@@ -1,0 +1,12 @@
+bin/
+obj/
+publish/
+*.user
+screencompanion.key
+screencompanion.key.new
+*.key
+*.zip
+*.pfx
+*.p12
+.env
+.env.*
