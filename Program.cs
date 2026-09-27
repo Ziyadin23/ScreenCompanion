@@ -17,7 +17,7 @@ internal static class Program
                 : new ScreenCompanionContext();
             using (context)
             {
-            Application.Run(context);
+                Application.Run(context);
             }
         }
         catch (Exception ex)
@@ -34,6 +34,7 @@ internal sealed class CaptureTestContext : ApplicationContext
     private const int VisibilityHotkeyId = 3;
     private readonly HotkeyHost _host;
     private readonly AnswerOverlay _overlay;
+    private readonly AppTray _tray;
 
     public CaptureTestContext()
     {
@@ -51,6 +52,7 @@ internal sealed class CaptureTestContext : ApplicationContext
         }
 
         _overlay = new AnswerOverlay(onSettings: null, onClose: ExitThread);
+        _tray = new AppTray(() => _overlay.ToggleVisibility(), null, ToggleTestPanel, ExitThread);
         _overlay.ShowCaptureTest();
     }
 
@@ -73,6 +75,7 @@ internal sealed class CaptureTestContext : ApplicationContext
         _host.Unregister(TestHotkeyId);
         _host.Unregister(VisibilityHotkeyId);
         _host.Dispose();
+        _tray.Dispose();
         _overlay.Dispose();
         base.ExitThreadCore();
     }
@@ -87,6 +90,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private readonly HotkeyHost _host;
     private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
     private AnswerOverlay? _overlay;
+    private AppTray? _tray;
     private string? _apiKey;
     private bool _ready;
     private bool _busy;
@@ -173,7 +177,8 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             _overlay = new AnswerOverlay(
                 onSettings: OpenSettings,
                 onClose: ExitThread);
-            _overlay.ShowStatus("Ready. Press Ctrl+Alt+Space while a question is on screen.");
+            _overlay.SetInitialStatus("Ready. Press Ctrl+Alt+Space to answer a question on the active monitor.");
+            _tray = new AppTray(ToggleVisibility, OpenSettings, ToggleCaptureTest, ExitThread);
         }
         catch (Exception ex)
         {
@@ -229,11 +234,13 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         byte[]? jpeg = null;
         try
         {
+            var bounds = ScreenCapture.GetActiveMonitorBounds();
             _overlay.HideForCapture();
             await Task.Delay(180);
-            jpeg = ScreenCapture.CaptureVirtualDesktopJpeg();
+            jpeg = ScreenCapture.CaptureMonitorJpeg(bounds);
 
             _overlay.ShowWorking();
+            _tray?.SetWorking(true);
             var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg);
             _overlay.ShowAnswer(answer);
         }
@@ -245,6 +252,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         {
             if (jpeg is not null)
                 CryptographicOperations.ZeroMemory(jpeg);
+            _tray?.SetWorking(false);
             _busy = false;
         }
     }
@@ -256,6 +264,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         _host.Unregister(TestHotkeyId);
         _host.Unregister(VisibilityHotkeyId);
         _host.Dispose();
+        _tray?.Dispose();
         _overlay?.Dispose();
         _httpClient.Dispose();
         _apiKey = null;
@@ -308,6 +317,44 @@ internal sealed class HotkeyHost : Form
     }
 }
 
+internal sealed class AppTray : IDisposable
+{
+    private readonly ContextMenuStrip _menu;
+    private readonly NotifyIcon _icon;
+
+    public AppTray(Action onToggle, Action? onSettings, Action onCaptureTest, Action onExit)
+    {
+        _menu = new ContextMenuStrip();
+        _menu.Items.Add("Show / hide answer", null, (_, _) => onToggle());
+        if (onSettings is not null)
+            _menu.Items.Add("Settings", null, (_, _) => onSettings());
+        _menu.Items.Add("Capture test", null, (_, _) => onCaptureTest());
+        _menu.Items.Add(new ToolStripSeparator());
+        _menu.Items.Add(new ToolStripMenuItem("Recording exclusion varies; test each recorder") { Enabled = false });
+        _menu.Items.Add(new ToolStripSeparator());
+        _menu.Items.Add("Exit", null, (_, _) => onExit());
+
+        _icon = new NotifyIcon
+        {
+            Icon = System.Drawing.SystemIcons.Application,
+            Text = "ScreenCompanion",
+            ContextMenuStrip = _menu,
+            Visible = true
+        };
+        _icon.DoubleClick += (_, _) => onToggle();
+    }
+
+    public void SetWorking(bool working) =>
+        _icon.Text = working ? "ScreenCompanion: reading screen" : "ScreenCompanion";
+
+    public void Dispose()
+    {
+        _icon.Visible = false;
+        _icon.Dispose();
+        _menu.Dispose();
+    }
+}
+
 internal sealed class AnswerOverlay : Form
 {
     private readonly Label _title;
@@ -329,9 +376,9 @@ internal sealed class AnswerOverlay : Form
         ShowIcon = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        Size = new System.Drawing.Size(480, 310);
+        Size = new System.Drawing.Size(380, 180);
         Location = new Point(Math.Max(12, Screen.PrimaryScreen!.WorkingArea.Right - 500),
-            Math.Max(12, Screen.PrimaryScreen.WorkingArea.Bottom - 330));
+            Math.Max(12, Screen.PrimaryScreen.WorkingArea.Bottom - 200));
         BackColor = System.Drawing.Color.FromArgb(26, 32, 44);
 
         var header = new Panel
@@ -348,17 +395,22 @@ internal sealed class AnswerOverlay : Form
             Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
             TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
             Location = new Point(14, 0),
-            Size = new System.Drawing.Size(280, 42)
+            Size = new System.Drawing.Size(210, 42)
         };
         _title.MouseDown += StartDrag;
         header.Controls.Add(_title);
         header.MouseDown += StartDrag;
 
-        var closeButton = MakeButton("×", 434, 7, 34, 28, () => onClose());
+        var closeButton = MakeButton("×", 334, 7, 34, 28, () => onClose());
         header.Controls.Add(closeButton);
-        var settingsButton = MakeButton("Settings", 342, 8, 82, 26, () => _onSettings?.Invoke());
+        var settingsButton = MakeButton("Settings", 242, 8, 82, 26, () => _onSettings?.Invoke());
         settingsButton.Visible = _onSettings is not null;
         header.Controls.Add(settingsButton);
+        header.Resize += (_, _) =>
+        {
+            closeButton.Location = new Point(header.ClientSize.Width - 46, 7);
+            settingsButton.Location = new Point(header.ClientSize.Width - 138, 8);
+        };
 
         _body = new RichTextBox
         {
@@ -381,11 +433,11 @@ internal sealed class AnswerOverlay : Form
         {
             AutoSize = false,
             Dock = DockStyle.Fill,
-            Height = 30,
+            Height = 34,
             Padding = new Padding(14, 5, 10, 4),
             ForeColor = System.Drawing.Color.FromArgb(173, 184, 199),
             Font = new System.Drawing.Font("Segoe UI", 8),
-            Text = "Visible only to you when capture exclusion works."
+            Text = "Recording exclusion is best effort. Test each recorder."
         };
 
         var layout = new TableLayoutPanel
@@ -400,7 +452,7 @@ internal sealed class AnswerOverlay : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.Controls.Add(header, 0, 0);
         layout.Controls.Add(_body, 0, 1);
         layout.Controls.Add(_footer, 0, 2);
@@ -419,11 +471,14 @@ internal sealed class AnswerOverlay : Form
 
     public void ToggleVisibility()
     {
-        _hiddenByUser = !_hiddenByUser;
-        if (_hiddenByUser)
-            Hide();
-        else
-            ShowIfVisible();
+        if (Visible)
+        {
+            HidePanel();
+            return;
+        }
+
+        _hiddenByUser = false;
+        ShowIfVisible();
     }
 
     public void HideForCapture()
@@ -448,12 +503,11 @@ internal sealed class AnswerOverlay : Form
 
     public void ShowWorking()
     {
-        _capturePending = false;
+        _capturePending = true;
         TestMode = false;
         _title.Text = "READING SCREEN";
         _body.Text = "Looking for the question on your screen…";
-        _footer.Text = CaptureStatus + "  Ctrl+Alt+Space asks again.  Esc hides this panel.";
-        ShowIfVisible();
+        _footer.Text = CaptureStatus;
     }
 
     public void ShowAnswer(string answer)
@@ -462,8 +516,17 @@ internal sealed class AnswerOverlay : Form
         TestMode = false;
         _title.Text = "SCREEN ANSWER";
         _body.Text = answer;
-        _footer.Text = CaptureStatus + "  Ctrl+Alt+Space asks again.  Ctrl+Alt+T tests recording exclusion.";
+        _footer.Text = "Ctrl+/ hides this panel. Recording exclusion is best effort.";
+        ResizeForContent(answer);
         ShowIfVisible();
+    }
+
+    public void SetInitialStatus(string message)
+    {
+        _title.Text = "SCREEN ANSWER";
+        _body.Text = message;
+        _footer.Text = "Recording exclusion is best effort. Test each recorder.";
+        ResizeForContent(message);
     }
 
     public void ShowStatus(string message)
@@ -472,7 +535,8 @@ internal sealed class AnswerOverlay : Form
         TestMode = false;
         _title.Text = "SCREEN ANSWER";
         _body.Text = message;
-        _footer.Text = CaptureStatus + "  No screenshots or answer history are saved by this app.";
+        _footer.Text = "No screenshots or answer history are saved by this app.";
+        ResizeForContent(message);
         ShowIfVisible();
     }
 
@@ -483,6 +547,7 @@ internal sealed class AnswerOverlay : Form
         _title.Text = "COULD NOT ANSWER";
         _body.Text = message;
         _footer.Text = "Check the internet connection and API key, then try again.";
+        ResizeForContent(message);
         ShowIfVisible();
     }
 
@@ -491,10 +556,11 @@ internal sealed class AnswerOverlay : Form
         _hiddenByUser = false;
         TestMode = true;
         _title.Text = "CAPTURE EXCLUSION TEST";
-        _body.Text = "This panel should be visible on your monitor and absent from a supported recording.\n\n" +
-                     "Start a Chrome whole-screen recording or another recorder, record for a few seconds, then inspect its saved video.\n\n" +
-                     "Press Ctrl+/ to hide or show this panel. Ctrl+Alt+T or Esc closes it.";
-        _footer.Text = CaptureStatus + "  Best effort; recorders may behave differently.";
+        _body.Text = "Check whether this panel appears in an Edge or Chrome whole-monitor recording or OBS Display Capture. " +
+                     "Record a few seconds and inspect the saved video.\n\n" +
+                     "Ctrl+/ hides or shows the panel. Ctrl+Alt+T or Esc closes it.";
+        _footer.Text = CaptureStatus;
+        ResizeForContent(_body.Text, testPanel: true);
         ShowIfVisible();
         if (Visible)
             Activate();
@@ -504,6 +570,21 @@ internal sealed class AnswerOverlay : Form
     {
         if (!_hiddenByUser && !_capturePending)
             Show();
+    }
+
+    private void ResizeForContent(string text, bool testPanel = false)
+    {
+        var width = testPanel || text.Length > 180 ? 480 : 380;
+        var measured = TextRenderer.MeasureText(text, _body.Font,
+            new System.Drawing.Size(width - 48, 2000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+        var height = Math.Clamp(measured.Height + 42 + 34 + 32, 180, 360);
+        var area = Screen.FromPoint(Location).WorkingArea;
+        var right = Right;
+        var bottom = Bottom;
+        Size = new System.Drawing.Size(width, height);
+        Location = new Point(
+            Math.Clamp(right - width, area.Left + 12, Math.Max(area.Left + 12, area.Right - width - 12)),
+            Math.Clamp(bottom - height, area.Top + 12, Math.Max(area.Top + 12, area.Bottom - height - 12)));
     }
 
     private string CaptureStatus => _captureExclusionRequested
@@ -680,11 +761,23 @@ internal class ProtectedDialog : Form
 
 internal static class ScreenCapture
 {
-    public static byte[] CaptureVirtualDesktopJpeg()
+    public static Rectangle GetActiveMonitorBounds()
     {
-        var bounds = SystemInformation.VirtualScreen;
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (foreground != IntPtr.Zero &&
+            NativeMethods.GetWindowThreadProcessId(foreground, out var processId) != 0 &&
+            processId != (uint)Environment.ProcessId &&
+            NativeMethods.IsWindowVisible(foreground) &&
+            !NativeMethods.IsIconic(foreground))
+            return Screen.FromHandle(foreground).Bounds;
+
+        return Screen.FromPoint(Cursor.Position).Bounds;
+    }
+
+    public static byte[] CaptureMonitorJpeg(Rectangle bounds)
+    {
         if (bounds.Width <= 0 || bounds.Height <= 0)
-            throw new InvalidOperationException("Windows did not report a usable screen size.");
+            throw new InvalidOperationException("Windows did not report a usable monitor size.");
 
         using var bitmap = new Bitmap(bounds.Width, bounds.Height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
         using (var graphics = Graphics.FromImage(bitmap))
@@ -729,6 +822,20 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowDisplayAffinity(IntPtr hWnd, uint affinity);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
