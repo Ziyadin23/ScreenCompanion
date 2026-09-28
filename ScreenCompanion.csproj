@@ -11,6 +11,7 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ScreenCompanion</AssemblyName>
+    <Version>0.3.7</Version>
     <RootNamespace>ScreenCompanion</RootNamespace>
   </PropertyGroup>
 </Project>

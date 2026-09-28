@@ -4,42 +4,69 @@ using System.Text.Json.Nodes;
 
 namespace ScreenCompanion;
 
+internal sealed class ApiResponseException(int statusCode, string message) : InvalidOperationException(message)
+{
+    public int StatusCode { get; } = statusCode;
+}
+
 internal static class OpenAiVisionClient
 {
-    private const string Model = "gpt-4.1-mini";
+    private const string Model = "gpt-6-luna";
     private const string Endpoint = "https://api.openai.com/v1/responses";
-    private const string ScreenInstruction =
-        "Read the visible screen and answer the main question or task shown there. Do not describe the screen unless that is what it asks. " +
-        "If several questions are visible, answer them briefly in order. If no question or task is legible, say that clearly. " +
-        "Use only information visible in this image; do not claim to have clicked or changed anything.";
-
-    public static async Task<string> AnswerVisibleQuestionAsync(HttpClient client, string apiKey, byte[] jpeg)
+    public static async Task<string> AnswerVisibleQuestionAsync(HttpClient client, string apiKey, byte[] jpeg,
+        string responseInstruction)
     {
         var imageData = "data:image/jpeg;base64," + Convert.ToBase64String(jpeg);
+        var content = new JsonArray
+        {
+            new JsonObject
+            {
+                ["type"] = "input_text",
+                ["text"] = "Use the image as input. Do not claim to have clicked or changed anything. " +
+                    "If the relevant text is illegible, say so. " + responseInstruction
+            },
+            new JsonObject
+            {
+                ["type"] = "input_image",
+                ["image_url"] = imageData,
+                ["detail"] = "high"
+            }
+        };
+        return await AnswerAsync(client, apiKey, content);
+    }
+
+    public static Task<string> AnswerTextAsync(HttpClient client, string apiKey, string question, byte[] jpeg,
+        string responseInstruction) => AnswerAsync(client, apiKey, new JsonArray
+    {
+        new JsonObject
+        {
+            ["type"] = "input_text",
+            ["text"] = "Use the attached screenshot as context for the typed question when relevant. " +
+                "The typed question determines the task; do not answer a different question merely visible on screen. " +
+                "If screen details needed to answer are illegible, say so. Do not claim to have clicked or changed anything. " +
+                responseInstruction + "\n\nUser question:\n" + question
+        },
+        new JsonObject
+        {
+            ["type"] = "input_image",
+            ["image_url"] = "data:image/jpeg;base64," + Convert.ToBase64String(jpeg),
+            ["detail"] = "high"
+        }
+    });
+
+    private static async Task<string> AnswerAsync(HttpClient client, string apiKey, JsonArray inputContent)
+    {
         var payload = new JsonObject
         {
             ["model"] = Model,
             ["store"] = false,
-            ["max_output_tokens"] = 700,
+            ["max_output_tokens"] = 1500,
             ["input"] = new JsonArray
             {
                 new JsonObject
                 {
                     ["role"] = "user",
-                    ["content"] = new JsonArray
-                    {
-                        new JsonObject
-                        {
-                            ["type"] = "input_text",
-                            ["text"] = ScreenInstruction
-                        },
-                        new JsonObject
-                        {
-                            ["type"] = "input_image",
-                            ["image_url"] = imageData,
-                            ["detail"] = "high"
-                        }
-                    }
+                    ["content"] = inputContent
                 }
             }
         };
@@ -51,7 +78,8 @@ internal static class OpenAiVisionClient
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead);
         var responseText = await response.Content.ReadAsStringAsync();
         if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException(ReadApiError(responseText, (int)response.StatusCode));
+            throw new ApiResponseException((int)response.StatusCode,
+                ReadApiError(responseText, (int)response.StatusCode));
 
         using var document = JsonDocument.Parse(responseText);
         var parts = new List<string>();
@@ -71,7 +99,7 @@ internal static class OpenAiVisionClient
         }
 
         var answer = string.Join(Environment.NewLine, parts).Trim();
-        return answer.Length > 0 ? answer : "The API returned no text answer. Press Ctrl+Alt+Space to try again.";
+        return answer.Length > 0 ? answer : "The API returned no text answer. Try again.";
     }
 
     private static string ReadApiError(string body, int statusCode)
@@ -88,6 +116,6 @@ internal static class OpenAiVisionClient
             // Use the status code below when the response is not a JSON API error.
         }
 
-        return $"OpenAI API request failed with status {statusCode}. Check the API key, billing, and internet connection.";
+        return $"OpenAI API request failed with status {statusCode}.";
     }
 }

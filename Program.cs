@@ -9,9 +9,10 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
-        ApplicationConfiguration.Initialize();
         try
         {
+            AppDiagnostics.RecordEvent(DiagnosticEvent.ProcessStarted);
+            ApplicationConfiguration.Initialize();
             ApplicationContext context = args.Contains("--capture-test-only", StringComparer.OrdinalIgnoreCase)
                 ? new CaptureTestContext()
                 : new ScreenCompanionContext();
@@ -22,7 +23,8 @@ internal static class Program
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}", "ScreenCompanion",
+            var report = AppDiagnostics.Record(FailureStage.Startup, ex);
+            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}\n\n{report.DisplayLine}", "ScreenCompanion",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
@@ -54,6 +56,7 @@ internal sealed class CaptureTestContext : ApplicationContext
         _overlay = new AnswerOverlay(onSettings: null, onClose: ExitThread);
         _tray = new AppTray(() => _overlay.ToggleVisibility(), null, ToggleTestPanel, ExitThread);
         _overlay.ShowCaptureTest();
+        AppDiagnostics.RecordEvent(DiagnosticEvent.Ready);
     }
 
     private void ToggleTestPanel()
@@ -87,36 +90,34 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private const int TestHotkeyId = 2;
     private const int VisibilityHotkeyId = 3;
     private readonly string _credentialPath;
+    private readonly bool _legacyVaultExists;
     private readonly HotkeyHost _host;
     private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
     private AnswerOverlay? _overlay;
     private AppTray? _tray;
     private string? _apiKey;
+    private VaultData? _settings;
+    private (HotkeyBinding Capture, HotkeyBinding Visibility, HotkeyBinding Test) _activeHotkeys =
+        (HotkeyBinding.DefaultCapture, HotkeyBinding.DefaultVisibility, HotkeyBinding.DefaultTest);
     private bool _ready;
     private bool _busy;
+    private bool _settingsOpen;
+    private bool _hotkeysRegistered;
 
     public ScreenCompanionContext()
     {
-        _credentialPath = Path.Combine(AppContext.BaseDirectory, "screencompanion.key");
+        var besideExecutable = Path.Combine(AppContext.BaseDirectory, "screencompanion.key");
+        var profileDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "ScreenCompanion");
+        _legacyVaultExists = File.Exists(besideExecutable) ||
+            File.Exists(Path.Combine(profileDirectory, "screencompanion.key"));
+        _credentialPath = Path.Combine(profileDirectory, "screencompanion.user.key");
         _host = new HotkeyHost();
         _host.CaptureRequested += async () => await CaptureAndAnswerAsync();
         _host.TestRequested += ToggleCaptureTest;
         _host.VisibilityRequested += ToggleVisibility;
 
         _ = _host.Handle;
-        if (!_host.Register(CaptureHotkeyId, NativeMethods.ModControl | NativeMethods.ModAlt, Keys.Space) ||
-            !_host.Register(TestHotkeyId, NativeMethods.ModControl | NativeMethods.ModAlt, Keys.T) ||
-            !_host.Register(VisibilityHotkeyId, NativeMethods.ModControl, Keys.OemQuestion))
-        {
-            _host.Unregister(CaptureHotkeyId);
-            _host.Unregister(TestHotkeyId);
-            _host.Unregister(VisibilityHotkeyId);
-            _host.Dispose();
-            _httpClient.Dispose();
-            throw new InvalidOperationException(
-                "A ScreenCompanion shortcut is already in use. Close the other app and try again. " +
-                "Capture: Ctrl+Alt+Space; test: Ctrl+Alt+T; visibility: Ctrl+/.");
-        }
 
         Application.Idle += InitializeOnFirstIdle;
     }
@@ -129,60 +130,76 @@ internal sealed class ScreenCompanionContext : ApplicationContext
 
     private void InitializeCredentials()
     {
+        var stage = FailureStage.Credentials;
         try
         {
             if (File.Exists(_credentialPath))
             {
-                while (true)
+                try
                 {
-                    using var dialog = new UnlockDialog();
-                    if (dialog.ShowDialog() != DialogResult.OK)
-                    {
-                        ExitThread();
-                        return;
-                    }
-
-                    try
-                    {
-                        _apiKey = ApiKeyVault.Load(_credentialPath, dialog.Password);
-                        break;
-                    }
-                    catch (CryptographicException)
-                    {
-                        MessageBox.Show("That password did not unlock the saved API key.", "ScreenCompanion",
-                            MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
-                    catch (IOException ex)
-                    {
-                        MessageBox.Show(ex.Message, "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        ExitThread();
-                        return;
-                    }
+                    _settings = ApiKeyVault.LoadForCurrentUser(_credentialPath);
+                }
+                catch (Exception ex) when (ex is CryptographicException or IOException)
+                {
+                    var report = AppDiagnostics.Record(FailureStage.Credentials, ex);
+                    MessageBox.Show("The saved API key file could not be opened. It may be damaged or " +
+                        $"belong to another Windows account. The file was left unchanged.\n\n{_credentialPath}\n\n{ex.Message}\n\n{report.DisplayLine}",
+                        "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    ExitThread();
+                    return;
                 }
             }
             else
             {
-                using var dialog = new SetupDialog();
+                using var dialog = new SetupDialog(_legacyVaultExists);
                 if (dialog.ShowDialog() != DialogResult.OK)
                 {
                     ExitThread();
                     return;
                 }
 
-                _apiKey = dialog.ApiKey;
-                ApiKeyVault.Save(_credentialPath, _apiKey, dialog.Password);
+                _settings = VaultData.Default(dialog.ApiKey);
+                Directory.CreateDirectory(Path.GetDirectoryName(_credentialPath)!);
+                ApiKeyVault.SaveForCurrentUser(_credentialPath, _settings);
             }
 
+            if (_settings is null)
+                throw new InvalidDataException("The saved settings are missing.");
+            _apiKey = _settings.ApiKey;
+
+            stage = FailureStage.Shortcuts;
+            if (!TryApplyHotkeys(_settings, out var shortcutError))
+            {
+                if (!TryApplyHotkeys(VaultData.Default(_settings.ApiKey), out var defaultError))
+                    throw new InvalidOperationException($"Saved shortcuts failed ({shortcutError}), and default shortcuts failed ({defaultError}).");
+                _settings = _settings with
+                {
+                    Capture = HotkeyBinding.DefaultCapture,
+                    Visibility = HotkeyBinding.DefaultVisibility,
+                    Test = HotkeyBinding.DefaultTest
+                };
+                MessageBox.Show($"Saved shortcuts could not be used: {shortcutError} Default shortcuts remain active.",
+                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
             _ready = true;
+            stage = FailureStage.Display;
             _overlay = new AnswerOverlay(
                 onSettings: OpenSettings,
-                onClose: ExitThread);
-            _overlay.SetInitialStatus("Ready. Press Ctrl+Alt+Space to answer a question on the active monitor.");
+                onClose: ExitThread,
+                onTextQuestion: AnswerTextAsync);
+            _overlay.VisibilityShortcut = _activeHotkeys.Visibility.ToString();
+            _overlay.TestShortcut = _activeHotkeys.Test.ToString();
+            _overlay.SetInitialStatus($"Type a question below, or press {_activeHotkeys.Capture} to use the active monitor.");
+            if (WindowSizeStore.Load() is { } savedSize)
+                _overlay.ApplySavedSize(savedSize);
+            _overlay.ManualSizeChanged += size => WindowSizeStore.TrySave(size);
             _tray = new AppTray(ToggleVisibility, OpenSettings, ToggleCaptureTest, ExitThread);
+            AppDiagnostics.RecordEvent(DiagnosticEvent.Ready);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}", "ScreenCompanion",
+            var report = AppDiagnostics.Record(stage, ex);
+            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}\n\n{report.DisplayLine}", "ScreenCompanion",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             ExitThread();
         }
@@ -190,24 +207,147 @@ internal sealed class ScreenCompanionContext : ApplicationContext
 
     private void OpenSettings()
     {
-        if (!_ready || _apiKey is null)
+        if (!_ready || _settingsOpen || _settings is null)
             return;
 
-        using var dialog = new SetupDialog(_apiKey);
-        if (dialog.ShowDialog() != DialogResult.OK)
-            return;
-
+        var previousHotkeys = _settings with
+        {
+            Capture = _activeHotkeys.Capture,
+            Visibility = _activeHotkeys.Visibility,
+            Test = _activeHotkeys.Test
+        };
+        _settingsOpen = true;
+        var saved = false;
         try
         {
-            ApiKeyVault.Save(_credentialPath, dialog.ApiKey, dialog.Password);
-            _apiKey = dialog.ApiKey;
-            _overlay?.ShowStatus("API key saved to this USB drive.");
+            // Registered global shortcuts consume their key presses before the focused settings field can see them.
+            if (_hotkeysRegistered)
+            {
+                _host.Unregister(CaptureHotkeyId);
+                _host.Unregister(VisibilityHotkeyId);
+                _host.Unregister(TestHotkeyId);
+                _hotkeysRegistered = false;
+            }
+
+            using var dialog = new SettingsDialog(_settings);
+            var result = dialog.ShowDialog();
+            if (result == DialogResult.Retry)
+            {
+                ChangeApiKey();
+                return;
+            }
+            if (result != DialogResult.OK || dialog.Settings is null)
+                return;
+
+            if (!TryApplyHotkeys(dialog.Settings, out var shortcutError))
+            {
+                MessageBox.Show($"Could not register the requested shortcuts: {shortcutError}",
+                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            try
+            {
+                ApiKeyVault.SaveForCurrentUser(_credentialPath, dialog.Settings);
+                _settings = dialog.Settings;
+                saved = true;
+                if (_overlay is not null)
+                {
+                    _overlay.VisibilityShortcut = _activeHotkeys.Visibility.ToString();
+                    _overlay.TestShortcut = _activeHotkeys.Test.ToString();
+                    _overlay.ShowStatus("Settings saved for this Windows account.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Could not save settings: {ex.Message}",
+                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+        finally
+        {
+            try
+            {
+                if (!saved)
+                {
+                    // A failed save must not leave the proposed shortcuts active.
+                    if (_hotkeysRegistered)
+                    {
+                        _host.Unregister(CaptureHotkeyId);
+                        _host.Unregister(VisibilityHotkeyId);
+                        _host.Unregister(TestHotkeyId);
+                        _hotkeysRegistered = false;
+                    }
+                    if (!TryApplyHotkeys(previousHotkeys, out var restoreError))
+                        MessageBox.Show($"Could not restore the previous shortcuts: {restoreError} Restart ScreenCompanion.",
+                            "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                _settingsOpen = false;
+            }
+        }
+    }
+
+    private void ChangeApiKey()
+    {
+        if (_settings is null)
+            return;
+        using var dialog = new SetupDialog(isChange: true);
+        if (dialog.ShowDialog() != DialogResult.OK)
+            return;
+        var updated = _settings with { ApiKey = dialog.ApiKey };
+        try
+        {
+            ApiKeyVault.SaveForCurrentUser(_credentialPath, updated);
+            _settings = updated;
+            _apiKey = updated.ApiKey;
+            _overlay?.ShowStatus("API key saved for this Windows account.");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Could not save the encrypted key beside the app: {ex.Message}",
+            MessageBox.Show($"Could not save the API key: {ex.Message}",
                 "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private bool TryApplyHotkeys(VaultData settings, out string error)
+    {
+        error = "";
+        var requested = (settings.Capture, settings.Visibility, settings.Test);
+        if (_hotkeysRegistered && requested == _activeHotkeys)
+            return true;
+        if (!requested.Capture.IsValid || !requested.Visibility.IsValid || !requested.Test.IsValid ||
+            requested.Capture == requested.Visibility || requested.Capture == requested.Test ||
+            requested.Visibility == requested.Test)
+        {
+            error = "The saved shortcut settings are invalid.";
+            return false;
+        }
+        if (_hotkeysRegistered)
+        {
+            _host.Unregister(CaptureHotkeyId);
+            _host.Unregister(VisibilityHotkeyId);
+            _host.Unregister(TestHotkeyId);
+        }
+        if (_host.Register(CaptureHotkeyId, requested.Capture.Modifiers, requested.Capture.Key) &&
+            _host.Register(VisibilityHotkeyId, requested.Visibility.Modifiers, requested.Visibility.Key) &&
+            _host.Register(TestHotkeyId, requested.Test.Modifiers, requested.Test.Key))
+        {
+            _activeHotkeys = requested;
+            _hotkeysRegistered = true;
+            return true;
+        }
+        _host.Unregister(CaptureHotkeyId);
+        _host.Unregister(VisibilityHotkeyId);
+        _host.Unregister(TestHotkeyId);
+        if (_hotkeysRegistered &&
+            (!_host.Register(CaptureHotkeyId, _activeHotkeys.Capture.Modifiers, _activeHotkeys.Capture.Key) ||
+             !_host.Register(VisibilityHotkeyId, _activeHotkeys.Visibility.Modifiers, _activeHotkeys.Visibility.Key) ||
+             !_host.Register(TestHotkeyId, _activeHotkeys.Test.Modifiers, _activeHotkeys.Test.Key)))
+            throw new InvalidOperationException("Could not restore the previous shortcuts. Restart ScreenCompanion.");
+        error = "Windows could not register one of the shortcuts; it may be reserved or in use.";
+        return false;
     }
 
     private void ToggleCaptureTest()
@@ -227,26 +367,34 @@ internal sealed class ScreenCompanionContext : ApplicationContext
 
     private async Task CaptureAndAnswerAsync()
     {
-        if (!_ready || _busy || _apiKey is null || _overlay is null)
+        if (!_ready || _busy || _settingsOpen || _apiKey is null || _overlay is null)
             return;
 
         _busy = true;
+        _overlay.SetInputBusy(true);
         byte[]? jpeg = null;
+        var stage = FailureStage.Capture;
         try
         {
             var bounds = ScreenCapture.GetActiveMonitorBounds();
+            stage = FailureStage.Display;
             _overlay.HideForCapture();
+            stage = FailureStage.Capture;
             await Task.Delay(180);
             jpeg = ScreenCapture.CaptureMonitorJpeg(bounds);
 
+            stage = FailureStage.Display;
             _overlay.ShowWorking();
             _tray?.SetWorking(true);
-            var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg);
+            stage = FailureStage.ApiRequest;
+            var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg,
+                ResponseModes.Instruction(_settings!));
+            stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
         }
         catch (Exception ex)
         {
-            _overlay.ShowError(ex.Message);
+            _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
         }
         finally
         {
@@ -254,6 +402,51 @@ internal sealed class ScreenCompanionContext : ApplicationContext
                 CryptographicOperations.ZeroMemory(jpeg);
             _tray?.SetWorking(false);
             _busy = false;
+            _overlay.SetInputBusy(false);
+        }
+    }
+
+    private async Task AnswerTextAsync(string question)
+    {
+        if (!_ready || _busy || _settingsOpen || _apiKey is null || _overlay is null ||
+            string.IsNullOrWhiteSpace(question))
+            return;
+
+        _busy = true;
+        _overlay.SetInputBusy(true);
+        byte[]? jpeg = null;
+        var stage = FailureStage.Capture;
+        try
+        {
+            // The text box has focus while sending, so the overlay identifies the monitor to capture.
+            var bounds = Screen.FromControl(_overlay).Bounds;
+            stage = FailureStage.Display;
+            _overlay.HideForCapture();
+            stage = FailureStage.Capture;
+            await Task.Delay(180);
+            jpeg = ScreenCapture.CaptureMonitorJpeg(bounds);
+
+            stage = FailureStage.Display;
+            _overlay.ShowWorking(textQuestion: true);
+            _tray?.SetWorking(true);
+            stage = FailureStage.ApiRequest;
+            var answer = await OpenAiVisionClient.AnswerTextAsync(_httpClient, _apiKey, question, jpeg,
+                ResponseModes.TextInstruction(_settings!));
+            stage = FailureStage.Display;
+            _overlay.ShowAnswer(answer);
+            _overlay.ClearQuestion();
+        }
+        catch (Exception ex)
+        {
+            _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
+        }
+        finally
+        {
+            if (jpeg is not null)
+                CryptographicOperations.ZeroMemory(jpeg);
+            _tray?.SetWorking(false);
+            _busy = false;
+            _overlay.SetInputBusy(false);
         }
     }
 
@@ -345,7 +538,7 @@ internal sealed class AppTray : IDisposable
     }
 
     public void SetWorking(bool working) =>
-        _icon.Text = working ? "ScreenCompanion: reading screen" : "ScreenCompanion";
+        _icon.Text = working ? "ScreenCompanion: answering" : "ScreenCompanion";
 
     public void Dispose()
     {
@@ -357,29 +550,58 @@ internal sealed class AppTray : IDisposable
 
 internal sealed class AnswerOverlay : Form
 {
+    private const int ResizeBorder = 7;
+
+    [Flags]
+    private enum ResizeEdge
+    {
+        None = 0,
+        Left = 1,
+        Top = 2,
+        Right = 4,
+        Bottom = 8
+    }
+
     private readonly Label _title;
     private readonly RichTextBox _body;
     private readonly Label _footer;
     private readonly Action? _onSettings;
+    private readonly Func<string, Task>? _onTextQuestion;
+    private readonly TextBox _question;
+    private readonly Button _sendButton;
     private bool _captureExclusionRequested;
     private bool _hiddenByUser;
     private bool _capturePending;
+    private bool _manuallyResized;
+    private bool _resizing;
+    private ResizeEdge _resizeEdges;
+    private Point _resizeStart;
+    private Rectangle _resizeStartBounds;
+
+    public event Action<Size>? ManualSizeChanged;
 
     public bool TestMode { get; private set; }
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string VisibilityShortcut { get; set; } = "Ctrl+/";
+    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+    internal string TestShortcut { get; set; } = "Ctrl+Alt+T";
 
-    public AnswerOverlay(Action? onSettings, Action onClose)
+    public AnswerOverlay(Action? onSettings, Action onClose, Func<string, Task>? onTextQuestion = null)
     {
         _onSettings = onSettings;
+        _onTextQuestion = onTextQuestion;
         Text = "";
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         ShowIcon = false;
         TopMost = true;
         StartPosition = FormStartPosition.Manual;
-        Size = new System.Drawing.Size(380, 180);
+        Size = new System.Drawing.Size(420, onTextQuestion is null ? 180 : 220);
+        MinimumSize = new System.Drawing.Size(320, 180);
+        Padding = new Padding(ResizeBorder);
         Location = new Point(Math.Max(12, Screen.PrimaryScreen!.WorkingArea.Right - 500),
             Math.Max(12, Screen.PrimaryScreen.WorkingArea.Bottom - 200));
-        BackColor = System.Drawing.Color.FromArgb(26, 32, 44);
+        BackColor = System.Drawing.Color.FromArgb(64, 77, 99);
 
         var header = new Panel
         {
@@ -410,6 +632,7 @@ internal sealed class AnswerOverlay : Form
         {
             closeButton.Location = new Point(header.ClientSize.Width - 46, 7);
             settingsButton.Location = new Point(header.ClientSize.Width - 138, 8);
+            _title.Width = Math.Max(90, header.ClientSize.Width - (settingsButton.Visible ? 154 : 70));
         };
 
         _body = new RichTextBox
@@ -422,12 +645,32 @@ internal sealed class AnswerOverlay : Form
             ScrollBars = RichTextBoxScrollBars.Vertical,
             DetectUrls = false,
             TabStop = false,
-            BackColor = BackColor,
+            BackColor = System.Drawing.Color.FromArgb(26, 32, 44),
             ForeColor = System.Drawing.Color.FromArgb(239, 242, 247),
             Font = new System.Drawing.Font("Segoe UI", 11),
-            Text = "Press Ctrl+Alt+Space to answer the question on screen.\n\n" +
-                   "Ctrl+/ hides or shows this panel. Ctrl+Alt+T opens the recording test."
+            Text = "Type a question below or press Ctrl+Alt+Space to ask about the screen."
         };
+
+        var questionPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 4, 12, 4) };
+        _sendButton = MakeButton("Send", 0, 4, 64, 29, () => SubmitQuestion());
+        _sendButton.Dock = DockStyle.Right;
+        _question = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            MaxLength = 4000,
+            Font = new System.Drawing.Font("Segoe UI", 10),
+            PlaceholderText = "Type your question here",
+            AccessibleName = "Question"
+        };
+        _question.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode != Keys.Enter) return;
+            e.SuppressKeyPress = true;
+            SubmitQuestion();
+        };
+        questionPanel.Controls.Add(_question);
+        questionPanel.Controls.Add(_sendButton);
+        questionPanel.Visible = _onTextQuestion is not null;
 
         _footer = new Label
         {
@@ -444,18 +687,20 @@ internal sealed class AnswerOverlay : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
-            BackColor = BackColor
+            BackColor = System.Drawing.Color.FromArgb(26, 32, 44)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _onTextQuestion is null ? 0 : 42));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         layout.Controls.Add(header, 0, 0);
         layout.Controls.Add(_body, 0, 1);
-        layout.Controls.Add(_footer, 0, 2);
+        layout.Controls.Add(questionPanel, 0, 2);
+        layout.Controls.Add(_footer, 0, 3);
         Controls.Add(layout);
 
         KeyPreview = true;
@@ -501,13 +746,29 @@ internal sealed class AnswerOverlay : Form
         _footer.Text = CaptureStatus;
     }
 
-    public void ShowWorking()
+    public void ShowWorking(bool textQuestion = false)
     {
-        _capturePending = true;
+        _capturePending = !textQuestion;
         TestMode = false;
-        _title.Text = "READING SCREEN";
-        _body.Text = "Looking for the question on your screen…";
+        _title.Text = textQuestion ? "ANSWERING" : "READING SCREEN";
+        _body.Text = textQuestion ? "Thinking about your question…" : "Looking for the question on your screen…";
         _footer.Text = CaptureStatus;
+        if (textQuestion) ShowIfVisible();
+    }
+
+    public void SetInputBusy(bool busy)
+    {
+        _question.Enabled = !busy;
+        _sendButton.Enabled = !busy;
+    }
+
+    public void ClearQuestion() => _question.Clear();
+
+    private void SubmitQuestion()
+    {
+        var question = _question.Text.Trim();
+        if (question.Length > 0 && _onTextQuestion is not null && _question.Enabled)
+            _ = _onTextQuestion(question);
     }
 
     public void ShowAnswer(string answer)
@@ -516,7 +777,7 @@ internal sealed class AnswerOverlay : Form
         TestMode = false;
         _title.Text = "SCREEN ANSWER";
         _body.Text = answer;
-        _footer.Text = "Ctrl+/ hides this panel. Recording exclusion is best effort.";
+        _footer.Text = $"{VisibilityShortcut} hides this panel. Recording exclusion is best effort.";
         ResizeForContent(answer);
         ShowIfVisible();
     }
@@ -540,14 +801,17 @@ internal sealed class AnswerOverlay : Form
         ShowIfVisible();
     }
 
-    public void ShowError(string message)
+    public void ShowError(string message, FailureReport report)
     {
         _capturePending = false;
         TestMode = false;
         _title.Text = "COULD NOT ANSWER";
-        _body.Text = message;
-        _footer.Text = "Check the internet connection and API key, then try again.";
-        ResizeForContent(message);
+        _body.Text = $"{message}\n\n{report.Hint}\n{report.DisplayLine}" +
+            (report.LogSaved ? "\nLog: %LOCALAPPDATA%\\ScreenCompanion\\diagnostics.log" : "");
+        _footer.Text = report.LogSaved
+            ? "The log contains no key, question, screenshot, or answer."
+            : "Could not save the diagnostic log.";
+        ResizeForContent(_body.Text);
         ShowIfVisible();
     }
 
@@ -558,12 +822,27 @@ internal sealed class AnswerOverlay : Form
         _title.Text = "CAPTURE EXCLUSION TEST";
         _body.Text = "Check whether this panel appears in an Edge or Chrome whole-monitor recording or OBS Display Capture. " +
                      "Record a few seconds and inspect the saved video.\n\n" +
-                     "Ctrl+/ hides or shows the panel. Ctrl+Alt+T or Esc closes it.";
+                     $"{VisibilityShortcut} hides or shows the panel. {TestShortcut} or Esc closes it.";
         _footer.Text = CaptureStatus;
         ResizeForContent(_body.Text, testPanel: true);
         ShowIfVisible();
         if (Visible)
             Activate();
+    }
+
+    public void ApplySavedSize(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+            return;
+
+        var area = Screen.FromRectangle(Bounds).WorkingArea;
+        var width = Math.Clamp(size.Width, Math.Min(MinimumSize.Width, area.Width), area.Width);
+        var height = Math.Clamp(size.Height, Math.Min(MinimumSize.Height, area.Height), area.Height);
+        SetBounds(
+            Math.Clamp(Right - width, area.Left, Math.Max(area.Left, area.Right - width)),
+            Math.Clamp(Bottom - height, area.Top, Math.Max(area.Top, area.Bottom - height)),
+            width, height);
+        _manuallyResized = true;
     }
 
     private void ShowIfVisible()
@@ -574,17 +853,118 @@ internal sealed class AnswerOverlay : Form
 
     private void ResizeForContent(string text, bool testPanel = false)
     {
-        var width = testPanel || text.Length > 180 ? 480 : 380;
+        if (_manuallyResized)
+            return;
+
+        var area = Screen.FromRectangle(Bounds).WorkingArea;
+        var width = testPanel || text.Length > 180 ? 480 : 420;
+        width = Math.Min(width, Math.Max(1, area.Width - 24));
         var measured = TextRenderer.MeasureText(text, _body.Font,
             new System.Drawing.Size(width - 48, 2000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-        var height = Math.Clamp(measured.Height + 42 + 34 + 32, 180, 360);
-        var area = Screen.FromPoint(Location).WorkingArea;
+        var questionHeight = _onTextQuestion is null ? 0 : 42;
+        var height = Math.Clamp(measured.Height + 42 + questionHeight + 34 + 32,
+            180 + questionHeight, 360 + questionHeight);
+        height = Math.Min(height, Math.Max(1, area.Height - 24));
         var right = Right;
         var bottom = Bottom;
         Size = new System.Drawing.Size(width, height);
         Location = new Point(
             Math.Clamp(right - width, area.Left + 12, Math.Max(area.Left + 12, area.Right - width - 12)),
             Math.Clamp(bottom - height, area.Top + 12, Math.Max(area.Top + 12, area.Bottom - height - 12)));
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left)
+            return;
+
+        _resizeEdges = GetResizeEdges(e.Location);
+        if (_resizeEdges == ResizeEdge.None)
+            return;
+
+        _resizing = true;
+        _resizeStart = MousePosition;
+        _resizeStartBounds = Bounds;
+        Capture = true;
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_resizing)
+        {
+            ResizeFromMouse();
+            return;
+        }
+
+        var edges = GetResizeEdges(e.Location);
+        var horizontal = edges.HasFlag(ResizeEdge.Left) || edges.HasFlag(ResizeEdge.Right);
+        var vertical = edges.HasFlag(ResizeEdge.Top) || edges.HasFlag(ResizeEdge.Bottom);
+        Cursor.Current = horizontal && vertical
+            ? (edges.HasFlag(ResizeEdge.Left) == edges.HasFlag(ResizeEdge.Top) ? Cursors.SizeNWSE : Cursors.SizeNESW)
+            : horizontal ? Cursors.SizeWE : vertical ? Cursors.SizeNS : Cursors.Default;
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (e.Button != MouseButtons.Left || !_resizing)
+            return;
+
+        ResizeFromMouse();
+        FinishResize();
+    }
+
+    protected override void OnMouseCaptureChanged(EventArgs e)
+    {
+        base.OnMouseCaptureChanged(e);
+        if (_resizing)
+            FinishResize();
+    }
+
+    private ResizeEdge GetResizeEdges(Point point)
+    {
+        var edges = ResizeEdge.None;
+        if (point.X < ResizeBorder) edges |= ResizeEdge.Left;
+        if (point.X >= ClientSize.Width - ResizeBorder) edges |= ResizeEdge.Right;
+        if (point.Y < ResizeBorder) edges |= ResizeEdge.Top;
+        if (point.Y >= ClientSize.Height - ResizeBorder) edges |= ResizeEdge.Bottom;
+        return edges;
+    }
+
+    private void ResizeFromMouse()
+    {
+        var delta = new Size(MousePosition.X - _resizeStart.X, MousePosition.Y - _resizeStart.Y);
+        var area = Screen.FromRectangle(_resizeStartBounds).WorkingArea;
+        var left = _resizeStartBounds.Left;
+        var top = _resizeStartBounds.Top;
+        var right = _resizeStartBounds.Right;
+        var bottom = _resizeStartBounds.Bottom;
+        var minWidth = Math.Min(MinimumSize.Width, area.Width);
+        var minHeight = Math.Min(MinimumSize.Height, area.Height);
+
+        if (_resizeEdges.HasFlag(ResizeEdge.Left))
+            left = Math.Clamp(left + delta.Width, area.Left, Math.Max(area.Left, right - minWidth));
+        if (_resizeEdges.HasFlag(ResizeEdge.Right))
+            right = Math.Clamp(right + delta.Width, Math.Min(left + minWidth, area.Right), area.Right);
+        if (_resizeEdges.HasFlag(ResizeEdge.Top))
+            top = Math.Clamp(top + delta.Height, area.Top, Math.Max(area.Top, bottom - minHeight));
+        if (_resizeEdges.HasFlag(ResizeEdge.Bottom))
+            bottom = Math.Clamp(bottom + delta.Height, Math.Min(top + minHeight, area.Bottom), area.Bottom);
+
+        SetBounds(left, top, right - left, bottom - top);
+    }
+
+    private void FinishResize()
+    {
+        _resizing = false;
+        Capture = false;
+        if (Size == _resizeStartBounds.Size)
+            return;
+
+        _manuallyResized = true;
+        ManualSizeChanged?.Invoke(Size);
     }
 
     private string CaptureStatus => _captureExclusionRequested
@@ -619,52 +999,30 @@ internal sealed class AnswerOverlay : Form
     }
 }
 
-internal sealed class UnlockDialog : ProtectedDialog
-{
-    private readonly TextBox _password;
-
-    public string Password => _password.Text;
-
-    public UnlockDialog()
-    {
-        Text = "Unlock USB key";
-        var prompt = AddLabel("Enter the password used to protect the API key saved on this USB drive.", 18, 18, 425, 42);
-        _password = AddPasswordBox(20, 68, 420);
-        var unlock = AddButton("Unlock", 270, 112, 78, DialogResult.OK);
-        var cancel = AddButton("Exit", 356, 112, 78, DialogResult.Cancel);
-        AcceptButton = unlock;
-        CancelButton = cancel;
-        Controls.Add(prompt);
-    }
-}
-
 internal sealed class SetupDialog : ProtectedDialog
 {
     private readonly TextBox _apiKey;
-    private readonly TextBox _password;
-    private readonly TextBox _confirm;
 
     public string ApiKey => _apiKey.Text.Trim();
-    public string Password => _password.Text;
 
-    public SetupDialog(string? existingKey = null)
+    public SetupDialog(bool legacyVaultExists = false, bool isChange = false)
     {
-        Text = existingKey is null ? "Set up ScreenCompanion" : "Change API key and password";
-        var keyLabel = AddLabel("OpenAI API key (saved encrypted on this USB drive)", 18, 14, 430, 24);
-        _apiKey = AddPasswordBox(20, 38, 420);
-        if (existingKey is not null)
-            _apiKey.Text = existingKey;
-
-        var passwordLabel = AddLabel("Choose a password to encrypt the key", 18, 78, 430, 24);
-        _password = AddPasswordBox(20, 102, 420);
-        var confirmLabel = AddLabel("Confirm password", 18, 142, 430, 24);
-        _confirm = AddPasswordBox(20, 166, 420);
-        var save = AddButton("Save", 270, 212, 78, DialogResult.None);
-        var cancel = AddButton("Cancel", 356, 212, 78, DialogResult.Cancel);
+        Text = isChange ? "Change API key" : "Set up ScreenCompanion";
+        ClientSize = new System.Drawing.Size(460, legacyVaultExists ? 246 : 206);
+        var keyLabel = AddLabel("OpenAI API key (protected by your Windows account)", 18, 56, 430, 24);
+        _apiKey = AddSecretBox(20, 86, 420);
+        var explanation = AddLabel(legacyVaultExists
+                ? "An older key file was found. Enter your API key once more. The old file will be left unchanged."
+                : "Enter the key you want to use with ScreenCompanion.",
+            20, 122, 420, legacyVaultExists ? 60 : 24);
+        explanation.ForeColor = UiTheme.SecondaryText;
+        var buttonY = legacyVaultExists ? 196 : 156;
+        var save = AddButton("Save", 270, buttonY, 78, DialogResult.None);
+        var cancel = AddButton("Cancel", 356, buttonY, 78, DialogResult.Cancel);
         save.Click += (_, _) => ValidateAndSave();
         AcceptButton = save;
         CancelButton = cancel;
-        Controls.AddRange([keyLabel, passwordLabel, confirmLabel]);
+        Controls.AddRange([keyLabel, explanation]);
     }
 
     private void ValidateAndSave()
@@ -677,40 +1035,77 @@ internal sealed class SetupDialog : ProtectedDialog
             return;
         }
 
-        if (_password.Text.Length < 10)
-        {
-            MessageBox.Show(this, "Use a password with at least 10 characters.", "ScreenCompanion",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-            _password.Focus();
-            return;
-        }
-
-        if (!string.Equals(_password.Text, _confirm.Text, StringComparison.Ordinal))
-        {
-            MessageBox.Show(this, "The passwords do not match.", "ScreenCompanion", MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            _confirm.Focus();
-            return;
-        }
-
         DialogResult = DialogResult.OK;
         Close();
     }
 }
 
+internal static class UiTheme
+{
+    public static readonly Color Background = Color.FromArgb(26, 32, 44);
+    public static readonly Color Header = Color.FromArgb(35, 43, 58);
+    public static readonly Color Text = Color.FromArgb(239, 242, 247);
+    public static readonly Color SecondaryText = Color.FromArgb(173, 184, 199);
+    public static readonly Color Button = Color.FromArgb(53, 64, 82);
+    public static readonly Color ButtonHover = Color.FromArgb(68, 82, 105);
+    public static readonly Color Border = Color.FromArgb(84, 99, 123);
+    public static readonly Color Listening = Color.FromArgb(57, 68, 87);
+    public static readonly Color ListeningText = Color.FromArgb(255, 220, 140);
+}
+
 internal class ProtectedDialog : Form
 {
+    private readonly Panel _header;
+    private readonly Label _title;
+    private readonly Button _close;
+
     public ProtectedDialog()
     {
-        FormBorderStyle = FormBorderStyle.FixedDialog;
+        FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.CenterScreen;
         ShowInTaskbar = false;
         ShowIcon = false;
         MaximizeBox = false;
         MinimizeBox = false;
         ClientSize = new System.Drawing.Size(460, 260);
-        BackColor = System.Drawing.Color.FromArgb(245, 247, 250);
+        BackColor = UiTheme.Background;
+        ForeColor = UiTheme.Text;
         Font = new System.Drawing.Font("Segoe UI", 9);
+
+        _header = new Panel { Location = Point.Empty, Height = 40, Width = ClientSize.Width, BackColor = UiTheme.Header };
+        _title = new Label
+        {
+            Location = new Point(14, 0),
+            Size = new System.Drawing.Size(ClientSize.Width - 65, 40),
+            Font = new Font("Segoe UI", 9, FontStyle.Bold),
+            ForeColor = UiTheme.Text,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        _close = new Button
+        {
+            Text = "×",
+            Location = new Point(ClientSize.Width - 40, 6),
+            Size = new System.Drawing.Size(30, 28),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = UiTheme.Button,
+            ForeColor = UiTheme.Text,
+            Font = new Font("Segoe UI", 9)
+        };
+        _close.FlatAppearance.BorderSize = 0;
+        _close.FlatAppearance.MouseOverBackColor = UiTheme.ButtonHover;
+        _close.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
+        _header.MouseDown += StartDrag;
+        _title.MouseDown += StartDrag;
+        _header.Controls.Add(_title);
+        _header.Controls.Add(_close);
+        Controls.Add(_header);
+        TextChanged += (_, _) => _title.Text = Text.ToUpperInvariant();
+        Resize += (_, _) =>
+        {
+            _header.Width = ClientSize.Width;
+            _title.Width = ClientSize.Width - 65;
+            _close.Left = ClientSize.Width - 40;
+        };
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -724,18 +1119,20 @@ internal class ProtectedDialog : Form
         Text = text,
         Location = new Point(x, y),
         Size = new System.Drawing.Size(width, height),
-        ForeColor = System.Drawing.Color.FromArgb(39, 48, 62),
+        ForeColor = UiTheme.Text,
         TextAlign = System.Drawing.ContentAlignment.MiddleLeft
     };
 
-    protected TextBox AddPasswordBox(int x, int y, int width)
+    protected TextBox AddSecretBox(int x, int y, int width)
     {
         var box = new TextBox
         {
             Location = new Point(x, y),
             Size = new System.Drawing.Size(width, 28),
             UseSystemPasswordChar = true,
-            BorderStyle = BorderStyle.FixedSingle
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = UiTheme.Header,
+            ForeColor = UiTheme.Text
         };
         Controls.Add(box);
         return box;
@@ -750,12 +1147,24 @@ internal class ProtectedDialog : Form
             Size = new System.Drawing.Size(width, 30),
             DialogResult = result,
             FlatStyle = FlatStyle.Flat,
-            BackColor = System.Drawing.Color.FromArgb(47, 104, 181),
-            ForeColor = System.Drawing.Color.White
+            BackColor = UiTheme.Button,
+            ForeColor = UiTheme.Text
         };
-        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.BorderColor = UiTheme.Border;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.MouseOverBackColor = UiTheme.ButtonHover;
         Controls.Add(button);
         return button;
+    }
+
+    private void StartDrag(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left)
+            return;
+
+        NativeMethods.ReleaseCapture();
+        NativeMethods.SendMessage(Handle, NativeMethods.WmNcLeftButtonDown,
+            new IntPtr(NativeMethods.HtCaption), IntPtr.Zero);
     }
 }
 
@@ -805,11 +1214,20 @@ internal static class CaptureExclusion
 
 internal static class NativeMethods
 {
+    public const uint ModShift = 0x0004;
     public const int WmNcLeftButtonDown = 0x00A1;
     public const int HtCaption = 2;
     public const uint ModAlt = 0x0001;
     public const uint ModControl = 0x0002;
+    public const uint ModWin = 0x0008;
     public const uint ModNoRepeat = 0x4000;
+
+    public static bool IsWinPressed() =>
+        (GetKeyState((int)Keys.LWin) & 0x8000) != 0 ||
+        (GetKeyState((int)Keys.RWin) & 0x8000) != 0;
+
+    [DllImport("user32.dll")]
+    private static extern short GetKeyState(int virtualKey);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -1,14 +1,17 @@
 # ScreenCompanion
 
-ScreenCompanion is a portable Windows 11 screen-question assistant. Press a hotkey to capture the monitor containing the foreground window once and ask the OpenAI API about the question visible there. The answer appears in a small overlay.
+ScreenCompanion is a single-file Windows 11 x64 assistant. Type a question in its answer panel, or press a shortcut to capture one monitor and ask about the visible question. Both request types use the OpenAI Responses API with `gpt-6-luna` and show the answer in the panel.
 
-## Download and run
+Version v0.3.7 is the current public release. Download it from the [v0.3.7 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.3.7). Earlier releases do not include typed questions or GPT-6 Luna.
 
-1. Download `ScreenCompanion-USB.zip` from the [latest release](https://github.com/Ziyadin23/ScreenCompanion/releases/latest) and extract it to a USB drive or another writable folder.
-2. Double-click `ScreenCompanion.exe`. On first launch, enter your own OpenAI API key and choose a vault password.
-3. On later launches, enter the vault password. The API key stays in the encrypted `screencompanion.key` file beside the executable; you do not need to enter it again. Keep that file with the executable when moving the app to another PC. After unlock, the answer panel starts hidden; use the ScreenCompanion tray icon or Ctrl+/ to show it.
+## Run on a Windows 11 PC
 
-The public download contains **no API key**. Windows does not automatically start ScreenCompanion when you insert a normal USB drive; open the drive and run the executable. The app is portable and does not request administrator rights, but managed PCs may block execution from removable drives. The build is unsigned, so Windows may show a warning on first launch.
+1. Download **`ScreenCompanion-v0.3.7.exe`** from the release, or extract the same EXE and `README.txt` from `ScreenCompanion-v0.3.7.zip`. You can also build it from source below. Copy the EXE to a folder on a Windows 11 x64 PC, such as the Desktop or Downloads. A USB drive and a .NET installation are not required.
+2. Double-click the EXE. On first launch, enter your own OpenAI API key. There is no app password. An internet connection and API access to `gpt-6-luna` are needed to get answers.
+3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key`, protected for that Windows account. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
+4. The answer panel starts hidden after setup. Use the tray icon or Ctrl+/ to show it. Type a question and press Enter or **Send**. The app captures the monitor containing the answer panel once and sends that image with your question, so the answer can use what is on screen.
+
+The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
 
 | Shortcut | Action |
 | --- | --- |
@@ -16,15 +19,25 @@ The public download contains **no API key**. Windows does not automatically star
 | **Ctrl+/** | Hide or show the answer panel. Capture and answering still work while it is hidden; showing it again displays the latest answer. Use the main `/` key. |
 | **Ctrl+Alt+T** | Open or close the capture-exclusion test panel. |
 
-The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the answer panel. The app does not open a progress panel while a request is running; the tray icon tooltip indicates that it is reading the screen. Answers and errors appear when ready. The movable answer panel starts compact and grows for longer text; it stays visible until you hide it. If you forget the password, delete `screencompanion.key` and set up a key again. Anyone who has both the USB drive and its vault password can use the saved API key.
+The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. To change a shortcut, click its field and press the desired key or combination. Ctrl and Alt are optional; a single key also works. Click elsewhere to stop recording, or use Restore shortcuts for the defaults. Windows may reject reserved or already registered combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps while ScreenCompanion runs. Settings also offers a button to change the API key.
 
-## Capture and privacy
+The tray icon indicates when a request is running. The answer panel can be moved by its header and resized by dragging an edge or corner. The chosen size is saved for later launches under `%LOCALAPPDATA%\ScreenCompanion\window-size.json`; answers keep that size until you resize it again. Only one request runs at a time. Settings and API-key setup use the same dark theme as the answer panel.
 
-Each Ctrl+Alt+Space press sends one active-monitor image to the OpenAI Responses API without an additional confirmation step. The app has no microphone, camera, typed question field, or file input. It keeps no screenshot or answer history and sends `store: false` with API requests. Screen images still leave the PC for API processing.
+## Diagnose a failure
 
-ScreenCompanion requests Windows capture exclusion for its own windows. This is best-effort and may differ by recorder; the tray menu and test panel remind you to verify it. To check a recorder without an API key, run `ScreenCompanion.exe --capture-test-only`, record the entire monitor, and inspect the saved recording. In this mode, Ctrl+/ hides or shows the test panel, Ctrl+Alt+T closes or reopens it, and Esc closes it. Check Edge and Chrome whole-monitor capture, OBS Display Capture, Snipping Tool screen recording, or Xbox Game Bar separately. A tab-only recording does not test whole-monitor capture.
+If an answer fails, the panel shows the error, a diagnostic code, and a report ID. `CAPTURE-...` means the screen capture failed before the API request. `APIREQUEST-NETWORK` and `APIREQUEST-TIMEOUT` indicate a connection failure or timeout; `APIREQUEST-HTTP-401` (or another number) means the API returned that HTTP status. The previous generic advice to check both the internet and API key for every error has been removed.
 
-In a Windows 11 Pro VirtualBox lab VM, the test panel was visible on the desktop and absent from inspected saved recordings made with Edge Entire Screen, Chrome Entire Screen, and OBS 32.2.2 Display Capture. Ctrl+/ was also verified there. These results apply to those recorder paths in that VM; capture exclusion is still best effort on other PCs and with other recorders. The physical USB was detected in the VM, but execution under a standard Windows account and the removable-drive execution policy test have not been completed.
+Open `%LOCALAPPDATA%\ScreenCompanion\diagnostics.log` using Win+R or File Explorer. The app writes `PROCESSSTARTED` when its managed code begins, `READY` when the tray app is ready, and one entry per reported failure. Each entry contains a UTC timestamp, app version, stage, code, exception type, and limited Windows/platform details. The log is capped at roughly 64 KB and contains no API key, request or response body, question, screenshot, answer, or raw exception message. If the app cannot write the log, the error still displays a diagnostic code and says the log was not saved. If no log appears at all, the EXE may have been blocked before its code ran, or the app may not have been able to write to that folder.
+
+For support, send the diagnostic code and report ID, the matching log entry, the EXE version, and what you clicked. Do not send your API key. If no window appears, first check the tray icon: the answer panel normally starts hidden after setup.
+
+## Privacy and capture testing
+
+A typed request sends your question and one fresh monitor image. A capture-shortcut request sends one monitor image. Neither request needs an extra confirmation. The app keeps no screenshot or answer history and sends `store: false` with API requests. Your question and screen image leave the PC for API processing. The API key and saved settings are encrypted for the current Windows user.
+
+ScreenCompanion requests Windows capture exclusion for its own windows. This is best effort and may differ by recorder. The tray menu and test panel remind you to verify it. To check a recorder without an API key, run `ScreenCompanion-v0.3.7.exe --capture-test-only`, record the entire monitor, and inspect the saved recording. This mode uses the default shortcuts: Ctrl+/ hides or shows the test panel, Ctrl+Alt+T closes or reopens it, and Esc closes it. A tab-only recording does not test whole-monitor capture.
+
+In a Windows 11 Pro VirtualBox lab VM, the test panel was visible on the desktop and absent from inspected saved recordings made with Edge Entire Screen, Chrome Entire Screen, and OBS 32.2.2 Display Capture. Ctrl+/ was also verified there. These results apply to those recorder paths in that VM; capture exclusion is still best effort on other PCs. A Windows runtime check of v0.3.7 diagnostics and window layout, key setup, shortcut remapping, typed-question capture, and a real GPT-6 Luna API response, are still pending.
 
 ## Build from source
 
@@ -34,6 +47,4 @@ Install the .NET 10 SDK on Windows, then run this from the repository folder in 
 .\publish.ps1
 ```
 
-This produces a self-contained Windows x64 executable at `publish\win-x64\ScreenCompanion.exe`; the target PC does not need the .NET runtime. Copy the executable to a writable USB drive. The app creates `screencompanion.key` beside it on first setup.
-
-Build output, USB bundles, and key files are excluded from Git. Never publish a personal `screencompanion.key` file or a bundle containing one.
+This produces a self-contained Windows x64 executable at `publish\win-x64\ScreenCompanion-v0.3.7.exe`. The version number comes from `ScreenCompanion.csproj` and is included in every generated EXE name. The target PC does not need the .NET runtime. Build output, private vaults, and credentials are excluded from Git. Never publish a personal key file.
