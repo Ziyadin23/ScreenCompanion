@@ -569,7 +569,7 @@ internal sealed class AnswerOverlay : Form
     private readonly Func<string, Task>? _onTextQuestion;
     private readonly TextBox _question;
     private readonly Button _sendButton;
-    private bool _captureExclusionRequested;
+    private CaptureExclusionResult _captureExclusionResult;
     private bool _hiddenByUser;
     private bool _capturePending;
     private bool _manuallyResized;
@@ -742,7 +742,7 @@ internal sealed class AnswerOverlay : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        _captureExclusionRequested = CaptureExclusion.Apply(Handle);
+        _captureExclusionResult = CaptureExclusion.Apply(Handle);
         _footer.Text = CaptureStatus;
     }
 
@@ -967,9 +967,12 @@ internal sealed class AnswerOverlay : Form
         ManualSizeChanged?.Invoke(Size);
     }
 
-    private string CaptureStatus => _captureExclusionRequested
-        ? "Windows capture exclusion requested. Verify each recorder."
-        : "Windows capture exclusion failed; this panel may appear in recordings.";
+    private string CaptureStatus => _captureExclusionResult switch
+    {
+        CaptureExclusionResult.Excluded => "Windows capture exclusion requested. Verify each recorder.",
+        CaptureExclusionResult.ContentHidden => "Windows 10 before 2004: panel may appear blank. Test recordings.",
+        _ => "Windows capture exclusion failed; this panel may appear in recordings."
+    };
 
     private static Button MakeButton(string text, int x, int y, int width, int height, Action onClick)
     {
@@ -1204,12 +1207,29 @@ internal static class ScreenCapture
     }
 }
 
+internal enum CaptureExclusionResult
+{
+    Failed,
+    Excluded,
+    ContentHidden
+}
+
 internal static class CaptureExclusion
 {
+    private const uint WdaMonitor = 0x00000001;
     private const uint WdaExcludeFromCapture = 0x00000011;
 
-    public static bool Apply(IntPtr windowHandle) =>
-        NativeMethods.SetWindowDisplayAffinity(windowHandle, WdaExcludeFromCapture);
+    public static CaptureExclusionResult Apply(IntPtr windowHandle)
+    {
+        // Before Windows 10 version 2004, EXCLUDEFROMCAPTURE behaves like MONITOR:
+        // the window can remain visible in a recording with its contents blanked.
+        var supportsExclusion = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041);
+        var affinity = supportsExclusion ? WdaExcludeFromCapture : WdaMonitor;
+        if (!NativeMethods.SetWindowDisplayAffinity(windowHandle, affinity))
+            return CaptureExclusionResult.Failed;
+
+        return supportsExclusion ? CaptureExclusionResult.Excluded : CaptureExclusionResult.ContentHidden;
+    }
 }
 
 internal static class NativeMethods

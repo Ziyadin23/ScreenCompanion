@@ -1,12 +1,14 @@
 # ScreenCompanion
 
-ScreenCompanion is a single-file Windows 11 x64 assistant. Type a question in its answer panel, or press a shortcut to capture one monitor and ask about the visible question. Both request types use the OpenAI Responses API with `gpt-6-luna` and show the answer in the panel.
+ScreenCompanion is a single-file Windows 10/11 x64 assistant. Type a question in its answer panel, or press a shortcut to capture one monitor and ask about the visible question. Both request types use the OpenAI Responses API with `gpt-6-luna` and show the answer in the panel.
 
-Version v0.3.7 is the current public release. Download it from the [v0.3.7 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.3.7). Earlier releases do not include typed questions or GPT-6 Luna.
+Version v0.3.8 in this source tree targets Windows 10 x64 22H2 (build 19045), adds an explicit Windows 10 compatibility manifest, and clarifies capture-exclusion behavior on older builds. It has not yet been run on Windows 10. Version v0.3.7 remains the current public release; download it from the [v0.3.7 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.3.7). Earlier releases do not include typed questions or GPT-6 Luna.
 
-## Run on a Windows 11 PC
+Microsoft currently lists .NET 10 support on Windows 10 for LTSC and Enterprise editions only ([supported Windows versions](https://learn.microsoft.com/dotnet/core/install/windows#supported-versions)). Other Windows 10 editions need a local runtime check before compatibility can be claimed.
 
-1. Download **`ScreenCompanion-v0.3.7.exe`** from the release, or extract the same EXE and `README.txt` from `ScreenCompanion-v0.3.7.zip`. You can also build it from source below. Copy the EXE to a folder on a Windows 11 x64 PC, such as the Desktop or Downloads. A USB drive and a .NET installation are not required.
+## Run on a Windows 10 or 11 PC
+
+1. For the Windows 10 changes, build **`ScreenCompanion-v0.3.8.exe`** from this source as described below. The public release still provides **`ScreenCompanion-v0.3.7.exe`** and `ScreenCompanion-v0.3.7.zip`. Copy the EXE to a folder on a Windows 10 or 11 x64 PC, such as the Desktop or Downloads. A USB drive and a .NET installation are not required on the target PC.
 2. Double-click the EXE. On first launch, enter your own OpenAI API key. There is no app password. An internet connection and API access to `gpt-6-luna` are needed to get answers.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key`, protected for that Windows account. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. The answer panel starts hidden after setup. Use the tray icon or Ctrl+/ to show it. Type a question and press Enter or **Send**. The app captures the monitor containing the answer panel once and sends that image with your question, so the answer can use what is on screen.
@@ -35,9 +37,9 @@ For support, send the diagnostic code and report ID, the matching log entry, the
 
 A typed request sends your question and one fresh monitor image. A capture-shortcut request sends one monitor image. Neither request needs an extra confirmation. The app keeps no screenshot or answer history and sends `store: false` with API requests. Your question and screen image leave the PC for API processing. The API key and saved settings are encrypted for the current Windows user.
 
-ScreenCompanion requests Windows capture exclusion for its own windows. This is best effort and may differ by recorder. The tray menu and test panel remind you to verify it. To check a recorder without an API key, run `ScreenCompanion-v0.3.7.exe --capture-test-only`, record the entire monitor, and inspect the saved recording. This mode uses the default shortcuts: Ctrl+/ hides or shows the test panel, Ctrl+Alt+T closes or reopens it, and Esc closes it. A tab-only recording does not test whole-monitor capture.
+ScreenCompanion requests Windows capture exclusion for its own windows. On Windows 10 version 2004 and later, it requests that the window be omitted from supported captures. On earlier Windows 10 builds, it requests that the window content be blanked; the window itself may remain visible. Both behaviors are best effort and may differ by recorder. The tray menu and test panel remind you to verify them. To check a recorder without an API key, run `ScreenCompanion-v0.3.8.exe --capture-test-only`, record the entire monitor, and inspect the saved recording. This mode uses the default shortcuts: Ctrl+/ hides or shows the test panel, Ctrl+Alt+T closes or reopens it, and Esc closes it. A tab-only recording does not test whole-monitor capture.
 
-In a Windows 11 Pro VirtualBox lab VM, the test panel was visible on the desktop and absent from inspected saved recordings made with Edge Entire Screen, Chrome Entire Screen, and OBS 32.2.2 Display Capture. Ctrl+/ was also verified there. These results apply to those recorder paths in that VM; capture exclusion is still best effort on other PCs. A Windows runtime check of v0.3.7 diagnostics and window layout, key setup, shortcut remapping, typed-question capture, and a real GPT-6 Luna API response, are still pending.
+In a Windows 11 Pro VirtualBox lab VM, an earlier build's test panel was visible on the desktop and absent from inspected saved recordings made with Edge Entire Screen, Chrome Entire Screen, and OBS 32.2.2 Display Capture. Ctrl+/ was also verified there. These results apply to those recorder paths in that VM; capture exclusion is still best effort on other PCs. The v0.3.8 build still needs Windows 10 runtime and recorder checks. A Windows runtime check of diagnostics and window layout, key setup, shortcut remapping, typed-question capture, and a real GPT-6 Luna API response are also pending.
 
 ## Build from source
 
@@ -47,4 +49,4 @@ Install the .NET 10 SDK on Windows, then run this from the repository folder in 
 .\publish.ps1
 ```
 
-This produces a self-contained Windows x64 executable at `publish\win-x64\ScreenCompanion-v0.3.7.exe`. The version number comes from `ScreenCompanion.csproj` and is included in every generated EXE name. The target PC does not need the .NET runtime. Build output, private vaults, and credentials are excluded from Git. Never publish a personal key file.
+This produces a self-contained Windows x64 executable at `publish\win-x64\ScreenCompanion-v0.3.8.exe`. The version number comes from `ScreenCompanion.csproj` and is included in every generated EXE name. The target PC does not need the .NET runtime. Build output, private vaults, and credentials are excluded from Git. Never publish a personal key file.
