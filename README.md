@@ -2,13 +2,13 @@
 
 ScreenCompanion is a single-file Windows 10/11 x64 assistant. Type a question in its answer panel, or press a shortcut to capture one monitor and ask about the visible question. Both request types use the OpenAI Responses API with `gpt-6-luna` and show the answer in the panel.
 
-Version v0.3.8 in this source tree targets Windows 10 x64 22H2 (build 19045), adds an explicit Windows 10 compatibility manifest, and clarifies capture-exclusion behavior on older builds. It has not yet been run on Windows 10. Version v0.3.7 remains the current public release; download it from the [v0.3.7 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.3.7). Earlier releases do not include typed questions or GPT-6 Luna.
+Version v0.3.8 is the current public release. Download it from the [v0.3.8 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.3.8). It targets Windows 10 x64 22H2 (build 19045), adds an explicit Windows 10 compatibility manifest, and clarifies capture-exclusion behavior on older builds. It has not yet been run on Windows 10.
 
 Microsoft currently lists .NET 10 support on Windows 10 for LTSC and Enterprise editions only ([supported Windows versions](https://learn.microsoft.com/dotnet/core/install/windows#supported-versions)). Other Windows 10 editions need a local runtime check before compatibility can be claimed.
 
 ## Run on a Windows 10 or 11 PC
 
-1. For the Windows 10 changes, build **`ScreenCompanion-v0.3.8.exe`** from this source as described below. The public release still provides **`ScreenCompanion-v0.3.7.exe`** and `ScreenCompanion-v0.3.7.zip`. Copy the EXE to a folder on a Windows 10 or 11 x64 PC, such as the Desktop or Downloads. A USB drive and a .NET installation are not required on the target PC.
+1. Download **`ScreenCompanion-v0.3.8.exe`** from the release, or extract the same EXE and `README.txt` from `ScreenCompanion-v0.3.8.zip`. You can also build it from source below. Copy the EXE to a folder on a Windows 10 or 11 x64 PC, such as the Desktop or Downloads. A USB drive and a .NET installation are not required on the target PC.
 2. Double-click the EXE. On first launch, enter your own OpenAI API key. There is no app password. An internet connection and API access to `gpt-6-luna` are needed to get answers.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key`, protected for that Windows account. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. The answer panel starts hidden after setup. Use the tray icon or Ctrl+/ to show it. Type a question and press Enter or **Send**. The app captures the monitor containing the answer panel once and sends that image with your question, so the answer can use what is on screen.
