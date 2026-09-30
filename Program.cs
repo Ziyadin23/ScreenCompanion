@@ -92,7 +92,8 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private readonly string _credentialPath;
     private readonly bool _legacyVaultExists;
     private readonly HotkeyHost _host;
-    private readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(90) };
+    private readonly HttpClient _httpClient;
+    private readonly PipelineConfiguration _pipelineConfiguration;
     private AnswerOverlay? _overlay;
     private AppTray? _tray;
     private string? _apiKey;
@@ -104,8 +105,10 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private bool _settingsOpen;
     private bool _hotkeysRegistered;
 
-    public ScreenCompanionContext()
+    public ScreenCompanionContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null)
     {
+        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+        _pipelineConfiguration = configuration ?? PipelineConfiguration.LoadFromEnvironment();
         var besideExecutable = Path.Combine(AppContext.BaseDirectory, "screencompanion.key");
         var profileDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ScreenCompanion");
@@ -388,7 +391,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg,
-                ResponseModes.Instruction(_settings!));
+                ResponseModes.Instruction(_settings!), _pipelineConfiguration);
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
         }
@@ -431,7 +434,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerTextAsync(_httpClient, _apiKey, question, jpeg,
-                ResponseModes.TextInstruction(_settings!));
+                ResponseModes.TextInstruction(_settings!), _pipelineConfiguration);
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
             _overlay.ClearQuestion();

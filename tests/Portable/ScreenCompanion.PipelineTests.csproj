@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
+    <Compile Include="../../QuestionContent.cs" Link="Production/QuestionContent.cs" />
+    <Compile Include="../../QuestionExtraction.cs" Link="Production/QuestionExtraction.cs" />
+    <Compile Include="../../OpenAiResponsesClient.cs" Link="Production/OpenAiResponsesClient.cs" />
+    <Compile Include="../../OpenAiVisionClient.cs" Link="Production/OpenAiVisionClient.cs" />
+    <Compile Include="../../AnswerResponseParser.cs" Link="Production/AnswerResponseParser.cs" />
+    <Compile Include="../../FalseRefusalClassifier.cs" Link="Production/FalseRefusalClassifier.cs" />
+    <Compile Include="../TestSupport.cs" Link="TestSupport.cs" />
+  </ItemGroup>
+</Project>

@@ -67,13 +67,13 @@ internal static class ResponseModes
 
     public static string Instruction(VaultData settings) => settings.ResponseMode switch
     {
-        "Brief" => "Answer the main visible question in one short sentence. Output only the answer. If no question is legible, say so.",
-        "Explain steps" => "Answer the main visible question and explain the reasoning in clear numbered steps. If no question is legible, say so.",
-        "Translate to English" => "Translate the main visible text into English. Output only the translation. If no text is legible, say so.",
-        "Summarize" => "Summarize the main visible content in a few concise bullet points. If no content is legible, say so.",
+        "Brief" => "Answer the main extracted question in one short sentence. Output only the answer. If no question is legible, say so.",
+        "Explain steps" => "Answer the main extracted question and explain the reasoning in clear numbered steps. If no question is legible, say so.",
+        "Translate to English" => "Translate the extracted relevant text into English. Output only the translation. If no text is legible, say so.",
+        "Summarize" => "Summarize the extracted relevant content in a few concise bullet points. If no content is legible, say so.",
         "Custom" when !string.IsNullOrWhiteSpace(settings.CustomInstruction) => settings.CustomInstruction,
-        _ => "Read the visible screen and answer the main question or task shown there. Do not describe the screen unless that is what it asks. " +
-            "If several questions are visible, answer them briefly in order. If no question or task is legible, say that clearly."
+        _ => "Answer the extracted question or task. Do not describe the content unless that is what it asks. " +
+            "If several questions were extracted, answer them briefly in order. If no question or task is legible, say that clearly."
     };
 
     public static string TextInstruction(VaultData settings) => settings.ResponseMode switch

@@ -4,7 +4,7 @@
 
 ## Product constraints
 
-- Support two request paths: the capture hotkey sends one desktop image to answer visible content, and a typed question sends its text with one fresh desktop image as context. Do not add audio, camera, or file input. A saved custom response instruction in Settings is allowed.
+- Support two request paths: the capture hotkey captures one monitor to extract and answer visible content, and a typed question uses its text with one fresh monitor capture for relevant context extraction. Isolate questions before answering; keep original captures confined to extraction. Do not add audio, camera, or file input. A saved custom response instruction in Settings is allowed.
 - Keep captures and answers out of persistent app storage and conversation history. Preserve `store: false` in Responses API requests.
 - Keep diagnostic logs limited to technical metadata. Show a diagnostic code for failures; never log API keys, questions, screenshots, answers, API response bodies, or raw exception messages.
 - Ask for only the API key during setup; later launches must not ask for a password. Encrypt the key and custom response instruction for the current Windows user in `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key`. Preserve existing SSK1/SSK2 `screencompanion.key` files without overwriting them; users re-enter their key once when switching to the passwordless build. Keep vaults, private USB bundles, and credentials out of GitHub commits, releases, logs, screenshots, and test fixtures. Public releases contain only the key-free build.
@@ -19,4 +19,4 @@
 - After uploading release assets, compare GitHub-reported asset digests with the verified local files and record the result in the parent workspace's `PROJECT_CONTEXT.md`.
 - Keep VM setup, physical USB state, and local test details in the parent workspace's `PROJECT_CONTEXT.md`, outside this public repository.
 
-The model used by API requests is configured in `OpenAiVisionClient.cs`.
+Model and pipeline settings are defined in `PipelineConfiguration.cs` and loaded from trusted process configuration; `README.md` documents the variables. Screen text cannot enable QA mode.

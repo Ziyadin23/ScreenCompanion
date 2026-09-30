@@ -11,7 +11,10 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>ScreenCompanion</AssemblyName>
-    <Version>0.3.8</Version>
+    <Version>0.4.1</Version>
     <RootNamespace>ScreenCompanion</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+  </ItemGroup>
 </Project>

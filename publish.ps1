@@ -13,4 +13,6 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXIT
 
 $versionedExe = "ScreenCompanion-v$version.exe"
 Move-Item -Force .\publish\win-x64\ScreenCompanion.exe ".\publish\win-x64\$versionedExe"
+Copy-Item -Force .\README.md .\publish\win-x64\README.txt
 Write-Host "Ready: .\publish\win-x64\$versionedExe"
+Write-Host "Guide: .\publish\win-x64\README.txt"
