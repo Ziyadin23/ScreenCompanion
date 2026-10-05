@@ -22,6 +22,7 @@ internal static class PipelineTests
         await CaptureCases();
         await RetryCases();
         await TypedAndModes();
+        await ProviderTests.Run();
         Console.WriteLine($"PASS: {TestCheck.Count} portable assertions.");
     }
 

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -68,9 +69,9 @@ internal static class QuestionExtractor
                 }
                 else
                 {
-                    var detection = await OpenAiResponsesClient.SendAsync(client, apiKey, config.VisionModel,
+                    var detection = await ModelApiClient.SendAsync(client, apiKey, config.VisionModel,
                         DetectionInstruction, ImageContent(screenshot, context), DetectionSchema(),
-                        config.ExtractionMaxOutputTokens, cancellationToken);
+                        config.ExtractionMaxOutputTokens, config.Provider, cancellationToken);
                     EnsureComplete(detection);
                     if (!string.IsNullOrWhiteSpace(typedQuestion) && IsNoRelevantRegion(detection.Text))
                         return TypedTaskWithoutScreen();
@@ -82,9 +83,9 @@ internal static class QuestionExtractor
             // Even when cropping is explicitly disabled, this original image is available only
             // to the extractor. The answer stage receives structured data and necessary subcrops.
             var extractionImage = isolatedImage ?? screenshot;
-            var extraction = await OpenAiResponsesClient.SendAsync(client, apiKey, config.VisionModel,
+            var extraction = await ModelApiClient.SendAsync(client, apiKey, config.VisionModel,
                 ExtractionInstruction, ImageContent(extractionImage, context), ExtractionSchema(),
-                config.ExtractionMaxOutputTokens, cancellationToken);
+                config.ExtractionMaxOutputTokens, config.Provider, cancellationToken);
             EnsureComplete(extraction);
             if (!string.IsNullOrWhiteSpace(typedQuestion) && IsNoRelevantContent(extraction.Text))
                 return TypedTaskWithoutScreen();

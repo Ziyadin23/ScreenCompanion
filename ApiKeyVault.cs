@@ -9,6 +9,20 @@ namespace ScreenCompanion;
 internal sealed record VaultData(string ApiKey, string ResponseMode, string CustomInstruction,
     HotkeyBinding Capture, HotkeyBinding Visibility, HotkeyBinding Test)
 {
+    public AppearanceSettings Appearance { get; init; } = new();
+    public HotkeyBinding SettingsShortcut { get; init; } = HotkeyBinding.DefaultSettings;
+    public HotkeyBinding ExitShortcut { get; init; } = HotkeyBinding.DefaultExit;
+    public HotkeyBinding InputShortcut { get; init; } = HotkeyBinding.DefaultInput;
+    public bool CommandsShown { get; init; }
+    public ModelSelection? Models { get; init; }
+    public ProviderKeys ProviderKeys { get; init; } = new();
+
+    public string KeyFor(ApiProvider provider)
+    {
+        var key = ProviderKeys.Get(provider);
+        return key.Length > 0 ? key : provider == (Models?.Provider ?? ApiProvider.OpenAI) ? ApiKey : "";
+    }
+
     public static VaultData Default(string apiKey) => new(apiKey, "Default", "",
         HotkeyBinding.DefaultCapture, HotkeyBinding.DefaultVisibility, HotkeyBinding.DefaultTest);
 }
@@ -97,7 +111,7 @@ internal static class ApiKeyVault
             }
 
             ValidateCurrentUserData(data, validateHotkeys: false);
-            return data;
+            return data with { Appearance = (data.Appearance ?? new()).Normalize() };
         }
         finally
         {
@@ -149,10 +163,12 @@ internal static class ApiKeyVault
     private static void ValidateCurrentUserData(VaultData data, bool validateHotkeys)
     {
         if (data is null || string.IsNullOrWhiteSpace(data.ApiKey) ||
+            !ProviderKeys.ValidKey(data.ApiKey) || data.ProviderKeys is null || !data.ProviderKeys.IsValid ||
+            (data.Models is not null && !data.Models.IsValid) ||
             data.ResponseMode is null || data.CustomInstruction is null ||
             data.CustomInstruction.Length > 2000 ||
-            (validateHotkeys && (!data.Capture.IsValid || !data.Visibility.IsValid || !data.Test.IsValid ||
-                data.Capture == data.Visibility || data.Capture == data.Test || data.Visibility == data.Test)))
+            (validateHotkeys && (data.Appearance is null || !data.Appearance.IsValid)) ||
+            (validateHotkeys && !ShortcutSet.From(data).IsValid))
             throw new IOException("The saved settings are invalid or damaged.");
     }
 

@@ -7,6 +7,7 @@ internal sealed record PipelineConfiguration
 {
     public const double DefaultImageRegionPadding = .08;
 
+    public ApiProvider Provider { get; init; } = ApiProvider.OpenAI;
     public string AnswerModel { get; init; } = "gpt-6-luna";
     public string VisionModel { get; init; } = "gpt-6-luna";
     public string AssessmentMode { get; init; } = "standard";
@@ -18,9 +19,20 @@ internal sealed record PipelineConfiguration
     public int ExtractionMaxOutputTokens { get; init; } = 6000;
     public int AnswerMaxOutputTokens { get; init; } = 2500;
 
+    public ModelSelection Models => new() { Provider = Provider, AnswerModel = AnswerModel, VisionModel = VisionModel };
+
+    public PipelineConfiguration WithModels(ModelSelection? models)
+    {
+        if (models is null) return this;
+        if (!models.IsValid) throw new InvalidDataException("The saved model selection is invalid.");
+        return this with { Provider = models.Provider, AnswerModel = models.AnswerModel, VisionModel = models.VisionModel };
+    }
+
     public static PipelineConfiguration LoadFromEnvironment(Func<string, string?>? read = null)
     {
         read ??= Environment.GetEnvironmentVariable;
+        var provider = ProviderCatalog.Parse(Value("API_PROVIDER", "OpenAI"));
+        var defaults = ModelSelection.Default(provider);
         var mode = Value("ASSESSMENT_MODE", "standard").ToLowerInvariant();
         if (mode is not ("qa" or "standard"))
             throw new InvalidDataException("ASSESSMENT_MODE must be qa or standard.");
@@ -42,8 +54,9 @@ internal sealed record PipelineConfiguration
 
         return new PipelineConfiguration
         {
-            AnswerModel = Value("ANSWER_MODEL", "gpt-6-luna"),
-            VisionModel = Value("VISION_MODEL", "gpt-6-luna"),
+            Provider = provider,
+            AnswerModel = Value("ANSWER_MODEL", defaults.AnswerModel),
+            VisionModel = Value("VISION_MODEL", defaults.VisionModel),
             AssessmentMode = mode,
             EnableQuestionCropping = Boolean("ENABLE_QUESTION_CROPPING", true),
             EnableRefusalRetry = Boolean("ENABLE_REFUSAL_RETRY", true),

@@ -7,6 +7,9 @@ internal readonly record struct HotkeyBinding(uint Modifiers, Keys Key)
     public static HotkeyBinding DefaultCapture => new(NativeMethods.ModControl | NativeMethods.ModAlt, Keys.Space);
     public static HotkeyBinding DefaultVisibility => new(NativeMethods.ModControl, Keys.OemQuestion);
     public static HotkeyBinding DefaultTest => new(NativeMethods.ModControl | NativeMethods.ModAlt, Keys.T);
+    public static HotkeyBinding DefaultSettings => new(NativeMethods.ModControl, Keys.I);
+    public static HotkeyBinding DefaultExit => new(NativeMethods.ModControl, Keys.Back);
+    public static HotkeyBinding DefaultInput => new(NativeMethods.ModControl, Keys.Enter);
 
     public bool IsValid => Key is not (Keys.None or Keys.F12 or Keys.KeyCode) &&
         (Key & ~Keys.KeyCode) == Keys.None &&
@@ -33,6 +36,7 @@ internal readonly record struct HotkeyBinding(uint Modifiers, Keys Key)
             Keys.LWin => "Left Win",
             Keys.RWin => "Right Win",
             Keys.OemQuestion => "/",
+            Keys.Back => "Backspace",
             _ => Key.ToString()
         };
         return prefix + name;
@@ -98,21 +102,52 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
     private readonly TextBox _capture;
     private readonly TextBox _visibility;
     private readonly TextBox _test;
+    private readonly TextBox _settingsHotkey;
+    private readonly TextBox _exitHotkey;
+    private readonly TextBox _inputHotkey;
     private HotkeyBinding _captureBinding;
     private HotkeyBinding _visibilityBinding;
     private HotkeyBinding _testBinding;
-    private readonly string _apiKey;
+    private HotkeyBinding _settingsBinding;
+    private HotkeyBinding _exitBinding;
+    private HotkeyBinding _inputBinding;
+    private readonly VaultData _original;
+    private ProviderKeys _providerKeys;
+    private ApiProvider _editingProvider;
+    private readonly Dictionary<ApiProvider, ModelSelection> _modelDrafts = new();
+    private readonly ComboBox _providerChoice;
+    private readonly ComboBox _answerModel;
+    private readonly ComboBox _visionModel;
+    private readonly TextBox _serviceKey;
+    private readonly CheckBox _showKey;
+    private readonly Label _providerNotice;
     private TextBox? _listeningField;
     private HotkeyBinding? _pendingModifierBinding;
     private bool _messageFilterRegistered;
+    private AppearanceSettings _appearance;
+    private readonly ComboBox _themeChoice;
+    private readonly TrackBar _transparency;
+    private readonly Label _transparencyLabel;
+    private readonly TrackBar _textOpacity;
+    private readonly Label _textOpacityLabel;
+    private readonly NumericUpDown _fontSize;
+    private readonly AppearancePreview _appearancePreview;
+    private readonly Dictionary<string, Button> _colorButtons = new();
 
     public VaultData? Settings { get; private set; }
+    public event Action<bool>? ShortcutRecordingChanged;
+    public void EndShortcutRecording() => StopListening();
 
-    public SettingsDialog(VaultData current)
+    public SettingsDialog(VaultData current, PipelineConfiguration? configuration = null)
     {
-        _apiKey = current.ApiKey;
+        _original = current;
+        var models = (configuration ?? PipelineConfiguration.LoadFromEnvironment()).WithModels(current.Models).Models;
+        _editingProvider = models.Provider;
+        _modelDrafts.Add(models.Provider, models);
+        _providerKeys = current.ProviderKeys.WithKey(models.Provider, current.ApiKey);
+        _appearance = current.Appearance.Normalize();
         Text = "ScreenCompanion settings";
-        ClientSize = new System.Drawing.Size(530, 540);
+        ClientSize = new System.Drawing.Size(530, 580);
 
         Controls.Add(AddLabel("Answer mode", 20, 52, 480, 24));
         _mode = new ComboBox
@@ -142,31 +177,245 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _captureBinding = current.Capture;
         _visibilityBinding = current.Visibility;
         _testBinding = current.Test;
+        _settingsBinding = current.SettingsShortcut;
+        _exitBinding = current.ExitShortcut;
+        _inputBinding = current.InputShortcut;
         _capture = AddHotkeyField("Capture and answer", 302, ref _captureBinding);
         _visibility = AddHotkeyField("Show or hide panel", 343, ref _visibilityBinding);
         _test = AddHotkeyField("Capture test", 384, ref _testBinding);
+        _settingsHotkey = AddHotkeyField("Open settings", 425, ref _settingsBinding);
+        _exitHotkey = AddHotkeyField("Exit app", 466, ref _exitBinding);
+        _inputHotkey = AddHotkeyField("Type a question", 507, ref _inputBinding);
         BindHotkey(_capture);
         BindHotkey(_visibility);
         BindHotkey(_test);
+        BindHotkey(_settingsHotkey);
+        BindHotkey(_exitHotkey);
+        BindHotkey(_inputHotkey);
 
-        var reset = AddButton("Restore shortcuts", 20, 428, 150, DialogResult.None);
+        var reset = AddButton("Restore shortcuts", 20, 553, 150, DialogResult.None);
         reset.Click += (_, _) =>
         {
             StopListening();
             _captureBinding = HotkeyBinding.DefaultCapture;
             _visibilityBinding = HotkeyBinding.DefaultVisibility;
             _testBinding = HotkeyBinding.DefaultTest;
+            _settingsBinding = HotkeyBinding.DefaultSettings;
+            _exitBinding = HotkeyBinding.DefaultExit;
+            _inputBinding = HotkeyBinding.DefaultInput;
             RefreshHotkeys();
         };
-        var changeKey = AddButton("Change API key", 180, 428, 190, DialogResult.Retry);
-        changeKey.Click += (_, _) => Close();
-        var save = AddButton("Save", 336, 488, 78, DialogResult.None);
+        var changeKey = AddButton("Change API key", 180, 553, 190, DialogResult.None);
+
+        var generalPage = new Panel { Location = new Point(0, 94), Size = new Size(530, 430), AutoScroll = true };
+        foreach (var control in Controls.Cast<Control>().Where(control => control.Tag is not UiColorRole.Header).ToArray())
+        {
+            Controls.Remove(control);
+            control.Top -= 52;
+            generalPage.Controls.Add(control);
+        }
+        Controls.Add(generalPage);
+        var appearancePage = new Panel
+        {
+            Location = generalPage.Location, Size = generalPage.Size, AutoScroll = true, Visible = false
+        };
+        Controls.Add(appearancePage);
+        var commandsPage = new Panel
+        {
+            Location = generalPage.Location, Size = generalPage.Size, AutoScroll = true, Visible = false
+        };
+        var commands = ShortcutSet.From(current);
+        commandsPage.Controls.Add(AddLabel($"{commands.Capture} — capture and answer\n\n" +
+            $"{commands.Input} — type a question\n\n{commands.Visibility} — show or hide everything\n\n" +
+            $"{commands.Settings} — open settings\n\n{commands.Exit} — exit app\n\n{commands.Test} — capture test\n\n" +
+            "Mouse wheel — scroll the answer\nAlt + left drag — move the panel\nDrag an edge — resize\n" +
+            "Enter — send; Esc — return or hide\n\nRecording exclusion is best effort. Test each recorder.", 20, 8, 480, 410));
+        Controls.Add(commandsPage);
+        var modelsPage = new Panel
+        {
+            Location = generalPage.Location, Size = generalPage.Size, AutoScroll = true, Visible = false
+        };
+        Controls.Add(modelsPage);
+        var generalTab = AddButton("Answer & shortcuts", 20, 52, 150, DialogResult.None);
+        generalTab.UseMnemonic = false;
+        var appearanceTab = AddButton("Panel", 178, 52, 82, DialogResult.None);
+        var commandsTab = AddButton("Commands", 268, 52, 108, DialogResult.None);
+        var modelsTab = AddButton("Models & API", 384, 52, 116, DialogResult.None);
+        modelsTab.UseMnemonic = false;
+        void ShowPage(Panel selected)
+        {
+            StopListening();
+            generalPage.Visible = selected == generalPage;
+            appearancePage.Visible = selected == appearancePage;
+            commandsPage.Visible = selected == commandsPage;
+            modelsPage.Visible = selected == modelsPage;
+        }
+        generalTab.Click += (_, _) => ShowPage(generalPage);
+        appearanceTab.Click += (_, _) => ShowPage(appearancePage);
+        commandsTab.Click += (_, _) => ShowPage(commandsPage);
+        modelsTab.Click += (_, _) => ShowPage(modelsPage);
+
+        modelsPage.Controls.Add(AddLabel("API service", 20, 0, 480, 24));
+        _providerChoice = AddModelChoice(modelsPage, 26, "API service", editable: false);
+        _providerChoice.Items.AddRange(Enum.GetValues<ApiProvider>().Cast<object>().ToArray());
+        _providerChoice.SelectedItem = models.Provider;
+        modelsPage.Controls.Add(AddLabel("Answer model", 20, 68, 480, 24));
+        _answerModel = AddModelChoice(modelsPage, 94, "Answer model", editable: true);
+        modelsPage.Controls.Add(AddLabel("Screen-reading model", 20, 136, 480, 24));
+        _visionModel = AddModelChoice(modelsPage, 162, "Screen-reading model", editable: true);
+        modelsPage.Controls.Add(AddLabel("API key for this service", 20, 204, 480, 24));
+        _serviceKey = new TextBox
+        {
+            Location = new Point(20, 230), Width = 480, UseSystemPasswordChar = true, MaxLength = 8192,
+            BackColor = UiTheme.Header, ForeColor = UiTheme.Text, BorderStyle = BorderStyle.FixedSingle,
+            AccessibleName = "Service API key"
+        };
+        _showKey = new CheckBox
+        {
+            Text = "Show API key", Location = new Point(20, 266), Size = new Size(480, 24),
+            AccessibleName = "Show API key"
+        };
+        _showKey.CheckedChanged += (_, _) => _serviceKey.UseSystemPasswordChar = !_showKey.Checked;
+        _providerNotice = AddLabel("", 20, 348, 480, 72);
+        modelsPage.Controls.AddRange([_serviceKey, _showKey,
+            AddLabel("Both models must support images and structured responses.\nSelect a suggestion or enter an exact model ID.", 20, 302, 480, 42),
+            _providerNotice]);
+        LoadProviderFields(models);
+        changeKey.Click += (_, _) => { ShowPage(modelsPage); _serviceKey.Focus(); };
+        _providerChoice.SelectedIndexChanged += (_, _) =>
+        {
+            RememberProviderFields();
+            _editingProvider = (ApiProvider)_providerChoice.SelectedItem!;
+            LoadProviderFields(_modelDrafts.GetValueOrDefault(_editingProvider) ?? ModelSelection.Default(_editingProvider));
+        };
+
+        _transparencyLabel = AddLabel("", 20, 0, 480, 24);
+        _transparency = new TrackBar
+        {
+            Location = new Point(14, 28), Size = new Size(490, 45), Minimum = 0,
+            Maximum = AppearanceSettings.MaximumTransparency, TickFrequency = 10, LargeChange = 10,
+            Value = _appearance.TransparencyPercent, AccessibleName = "Background transparency"
+        };
+        _transparency.ValueChanged += (_, _) =>
+        {
+            _appearance = _appearance with { TransparencyPercent = _transparency.Value };
+            UpdateAppearancePreview();
+        };
+        _textOpacityLabel = AddLabel("", 20, 78, 480, 24);
+        _textOpacity = new TrackBar
+        {
+            Location = new Point(14, 106), Size = new Size(490, 45), Minimum = 15, Maximum = 100,
+            TickFrequency = 10, Value = _appearance.TextOpacityPercent, AccessibleName = "Text visibility"
+        };
+        _textOpacity.ValueChanged += (_, _) =>
+        {
+            _appearance = _appearance with { TextOpacityPercent = _textOpacity.Value };
+            UpdateAppearancePreview();
+        };
+        _fontSize = new NumericUpDown
+        {
+            Location = new Point(255, 164), Width = 100, Minimum = 8, Maximum = 28,
+            Value = _appearance.TextSizePoints, AccessibleName = "Answer text size"
+        };
+        _fontSize.ValueChanged += (_, _) =>
+        {
+            _appearance = _appearance with { TextSizePoints = (int)_fontSize.Value };
+            UpdateAppearancePreview();
+        };
+        appearancePage.Controls.AddRange([_transparencyLabel, _transparency, _textOpacityLabel, _textOpacity,
+            AddLabel("Text size (points)", 20, 160, 225, 30), _fontSize,
+            AddLabel("Interface colors", 20, 204, 480, 24)]);
+        _themeChoice = new ComboBox
+        {
+            Location = new Point(20, 234), Width = 480, DropDownStyle = ComboBoxStyle.DropDownList,
+            DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 23, FlatStyle = FlatStyle.Flat,
+            AccessibleName = "Interface color theme"
+        };
+        _themeChoice.Items.AddRange(AppearanceSettings.PresetNames);
+        _themeChoice.SelectedItem = _appearance.PresetName;
+        _themeChoice.DrawItem += DrawModeItem;
+        _themeChoice.SelectedIndexChanged += (_, _) =>
+        {
+            if (_themeChoice.SelectedItem is string name && name != "Custom")
+                _appearance = AppearanceSettings.Preset(name) with
+                {
+                    TransparencyPercent = _transparency.Value, TextOpacityPercent = _textOpacity.Value,
+                    TextSizePoints = (int)_fontSize.Value
+                };
+            UpdateAppearancePreview();
+        };
+        appearancePage.Controls.Add(_themeChoice);
+        AddColorButton(appearancePage, "Background", 20);
+        AddColorButton(appearancePage, "Text", 183);
+        AddColorButton(appearancePage, "Buttons", 346);
+        _appearancePreview = new AppearancePreview { Location = new Point(20, 346), Size = new Size(480, 130) };
+        appearancePage.Controls.Add(_appearancePreview);
+        var resetAppearance = new Button
+        {
+            Text = "Restore appearance", Location = new Point(20, 494), Size = new Size(170, 30), FlatStyle = FlatStyle.Flat
+        };
+        resetAppearance.Click += (_, _) =>
+        {
+            _appearance = new();
+            _transparency.Value = _appearance.TransparencyPercent;
+            _textOpacity.Value = _appearance.TextOpacityPercent;
+            _fontSize.Value = _appearance.TextSizePoints;
+            _themeChoice.SelectedItem = "Dark";
+            UpdateAppearancePreview();
+        };
+        appearancePage.Controls.Add(resetAppearance);
+        UpdateAppearancePreview();
+
+        var save = AddButton("Save", 336, 540, 78, DialogResult.None);
         save.Click += (_, _) => ValidateAndSave();
-        var cancel = AddButton("Cancel", 422, 488, 78, DialogResult.Cancel);
+        var cancel = AddButton("Back", 422, 540, 78, DialogResult.Cancel);
+        cancel.Click += (_, _) => Close();
         AcceptButton = save;
         CancelButton = cancel;
         Application.AddMessageFilter(this);
         _messageFilterRegistered = true;
+    }
+
+    private ComboBox AddModelChoice(Panel page, int y, string name, bool editable)
+    {
+        var choice = new ComboBox
+        {
+            Location = new Point(20, y), Width = 480,
+            DropDownStyle = editable ? ComboBoxStyle.DropDown : ComboBoxStyle.DropDownList,
+            MaxLength = 160, FlatStyle = FlatStyle.Flat, BackColor = UiTheme.Header, ForeColor = UiTheme.Text,
+            AccessibleName = name
+        };
+        if (!editable)
+        {
+            choice.DrawMode = DrawMode.OwnerDrawFixed;
+            choice.ItemHeight = 23;
+            choice.DrawItem += DrawModeItem;
+        }
+        page.Controls.Add(choice);
+        return choice;
+    }
+
+    private void RememberProviderFields()
+    {
+        _providerKeys = _providerKeys.WithKey(_editingProvider, _serviceKey.Text.Trim());
+        _modelDrafts[_editingProvider] = new ModelSelection
+        {
+            Provider = _editingProvider, AnswerModel = _answerModel.Text.Trim(), VisionModel = _visionModel.Text.Trim()
+        };
+    }
+
+    private void LoadProviderFields(ModelSelection models)
+    {
+        foreach (var choice in new[] { _answerModel, _visionModel })
+        {
+            choice.Items.Clear();
+            choice.Items.AddRange(ProviderCatalog.Models(models.Provider));
+        }
+        _answerModel.Text = models.AnswerModel;
+        _visionModel.Text = models.VisionModel;
+        _showKey.Checked = false;
+        _serviceKey.Text = _providerKeys.Get(models.Provider);
+        _providerNotice.Text = ProviderCatalog.DataNotice(models.Provider);
     }
 
     private void DrawModeItem(object? sender, DrawItemEventArgs e)
@@ -174,14 +423,73 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         if (e.Index < 0)
             return;
 
+        var choice = (ComboBox)sender!;
         var selected = (e.State & DrawItemState.Selected) != 0;
         using var background = new SolidBrush(selected ? UiTheme.Button : UiTheme.Header);
         e.Graphics.FillRectangle(background, e.Bounds);
-        TextRenderer.DrawText(e.Graphics, _mode.Items[e.Index]?.ToString() ?? string.Empty, _mode.Font,
+        var label = choice.Items[e.Index] is ApiProvider provider ? ProviderCatalog.Name(provider) :
+            choice.Items[e.Index]?.ToString() ?? string.Empty;
+        TextRenderer.DrawText(e.Graphics, label, choice.Font,
             new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height),
-            UiTheme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            selected ? UiTheme.ButtonText : UiTheme.Text,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         if ((e.State & DrawItemState.Focus) != 0)
             ControlPaint.DrawFocusRectangle(e.Graphics, e.Bounds, UiTheme.Text, UiTheme.Button);
+    }
+
+    private void AddColorButton(Panel page, string name, int x)
+    {
+        page.Controls.Add(AddLabel(name, x, 272, 154, 24));
+        var button = new Button
+        {
+            Location = new Point(x, 300), Size = new Size(154, 30), FlatStyle = FlatStyle.Flat,
+            Tag = UiColorRole.ColorSwatch, AccessibleName = name + " color"
+        };
+        button.Click += (_, _) =>
+        {
+            using var picker = new ColorDialog { Color = button.BackColor, FullOpen = true };
+            if (picker.ShowDialog(this) != DialogResult.OK) return;
+            var color = UiTheme.Hex(picker.Color);
+            _appearance = name switch
+            {
+                "Background" => _appearance with { BackgroundColor = color },
+                "Text" => _appearance with { TextColor = color },
+                _ => _appearance with { AccentColor = color }
+            };
+            _themeChoice.SelectedItem = _appearance.PresetName;
+            UpdateAppearancePreview();
+        };
+        _colorButtons.Add(name, button);
+        page.Controls.Add(button);
+    }
+
+    private void UpdateAppearancePreview()
+    {
+        _transparencyLabel.Text = $"Background transparency: {_appearance.TransparencyPercent}% (100%: text only)";
+        _textOpacityLabel.Text = $"Text visibility: {_appearance.TextOpacityPercent}%";
+        foreach (var (name, button) in _colorButtons)
+        {
+            var color = name switch
+            {
+                "Background" => _appearance.BackgroundColor,
+                "Text" => _appearance.TextColor,
+                _ => _appearance.AccentColor
+            };
+            button.Text = color;
+            button.BackColor = UiTheme.Parse(color);
+            button.ForeColor = UiTheme.ContrastText(button.BackColor);
+            button.UseVisualStyleBackColor = false;
+        }
+        // The preview is local to the dialog; Save applies it to the app.
+        if (_appearancePreview is null) return;
+        _appearancePreview.Appearance = _appearance;
+        _appearancePreview.Invalidate();
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        UpdateInstructionState();
     }
 
     private void UpdateInstructionState()
@@ -225,6 +533,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         field.BackColor = UiTheme.Listening;
         field.ForeColor = UiTheme.ListeningText;
         field.Text = "Listening... press a key";
+        ShortcutRecordingChanged?.Invoke(true);
     }
 
     private void StopListening()
@@ -236,6 +545,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _listeningField = null;
         _pendingModifierBinding = null;
         RefreshHotkeys();
+        ShortcutRecordingChanged?.Invoke(false);
     }
 
     public bool PreFilterMessage(ref Message message)
@@ -294,6 +604,12 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
             _visibilityBinding = binding;
         else if (_listeningField == _test)
             _testBinding = binding;
+        else if (_listeningField == _settingsHotkey)
+            _settingsBinding = binding;
+        else if (_listeningField == _exitHotkey)
+            _exitBinding = binding;
+        else if (_listeningField == _inputHotkey)
+            _inputBinding = binding;
         StopListening();
     }
 
@@ -302,6 +618,9 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _capture.Text = _captureBinding.ToString();
         _visibility.Text = _visibilityBinding.ToString();
         _test.Text = _testBinding.ToString();
+        _settingsHotkey.Text = _settingsBinding.ToString();
+        _exitHotkey.Text = _exitBinding.ToString();
+        _inputHotkey.Text = _inputBinding.ToString();
     }
 
     private void ValidateAndSave()
@@ -314,14 +633,28 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
             _instruction.Focus();
             return;
         }
-        if (_captureBinding == _visibilityBinding || _captureBinding == _testBinding || _visibilityBinding == _testBinding)
+        var shortcuts = new ShortcutSet(_captureBinding, _visibilityBinding, _testBinding,
+            _settingsBinding, _exitBinding, _inputBinding);
+        if (!shortcuts.IsValid)
         {
             MessageBox.Show(this, "Each action needs a different shortcut.", "ScreenCompanion",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        Settings = new VaultData(_apiKey, (string)_mode.SelectedItem!, _instruction.Text.Trim(),
-            _captureBinding, _visibilityBinding, _testBinding);
+        RememberProviderFields();
+        if (!_modelDrafts[_editingProvider].IsValid || !_providerKeys.IsValid ||
+            string.IsNullOrWhiteSpace(_providerKeys.Get(_editingProvider)))
+        {
+            MessageBox.Show(this, "Choose valid model IDs and enter the selected service's API key on Models & API.",
+                "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        Settings = shortcuts.ApplyTo(_original) with
+        {
+            ApiKey = _providerKeys.Get(_editingProvider), ProviderKeys = _providerKeys,
+            Models = _modelDrafts[_editingProvider], ResponseMode = (string)_mode.SelectedItem!,
+            CustomInstruction = _instruction.Text.Trim(), Appearance = _appearance
+        };
         DialogResult = DialogResult.OK;
         Close();
     }

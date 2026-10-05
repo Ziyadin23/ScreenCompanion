@@ -1,3 +1,4 @@
+using System.Net.Http;
 using System.Text.Json.Nodes;
 
 namespace ScreenCompanion;
@@ -78,9 +79,9 @@ internal static class OpenAiVisionClient
                 ["detail"] = "high"
             });
         }
-        return OpenAiResponsesClient.SendAsync(client, apiKey, configuration.AnswerModel,
+        return ModelApiClient.SendAsync(client, apiKey, configuration.AnswerModel,
             AnswerInstruction(configuration.IsTrustedQa), content, AnswerResponseParser.Schema(),
-            configuration.AnswerMaxOutputTokens, cancellationToken);
+            configuration.AnswerMaxOutputTokens, configuration.Provider, cancellationToken);
     }
 
     private static string AnswerInstruction(bool trustedQa)

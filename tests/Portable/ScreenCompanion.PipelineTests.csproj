@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../ModelSelection.cs" Link="Production/ModelSelection.cs" />
+    <Compile Include="../../ModelApiClient.cs" Link="Production/ModelApiClient.cs" />
     <Compile Include="../../PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
     <Compile Include="../../QuestionContent.cs" Link="Production/QuestionContent.cs" />
     <Compile Include="../../QuestionExtraction.cs" Link="Production/QuestionExtraction.cs" />

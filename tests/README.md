@@ -20,10 +20,39 @@ mocked Responses HTTP responses:
 dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release
 ```
 
+For the v0.4.6 panel, Settings, and native-popup capture checks, run:
+
+```powershell
+dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --appearance
+```
+
+This needs no API-key setup and makes no API requests. It checks answer-only
+layout, focus-independent hover scrolling (including a busy UI thread), text
+selection, Alt-drag movement, invisible-edge resizing, temporary question input,
+all six global shortcuts, one-time help, mutually exclusive Settings/answer views,
+and visibility while recording shortcuts. Native color pickers and message boxes
+hide with Settings and restore through either visibility or Settings shortcuts.
+Temporary synthetic DPAPI vaults cover
+older settings, Save/Back/Restore, appearance, model IDs and separate provider keys.
+It also checks
+capture exclusion with Windows GDI `CopyFromScreen` (`SourceCopy`) and native
+`BitBlt` (`SRCCOPY|CAPTUREBLT`) at 0%, 50%, and 100% background transparency,
+with 100% text visibility. These paths do
+not establish behavior in Edge/Chrome whole-monitor recordings or OBS Display
+Capture; those recorder paths need a separate check on the updated build.
+
+The same suite checks both GDI paths for newly shown/restored app windows, native combo-box lists, context menus, ColorDialog, and MessageBox. It verifies native Settings popup exclusion after hide/restore and releases the UI-thread capture hook afterward. On 2026-10-02 it passed **125 assertions** in Windows 11; portable and mocked production UI suites passed **764** and **258** respectively. These checks make no live API requests.
+
+On 2026-10-01 this suite passed 75 assertions in Windows 11, including both GDI
+capture paths at all three transparency levels. The combined portable suite
+passed 764 assertions.
+
 Add `--ui` to exercise the production tray context, registered global capture
 shortcut, answer panel, typed question, and forced assessment-refusal retry.
-This reads the existing Windows-user encrypted app settings and requires prior
-ScreenCompanion API-key setup. It does not write or replace the saved key.
+Mocked runs use a temporary synthetic encrypted vault and need no prior setup.
+They do not read or replace the real saved key. The suite also captures while
+Settings is hidden and requests Settings during the fresh-capture delay; the
+latest answer remains suppressed until returning with Back.
 Close any other ScreenCompanion instance first so its shortcuts are available.
 
 ```powershell
@@ -50,6 +79,16 @@ multiple-choice, multiple-selection, short-answer, code, and diagram fixtures.
 ```powershell
 dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --fixture
 ```
+
+`--panel-preview` opens a synthetic practice page and the production answer
+panel with a transparent background and 55% text visibility. It uses an isolated
+synthetic vault and rejects API requests; Ctrl+I opens Settings, Ctrl+/ toggles
+the selected panel, and Ctrl+Backspace exits. This preview supported the separate
+OBS 32.2.2 Display Capture saved-recording check in Windows 11. The inspected
+recording omitted answer text visible on the desktop. That single recorder path
+does not establish universal capture exclusion.
+
+`--capture-preview` adds the production UI-thread capture protection to that preview and uses a full-screen synthetic backdrop. Only that test backdrop explicitly opts into capture. Use it to check the answer, typed input, Settings, and native color picker in a recorder; it contains synthetic credentials and rejects API requests. Discord full-monitor sharing needs its own receiving-device check.
 
 Use `--no-monitoring` to remove the synthetic monitoring indicators, for example
 `--live --one short --no-monitoring` for a normal practice-screen check.
@@ -90,10 +129,21 @@ an expected number appearing only in an explanation or inside another number
 does not pass. Empty primary answers and explicit IDs for a different question
 fail. Parsed answers remain in memory only.
 
-On 2026-10-01 the current portable suite passed 397 assertions. The current
-Windows test project compiles successfully; its runtime checks were not rerun
-in this update. Earlier Windows assertion counts in the main README apply to
-earlier test revisions. Saved metadata from a later incomplete live campaign
+On 2026-10-01 the combined portable suite passed 764 assertions, the Windows
+panel/settings suite passed 75, and the production UI suite passed 258 using
+mocked API transport. Earlier Windows assertion counts in the main README apply
+to earlier test revisions. Saved metadata from a later incomplete live campaign
 contains extraction, diagram-crop, and answer failures; passing the portable
 suite does not resolve those live failures. Local campaign details remain
 outside the public repository.
+
+## Provider integration in the current source
+
+The portable suite now includes mocked transport coverage for OpenAI, Groq,
+Gemini, Mistral, and OpenRouter: capture and typed requests, model routing,
+question-crop boundaries, refusal retry, credential headers, structured output,
+HTTP failures, and Groq image limits. It uses synthetic keys and makes no real
+provider calls. These cases passed in the combined portable run. Windows Settings
+checks passed for masked keys, switching services, editable model drafts,
+Save/Back, and encrypted provider-key/model reload. Live provider access remains
+unverified.

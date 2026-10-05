@@ -9,10 +9,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        WindowCaptureProtection? captureProtection = null;
         try
         {
             AppDiagnostics.RecordEvent(DiagnosticEvent.ProcessStarted);
             ApplicationConfiguration.Initialize();
+            captureProtection = new WindowCaptureProtection();
             ApplicationContext context = args.Contains("--capture-test-only", StringComparer.OrdinalIgnoreCase)
                 ? new CaptureTestContext()
                 : new ScreenCompanionContext();
@@ -27,6 +29,7 @@ internal static class Program
             MessageBox.Show($"ScreenCompanion could not start: {ex.Message}\n\n{report.DisplayLine}", "ScreenCompanion",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+        finally { captureProtection?.Dispose(); }
     }
 }
 
@@ -43,17 +46,18 @@ internal sealed class CaptureTestContext : ApplicationContext
         _host = new HotkeyHost();
         _host.TestRequested += ToggleTestPanel;
         _host.VisibilityRequested += ToggleVisibility;
+        _host.ExitRequested += ExitThread;
         _ = _host.Handle;
         if (!_host.Register(TestHotkeyId, NativeMethods.ModControl | NativeMethods.ModAlt, Keys.T) ||
-            !_host.Register(VisibilityHotkeyId, NativeMethods.ModControl, Keys.OemQuestion))
+            !_host.Register(VisibilityHotkeyId, NativeMethods.ModControl, Keys.OemQuestion) ||
+            !_host.Register(5, HotkeyBinding.DefaultExit.Modifiers, HotkeyBinding.DefaultExit.Key))
         {
-            _host.Unregister(TestHotkeyId);
-            _host.Unregister(VisibilityHotkeyId);
+            _host.UnregisterAll();
             _host.Dispose();
-            throw new InvalidOperationException("Ctrl+Alt+T or Ctrl+/ is already in use.");
+            throw new InvalidOperationException("Ctrl+Alt+T, Ctrl+/ or Ctrl+Backspace is already in use.");
         }
 
-        _overlay = new AnswerOverlay(onSettings: null, onClose: ExitThread);
+        _overlay = new AnswerOverlay();
         _tray = new AppTray(() => _overlay.ToggleVisibility(), null, ToggleTestPanel, ExitThread);
         _overlay.ShowCaptureTest();
         AppDiagnostics.RecordEvent(DiagnosticEvent.Ready);
@@ -75,8 +79,7 @@ internal sealed class CaptureTestContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
-        _host.Unregister(TestHotkeyId);
-        _host.Unregister(VisibilityHotkeyId);
+        _host.UnregisterAll();
         _host.Dispose();
         _tray.Dispose();
         _overlay.Dispose();
@@ -98,14 +101,18 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private AppTray? _tray;
     private string? _apiKey;
     private VaultData? _settings;
-    private (HotkeyBinding Capture, HotkeyBinding Visibility, HotkeyBinding Test) _activeHotkeys =
-        (HotkeyBinding.DefaultCapture, HotkeyBinding.DefaultVisibility, HotkeyBinding.DefaultTest);
+    private ShortcutSet _activeHotkeys = ShortcutSet.Default;
+    private SettingsDialog? _settingsDialog;
+    private SettingsVisibility? _settingsVisibility;
+    private bool _exiting;
     private bool _ready;
     private bool _busy;
     private bool _settingsOpen;
-    private bool _hotkeysRegistered;
+    private bool _capturingFrame;
+    private readonly Queue<Action> _afterCapture = new();
 
-    public ScreenCompanionContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null)
+    public ScreenCompanionContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null,
+        string? credentialPath = null)
     {
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
         _pipelineConfiguration = configuration ?? PipelineConfiguration.LoadFromEnvironment();
@@ -114,11 +121,14 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             "ScreenCompanion");
         _legacyVaultExists = File.Exists(besideExecutable) ||
             File.Exists(Path.Combine(profileDirectory, "screencompanion.key"));
-        _credentialPath = Path.Combine(profileDirectory, "screencompanion.user.key");
+        _credentialPath = credentialPath ?? Path.Combine(profileDirectory, "screencompanion.user.key");
         _host = new HotkeyHost();
         _host.CaptureRequested += async () => await CaptureAndAnswerAsync();
         _host.TestRequested += ToggleCaptureTest;
         _host.VisibilityRequested += ToggleVisibility;
+        _host.SettingsRequested += OpenSettings;
+        _host.ExitRequested += ExitThread;
+        _host.InputRequested += OpenInput;
 
         _ = _host.Handle;
 
@@ -175,28 +185,28 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             {
                 if (!TryApplyHotkeys(VaultData.Default(_settings.ApiKey), out var defaultError))
                     throw new InvalidOperationException($"Saved shortcuts failed ({shortcutError}), and default shortcuts failed ({defaultError}).");
-                _settings = _settings with
-                {
-                    Capture = HotkeyBinding.DefaultCapture,
-                    Visibility = HotkeyBinding.DefaultVisibility,
-                    Test = HotkeyBinding.DefaultTest
-                };
+                _settings = _activeHotkeys.ApplyTo(_settings);
                 MessageBox.Show($"Saved shortcuts could not be used: {shortcutError} Default shortcuts remain active.",
                     "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             _ready = true;
             stage = FailureStage.Display;
-            _overlay = new AnswerOverlay(
-                onSettings: OpenSettings,
-                onClose: ExitThread,
-                onTextQuestion: AnswerTextAsync);
+            _overlay = new AnswerOverlay(onTextQuestion: AnswerTextAsync);
+            _overlay.ApplyAppearance(_settings.Appearance);
             _overlay.VisibilityShortcut = _activeHotkeys.Visibility.ToString();
             _overlay.TestShortcut = _activeHotkeys.Test.ToString();
-            _overlay.SetInitialStatus($"Type a question below, or press {_activeHotkeys.Capture} to use the active monitor.");
+            _overlay.ExitShortcut = _activeHotkeys.Exit.ToString();
+            _overlay.SetInitialStatus("");
             if (WindowSizeStore.Load() is { } savedSize)
                 _overlay.ApplySavedSize(savedSize);
             _overlay.ManualSizeChanged += size => WindowSizeStore.TrySave(size);
             _tray = new AppTray(ToggleVisibility, OpenSettings, ToggleCaptureTest, ExitThread);
+            if (!_settings.CommandsShown)
+            {
+                _overlay.ShowCommands(_activeHotkeys);
+                _settings = _settings with { CommandsShown = true };
+                ApiKeyVault.SaveForCurrentUser(_credentialPath, _settings);
+            }
             AppDiagnostics.RecordEvent(DiagnosticEvent.Ready);
         }
         catch (Exception ex)
@@ -210,167 +220,136 @@ internal sealed class ScreenCompanionContext : ApplicationContext
 
     private void OpenSettings()
     {
-        if (!_ready || _settingsOpen || _settings is null)
+        if (!_ready || _settings is null || _overlay is null) return;
+        if (DeferDuringCapture(OpenSettings)) return;
+        if (_settingsDialog is not null)
+        {
+            _settingsVisibility!.Show();
             return;
-
-        var previousHotkeys = _settings with
-        {
-            Capture = _activeHotkeys.Capture,
-            Visibility = _activeHotkeys.Visibility,
-            Test = _activeHotkeys.Test
-        };
+        }
         _settingsOpen = true;
-        var saved = false;
-        try
+        _overlay.SetSuppressed(true);
+        var dialog = new SettingsDialog(_settings, _pipelineConfiguration) { TopMost = true };
+        _settingsDialog = dialog;
+        _settingsVisibility = new SettingsVisibility(dialog);
+        dialog.ShortcutRecordingChanged += recording =>
         {
-            // Registered global shortcuts consume their key presses before the focused settings field can see them.
-            if (_hotkeysRegistered)
+            if (!_exiting && !_host.TryApply(_activeHotkeys, recording, out var error))
+                MessageBox.Show(dialog, error, "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        };
+        dialog.FormClosing += (_, e) =>
+        {
+            dialog.EndShortcutRecording();
+            if (_exiting || dialog.DialogResult != DialogResult.OK || dialog.Settings is null) return;
+            var previous = _settings;
+            if (!TryApplyHotkeys(dialog.Settings, out var error))
             {
-                _host.Unregister(CaptureHotkeyId);
-                _host.Unregister(VisibilityHotkeyId);
-                _host.Unregister(TestHotkeyId);
-                _hotkeysRegistered = false;
-            }
-
-            using var dialog = new SettingsDialog(_settings);
-            var result = dialog.ShowDialog();
-            if (result == DialogResult.Retry)
-            {
-                ChangeApiKey();
-                return;
-            }
-            if (result != DialogResult.OK || dialog.Settings is null)
-                return;
-
-            if (!TryApplyHotkeys(dialog.Settings, out var shortcutError))
-            {
-                MessageBox.Show($"Could not register the requested shortcuts: {shortcutError}",
-                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                e.Cancel = true;
+                MessageBox.Show(dialog, error, "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try
             {
                 ApiKeyVault.SaveForCurrentUser(_credentialPath, dialog.Settings);
                 _settings = dialog.Settings;
-                saved = true;
-                if (_overlay is not null)
-                {
-                    _overlay.VisibilityShortcut = _activeHotkeys.Visibility.ToString();
-                    _overlay.TestShortcut = _activeHotkeys.Test.ToString();
-                    _overlay.ShowStatus("Settings saved for this Windows account.");
-                }
+                _apiKey = _settings.ApiKey;
+                _overlay.VisibilityShortcut = _activeHotkeys.Visibility.ToString();
+                _overlay.TestShortcut = _activeHotkeys.Test.ToString();
+                _overlay.ExitShortcut = _activeHotkeys.Exit.ToString();
+                _overlay.ApplyAppearance(_settings.Appearance);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Could not save settings: {ex.Message}",
-                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                TryApplyHotkeys(previous!, out var restoreError);
+                e.Cancel = true;
+                MessageBox.Show(dialog, $"Could not save settings: {ex.Message}", "ScreenCompanion",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-        finally
+        };
+        dialog.FormClosed += (_, _) =>
         {
-            try
-            {
-                if (!saved)
-                {
-                    // A failed save must not leave the proposed shortcuts active.
-                    if (_hotkeysRegistered)
-                    {
-                        _host.Unregister(CaptureHotkeyId);
-                        _host.Unregister(VisibilityHotkeyId);
-                        _host.Unregister(TestHotkeyId);
-                        _hotkeysRegistered = false;
-                    }
-                    if (!TryApplyHotkeys(previousHotkeys, out var restoreError))
-                        MessageBox.Show($"Could not restore the previous shortcuts: {restoreError} Restart ScreenCompanion.",
-                            "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            finally
-            {
-                _settingsOpen = false;
-            }
-        }
-    }
-
-    private void ChangeApiKey()
-    {
-        if (_settings is null)
-            return;
-        using var dialog = new SetupDialog(isChange: true);
-        if (dialog.ShowDialog() != DialogResult.OK)
-            return;
-        var updated = _settings with { ApiKey = dialog.ApiKey };
-        try
-        {
-            ApiKeyVault.SaveForCurrentUser(_credentialPath, updated);
-            _settings = updated;
-            _apiKey = updated.ApiKey;
-            _overlay?.ShowStatus("API key saved for this Windows account.");
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Could not save the API key: {ex.Message}",
-                "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
+            _settingsDialog = null;
+            _settingsVisibility = null;
+            _settingsOpen = false;
+            dialog.Dispose();
+            if (_exiting) return;
+            _overlay.SetSuppressed(false);
+            _overlay.ShowPanel();
+        };
+        dialog.Show();
+        dialog.Activate();
     }
 
     private bool TryApplyHotkeys(VaultData settings, out string error)
     {
-        error = "";
-        var requested = (settings.Capture, settings.Visibility, settings.Test);
-        if (_hotkeysRegistered && requested == _activeHotkeys)
-            return true;
-        if (!requested.Capture.IsValid || !requested.Visibility.IsValid || !requested.Test.IsValid ||
-            requested.Capture == requested.Visibility || requested.Capture == requested.Test ||
-            requested.Visibility == requested.Test)
+        var requested = ShortcutSet.From(settings);
+        if (!_host.TryApply(requested, recording: false, out error)) return false;
+        _activeHotkeys = requested;
+        return true;
+    }
+
+    private void CloseSettings()
+    {
+        if (_settingsDialog is not null)
         {
-            error = "The saved shortcut settings are invalid.";
-            return false;
+            _settingsDialog.DialogResult = DialogResult.Cancel;
+            _settingsDialog.Close();
         }
-        if (_hotkeysRegistered)
-        {
-            _host.Unregister(CaptureHotkeyId);
-            _host.Unregister(VisibilityHotkeyId);
-            _host.Unregister(TestHotkeyId);
-        }
-        if (_host.Register(CaptureHotkeyId, requested.Capture.Modifiers, requested.Capture.Key) &&
-            _host.Register(VisibilityHotkeyId, requested.Visibility.Modifiers, requested.Visibility.Key) &&
-            _host.Register(TestHotkeyId, requested.Test.Modifiers, requested.Test.Key))
-        {
-            _activeHotkeys = requested;
-            _hotkeysRegistered = true;
-            return true;
-        }
-        _host.Unregister(CaptureHotkeyId);
-        _host.Unregister(VisibilityHotkeyId);
-        _host.Unregister(TestHotkeyId);
-        if (_hotkeysRegistered &&
-            (!_host.Register(CaptureHotkeyId, _activeHotkeys.Capture.Modifiers, _activeHotkeys.Capture.Key) ||
-             !_host.Register(VisibilityHotkeyId, _activeHotkeys.Visibility.Modifiers, _activeHotkeys.Visibility.Key) ||
-             !_host.Register(TestHotkeyId, _activeHotkeys.Test.Modifiers, _activeHotkeys.Test.Key)))
-            throw new InvalidOperationException("Could not restore the previous shortcuts. Restart ScreenCompanion.");
-        error = "Windows could not register one of the shortcuts; it may be reserved or in use.";
-        return false;
+    }
+
+    private void OpenInput()
+    {
+        if (!_ready || _busy || _overlay is null) return;
+        CloseSettings();
+        _overlay.ShowInput();
     }
 
     private void ToggleCaptureTest()
     {
-        if (!_ready || _overlay is null)
-            return;
-
-        if (_overlay.TestMode && _overlay.Visible)
-        {
-            _overlay.HidePanel();
-        }
-        else
-            _overlay.ShowCaptureTest();
+        if (!_ready || _overlay is null) return;
+        if (DeferDuringCapture(ToggleCaptureTest)) return;
+        CloseSettings();
+        if (_overlay.TestMode && _overlay.Visible) _overlay.HidePanel();
+        else _overlay.ShowCaptureTest();
     }
 
-    private void ToggleVisibility() => _overlay?.ToggleVisibility();
+    private void ToggleVisibility()
+    {
+        if (DeferDuringCapture(ToggleVisibility)) return;
+        var dialog = _settingsDialog;
+        if (dialog is null)
+        {
+            _overlay?.ToggleVisibility();
+            return;
+        }
+        if (dialog.Visible)
+        {
+            _settingsDialog?.EndShortcutRecording();
+            _settingsVisibility!.Hide();
+        }
+        else
+        {
+            _settingsVisibility!.Show();
+        }
+    }
+
+    private bool DeferDuringCapture(Action action)
+    {
+        if (!_capturingFrame) return false;
+        _afterCapture.Enqueue(action);
+        return true;
+    }
+
+    private void FinishCaptureFrame()
+    {
+        _capturingFrame = false;
+        while (_afterCapture.TryDequeue(out var action))
+            if (!_exiting) action();
+    }
 
     private async Task CaptureAndAnswerAsync()
     {
-        if (!_ready || _busy || _settingsOpen || _apiKey is null || _overlay is null)
+        if (!_ready || _busy || (_settingsOpen && _settingsDialog?.Visible == true) || _apiKey is null || _overlay is null)
             return;
 
         _busy = true;
@@ -381,31 +360,38 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         {
             var bounds = ScreenCapture.GetActiveMonitorBounds();
             stage = FailureStage.Display;
+            _capturingFrame = true;
             _overlay.HideForCapture();
             stage = FailureStage.Capture;
             await Task.Delay(180);
             jpeg = ScreenCapture.CaptureMonitorJpeg(bounds);
 
             stage = FailureStage.Display;
+            FinishCaptureFrame();
             _overlay.ShowWorking();
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg,
-                ResponseModes.Instruction(_settings!), _pipelineConfiguration);
+                ResponseModes.Instruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models));
+            if (_exiting) return;
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
         }
         catch (Exception ex)
         {
-            _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
+            FinishCaptureFrame();
+            if (!_exiting) _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
         }
         finally
         {
             if (jpeg is not null)
                 CryptographicOperations.ZeroMemory(jpeg);
-            _tray?.SetWorking(false);
             _busy = false;
-            _overlay.SetInputBusy(false);
+            if (!_exiting)
+            {
+                _tray?.SetWorking(false);
+                _overlay.SetInputBusy(false);
+            }
         }
     }
 
@@ -422,43 +408,52 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         try
         {
             // The text box has focus while sending, so the overlay identifies the monitor to capture.
-            var bounds = Screen.FromControl(_overlay).Bounds;
+            var bounds = Screen.FromRectangle(_overlay.Bounds).Bounds;
             stage = FailureStage.Display;
+            _capturingFrame = true;
             _overlay.HideForCapture();
             stage = FailureStage.Capture;
             await Task.Delay(180);
             jpeg = ScreenCapture.CaptureMonitorJpeg(bounds);
 
             stage = FailureStage.Display;
+            FinishCaptureFrame();
             _overlay.ShowWorking(textQuestion: true);
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerTextAsync(_httpClient, _apiKey, question, jpeg,
-                ResponseModes.TextInstruction(_settings!), _pipelineConfiguration);
+                ResponseModes.TextInstruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models));
+            if (_exiting) return;
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
             _overlay.ClearQuestion();
         }
         catch (Exception ex)
         {
-            _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
+            FinishCaptureFrame();
+            if (!_exiting) _overlay.ShowError(ex.Message, AppDiagnostics.Record(stage, ex));
         }
         finally
         {
             if (jpeg is not null)
                 CryptographicOperations.ZeroMemory(jpeg);
-            _tray?.SetWorking(false);
             _busy = false;
-            _overlay.SetInputBusy(false);
+            if (!_exiting)
+            {
+                _tray?.SetWorking(false);
+                _overlay.SetInputBusy(false);
+            }
         }
     }
 
     protected override void ExitThreadCore()
     {
+        _exiting = true;
+        _afterCapture.Clear();
+        Application.Idle -= InitializeOnFirstIdle;
         _ready = false;
-        _host.Unregister(CaptureHotkeyId);
-        _host.Unregister(TestHotkeyId);
-        _host.Unregister(VisibilityHotkeyId);
+        _settingsDialog?.Close();
+        _host.UnregisterAll();
         _host.Dispose();
         _tray?.Dispose();
         _overlay?.Dispose();
@@ -466,6 +461,13 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         _apiKey = null;
         base.ExitThreadCore();
     }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && !_exiting) ExitThreadCore();
+        base.Dispose(disposing);
+    }
+
 }
 
 internal sealed class HotkeyHost : Form
@@ -475,6 +477,10 @@ internal sealed class HotkeyHost : Form
     public event Func<Task>? CaptureRequested;
     public event Action? TestRequested;
     public event Action? VisibilityRequested;
+    public event Action? SettingsRequested;
+    public event Action? ExitRequested;
+    public event Action? InputRequested;
+    private readonly Dictionary<int, HotkeyBinding> _registered = new();
 
     public HotkeyHost()
     {
@@ -485,10 +491,52 @@ internal sealed class HotkeyHost : Form
         Size = new System.Drawing.Size(1, 1);
     }
 
-    public bool Register(int id, uint modifiers, Keys key) =>
-        NativeMethods.RegisterHotKey(Handle, id, modifiers | NativeMethods.ModNoRepeat, (uint)key);
+    public bool Register(int id, uint modifiers, Keys key)
+    {
+        var binding = new HotkeyBinding(modifiers, key);
+        if (_registered.TryGetValue(id, out var previous) && previous == binding) return true;
+        Unregister(id);
+        if (!NativeMethods.RegisterHotKey(Handle, id, modifiers | NativeMethods.ModNoRepeat, (uint)key)) return false;
+        _registered[id] = binding;
+        return true;
+    }
 
-    public void Unregister(int id) => NativeMethods.UnregisterHotKey(Handle, id);
+    public void Unregister(int id)
+    {
+        NativeMethods.UnregisterHotKey(Handle, id);
+        _registered.Remove(id);
+    }
+
+    public void UnregisterAll()
+    {
+        foreach (var id in _registered.Keys.ToArray()) Unregister(id);
+    }
+
+    public bool TryApply(ShortcutSet shortcuts, bool recording, out string error)
+    {
+        error = "";
+        if (!shortcuts.IsValid)
+        {
+            error = "Each action needs a valid, different shortcut.";
+            return false;
+        }
+        var target = shortcuts.Bindings.Where(entry => !recording || entry.Id is 3 or 5)
+            .ToDictionary(entry => entry.Id, entry => entry.Binding);
+        var previous = new Dictionary<int, HotkeyBinding>(_registered);
+        foreach (var id in _registered.Keys.ToArray())
+            if (!target.TryGetValue(id, out var requested) || requested != _registered[id]) Unregister(id);
+        foreach (var (id, binding) in target)
+        {
+            if (Register(id, binding.Modifiers, binding.Key)) continue;
+            UnregisterAll();
+            foreach (var (oldId, oldBinding) in previous)
+                if (!Register(oldId, oldBinding.Modifiers, oldBinding.Key))
+                    throw new InvalidOperationException("Could not restore the previous shortcuts. Restart ScreenCompanion.");
+            error = "Windows could not register a shortcut; it may be reserved or already in use.";
+            return false;
+        }
+        return true;
+    }
 
     protected override void WndProc(ref Message m)
     {
@@ -506,6 +554,15 @@ internal sealed class HotkeyHost : Form
                 case 3:
                     VisibilityRequested?.Invoke();
                     break;
+                case 4:
+                    SettingsRequested?.Invoke();
+                    break;
+                case 5:
+                    ExitRequested?.Invoke();
+                    break;
+                case 6:
+                    InputRequested?.Invoke();
+                    break;
             }
         }
 
@@ -521,12 +578,12 @@ internal sealed class AppTray : IDisposable
     public AppTray(Action onToggle, Action? onSettings, Action onCaptureTest, Action onExit)
     {
         _menu = new ContextMenuStrip();
-        _menu.Items.Add("Show / hide answer", null, (_, _) => onToggle());
+        _menu.Items.Add("Show / hide panel", null, (_, _) => onToggle());
         if (onSettings is not null)
             _menu.Items.Add("Settings", null, (_, _) => onSettings());
         _menu.Items.Add("Capture test", null, (_, _) => onCaptureTest());
         _menu.Items.Add(new ToolStripSeparator());
-        _menu.Items.Add(new ToolStripMenuItem("Recording exclusion varies; test each recorder") { Enabled = false });
+        _menu.Items.Add(new ToolStripMenuItem("Recording/stream exclusion varies; test each app") { Enabled = false });
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add("Exit", null, (_, _) => onExit());
 
@@ -548,460 +605,6 @@ internal sealed class AppTray : IDisposable
         _icon.Visible = false;
         _icon.Dispose();
         _menu.Dispose();
-    }
-}
-
-internal sealed class AnswerOverlay : Form
-{
-    private const int ResizeBorder = 7;
-
-    [Flags]
-    private enum ResizeEdge
-    {
-        None = 0,
-        Left = 1,
-        Top = 2,
-        Right = 4,
-        Bottom = 8
-    }
-
-    private readonly Label _title;
-    private readonly RichTextBox _body;
-    private readonly Label _footer;
-    private readonly Action? _onSettings;
-    private readonly Func<string, Task>? _onTextQuestion;
-    private readonly TextBox _question;
-    private readonly Button _sendButton;
-    private CaptureExclusionResult _captureExclusionResult;
-    private bool _hiddenByUser;
-    private bool _capturePending;
-    private bool _manuallyResized;
-    private bool _resizing;
-    private ResizeEdge _resizeEdges;
-    private Point _resizeStart;
-    private Rectangle _resizeStartBounds;
-
-    public event Action<Size>? ManualSizeChanged;
-
-    public bool TestMode { get; private set; }
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-    internal string VisibilityShortcut { get; set; } = "Ctrl+/";
-    [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
-    internal string TestShortcut { get; set; } = "Ctrl+Alt+T";
-
-    public AnswerOverlay(Action? onSettings, Action onClose, Func<string, Task>? onTextQuestion = null)
-    {
-        _onSettings = onSettings;
-        _onTextQuestion = onTextQuestion;
-        Text = "";
-        FormBorderStyle = FormBorderStyle.None;
-        ShowInTaskbar = false;
-        ShowIcon = false;
-        TopMost = true;
-        StartPosition = FormStartPosition.Manual;
-        Size = new System.Drawing.Size(420, onTextQuestion is null ? 180 : 220);
-        MinimumSize = new System.Drawing.Size(320, 180);
-        Padding = new Padding(ResizeBorder);
-        Location = new Point(Math.Max(12, Screen.PrimaryScreen!.WorkingArea.Right - 500),
-            Math.Max(12, Screen.PrimaryScreen.WorkingArea.Bottom - 200));
-        BackColor = System.Drawing.Color.FromArgb(64, 77, 99);
-
-        var header = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Height = 42,
-            BackColor = System.Drawing.Color.FromArgb(35, 43, 58)
-        };
-        _title = new Label
-        {
-            AutoSize = false,
-            Text = "SCREEN ANSWER",
-            ForeColor = System.Drawing.Color.White,
-            Font = new System.Drawing.Font("Segoe UI", 9, System.Drawing.FontStyle.Bold),
-            TextAlign = System.Drawing.ContentAlignment.MiddleLeft,
-            Location = new Point(14, 0),
-            Size = new System.Drawing.Size(210, 42)
-        };
-        _title.MouseDown += StartDrag;
-        header.Controls.Add(_title);
-        header.MouseDown += StartDrag;
-
-        var closeButton = MakeButton("×", 334, 7, 34, 28, () => onClose());
-        header.Controls.Add(closeButton);
-        var settingsButton = MakeButton("Settings", 242, 8, 82, 26, () => _onSettings?.Invoke());
-        settingsButton.Visible = _onSettings is not null;
-        header.Controls.Add(settingsButton);
-        header.Resize += (_, _) =>
-        {
-            closeButton.Location = new Point(header.ClientSize.Width - 46, 7);
-            settingsButton.Location = new Point(header.ClientSize.Width - 138, 8);
-            _title.Width = Math.Max(90, header.ClientSize.Width - (settingsButton.Visible ? 154 : 70));
-        };
-
-        _body = new RichTextBox
-        {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(18, 16, 18, 10),
-            BorderStyle = BorderStyle.None,
-            ReadOnly = true,
-            WordWrap = true,
-            ScrollBars = RichTextBoxScrollBars.Vertical,
-            DetectUrls = false,
-            TabStop = false,
-            BackColor = System.Drawing.Color.FromArgb(26, 32, 44),
-            ForeColor = System.Drawing.Color.FromArgb(239, 242, 247),
-            Font = new System.Drawing.Font("Segoe UI", 11),
-            Text = "Type a question below or press Ctrl+Alt+Space to ask about the screen."
-        };
-
-        var questionPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 4, 12, 4) };
-        _sendButton = MakeButton("Send", 0, 4, 64, 29, () => SubmitQuestion());
-        _sendButton.Dock = DockStyle.Right;
-        _question = new TextBox
-        {
-            Dock = DockStyle.Fill,
-            MaxLength = 4000,
-            Font = new System.Drawing.Font("Segoe UI", 10),
-            PlaceholderText = "Type your question here",
-            AccessibleName = "Question"
-        };
-        _question.KeyDown += (_, e) =>
-        {
-            if (e.KeyCode != Keys.Enter) return;
-            e.SuppressKeyPress = true;
-            SubmitQuestion();
-        };
-        questionPanel.Controls.Add(_question);
-        questionPanel.Controls.Add(_sendButton);
-        questionPanel.Visible = _onTextQuestion is not null;
-
-        _footer = new Label
-        {
-            AutoSize = false,
-            Dock = DockStyle.Fill,
-            Height = 34,
-            Padding = new Padding(14, 5, 10, 4),
-            ForeColor = System.Drawing.Color.FromArgb(173, 184, 199),
-            Font = new System.Drawing.Font("Segoe UI", 8),
-            Text = "Recording exclusion is best effort. Test each recorder."
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 4,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            BackColor = System.Drawing.Color.FromArgb(26, 32, 44)
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, _onTextQuestion is null ? 0 : 42));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        layout.Controls.Add(header, 0, 0);
-        layout.Controls.Add(_body, 0, 1);
-        layout.Controls.Add(questionPanel, 0, 2);
-        layout.Controls.Add(_footer, 0, 3);
-        Controls.Add(layout);
-
-        KeyPreview = true;
-        KeyDown += (_, e) =>
-        {
-            if (e.KeyCode == Keys.Escape)
-            {
-                HidePanel();
-                e.Handled = true;
-            }
-        };
-    }
-
-    public void ToggleVisibility()
-    {
-        if (Visible)
-        {
-            HidePanel();
-            return;
-        }
-
-        _hiddenByUser = false;
-        ShowIfVisible();
-    }
-
-    public void HideForCapture()
-    {
-        _capturePending = true;
-        Hide();
-    }
-
-    public void HidePanel()
-    {
-        TestMode = false;
-        _hiddenByUser = true;
-        Hide();
-    }
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        _captureExclusionResult = CaptureExclusion.Apply(Handle);
-        _footer.Text = CaptureStatus;
-    }
-
-    public void ShowWorking(bool textQuestion = false)
-    {
-        _capturePending = !textQuestion;
-        TestMode = false;
-        _title.Text = textQuestion ? "ANSWERING" : "READING SCREEN";
-        _body.Text = textQuestion ? "Thinking about your question…" : "Looking for the question on your screen…";
-        _footer.Text = CaptureStatus;
-        if (textQuestion) ShowIfVisible();
-    }
-
-    public void SetInputBusy(bool busy)
-    {
-        _question.Enabled = !busy;
-        _sendButton.Enabled = !busy;
-    }
-
-    public void ClearQuestion() => _question.Clear();
-
-    private void SubmitQuestion()
-    {
-        var question = _question.Text.Trim();
-        if (question.Length > 0 && _onTextQuestion is not null && _question.Enabled)
-            _ = _onTextQuestion(question);
-    }
-
-    public void ShowAnswer(string answer)
-    {
-        _capturePending = false;
-        TestMode = false;
-        _title.Text = "SCREEN ANSWER";
-        _body.Text = answer;
-        _footer.Text = $"{VisibilityShortcut} hides this panel. Recording exclusion is best effort.";
-        ResizeForContent(answer);
-        ShowIfVisible();
-    }
-
-    public void SetInitialStatus(string message)
-    {
-        _title.Text = "SCREEN ANSWER";
-        _body.Text = message;
-        _footer.Text = "Recording exclusion is best effort. Test each recorder.";
-        ResizeForContent(message);
-    }
-
-    public void ShowStatus(string message)
-    {
-        _capturePending = false;
-        TestMode = false;
-        _title.Text = "SCREEN ANSWER";
-        _body.Text = message;
-        _footer.Text = "No screenshots or answer history are saved by this app.";
-        ResizeForContent(message);
-        ShowIfVisible();
-    }
-
-    public void ShowError(string message, FailureReport report)
-    {
-        _capturePending = false;
-        TestMode = false;
-        _title.Text = "COULD NOT ANSWER";
-        _body.Text = $"{message}\n\n{report.Hint}\n{report.DisplayLine}" +
-            (report.LogSaved ? "\nLog: %LOCALAPPDATA%\\ScreenCompanion\\diagnostics.log" : "");
-        _footer.Text = report.LogSaved
-            ? "The log contains no key, question, screenshot, or answer."
-            : "Could not save the diagnostic log.";
-        ResizeForContent(_body.Text);
-        ShowIfVisible();
-    }
-
-    public void ShowCaptureTest()
-    {
-        _hiddenByUser = false;
-        TestMode = true;
-        _title.Text = "CAPTURE EXCLUSION TEST";
-        _body.Text = "Check whether this panel appears in an Edge or Chrome whole-monitor recording or OBS Display Capture. " +
-                     "Record a few seconds and inspect the saved video.\n\n" +
-                     $"{VisibilityShortcut} hides or shows the panel. {TestShortcut} or Esc closes it.";
-        _footer.Text = CaptureStatus;
-        ResizeForContent(_body.Text, testPanel: true);
-        ShowIfVisible();
-        if (Visible)
-            Activate();
-    }
-
-    public void ApplySavedSize(Size size)
-    {
-        if (size.Width <= 0 || size.Height <= 0)
-            return;
-
-        var area = Screen.FromRectangle(Bounds).WorkingArea;
-        var width = Math.Clamp(size.Width, Math.Min(MinimumSize.Width, area.Width), area.Width);
-        var height = Math.Clamp(size.Height, Math.Min(MinimumSize.Height, area.Height), area.Height);
-        SetBounds(
-            Math.Clamp(Right - width, area.Left, Math.Max(area.Left, area.Right - width)),
-            Math.Clamp(Bottom - height, area.Top, Math.Max(area.Top, area.Bottom - height)),
-            width, height);
-        _manuallyResized = true;
-    }
-
-    private void ShowIfVisible()
-    {
-        if (!_hiddenByUser && !_capturePending)
-            Show();
-    }
-
-    private void ResizeForContent(string text, bool testPanel = false)
-    {
-        if (_manuallyResized)
-            return;
-
-        var area = Screen.FromRectangle(Bounds).WorkingArea;
-        var width = testPanel || text.Length > 180 ? 480 : 420;
-        width = Math.Min(width, Math.Max(1, area.Width - 24));
-        var measured = TextRenderer.MeasureText(text, _body.Font,
-            new System.Drawing.Size(width - 48, 2000), TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-        var questionHeight = _onTextQuestion is null ? 0 : 42;
-        var height = Math.Clamp(measured.Height + 42 + questionHeight + 34 + 32,
-            180 + questionHeight, 360 + questionHeight);
-        height = Math.Min(height, Math.Max(1, area.Height - 24));
-        var right = Right;
-        var bottom = Bottom;
-        Size = new System.Drawing.Size(width, height);
-        Location = new Point(
-            Math.Clamp(right - width, area.Left + 12, Math.Max(area.Left + 12, area.Right - width - 12)),
-            Math.Clamp(bottom - height, area.Top + 12, Math.Max(area.Top + 12, area.Bottom - height - 12)));
-    }
-
-    protected override void OnMouseDown(MouseEventArgs e)
-    {
-        base.OnMouseDown(e);
-        if (e.Button != MouseButtons.Left)
-            return;
-
-        _resizeEdges = GetResizeEdges(e.Location);
-        if (_resizeEdges == ResizeEdge.None)
-            return;
-
-        _resizing = true;
-        _resizeStart = MousePosition;
-        _resizeStartBounds = Bounds;
-        Capture = true;
-    }
-
-    protected override void OnMouseMove(MouseEventArgs e)
-    {
-        base.OnMouseMove(e);
-        if (_resizing)
-        {
-            ResizeFromMouse();
-            return;
-        }
-
-        var edges = GetResizeEdges(e.Location);
-        var horizontal = edges.HasFlag(ResizeEdge.Left) || edges.HasFlag(ResizeEdge.Right);
-        var vertical = edges.HasFlag(ResizeEdge.Top) || edges.HasFlag(ResizeEdge.Bottom);
-        Cursor.Current = horizontal && vertical
-            ? (edges.HasFlag(ResizeEdge.Left) == edges.HasFlag(ResizeEdge.Top) ? Cursors.SizeNWSE : Cursors.SizeNESW)
-            : horizontal ? Cursors.SizeWE : vertical ? Cursors.SizeNS : Cursors.Default;
-    }
-
-    protected override void OnMouseUp(MouseEventArgs e)
-    {
-        base.OnMouseUp(e);
-        if (e.Button != MouseButtons.Left || !_resizing)
-            return;
-
-        ResizeFromMouse();
-        FinishResize();
-    }
-
-    protected override void OnMouseCaptureChanged(EventArgs e)
-    {
-        base.OnMouseCaptureChanged(e);
-        if (_resizing)
-            FinishResize();
-    }
-
-    private ResizeEdge GetResizeEdges(Point point)
-    {
-        var edges = ResizeEdge.None;
-        if (point.X < ResizeBorder) edges |= ResizeEdge.Left;
-        if (point.X >= ClientSize.Width - ResizeBorder) edges |= ResizeEdge.Right;
-        if (point.Y < ResizeBorder) edges |= ResizeEdge.Top;
-        if (point.Y >= ClientSize.Height - ResizeBorder) edges |= ResizeEdge.Bottom;
-        return edges;
-    }
-
-    private void ResizeFromMouse()
-    {
-        var delta = new Size(MousePosition.X - _resizeStart.X, MousePosition.Y - _resizeStart.Y);
-        var area = Screen.FromRectangle(_resizeStartBounds).WorkingArea;
-        var left = _resizeStartBounds.Left;
-        var top = _resizeStartBounds.Top;
-        var right = _resizeStartBounds.Right;
-        var bottom = _resizeStartBounds.Bottom;
-        var minWidth = Math.Min(MinimumSize.Width, area.Width);
-        var minHeight = Math.Min(MinimumSize.Height, area.Height);
-
-        if (_resizeEdges.HasFlag(ResizeEdge.Left))
-            left = Math.Clamp(left + delta.Width, area.Left, Math.Max(area.Left, right - minWidth));
-        if (_resizeEdges.HasFlag(ResizeEdge.Right))
-            right = Math.Clamp(right + delta.Width, Math.Min(left + minWidth, area.Right), area.Right);
-        if (_resizeEdges.HasFlag(ResizeEdge.Top))
-            top = Math.Clamp(top + delta.Height, area.Top, Math.Max(area.Top, bottom - minHeight));
-        if (_resizeEdges.HasFlag(ResizeEdge.Bottom))
-            bottom = Math.Clamp(bottom + delta.Height, Math.Min(top + minHeight, area.Bottom), area.Bottom);
-
-        SetBounds(left, top, right - left, bottom - top);
-    }
-
-    private void FinishResize()
-    {
-        _resizing = false;
-        Capture = false;
-        if (Size == _resizeStartBounds.Size)
-            return;
-
-        _manuallyResized = true;
-        ManualSizeChanged?.Invoke(Size);
-    }
-
-    private string CaptureStatus => _captureExclusionResult switch
-    {
-        CaptureExclusionResult.Excluded => "Windows capture exclusion requested. Verify each recorder.",
-        CaptureExclusionResult.ContentHidden => "Windows 10 before 2004: panel may appear blank. Test recordings.",
-        _ => "Windows capture exclusion failed; this panel may appear in recordings."
-    };
-
-    private static Button MakeButton(string text, int x, int y, int width, int height, Action onClick)
-    {
-        var button = new Button
-        {
-            Text = text,
-            Location = new Point(x, y),
-            Size = new System.Drawing.Size(width, height),
-            FlatStyle = FlatStyle.Flat,
-            ForeColor = System.Drawing.Color.White,
-            BackColor = System.Drawing.Color.FromArgb(53, 64, 82),
-            Font = new System.Drawing.Font("Segoe UI", 8)
-        };
-        button.FlatAppearance.BorderSize = 0;
-        button.Click += (_, _) => onClick();
-        return button;
-    }
-
-    private void StartDrag(object? sender, MouseEventArgs e)
-    {
-        if (e.Button != MouseButtons.Left)
-            return;
-
-        NativeMethods.ReleaseCapture();
-        NativeMethods.SendMessage(Handle, NativeMethods.WmNcLeftButtonDown,
-            new IntPtr(NativeMethods.HtCaption), IntPtr.Zero);
     }
 }
 
@@ -1046,19 +649,6 @@ internal sealed class SetupDialog : ProtectedDialog
     }
 }
 
-internal static class UiTheme
-{
-    public static readonly Color Background = Color.FromArgb(26, 32, 44);
-    public static readonly Color Header = Color.FromArgb(35, 43, 58);
-    public static readonly Color Text = Color.FromArgb(239, 242, 247);
-    public static readonly Color SecondaryText = Color.FromArgb(173, 184, 199);
-    public static readonly Color Button = Color.FromArgb(53, 64, 82);
-    public static readonly Color ButtonHover = Color.FromArgb(68, 82, 105);
-    public static readonly Color Border = Color.FromArgb(84, 99, 123);
-    public static readonly Color Listening = Color.FromArgb(57, 68, 87);
-    public static readonly Color ListeningText = Color.FromArgb(255, 220, 140);
-}
-
 internal class ProtectedDialog : Form
 {
     private readonly Panel _header;
@@ -1078,7 +668,8 @@ internal class ProtectedDialog : Form
         ForeColor = UiTheme.Text;
         Font = new System.Drawing.Font("Segoe UI", 9);
 
-        _header = new Panel { Location = Point.Empty, Height = 40, Width = ClientSize.Width, BackColor = UiTheme.Header };
+        _header = new Panel { Location = Point.Empty, Height = 40, Width = ClientSize.Width,
+            BackColor = UiTheme.Header, Tag = UiColorRole.Header };
         _title = new Label
         {
             Location = new Point(14, 0),
@@ -1118,6 +709,12 @@ internal class ProtectedDialog : Form
     {
         base.OnHandleCreated(e);
         CaptureExclusion.Apply(Handle);
+    }
+
+    protected override void OnLoad(EventArgs e)
+    {
+        UiTheme.Apply(this);
+        base.OnLoad(e);
     }
 
     protected Label AddLabel(string text, int x, int y, int width, int height) => new()

@@ -14,6 +14,13 @@ internal static class WindowsPipelineTests
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--capture-preview")) { AppearanceUiTests.ShowPanelPreview(protectWindows: true); return; }
+        if (args.Contains("--panel-preview")) { AppearanceUiTests.ShowPanelPreview(); return; }
+        if (args.Contains("--appearance") || args.Contains("--hover"))
+        {
+            Environment.ExitCode = AppearanceUiTests.Run(args.Contains("--hover"));
+            return;
+        }
         var fixtureOnly = args.Contains("--fixture");
         var live = args.Contains("--live");
         var ui = args.Contains("--ui");
@@ -58,7 +65,7 @@ internal static class WindowsPipelineTests
     {
         var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "ScreenCompanion", "screencompanion.user.key");
-        if (!File.Exists(path)) throw new InvalidOperationException("Existing API-key setup is required for --live or --ui.");
+        if (!File.Exists(path)) throw new InvalidOperationException("Existing API-key setup is required for --live.");
         return ApiKeyVault.LoadForCurrentUser(path).ApiKey;
     }
 
@@ -121,15 +128,16 @@ internal static class WindowsPipelineTests
 
     private static async Task TestProductionUi(SyntheticQuestionWindow fixture, bool live)
     {
-        // Context still reads the existing encrypted vault itself. The test never
-        // writes a key file, changes saved settings, or exports the key.
+        // Isolate settings and help state in a temporary encrypted vault. Mocked
+        // runs use a synthetic key; live runs read the existing key locally.
         using var handler = new FixtureResponsesHandler(fixture, live);
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(150) };
-        using var context = new ScreenCompanionContext(client, Configuration());
+        using var vault = new TemporaryUiVault(VaultData.Default(live ? ExistingKey() : "synthetic-test-key") with { CommandsShown = true });
+        using var context = new ScreenCompanionContext(client, Configuration(), vault.Path);
         await WaitUntil(() => Field<bool>(context, "_ready"), TimeSpan.FromSeconds(15));
         var overlay = Field<AnswerOverlay>(context, "_overlay");
-        var body = Field<RichTextBox>(overlay, "_body");
-        var active = Field<(HotkeyBinding Capture, HotkeyBinding Visibility, HotkeyBinding Test)>(context, "_activeHotkeys");
+        var body = Field<System.Windows.Controls.TextBox>(overlay, "_body");
+        var active = Field<ShortcutSet>(context, "_activeHotkeys");
         foreach (var caseName in SyntheticQuestionWindow.Cases)
         {
             for (var repeat = 0; repeat < (live ? 1 : 2); repeat++)
@@ -150,13 +158,52 @@ internal static class WindowsPipelineTests
             }
         }
         fixture.SetCase("short");
+        if (!live)
+        {
+            Press(active.Settings);
+            await WaitUntil(() => Field<SettingsDialog?>(context, "_settingsDialog")?.Visible == true, TimeSpan.FromSeconds(5));
+            var settings = Field<SettingsDialog>(context, "_settingsDialog");
+            Press(active.Visibility);
+            await WaitUntil(() => !settings.Visible, TimeSpan.FromSeconds(5));
+            fixture.Activate();
+            await Task.Delay(150);
+            var beforeHidden = handler.AnswerRequests;
+            Press(active.Capture);
+            await WaitUntil(() => handler.AnswerRequests > beforeHidden && !Field<bool>(context, "_busy"), TimeSpan.FromSeconds(20));
+            TestCheck.That(!overlay.Visible && !settings.Visible && FixtureAnswerOracle.DisplayMatchesPrimary(handler.LastParsedAnswer, body.Text),
+                "capture while settings are hidden updates the answer without revealing either panel");
+            Press(active.Visibility);
+            await WaitUntil(() => settings.Visible, TimeSpan.FromSeconds(5));
+            TestCheck.That(!overlay.Visible, "restoring hidden settings keeps the updated answer hidden");
+            ((Button)settings.CancelButton!).PerformClick();
+            TestCheck.That(overlay.Visible && FixtureAnswerOracle.DisplayMatchesPrimary(handler.LastParsedAnswer, body.Text),
+                "Back reveals the answer received behind hidden settings");
+
+            fixture.Activate();
+            await Task.Delay(150);
+            var beforeDeferred = handler.AnswerRequests;
+            Press(active.Capture);
+            await WaitUntil(() => Field<bool>(context, "_capturingFrame"), TimeSpan.FromSeconds(5));
+            Press(active.Settings);
+            await Task.Delay(25);
+            if (Field<bool>(context, "_capturingFrame"))
+                TestCheck.That(Field<SettingsDialog?>(context, "_settingsDialog") is null,
+                    "settings stay hidden during the fresh monitor capture");
+            await WaitUntil(() => handler.AnswerRequests > beforeDeferred && !Field<bool>(context, "_busy") &&
+                Field<SettingsDialog?>(context, "_settingsDialog")?.Visible == true, TimeSpan.FromSeconds(20));
+            settings = Field<SettingsDialog>(context, "_settingsDialog");
+            TestCheck.That(!overlay.Visible && FixtureAnswerOracle.DisplayMatchesPrimary(handler.LastParsedAnswer, body.Text),
+                "settings requested during capture open afterward and keep the answer suppressed");
+            ((Button)settings.CancelButton!).PerformClick();
+        }
         overlay.ShowStatus("Typed workflow check");
-        overlay.Show();
-        var input = Field<TextBox>(overlay, "_question");
+        overlay.ShowInput();
+        var input = Field<System.Windows.Controls.TextBox>(overlay, "_question");
         input.Text = "What is 6 multiplied by 7?";
         input.Focus();
         var beforeTyped = handler.AnswerRequests;
-        Field<Button>(overlay, "_sendButton").PerformClick();
+        Field<System.Windows.Controls.Button>(overlay, "_sendButton").RaiseEvent(
+            new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         await WaitUntil(() => handler.AnswerRequests > beforeTyped && !Field<bool>(context, "_busy"),
             TimeSpan.FromSeconds(live ? 150 : 20));
         TestCheck.That(FixtureAnswerOracle.IsExpected(handler.LastParsedAnswer, "short") && input.Text.Length == 0,
