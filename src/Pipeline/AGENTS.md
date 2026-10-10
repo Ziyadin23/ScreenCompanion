@@ -2,6 +2,8 @@
 
 This folder contains the platform-independent request pipeline. Shared constraints and commands are in the repository root `AGENTS.md`.
 
+For request-flow, crop, prompt, or trusted-configuration changes, read the [pipeline reference](../../docs/PIPELINE.md). It contains the environment defaults and complete detection/extraction/answer/retry contracts.
+
 - `PipelineConfiguration.cs` reads trusted process environment settings. Saved model selection can override provider/models; screen text and model output cannot change QA authorization or retry policy.
 - `QuestionExtraction.cs` locates one normalized question rectangle, crops locally, then extracts structured task content. Coordinate validation checks bounds rather than semantic completeness; keep readable errors for invalid/missing regions.
 - A configured `QUESTION_REGION` skips detection. Disabling cropping may send the original monitor image to extraction, while the answering boundary still accepts only extraction output.

@@ -153,8 +153,8 @@ fail. Parsed answers remain in memory only.
 
 On 2026-10-01 the combined portable suite passed 764 assertions, the Windows
 panel/settings suite passed 75, and the production UI suite passed 258 using
-mocked API transport. Earlier Windows assertion counts in the main README apply
-to earlier test revisions. Saved metadata from a later incomplete live campaign
+mocked API transport. [Release verification](../docs/VERIFICATION.md) distinguishes
+the current build's evidence from preceding checks. Saved metadata from a later incomplete live campaign
 contains extraction, diagram-crop, and answer failures; passing the portable
 suite does not resolve those live failures. Local campaign details remain
 outside the public repository.

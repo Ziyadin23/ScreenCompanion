@@ -19,7 +19,7 @@ Read the `AGENTS.md` in the area you change, including when a root project or bu
 | [src/Storage](src/Storage/AGENTS.md) | Windows-user encrypted settings, migration and panel size | `ApiKeyVault.cs`, `AppStorage.cs`, `WindowSizeStore.cs` |
 | [src/Platform](src/Platform/AGENTS.md) | Windows capture, native APIs, hotkeys, activation and mouse hooks | `ScreenCapture.cs`, `NativeMethods.cs`, `SingleInstance.cs` |
 | [tests](tests/AGENTS.md) | Shared synthetic fixtures and portable/Windows regression suites | [test commands](tests/README.md) |
-| [docs](docs/AGENTS.md) | Contributor documentation and release procedure | [publishing](docs/PUBLISHING.md) |
+| [docs](docs/AGENTS.md) | Detailed user/reference documentation and release procedure | [pipeline](docs/PIPELINE.md), [verification](docs/VERIFICATION.md), [publishing](docs/PUBLISHING.md) |
 
 ## Rules shared by every area
 
@@ -52,6 +52,8 @@ Portable checks do not verify Windows UI/capture behavior or live model quality.
 
 ## Documentation and publishing
 
-Keep [README.md](README.md) current when setup, shortcuts, behavior, build commands, release status, or limitations change. Update source links and both test project inclusion lists after moving files.
+Keep [README.md](README.md) a concise user introduction with downloads, setup, shortcuts, privacy, and key limitations. Put detailed settings/troubleshooting in [docs/USER_GUIDE.md](docs/USER_GUIDE.md), trusted configuration/request contracts in [docs/PIPELINE.md](docs/PIPELINE.md), and measured checks/unfinished limits in [docs/VERIFICATION.md](docs/VERIFICATION.md). Update the relevant reference and README summary when behavior changes; update source links and both test project inclusion lists after moving files.
+
+Pipeline, prompt, schema, or trusted-configuration changes: read [docs/PIPELINE.md](docs/PIPELINE.md). Visibility or recorder claims: read [docs/VERIFICATION.md](docs/VERIFICATION.md#capture-exclusion-checks). Agent development rules remain in this file and the scoped folder instructions.
 
 Read [docs/PUBLISHING.md](docs/PUBLISHING.md) for builds intended for distribution or GitHub releases. Source organization and documentation updates preserve existing release tags/assets. For release, VM, or physical USB work in the parent workspace, first read its `AGENTS.md` and `PROJECT_CONTEXT.md`; record resulting private state there.
