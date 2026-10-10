@@ -11,7 +11,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../*.cs" Link="Production/%(Filename)%(Extension)" />
+    <Compile Include="../../src/**/*.cs" Link="Production/%(RecursiveDir)%(Filename)%(Extension)" />
     <Compile Include="../TestSupport.cs" Link="TestSupport.cs" />
   </ItemGroup>
 </Project>

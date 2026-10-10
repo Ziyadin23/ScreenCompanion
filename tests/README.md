@@ -7,6 +7,12 @@ synthetic question window containing browser-like controls, monitoring labels,
 timer, navigation, and a student placeholder. Fixtures contain no credentials
 or real assessment material.
 
+Production code lives under `src/`. The portable project explicitly links its
+pipeline/provider dependencies; the Windows project links the full source tree.
+Shared fixture/oracle code remains in `TestSupport.cs`. Test guidance is split
+between [common instructions](AGENTS.md), [portable instructions](Portable/AGENTS.md),
+and [Windows instructions](Windows/AGENTS.md).
+
 On 2026-10-10 v0.4.7 passed **966 portable assertions** on Linux and
 Windows, plus **321 capture/crop**, **125 appearance**, and **258 production UI**
 assertions in Windows 11. New regressions cover malformed provider responses

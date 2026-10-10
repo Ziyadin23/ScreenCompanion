@@ -4,7 +4,7 @@ SC is a single-file Windows 10/11 x64 assistant. Type a question in its temporar
 
 ## Release status
 
-The current release and source are **SC v0.4.8**. Download **`SC-v0.4.8.exe`** or **`SC-v0.4.8.zip`** from the [v0.4.8 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.8). The ZIP contains only the EXE and this README; both downloads are key-free.
+The current release and source are **SC v0.4.8**. Download **`SC-v0.4.8.exe`** or **`SC-v0.4.8.zip`** from the [v0.4.8 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.8). The ZIP contains only the EXE and `README.txt`; both downloads are key-free.
 
 Opening the EXE again restores the running app, including hidden Settings, instead of starting another shortcut owner. Panel color choices apply to the answer panel and its temporary input; Settings and key setup use a fixed, readable palette. Encrypted settings migrate from the previous ScreenCompanion location while preserving the original. This release also includes the v0.4.7 fixes for malformed provider responses and incomplete answers.
 
@@ -162,3 +162,32 @@ Install the .NET 10 SDK on Windows, then run this from the repository folder in 
 ```
 
 This produces a self-contained Windows x64 executable at `publish\win-x64\SC-v0.4.8.exe` and copies the current README to `publish\win-x64\README.txt`. The version number comes from `SC.csproj` and is included in every generated EXE name. The target PC does not need the .NET runtime. Build output, private vaults, and credentials are excluded from Git. Never publish a personal key file.
+
+## Repository layout
+
+The source is grouped by responsibility while retaining the shared `SC` namespace and the root project/build commands:
+
+```text
+ScreenCompanion/
+├── AGENTS.md                 # Architecture, common rules, and verification commands
+├── README.md                 # User workflow and verified release status
+├── SC.csproj                 # Production build and version
+├── app.manifest
+├── publish.ps1
+├── src/
+│   ├── App/                  # Startup, request lifecycle, response modes, diagnostics
+│   ├── UI/                   # Answer/input panel, Settings, setup, tray, appearance
+│   ├── Pipeline/             # Trusted configuration, extraction, answering, parsing
+│   ├── Providers/            # API services, model selection, and HTTP adapters
+│   ├── Storage/              # Encrypted settings, migration, and panel dimensions
+│   ├── Platform/             # Windows capture, native APIs, hotkeys, activation, hooks
+│   └── GlobalUsings.cs
+├── tests/
+│   ├── Portable/             # Mocked pipeline/provider tests
+│   ├── Windows/              # Real capture/crop and production UI tests
+│   └── TestSupport.cs
+└── docs/
+    └── PUBLISHING.md          # Distribution and GitHub release procedure
+```
+
+Each source folder, the documentation folder, and the test folders has a scoped `AGENTS.md` with its specific constraints and checks. Read the [root agent guidance](AGENTS.md) for the architecture and shared rules and the relevant folder guidance before changing that area. The production project compiles only `src/**/*.cs`; tests link the selected production files they exercise. The source reorganization preserves the existing v0.4.8 downloads and release tag. See [publishing guidance](docs/PUBLISHING.md) for future releases.

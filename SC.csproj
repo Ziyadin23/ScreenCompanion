@@ -10,12 +10,13 @@
     <DebugSymbols>false</DebugSymbols>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyName>SC</AssemblyName>
     <Version>0.4.8</Version>
     <RootNamespace>SC</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="tests/**/*.cs" />
+    <Compile Include="src/**/*.cs" />
   </ItemGroup>
 </Project>

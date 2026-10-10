@@ -6,15 +6,15 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="../../ModelSelection.cs" Link="Production/ModelSelection.cs" />
-    <Compile Include="../../ModelApiClient.cs" Link="Production/ModelApiClient.cs" />
-    <Compile Include="../../PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
-    <Compile Include="../../QuestionContent.cs" Link="Production/QuestionContent.cs" />
-    <Compile Include="../../QuestionExtraction.cs" Link="Production/QuestionExtraction.cs" />
-    <Compile Include="../../OpenAiResponsesClient.cs" Link="Production/OpenAiResponsesClient.cs" />
-    <Compile Include="../../OpenAiVisionClient.cs" Link="Production/OpenAiVisionClient.cs" />
-    <Compile Include="../../AnswerResponseParser.cs" Link="Production/AnswerResponseParser.cs" />
-    <Compile Include="../../FalseRefusalClassifier.cs" Link="Production/FalseRefusalClassifier.cs" />
+    <Compile Include="../../src/Providers/ModelSelection.cs" Link="Production/ModelSelection.cs" />
+    <Compile Include="../../src/Providers/ModelApiClient.cs" Link="Production/ModelApiClient.cs" />
+    <Compile Include="../../src/Pipeline/PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
+    <Compile Include="../../src/Pipeline/QuestionContent.cs" Link="Production/QuestionContent.cs" />
+    <Compile Include="../../src/Pipeline/QuestionExtraction.cs" Link="Production/QuestionExtraction.cs" />
+    <Compile Include="../../src/Providers/OpenAiResponsesClient.cs" Link="Production/OpenAiResponsesClient.cs" />
+    <Compile Include="../../src/Pipeline/OpenAiVisionClient.cs" Link="Production/OpenAiVisionClient.cs" />
+    <Compile Include="../../src/Pipeline/AnswerResponseParser.cs" Link="Production/AnswerResponseParser.cs" />
+    <Compile Include="../../src/Pipeline/FalseRefusalClassifier.cs" Link="Production/FalseRefusalClassifier.cs" />
     <Compile Include="../TestSupport.cs" Link="TestSupport.cs" />
   </ItemGroup>
 </Project>
