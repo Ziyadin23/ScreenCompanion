@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal readonly record struct PixelRegion(int X, int Y, int Width, int Height);
 

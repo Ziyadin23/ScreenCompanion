@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal sealed record QuestionAnswer(string? QuestionId, string? Answer, IReadOnlyList<string> Answers,
     string? AnswerText, string Explanation, double? Confidence)

@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class Program
 {
@@ -10,26 +10,30 @@ internal static class Program
     private static void Main(string[] args)
     {
         WindowCaptureProtection? captureProtection = null;
+        SingleInstance? instance = null;
         try
         {
-            AppDiagnostics.RecordEvent(DiagnosticEvent.ProcessStarted);
             ApplicationConfiguration.Initialize();
+            instance = new SingleInstance();
+            if (!instance.StartOrActivate()) return;
+            AppDiagnostics.RecordEvent(DiagnosticEvent.ProcessStarted);
             captureProtection = new WindowCaptureProtection();
             ApplicationContext context = args.Contains("--capture-test-only", StringComparer.OrdinalIgnoreCase)
                 ? new CaptureTestContext()
-                : new ScreenCompanionContext();
+                : new SCContext();
             using (context)
             {
+                instance.OnActivation(context is CaptureTestContext test ? test.Restore : ((SCContext)context).Restore);
                 Application.Run(context);
             }
         }
         catch (Exception ex)
         {
             var report = AppDiagnostics.Record(FailureStage.Startup, ex);
-            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}\n\n{report.DisplayLine}", "ScreenCompanion",
+            MessageBox.Show($"SC could not start: {ex.Message}\n\n{report.DisplayLine}", "SC",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
-        finally { captureProtection?.Dispose(); }
+        finally { captureProtection?.Dispose(); instance?.Dispose(); }
     }
 }
 
@@ -77,6 +81,12 @@ internal sealed class CaptureTestContext : ApplicationContext
 
     private void ToggleVisibility() => _overlay.ToggleVisibility();
 
+    public void Restore()
+    {
+        _overlay.ShowPanel();
+        _overlay.Activate();
+    }
+
     protected override void ExitThreadCore()
     {
         _host.UnregisterAll();
@@ -87,7 +97,7 @@ internal sealed class CaptureTestContext : ApplicationContext
     }
 }
 
-internal sealed class ScreenCompanionContext : ApplicationContext
+internal sealed class SCContext : ApplicationContext
 {
     private const int CaptureHotkeyId = 1;
     private const int TestHotkeyId = 2;
@@ -109,19 +119,18 @@ internal sealed class ScreenCompanionContext : ApplicationContext
     private bool _busy;
     private bool _settingsOpen;
     private bool _capturingFrame;
+    private bool _restoreOnReady;
     private readonly Queue<Action> _afterCapture = new();
 
-    public ScreenCompanionContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null,
+    public SCContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null,
         string? credentialPath = null)
     {
         _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
         _pipelineConfiguration = configuration ?? PipelineConfiguration.LoadFromEnvironment();
         var besideExecutable = Path.Combine(AppContext.BaseDirectory, "screencompanion.key");
-        var profileDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ScreenCompanion");
         _legacyVaultExists = File.Exists(besideExecutable) ||
-            File.Exists(Path.Combine(profileDirectory, "screencompanion.key"));
-        _credentialPath = credentialPath ?? Path.Combine(profileDirectory, "screencompanion.user.key");
+            File.Exists(Path.Combine(AppStorage.LegacyProfileDirectory, "screencompanion.key"));
+        _credentialPath = credentialPath ?? AppStorage.GetCredentialPath();
         _host = new HotkeyHost();
         _host.CaptureRequested += async () => await CaptureAndAnswerAsync();
         _host.TestRequested += ToggleCaptureTest;
@@ -157,7 +166,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
                     var report = AppDiagnostics.Record(FailureStage.Credentials, ex);
                     MessageBox.Show("The saved API key file could not be opened. It may be damaged or " +
                         $"belong to another Windows account. The file was left unchanged.\n\n{_credentialPath}\n\n{ex.Message}\n\n{report.DisplayLine}",
-                        "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        "SC", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     ExitThread();
                     return;
                 }
@@ -187,7 +196,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
                     throw new InvalidOperationException($"Saved shortcuts failed ({shortcutError}), and default shortcuts failed ({defaultError}).");
                 _settings = _activeHotkeys.ApplyTo(_settings);
                 MessageBox.Show($"Saved shortcuts could not be used: {shortcutError} Default shortcuts remain active.",
-                    "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    "SC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
             _ready = true;
             stage = FailureStage.Display;
@@ -208,13 +217,35 @@ internal sealed class ScreenCompanionContext : ApplicationContext
                 ApiKeyVault.SaveForCurrentUser(_credentialPath, _settings);
             }
             AppDiagnostics.RecordEvent(DiagnosticEvent.Ready);
+            if (_restoreOnReady) Restore();
         }
         catch (Exception ex)
         {
             var report = AppDiagnostics.Record(stage, ex);
-            MessageBox.Show($"ScreenCompanion could not start: {ex.Message}\n\n{report.DisplayLine}", "ScreenCompanion",
+            MessageBox.Show($"SC could not start: {ex.Message}\n\n{report.DisplayLine}", "SC",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
             ExitThread();
+        }
+    }
+
+    public void Restore()
+    {
+        if (_exiting) return;
+        if (!_ready || _overlay is null)
+        {
+            _restoreOnReady = true;
+            Application.OpenForms.Cast<Form>().LastOrDefault(form => form.Visible)?.Activate();
+            return;
+        }
+        _restoreOnReady = false;
+        if (DeferDuringCapture(Restore)) return;
+        if (_settingsVisibility is not null) _settingsVisibility.Show();
+        else
+        {
+            if (!_overlay.TestMode && !_overlay.InputVisible && string.IsNullOrWhiteSpace(_overlay.AnswerText))
+                _overlay.ShowInput();
+            else _overlay.ShowPanel();
+            _overlay.Activate();
         }
     }
 
@@ -235,7 +266,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
         dialog.ShortcutRecordingChanged += recording =>
         {
             if (!_exiting && !_host.TryApply(_activeHotkeys, recording, out var error))
-                MessageBox.Show(dialog, error, "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(dialog, error, "SC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         };
         dialog.FormClosing += (_, e) =>
         {
@@ -245,7 +276,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             if (!TryApplyHotkeys(dialog.Settings, out var error))
             {
                 e.Cancel = true;
-                MessageBox.Show(dialog, error, "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(dialog, error, "SC", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             try
@@ -262,7 +293,7 @@ internal sealed class ScreenCompanionContext : ApplicationContext
             {
                 TryApplyHotkeys(previous!, out var restoreError);
                 e.Cancel = true;
-                MessageBox.Show(dialog, $"Could not save settings: {ex.Message}", "ScreenCompanion",
+                MessageBox.Show(dialog, $"Could not save settings: {ex.Message}", "SC",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         };
@@ -531,7 +562,7 @@ internal sealed class HotkeyHost : Form
             UnregisterAll();
             foreach (var (oldId, oldBinding) in previous)
                 if (!Register(oldId, oldBinding.Modifiers, oldBinding.Key))
-                    throw new InvalidOperationException("Could not restore the previous shortcuts. Restart ScreenCompanion.");
+                    throw new InvalidOperationException("Could not restore the previous shortcuts. Restart SC.");
             error = "Windows could not register a shortcut; it may be reserved or already in use.";
             return false;
         }
@@ -590,7 +621,7 @@ internal sealed class AppTray : IDisposable
         _icon = new NotifyIcon
         {
             Icon = System.Drawing.SystemIcons.Application,
-            Text = "ScreenCompanion",
+            Text = "SC",
             ContextMenuStrip = _menu,
             Visible = true
         };
@@ -598,7 +629,7 @@ internal sealed class AppTray : IDisposable
     }
 
     public void SetWorking(bool working) =>
-        _icon.Text = working ? "ScreenCompanion: answering" : "ScreenCompanion";
+        _icon.Text = working ? "SC: answering" : "SC";
 
     public void Dispose()
     {
@@ -616,13 +647,13 @@ internal sealed class SetupDialog : ProtectedDialog
 
     public SetupDialog(bool legacyVaultExists = false, bool isChange = false)
     {
-        Text = isChange ? "Change API key" : "Set up ScreenCompanion";
+        Text = isChange ? "Change API key" : "Set up SC";
         ClientSize = new System.Drawing.Size(460, legacyVaultExists ? 246 : 206);
         var keyLabel = AddLabel("OpenAI API key (protected by your Windows account)", 18, 56, 430, 24);
         _apiKey = AddSecretBox(20, 86, 420);
         var explanation = AddLabel(legacyVaultExists
                 ? "An older key file was found. Enter your API key once more. The old file will be left unchanged."
-                : "Enter the key you want to use with ScreenCompanion.",
+                : "Enter the key you want to use with SC.",
             20, 122, 420, legacyVaultExists ? 60 : 24);
         explanation.ForeColor = UiTheme.SecondaryText;
         var buttonY = legacyVaultExists ? 196 : 156;
@@ -638,7 +669,7 @@ internal sealed class SetupDialog : ProtectedDialog
     {
         if (string.IsNullOrWhiteSpace(ApiKey))
         {
-            MessageBox.Show(this, "Enter your OpenAI API key.", "ScreenCompanion", MessageBoxButtons.OK,
+            MessageBox.Show(this, "Enter your OpenAI API key.", "SC", MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
             _apiKey.Focus();
             return;

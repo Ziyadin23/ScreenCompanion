@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // Native dialogs, combo-box lists and tray menus have their own top-level HWNDs.
 // Protect them before Windows processes the message that makes them visible.

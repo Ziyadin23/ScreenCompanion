@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class FalseRefusalClassifier
 {

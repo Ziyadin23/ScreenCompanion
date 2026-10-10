@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // The hook has its own message loop: Windows silently removes a low-level mouse
 // hook if its thread is busy for too long. It only posts wheel deltas to our HWND;
@@ -23,7 +23,7 @@ internal sealed class HoverMouseWheel : IDisposable
     {
         _window = window;
         _callback = OnMouse;
-        _thread = new Thread(Run) { IsBackground = true, Name = "ScreenCompanion hover scrolling" };
+        _thread = new Thread(Run) { IsBackground = true, Name = "SC hover scrolling" };
         _thread.Start();
         _started.Wait();
         if (_startError is not null)

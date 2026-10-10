@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Drawing.Imaging;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // This is the only extraction component tied to the Windows image implementation.
 // Region detection and parsing can be tested independently with an injected cropper.

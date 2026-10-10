@@ -7,23 +7,39 @@ synthetic question window containing browser-like controls, monitoring labels,
 timer, navigation, and a student placeholder. Fixtures contain no credentials
 or real assessment material.
 
+On 2026-10-10 v0.4.7 passed **966 portable assertions** on Linux and
+Windows, plus **321 capture/crop**, **125 appearance**, and **258 production UI**
+assertions in Windows 11. New regressions cover malformed provider responses
+across all five services and structured explanations without a primary answer.
+Explicit refusals and the existing trusted retry boundary remain covered.
+These runs use synthetic credentials and mocked transport; live provider
+access and answer accuracy remain separate, unfinished checks.
+
+The current release, **SC v0.4.8**, adds regression coverage for the fixed Settings palette, encrypted-vault migration and existing-vault priority, retained-answer activation, and usable input on relaunch without an answer. The Windows appearance suite passed **134 assertions**; capture/crop and production UI suites passed **321** and **258**. The portable suite passed **966 assertions** on Linux and Windows. To run only the Settings color regression, add `--settings-palette` to the Windows test command. Standalone duplicate-process tests additionally checked repeated/hidden launches, different paths, ten rapid launches, and Settings restoration.
+
+The SC v0.4.8 synthetic preview was also checked with OBS 32.2.2 Display Capture
+in Windows 11. Inspected saved frames omitted the answer, typed input, Settings,
+and its native color picker. A desktop image confirmed that Settings/picker were
+visible locally. This checks that recorder path; Discord and browser Entire
+Screen paths remain unverified.
+
 From the repository root with the .NET 10 SDK:
 
 ```bash
-dotnet run --project tests/Portable/ScreenCompanion.PipelineTests.csproj -c Release
+dotnet run --project tests/Portable/SC.PipelineTests.csproj -c Release
 ```
 
 On Windows 11 with the .NET 10 SDK, run real screen capture and crop tests with
 mocked Responses HTTP responses:
 
 ```powershell
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release
 ```
 
-For the v0.4.6 panel, Settings, and native-popup capture checks, run:
+For the current panel, Settings, migration, activation, and native-popup capture checks, run:
 
 ```powershell
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --appearance
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --appearance
 ```
 
 This needs no API-key setup and makes no API requests. It checks answer-only
@@ -38,8 +54,8 @@ It also checks
 capture exclusion with Windows GDI `CopyFromScreen` (`SourceCopy`) and native
 `BitBlt` (`SRCCOPY|CAPTUREBLT`) at 0%, 50%, and 100% background transparency,
 with 100% text visibility. These paths do
-not establish behavior in Edge/Chrome whole-monitor recordings or OBS Display
-Capture; those recorder paths need a separate check on the updated build.
+not establish behavior in whole-monitor recorder captures. The separate OBS
+check above applies to SC v0.4.8; Edge/Chrome and Discord still need a current-build check.
 
 The same suite checks both GDI paths for newly shown/restored app windows, native combo-box lists, context menus, ColorDialog, and MessageBox. It verifies native Settings popup exclusion after hide/restore and releases the UI-thread capture hook afterward. On 2026-10-02 it passed **125 assertions** in Windows 11; portable and mocked production UI suites passed **764** and **258** respectively. These checks make no live API requests.
 
@@ -53,10 +69,10 @@ Mocked runs use a temporary synthetic encrypted vault and need no prior setup.
 They do not read or replace the real saved key. The suite also captures while
 Settings is hidden and requests Settings during the fresh-capture delay; the
 latest answer remains suppressed until returning with Back.
-Close any other ScreenCompanion instance first so its shortcuts are available.
+Close any other SC instance first so its shortcuts are available.
 
 ```powershell
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --ui
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --ui
 ```
 
 Add `--live` to send synthetic questions through the real Responses API using
@@ -67,8 +83,8 @@ body is written by the harness. Console output reports test counts, fixture
 names, failure types, and numeric HTTP status codes.
 
 ```powershell
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --live
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --ui --live
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --live
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --ui --live
 ```
 
 To rerun one live capture case, use `--live --one image` (or `multiple`, `multi`,
@@ -77,7 +93,7 @@ API requests or reading a key, use `--fixture`. Number keys 1–5 switch between
 multiple-choice, multiple-selection, short-answer, code, and diagram fixtures.
 
 ```powershell
-dotnet run --project tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -- --fixture
+dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --fixture
 ```
 
 `--panel-preview` opens a synthetic practice page and the production answer
@@ -101,9 +117,9 @@ Publish a standalone Windows x64 test executable when the Windows test PC has
 no SDK/runtime installed:
 
 ```powershell
-dotnet publish tests/Windows/ScreenCompanion.WindowsTests.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o tests/Windows/publish
-.\tests\Windows\publish\ScreenCompanion.WindowsTests.exe
-.\tests\Windows\publish\ScreenCompanion.WindowsTests.exe --ui
+dotnet publish tests/Windows/SC.WindowsTests.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o tests/Windows/publish
+.\tests\Windows\publish\SC.WindowsTests.exe
+.\tests\Windows\publish\SC.WindowsTests.exe --ui
 ```
 
 The portable tests cover trusted mode configuration, crop boundaries and fail

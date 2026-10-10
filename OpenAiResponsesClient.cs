@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal sealed class ApiResponseException(int statusCode, string message) : InvalidOperationException(message)
 {
@@ -20,6 +20,7 @@ internal sealed record ModelResponse(string Text, string Refusal, string Status)
 internal static class OpenAiResponsesClient
 {
     private const string Endpoint = "https://api.openai.com/v1/responses";
+    private const string UnreadableResponseMessage = "OpenAI returned an unreadable response. Try again.";
 
     public static async Task<ModelResponse> SendAsync(HttpClient client, string apiKey, string model,
         string developerInstruction, JsonArray userContent, JsonObject schema, int maxOutputTokens,
@@ -39,7 +40,7 @@ internal static class OpenAiResponsesClient
             {
                 ["format"] = new JsonObject
                 {
-                    ["type"] = "json_schema", ["name"] = "screencompanion_response",
+                    ["type"] = "json_schema", ["name"] = "sc_response",
                     ["strict"] = true, ["schema"] = schema
                 }
             }
@@ -55,22 +56,35 @@ internal static class OpenAiResponsesClient
             throw new ApiResponseException((int)response.StatusCode,
                 $"OpenAI API request failed with status {(int)response.StatusCode}.");
 
-        using var document = JsonDocument.Parse(responseText);
-        return ParseResponse(document.RootElement);
+        try
+        {
+            using var document = JsonDocument.Parse(responseText);
+            return ParseResponse(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            throw new InvalidOperationException(UnreadableResponseMessage);
+        }
     }
 
     internal static ModelResponse ParseResponse(JsonElement root)
     {
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException(UnreadableResponseMessage);
         var parts = new List<string>();
         var refusals = new List<string>();
         if (root.TryGetProperty("output", out var output) && output.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in output.EnumerateArray())
             {
+                if (item.ValueKind != JsonValueKind.Object)
+                    throw new InvalidOperationException(UnreadableResponseMessage);
                 if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
                     continue;
                 foreach (var part in content.EnumerateArray())
                 {
+                    if (part.ValueKind != JsonValueKind.Object)
+                        throw new InvalidOperationException(UnreadableResponseMessage);
                     if (!part.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String)
                         continue;
                     if (type.GetString() == "output_text" && part.TryGetProperty("text", out var text) &&

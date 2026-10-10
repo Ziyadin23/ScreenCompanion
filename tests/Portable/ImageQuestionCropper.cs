@@ -1,4 +1,4 @@
-namespace ScreenCompanion;
+namespace SC;
 
 // Only the portable test assembly uses this byte-marker cropper. Windows tests
 // link the production System.Drawing implementation and verify real JPEG pixels.

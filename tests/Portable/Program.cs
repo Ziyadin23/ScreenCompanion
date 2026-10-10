@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class PipelineTests
 {
@@ -23,7 +23,65 @@ internal static class PipelineTests
         await RetryCases();
         await TypedAndModes();
         await ProviderTests.Run();
+        await MissingPrimaryAnswerCases();
         Console.WriteLine($"PASS: {TestCheck.Count} portable assertions.");
+    }
+
+    private static async Task MissingPrimaryAnswerCases()
+    {
+        foreach (var primary in new string?[] { null, "", "   " })
+        {
+            var result = JsonNode.Parse(FixtureData.Answer("multiple"))!.AsObject();
+            result["question_id"] = null;
+            result["answer"] = primary;
+            result["answer_text"] = null;
+            result["answers"] = new JsonArray();
+            result["explanation"] = "The option follows from the supplied example.";
+            var response = new JsonObject { ["results"] = new JsonArray(result) };
+            using var handler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(index switch
+            {
+                0 => FixtureData.Detection(Region).ToJsonString(),
+                1 => FixtureData.Extracted("multiple").ToJsonString(),
+                _ => response.ToJsonString()
+            }));
+            using var client = new HttpClient(handler);
+            try
+            {
+                await OpenAiVisionClient.AnswerVisibleQuestionAsync(client, "synthetic-test-key", FullScreen,
+                    "Answer directly.", Qa);
+                throw new Exception("FAIL: an explanation without a primary answer was accepted");
+            }
+            catch (InvalidOperationException error)
+            {
+                TestCheck.That(error.Message.Contains("incomplete answer", StringComparison.OrdinalIgnoreCase),
+                    "an explanation-only model result reports an incomplete answer");
+                TestCheck.That(handler.Requests.Count == 3,
+                    "a missing primary answer does not trigger an assessment-refusal retry");
+            }
+        }
+        using var extracted = QuestionExtractor.ParseQuestionContent(FixtureData.Extracted("multiple").ToJsonString(),
+            FullScreen, new ImageQuestionCropper());
+        foreach (var mode in new[] { "standard", "qa" })
+        {
+            foreach (var refusal in new[] { "I cannot help answer a live exam.", "I cannot help create malware." })
+            {
+                var response = new JsonObject
+                {
+                    ["results"] = new JsonArray(new JsonObject
+                    {
+                        ["question_id"] = null, ["answer"] = null, ["answer_text"] = null,
+                        ["answers"] = new JsonArray(), ["explanation"] = refusal, ["confidence"] = null
+                    })
+                };
+                using var handler = new RecordingResponsesHandler((_, _) => RecordingResponsesHandler.Text(response.ToJsonString()));
+                using var client = new HttpClient(handler);
+                var answer = await OpenAiVisionClient.AnswerExtractedAsync(client, "synthetic-test-key", extracted,
+                    "Answer directly.", Qa with { AssessmentMode = mode });
+                TestCheck.That(answer == refusal, "explanation-only refusals remain visible");
+                TestCheck.That(handler.Requests.Count == (mode == "qa" && refusal.Contains("exam") ? 2 : 1),
+                    "missing primary validation preserves the existing trusted retry boundary");
+            }
+        }
     }
 
     private static void ConfigurationTests()

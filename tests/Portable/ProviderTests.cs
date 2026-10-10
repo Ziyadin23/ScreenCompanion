@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class ProviderTests
 {
@@ -30,6 +30,37 @@ internal static class ProviderTests
             await Pipeline(provider, typed: false, retry: true);
         }
         await ErrorCases();
+        await MalformedResponses();
+    }
+
+    private static async Task MalformedResponses()
+    {
+        foreach (var provider in Enum.GetValues<ApiProvider>())
+        {
+            var malformed = new List<string> { "provider-body-sentinel", "null", "[]", "42" };
+            malformed.AddRange(provider == ApiProvider.OpenAI
+                ? new[] { "{\"output\":[null]}", "{\"output\":[{\"content\":[42]}]}" }
+                : new[] { "{\"choices\":[null]}", "{\"choices\":[{\"message\":null}]}" });
+            foreach (var body in malformed)
+            {
+                using var handler = new ProviderHandler(provider, (_, _) => Chat("unused"), rawBody: body);
+                using var client = new HttpClient(handler);
+                try
+                {
+                    await ModelApiClient.SendAsync(client, "synthetic-provider-key", "model", "instruction",
+                        new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = "fixture" }),
+                        new JsonObject { ["type"] = "object" }, 256, provider);
+                    throw new Exception("FAIL: " + provider + " accepted a malformed success response");
+                }
+                catch (InvalidOperationException error)
+                {
+                    TestCheck.That(error.Message.Contains("try again", StringComparison.OrdinalIgnoreCase) &&
+                        !error.Message.Contains("JsonElement", StringComparison.Ordinal) &&
+                        !error.Message.Contains("provider-body-sentinel", StringComparison.Ordinal),
+                        provider + " reports malformed success responses without parser details or response content");
+                }
+            }
+        }
     }
 
     private static async Task Pipeline(ApiProvider provider, bool typed, bool retry)
@@ -136,7 +167,7 @@ internal static class ProviderTests
     };
 
     private sealed class ProviderHandler(ApiProvider provider, Func<JsonObject, int, JsonObject> respond,
-        HttpStatusCode status = HttpStatusCode.OK) : HttpMessageHandler
+        HttpStatusCode status = HttpStatusCode.OK, string? rawBody = null) : HttpMessageHandler
     {
         public List<JsonObject> Requests { get; } = [];
 
@@ -171,7 +202,7 @@ internal static class ProviderTests
             }
             return new HttpResponseMessage(status)
             {
-                Content = new StringContent(status == HttpStatusCode.OK ? respond(body, Requests.Count - 1).ToJsonString() :
+                Content = new StringContent(status == HttpStatusCode.OK ? rawBody ?? respond(body, Requests.Count - 1).ToJsonString() :
                     "private-sentinel", Encoding.UTF8, "application/json")
             };
         }

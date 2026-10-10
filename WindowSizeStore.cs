@@ -2,22 +2,20 @@ using System.Drawing;
 using System.Security;
 using System.Text.Json;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class WindowSizeStore
 {
     private const int MaximumFileLength = 4096;
     private const int MaximumDimension = 16384;
 
-    private static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ScreenCompanion", "window-size.json");
+    private static string DefaultPath => AppStorage.WindowSizePath;
 
     public static Size? Load(string? path = null)
     {
         try
         {
-            path ??= DefaultPath;
+            path ??= File.Exists(DefaultPath) ? DefaultPath : AppStorage.LegacyWindowSizePath;
             if (!File.Exists(path) || new FileInfo(path).Length > MaximumFileLength)
                 return null;
 

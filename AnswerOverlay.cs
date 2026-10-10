@@ -6,7 +6,7 @@ using Controls = System.Windows.Controls;
 using Input = System.Windows.Input;
 using Media = System.Windows.Media;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // A top-level WPF window keeps background and text opacity independent, including
 // a text-only appearance. WinForms continues to own setup, settings and the tray.
@@ -59,7 +59,7 @@ internal sealed class AnswerOverlay : Wpf.Window, IDisposable
     public AnswerOverlay(Func<string, Task>? onTextQuestion = null)
     {
         _onTextQuestion = onTextQuestion;
-        Title = "ScreenCompanion";
+        Title = "SC";
         WindowStyle = Wpf.WindowStyle.None;
         ResizeMode = Wpf.ResizeMode.NoResize;
         AllowsTransparency = true;
@@ -174,7 +174,6 @@ internal sealed class AnswerOverlay : Wpf.Window, IDisposable
     public void ApplyAppearance(AppearanceSettings appearance)
     {
         appearance = appearance.Normalize();
-        UiTheme.Configure(appearance);
         var color = UiTheme.Parse(appearance.BackgroundColor);
         // Alpha 1 keeps the visually transparent rectangle interactive for scrolling,
         // selection and resizing instead of passing those events to the window behind it.
@@ -182,10 +181,12 @@ internal sealed class AnswerOverlay : Wpf.Window, IDisposable
             (byte)Math.Max(1, Math.Round(255 * (1 - appearance.TransparencyPercent / 100.0))), color.R, color.G, color.B));
         _body.Foreground = Brush(UiTheme.Parse(appearance.TextColor), appearance.TextOpacityPercent / 100.0);
         _body.FontSize = appearance.TextSizePoints * 96.0 / 72;
-        _question.Foreground = Brush(UiTheme.Text);
-        _question.Background = Brush(UiTheme.Header);
-        _sendButton.Background = Brush(UiTheme.Button);
-        _sendButton.Foreground = Brush(UiTheme.ButtonText);
+        var textColor = UiTheme.Parse(appearance.TextColor);
+        var accentColor = UiTheme.Parse(appearance.AccentColor);
+        _question.Foreground = Brush(textColor);
+        _question.Background = Brush(UiTheme.Mix(color, textColor, 0.04));
+        _sendButton.Background = Brush(accentColor);
+        _sendButton.Foreground = Brush(UiTheme.ContrastText(accentColor));
     }
 
     private static Media.SolidColorBrush Brush(Color color, double opacity = 1) =>
@@ -282,7 +283,7 @@ internal sealed class AnswerOverlay : Wpf.Window, IDisposable
     {
         TestMode = false;
         SetContent($"{message}\n\n{report.Hint}\n{report.DisplayLine}" +
-            (report.LogSaved ? "\nLog: %LOCALAPPDATA%\\ScreenCompanion\\diagnostics.log" : ""));
+            (report.LogSaved ? "\nLog: %LOCALAPPDATA%\\SC\\diagnostics.log" : ""));
     }
 
     private void SetContent(string text)

@@ -1,7 +1,7 @@
 using System.Net.Http;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class OpenAiVisionClient
 {
@@ -41,7 +41,11 @@ internal static class OpenAiVisionClient
         }
         if (!string.IsNullOrWhiteSpace(response.Refusal))
             return response.Refusal;
-        var answer = AnswerResponseParser.Parse(response.Text).Format();
+        var parsed = AnswerResponseParser.Parse(response.Text);
+        if (parsed.Results.Any(result => string.IsNullOrWhiteSpace(result.PrimaryAnswer) &&
+            !FalseRefusalClassifier.HasRefusalLanguage(result.Explanation)))
+            throw new InvalidOperationException("The model returned an incomplete answer. Try again.");
+        var answer = parsed.Format();
         return answer.Length > 0 ? answer : "The API returned no text answer. Try again.";
     }
 

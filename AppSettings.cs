@@ -1,6 +1,6 @@
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal readonly record struct HotkeyBinding(uint Modifiers, Keys Key)
 {
@@ -146,7 +146,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _modelDrafts.Add(models.Provider, models);
         _providerKeys = current.ProviderKeys.WithKey(models.Provider, current.ApiKey);
         _appearance = current.Appearance.Normalize();
-        Text = "ScreenCompanion settings";
+        Text = "SC settings";
         ClientSize = new System.Drawing.Size(530, 580);
 
         Controls.Add(AddLabel("Answer mode", 20, 52, 480, 24));
@@ -324,12 +324,12 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         };
         appearancePage.Controls.AddRange([_transparencyLabel, _transparency, _textOpacityLabel, _textOpacity,
             AddLabel("Text size (points)", 20, 160, 225, 30), _fontSize,
-            AddLabel("Interface colors", 20, 204, 480, 24)]);
+            AddLabel("Panel colors", 20, 204, 480, 24)]);
         _themeChoice = new ComboBox
         {
             Location = new Point(20, 234), Width = 480, DropDownStyle = ComboBoxStyle.DropDownList,
             DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 23, FlatStyle = FlatStyle.Flat,
-            AccessibleName = "Interface color theme"
+            AccessibleName = "Panel color theme"
         };
         _themeChoice.Items.AddRange(AppearanceSettings.PresetNames);
         _themeChoice.SelectedItem = _appearance.PresetName;
@@ -628,7 +628,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         StopListening();
         if ((string?)_mode.SelectedItem == "Custom" && string.IsNullOrWhiteSpace(_instruction.Text))
         {
-            MessageBox.Show(this, "Enter a custom instruction or choose another mode.", "ScreenCompanion",
+            MessageBox.Show(this, "Enter a custom instruction or choose another mode.", "SC",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             _instruction.Focus();
             return;
@@ -637,7 +637,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
             _settingsBinding, _exitBinding, _inputBinding);
         if (!shortcuts.IsValid)
         {
-            MessageBox.Show(this, "Each action needs a different shortcut.", "ScreenCompanion",
+            MessageBox.Show(this, "Each action needs a different shortcut.", "SC",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
@@ -646,7 +646,7 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
             string.IsNullOrWhiteSpace(_providerKeys.Get(_editingProvider)))
         {
             MessageBox.Show(this, "Choose valid model IDs and enter the selected service's API key on Models & API.",
-                "ScreenCompanion", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                "SC", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         Settings = shortcuts.ApplyTo(_original) with

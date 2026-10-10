@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text.Json.Serialization;
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal sealed record AppearanceSettings
 {
@@ -55,7 +55,7 @@ internal enum UiColorRole { Header, SecondaryText, ColorSwatch }
 
 internal static class UiTheme
 {
-    private static AppearanceSettings _appearance = new();
+    private static readonly AppearanceSettings _appearance = new();
     public static Color Background => Parse(_appearance.BackgroundColor);
     public static Color Text => Parse(_appearance.TextColor);
     public static Color Button => Parse(_appearance.AccentColor);
@@ -67,7 +67,6 @@ internal static class UiTheme
     public static Color Listening => Mix(Button, Text, 0.08);
     public static Color ListeningText => ContrastText(Listening);
 
-    public static void Configure(AppearanceSettings appearance) => _appearance = appearance.Normalize();
     public static Color Parse(string value) => Color.FromArgb(
         int.Parse(value.AsSpan(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture),
         int.Parse(value.AsSpan(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture),
@@ -94,7 +93,7 @@ internal static class UiTheme
     public static Color ContrastText(Color color) =>
         0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B > 150 ? Color.FromArgb(20, 25, 32) : Color.White;
 
-    private static Color Mix(Color background, Color foreground, double amount) => Color.FromArgb(
+    public static Color Mix(Color background, Color foreground, double amount) => Color.FromArgb(
         (int)Math.Round(background.R + (foreground.R - background.R) * amount),
         (int)Math.Round(background.G + (foreground.G - background.G) * amount),
         (int)Math.Round(background.B + (foreground.B - background.B) * amount));

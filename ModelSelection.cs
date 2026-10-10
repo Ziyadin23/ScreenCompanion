@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ScreenCompanion;
+namespace SC;
 
 [JsonConverter(typeof(JsonStringEnumConverter<ApiProvider>))]
 internal enum ApiProvider { OpenAI, Groq, Gemini, Mistral, OpenRouter }

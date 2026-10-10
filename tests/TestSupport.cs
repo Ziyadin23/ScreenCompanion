@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class FixtureAnswerOracle
 {

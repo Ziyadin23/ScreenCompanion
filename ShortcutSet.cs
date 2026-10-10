@@ -1,4 +1,4 @@
-namespace ScreenCompanion;
+namespace SC;
 
 internal readonly record struct ShortcutSet(HotkeyBinding Capture, HotkeyBinding Visibility,
     HotkeyBinding Test, HotkeyBinding Settings, HotkeyBinding Exit, HotkeyBinding Input)

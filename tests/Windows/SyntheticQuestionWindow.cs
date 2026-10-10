@@ -1,7 +1,7 @@
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // Public fixtures contain only made-up questions and interface text.
 internal sealed class SyntheticQuestionWindow : Form
@@ -16,7 +16,7 @@ internal sealed class SyntheticQuestionWindow : Form
     public SyntheticQuestionWindow(string caseName = "multiple")
     {
         CaseName = caseName;
-        Text = "ScreenCompanion synthetic QA";
+        Text = "SC synthetic QA";
         WindowState = FormWindowState.Maximized;
         BackColor = Color.FromArgb(238, 242, 246);
         KeyPreview = true;

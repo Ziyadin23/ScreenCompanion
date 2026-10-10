@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // Process configuration is trusted application state. Screenshot text never changes it.
 internal sealed record PipelineConfiguration

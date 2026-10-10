@@ -7,14 +7,20 @@ using System.Windows.Forms;
 using WpfControls = System.Windows.Controls;
 using WpfMedia = System.Windows.Media;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class AppearanceUiTests
 {
-    public static int Run(bool hoverOnly = false)
+    public static int Run(bool hoverOnly = false, bool paletteOnly = false)
     {
         try
         {
+            if (paletteOnly)
+            {
+                TestSettingsPaletteIsolation();
+                Console.WriteLine($"PASS: {TestCheck.Count} Settings palette assertions.");
+                return 0;
+            }
             if (hoverOnly)
             {
                 TestMinimalPanel();
@@ -22,7 +28,9 @@ internal static class AppearanceUiTests
                 return 0;
             }
             TestAppearancePersistence();
+            TestStorageMigration();
             TestAppearanceDialog();
+            TestSettingsPaletteIsolation();
             TestProviderSettings();
             TestMinimalPanel();
             TestGdiCaptureExclusion();
@@ -36,6 +44,34 @@ internal static class AppearanceUiTests
             Console.WriteLine("FAIL: " + exception.Message);
             return 1;
         }
+    }
+
+    private static void TestStorageMigration()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "sc-migration-test-" + Guid.NewGuid().ToString("N"));
+        var legacy = Path.Combine(root, "ScreenCompanion", "screencompanion.user.key");
+        try
+        {
+            var original = VaultData.Default("synthetic-migration-key") with { CommandsShown = true };
+            ApiKeyVault.SaveForCurrentUser(legacy, original);
+            var bytes = File.ReadAllBytes(legacy);
+            var current = AppStorage.GetCredentialPath(root);
+            TestCheck.That(current == Path.Combine(root, "SC", "sc.user.key") &&
+                ApiKeyVault.LoadForCurrentUser(current) == original, "SC retains encrypted keys and settings from the previous name");
+            TestCheck.That(File.ReadAllBytes(current).SequenceEqual(bytes) && File.ReadAllBytes(legacy).SequenceEqual(bytes),
+                "migration copies encrypted bytes and leaves the old vault unchanged");
+            var newer = original with { CustomInstruction = "Synthetic newer preference" };
+            ApiKeyVault.SaveForCurrentUser(current, newer);
+            TestCheck.That(AppStorage.GetCredentialPath(root) == current && ApiKeyVault.LoadForCurrentUser(current) == newer,
+                "an existing SC vault is never replaced by the old vault");
+            File.Delete(current);
+            File.Delete(legacy);
+            var passwordVault = Path.Combine(root, "ScreenCompanion", "screencompanion.key");
+            File.WriteAllText(passwordVault, "synthetic-legacy-marker");
+            TestCheck.That(AppStorage.GetCredentialPath(root) == current && !File.Exists(current) &&
+                File.ReadAllText(passwordVault) == "synthetic-legacy-marker", "older password vaults remain untouched");
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
     }
 
     private static void TestAppearancePersistence()
@@ -74,7 +110,6 @@ internal static class AppearanceUiTests
 
     private static void TestAppearanceDialog()
     {
-        UiTheme.Configure(new());
         var current = VaultData.Default("synthetic-test-key") with
         {
             CommandsShown = true,
@@ -87,7 +122,7 @@ internal static class AppearanceUiTests
             var background = Slider(dialog, "Background transparency");
             var text = Slider(dialog, "Text visibility");
             var size = Descendants(dialog).OfType<NumericUpDown>().Single();
-            var theme = Descendants(dialog).OfType<ComboBox>().Single(choice => choice.AccessibleName == "Interface color theme");
+            var theme = Descendants(dialog).OfType<ComboBox>().Single(choice => choice.AccessibleName == "Panel color theme");
             TestCheck.That(background.Value == 50 && text.Value == 40 && size.Value == 15 && (string?)theme.SelectedItem == "Forest",
                 "Panel restores independent text and background settings");
             background.Value = 100;
@@ -112,6 +147,27 @@ internal static class AppearanceUiTests
             Button(dialog, "Back").PerformClick();
             TestCheck.That(dialog.Settings is null && current.Appearance.TextOpacityPercent == 40, "Back discards edits");
         }
+    }
+
+    private static void TestSettingsPaletteIsolation()
+    {
+        var appearance = new AppearanceSettings
+        {
+            BackgroundColor = "#FFFFFF", TextColor = "#FFFFFF", AccentColor = "#FFFFFF"
+        };
+        using var overlay = new AnswerOverlay();
+        overlay.ApplyAppearance(appearance);
+        using var dialog = new SettingsDialog(VaultData.Default("synthetic-test-key") with { Appearance = appearance });
+        dialog.Show();
+        Button(dialog, "Panel").PerformClick();
+        var label = Descendants(dialog).OfType<Label>().Single(control => control.Text.StartsWith("Text visibility:"));
+        TestCheck.That(label.ForeColor == UiTheme.Parse("#EFF2F7") && dialog.BackColor == UiTheme.Parse("#1A202C"),
+            "saved answer colors leave Settings text and background readable");
+        TestCheck.That(Button(dialog, "Save").BackColor == UiTheme.Parse("#354052"),
+            "saved answer accent leaves Settings buttons readable");
+        TestCheck.That(((WpfMedia.SolidColorBrush)Field<WpfControls.TextBox>(overlay, "_body").Foreground).Color ==
+            WpfMedia.Colors.White, "the selected text color still applies to the answer");
+        Button(dialog, "Back").PerformClick();
     }
 
     private static void TestProviderSettings()
@@ -185,7 +241,7 @@ internal static class AppearanceUiTests
         }
         backdrop.Show();
         using var protection = protectWindows ? new WindowCaptureProtection() : null;
-        using var context = new ScreenCompanionContext(new HttpClient(new NoApiHandler()), credentialPath: vault.Path);
+        using var context = new SCContext(new HttpClient(new NoApiHandler()), credentialPath: vault.Path);
         EventHandler? show = null;
         show = (_, _) =>
         {
@@ -293,7 +349,6 @@ internal static class AppearanceUiTests
         overlay.SetSuppressed(false);
         overlay.ShowPanel();
         TestCheck.That(overlay.Visible, "returning reveals the latest answer");
-        UiTheme.Configure(new());
     }
 
     private static void TestGdiCaptureExclusion()
@@ -338,7 +393,6 @@ internal static class AppearanceUiTests
             }
         }
         Console.WriteLine("PASS capture paths: Windows GDI CopyFromScreen SourceCopy and BitBlt SRCCOPY|CAPTUREBLT; background=0%,50%,100%; text=100%.");
-        UiTheme.Configure(new());
     }
 
     private static void TestWindowCaptureProtection()
@@ -454,13 +508,18 @@ internal static class AppearanceUiTests
         using var vault = new TemporaryUiVault(VaultData.Default("synthetic-test-key"));
         var handler = new NoApiHandler();
         using var client = new HttpClient(handler);
-        using (var context = new ScreenCompanionContext(client, credentialPath: vault.Path))
+        using (var context = new SCContext(client, credentialPath: vault.Path))
         {
             Initialize(context);
             var overlay = Field<AnswerOverlay>(context, "_overlay");
             TestCheck.That(overlay.Visible && overlay.AnswerText.Contains("Ctrl+Backspace"), "first launch shows commands with current shortcuts");
             TestCheck.That(ApiKeyVault.LoadForCurrentUser(vault.Path).CommandsShown, "first-launch help is remembered in encrypted settings");
             overlay.ShowAnswer("Synthetic retained answer");
+            overlay.HidePanel();
+            context.Restore();
+            Pump();
+            TestCheck.That(overlay.Visible && overlay.AnswerText == "Synthetic retained answer",
+                "relaunch activation restores the answer without replacing it");
             Press(HotkeyBinding.DefaultSettings);
             Wait(() => Field<SettingsDialog?>(context, "_settingsDialog")?.Visible == true, "Ctrl+I opens settings");
             var dialog = Field<SettingsDialog>(context, "_settingsDialog");
@@ -521,11 +580,15 @@ internal static class AppearanceUiTests
             Press(HotkeyBinding.DefaultExit);
             Wait(() => !Field<bool>(context, "_ready"), "Ctrl+Backspace exits from settings");
         }
-        using (var restarted = new ScreenCompanionContext(new HttpClient(handler), credentialPath: vault.Path))
+        using (var restarted = new SCContext(new HttpClient(handler), credentialPath: vault.Path))
         {
             Initialize(restarted);
             var overlay = Field<AnswerOverlay>(restarted, "_overlay");
             TestCheck.That(!overlay.Visible && overlay.AnswerText.Length == 0, "later launches do not repeat help or restore answers");
+            restarted.Restore();
+            Pump();
+            TestCheck.That(overlay.Visible && overlay.InputVisible, "relaunch with no answer opens usable question input");
+            overlay.HidePanel();
             Press(HotkeyBinding.DefaultVisibility);
             Wait(() => overlay.Visible, "visibility shortcut works after restart");
             Press(HotkeyBinding.DefaultExit);
@@ -605,7 +668,7 @@ internal static class AppearanceUiTests
         }
     }
 
-    private static void Initialize(ScreenCompanionContext context) => typeof(ScreenCompanionContext)
+    private static void Initialize(SCContext context) => typeof(SCContext)
         .GetMethod("InitializeOnFirstIdle", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(context, [null, EventArgs.Empty]);
     private static T Field<T>(object instance, string name) => (T)instance.GetType()
         .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(instance)!;
@@ -689,7 +752,7 @@ internal static class AppearanceUiTests
 
 internal sealed class TemporaryUiVault : IDisposable
 {
-    public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "ScreenCompanion-ui-" + Guid.NewGuid() + ".key");
+    public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SC-ui-" + Guid.NewGuid() + ".key");
     public TemporaryUiVault(VaultData data) => ApiKeyVault.SaveForCurrentUser(Path, data);
     public void Dispose() { if (File.Exists(Path)) File.Delete(Path); }
 }

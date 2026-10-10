@@ -11,9 +11,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>ScreenCompanion</AssemblyName>
-    <Version>0.4.6</Version>
-    <RootNamespace>ScreenCompanion</RootNamespace>
+    <AssemblyName>SC</AssemblyName>
+    <Version>0.4.8</Version>
+    <RootNamespace>SC</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests/**/*.cs" />

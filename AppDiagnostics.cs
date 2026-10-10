@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal enum FailureStage
 {
@@ -30,9 +30,7 @@ internal sealed record FailureReport(string Id, string Code, bool LogSaved, stri
 internal static class AppDiagnostics
 {
     private const long MaximumLogLength = 64 * 1024;
-    public static string LogPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "ScreenCompanion", "diagnostics.log");
+    public static string LogPath => Path.Combine(AppStorage.ProfileDirectory, "diagnostics.log");
 
     public static void RecordEvent(DiagnosticEvent diagnosticEvent, string? logPath = null)
     {

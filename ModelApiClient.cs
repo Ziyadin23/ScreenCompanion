@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // The pipeline supplies one stateless request; transport differences stay here.
 internal static class ModelApiClient
@@ -62,7 +62,7 @@ internal static class ModelApiClient
                 ["type"] = "json_schema",
                 ["json_schema"] = new JsonObject
                 {
-                    ["name"] = "screencompanion_response", ["strict"] = true, ["schema"] = schema.DeepClone()
+                    ["name"] = "sc_response", ["strict"] = true, ["schema"] = schema.DeepClone()
                 }
             }
         };
@@ -91,8 +91,11 @@ internal static class ModelApiClient
 
     internal static ModelResponse ParseChatResponse(JsonElement root)
     {
+        if (root.ValueKind != JsonValueKind.Object)
+            throw new InvalidOperationException("The service returned an unreadable response. Try again.");
         if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array ||
-            choices.GetArrayLength() == 0 || !choices[0].TryGetProperty("message", out var message))
+            choices.GetArrayLength() == 0 || choices[0].ValueKind != JsonValueKind.Object ||
+            !choices[0].TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("The service returned no model answer. Check model access and try again.");
         var choice = choices[0];
         var finish = choice.TryGetProperty("finish_reason", out var finishValue) && finishValue.ValueKind == JsonValueKind.String

@@ -6,7 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal static class WindowsPipelineTests
 {
@@ -16,9 +16,9 @@ internal static class WindowsPipelineTests
         ApplicationConfiguration.Initialize();
         if (args.Contains("--capture-preview")) { AppearanceUiTests.ShowPanelPreview(protectWindows: true); return; }
         if (args.Contains("--panel-preview")) { AppearanceUiTests.ShowPanelPreview(); return; }
-        if (args.Contains("--appearance") || args.Contains("--hover"))
+        if (args.Contains("--appearance") || args.Contains("--hover") || args.Contains("--settings-palette"))
         {
-            Environment.ExitCode = AppearanceUiTests.Run(args.Contains("--hover"));
+            Environment.ExitCode = AppearanceUiTests.Run(args.Contains("--hover"), args.Contains("--settings-palette"));
             return;
         }
         var fixtureOnly = args.Contains("--fixture");
@@ -63,8 +63,7 @@ internal static class WindowsPipelineTests
 
     private static string ExistingKey()
     {
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ScreenCompanion", "screencompanion.user.key");
+        var path = AppStorage.GetCredentialPath();
         if (!File.Exists(path)) throw new InvalidOperationException("Existing API-key setup is required for --live.");
         return ApiKeyVault.LoadForCurrentUser(path).ApiKey;
     }
@@ -133,7 +132,7 @@ internal static class WindowsPipelineTests
         using var handler = new FixtureResponsesHandler(fixture, live);
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(150) };
         using var vault = new TemporaryUiVault(VaultData.Default(live ? ExistingKey() : "synthetic-test-key") with { CommandsShown = true });
-        using var context = new ScreenCompanionContext(client, Configuration(), vault.Path);
+        using var context = new SCContext(client, Configuration(), vault.Path);
         await WaitUntil(() => Field<bool>(context, "_ready"), TimeSpan.FromSeconds(15));
         var overlay = Field<AnswerOverlay>(context, "_overlay");
         var body = Field<System.Windows.Controls.TextBox>(overlay, "_body");

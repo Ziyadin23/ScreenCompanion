@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal sealed record VaultData(string ApiKey, string ResponseMode, string CustomInstruction,
     HotkeyBinding Capture, HotkeyBinding Visibility, HotkeyBinding Test)

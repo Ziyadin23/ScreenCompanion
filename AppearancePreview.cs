@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 
-namespace ScreenCompanion;
+namespace SC;
 
 internal sealed class AppearancePreview : Control
 {

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace ScreenCompanion;
+namespace SC;
 
 // Native common dialogs and message boxes are owned by Settings, but Windows
 // does not hide them when their owner is hidden. Restore only the popups that

@@ -29,8 +29,8 @@
 
 ## Publishing
 
-1. Use [publish.ps1](publish.ps1) to build the self-contained Windows x64 executable with a versioned name matching the project version. A ZIP, if produced, must also have a versioned name and contain only that EXE and `README.txt`.
+1. Use [publish.ps1](publish.ps1) to build the self-contained Windows x64 executable with a versioned name matching [SC.csproj](SC.csproj). Use a new version for each changed binary. A ZIP, if produced, must also have a versioned name and contain only that EXE and `README.txt`.
 2. Before a GitHub release, verify executable and ZIP contents and integrity. Update [README.md](README.md) with verified behavior, current release status, and unfinished lab checks before publishing.
-3. After uploading assets, compare GitHub-reported digests with the verified local files. Record the result in the parent workspace's `PROJECT_CONTEXT.md`, outside this public repository.
+3. Synchronize this repository's and the parent workspace's `AGENTS.md` with the project version and actual publication state. After uploading assets, compare GitHub-reported digests with the verified local files. Record the result in the parent workspace's `PROJECT_CONTEXT.md`, outside this public repository.
 
 Keep VM setup, physical USB state, and local test details in that private workspace context. Follow the parent workspace's `AGENTS.md` for release, VM, and USB work there.
