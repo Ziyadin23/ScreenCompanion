@@ -46,7 +46,13 @@ Windows 11 UI, migration, relaunch, GDI capture, and OBS Display Capture checks 
 
 ## Build and further documentation
 
-With the .NET 10 SDK on Windows, run from the repository root:
+With the .NET 10 SDK on Windows, compile production code from the repository root:
+
+```powershell
+dotnet build SC.csproj -c Release
+```
+
+For a distributable executable, follow [publishing](docs/PUBLISHING.md) and run:
 
 ```powershell
 .\publish.ps1
@@ -57,4 +63,4 @@ Output: `publish\win-x64\SC-v0.4.8.exe` and `README.txt`.
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.
 - [Pipeline reference](docs/PIPELINE.md): request flow and advanced environment configuration.
 - [Tests](tests/README.md) and [publishing](docs/PUBLISHING.md).
-- [Agent instructions](AGENTS.md): architecture, development rules, and scoped folder guidance.
+- [Agent instructions](AGENTS.md) route development tasks to [coding standards](CODING_STANDARDS.md).

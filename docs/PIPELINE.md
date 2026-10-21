@@ -1,6 +1,6 @@
 # Pipeline reference
 
-Technical reference for contributors and coding agents changing request flow, prompts, crop handling, or trusted process configuration. Read the [root agent instructions](../AGENTS.md) and [pipeline instructions](../src/Pipeline/AGENTS.md) for the applicable development rules.
+Technical reference for contributors and coding agents changing request flow, prompts, crop handling, or trusted process configuration. Apply the [pipeline development contracts](../CODING_STANDARDS.md#pipeline-contracts) when changing this behavior.
 
 Implementation: `src/Pipeline/PipelineConfiguration.cs`, `QuestionExtraction.cs`, and `OpenAiVisionClient.cs`; provider adapters are under `src/Providers`.
 
