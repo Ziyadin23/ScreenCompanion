@@ -1,6 +1,6 @@
 # Windows capture and UI tests
 
-This project links all production `src/**/*.cs` and shared `TestSupport.cs`; its entry point stays `SC.WindowsPipelineTests` so it exercises the harness rather than the production `Program`.
+Keep the `SC.WindowsPipelineTests` entry point so this project exercises the harness rather than the production `Program`.
 
 - Default runs use real monitor capture/JPEG cropping with mocked API responses. `--appearance` exercises panel/Settings, encrypted storage/migration, activation, and native popup/capture behavior. `--ui` runs the production context and registered shortcuts.
 - Mocked UI runs use isolated temporary synthetic DPAPI vaults and must neither read nor replace the user's saved key. Preserve cleanup of forms, hooks, hotkeys, temporary vaults, and fixture windows.

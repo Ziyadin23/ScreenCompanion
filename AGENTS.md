@@ -2,24 +2,22 @@
 
 ## Product and status
 
-SC is a standalone Windows 10/11 x64 screen-question assistant with a WPF answer panel and WinForms Settings/tray. Source and the latest published release are **SC v0.4.8**; [SC.csproj](SC.csproj) defines the source version and [README.md](README.md#release-status) records publication status and verified limits. Use SC for the product name while retaining historical GitHub URLs, release names, and legacy storage identifiers.
-
-Two workflows share the same pipeline: a capture shortcut answers the visible task on one monitor; typed input uses its text with one fresh monitor capture for relevant context. The flow is capture → locate question → local crop → structured extraction → answer. Provider adapters support OpenAI, Groq, Gemini, Mistral, and OpenRouter.
+SC is a Windows 10/11 x64 screen-question assistant. Source and the latest published release are **SC v0.4.8**; [SC.csproj](SC.csproj) defines the source version and [README.md](README.md#release-status) records publication status and verified limits. Use SC for the product name while retaining historical GitHub URLs, release names, and legacy storage identifiers.
 
 ## Source map and scoped instructions
 
-Read the `AGENTS.md` in the area you change, including when a root project or build change affects that area. Source files retain the shared `SC` namespace; folders separate responsibilities without creating new assemblies.
+Read the scoped instructions for each area affected, including by root project/build changes. Keep the shared `SC` namespace and single production assembly.
 
-| Folder | Responsibility | Main entry points |
-| --- | --- | --- |
-| [src/App](src/App/AGENTS.md) | Startup, request lifecycle, response preferences, diagnostics | `Program.cs`, `SCContext.cs`, `CaptureTestContext.cs` |
-| [src/UI](src/UI/AGENTS.md) | WPF answer/input, WinForms Settings/setup, tray, appearance | `AnswerOverlay.cs`, `SettingsDialog.cs`, `ProtectedDialog.cs` |
-| [src/Pipeline](src/Pipeline/AGENTS.md) | Trusted configuration, question extraction, answer parsing and retry | `PipelineConfiguration.cs`, `QuestionExtraction.cs`, `OpenAiVisionClient.cs` |
-| [src/Providers](src/Providers/AGENTS.md) | Service/model selection and HTTP adapters | `ModelApiClient.cs`, `OpenAiResponsesClient.cs`, `ModelSelection.cs` |
-| [src/Storage](src/Storage/AGENTS.md) | Windows-user encrypted settings, migration and panel size | `ApiKeyVault.cs`, `AppStorage.cs`, `WindowSizeStore.cs` |
-| [src/Platform](src/Platform/AGENTS.md) | Windows capture, native APIs, hotkeys, activation and mouse hooks | `ScreenCapture.cs`, `NativeMethods.cs`, `SingleInstance.cs` |
-| [tests](tests/AGENTS.md) | Shared synthetic fixtures and portable/Windows regression suites | [test commands](tests/README.md) |
-| [docs](docs/AGENTS.md) | Detailed user/reference documentation and release procedure | [pipeline](docs/PIPELINE.md), [verification](docs/VERIFICATION.md), [publishing](docs/PUBLISHING.md) |
+| When changing | Read |
+| --- | --- |
+| Startup, request lifecycle, response preferences, diagnostics | [src/App](src/App/AGENTS.md) |
+| Answer/input, Settings/setup, tray, appearance | [src/UI](src/UI/AGENTS.md) |
+| Trusted configuration, extraction, parsing, retry | [src/Pipeline](src/Pipeline/AGENTS.md) |
+| Service/model selection, HTTP adapters | [src/Providers](src/Providers/AGENTS.md) |
+| Encrypted settings, migration, panel size | [src/Storage](src/Storage/AGENTS.md) |
+| Capture, native APIs, hotkeys, activation, mouse hooks | [src/Platform](src/Platform/AGENTS.md) |
+| Regression tests or fixtures | [tests](tests/AGENTS.md) |
+| Public documentation | [docs](docs/AGENTS.md) |
 
 ## Rules shared by every area
 
@@ -33,27 +31,14 @@ Read the `AGENTS.md` in the area you change, including when a root project or bu
 
 ## Build and verification
 
-Run commands from the repository root with the .NET 10 SDK. The production project compiles only `src/**/*.cs`; portable tests link selected production files and Windows tests link the whole source tree.
-
-```bash
-dotnet build SC.csproj -c Release
-dotnet run --project tests/Portable/SC.PipelineTests.csproj -c Release
-```
-
-On Windows, use the relevant suite:
-
-```powershell
-dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release
-dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --appearance
-dotnet run --project tests/Windows/SC.WindowsTests.csproj -c Release -- --ui
-```
+For build commands, read [README.md](README.md#build-and-further-documentation). Before regression runs, read [tests/README.md](tests/README.md) for commands, fixture modes, and platform requirements.
 
 Portable checks do not verify Windows UI/capture behavior or live model quality. Mocked Windows tests use synthetic temporary vaults. Live runs need existing local credentials, model access, and normal API usage; keep them separate from mocked verification.
 
 ## Documentation and publishing
 
-Keep [README.md](README.md) a concise user introduction with downloads, setup, shortcuts, privacy, and key limitations. Put detailed settings/troubleshooting in [docs/USER_GUIDE.md](docs/USER_GUIDE.md), trusted configuration/request contracts in [docs/PIPELINE.md](docs/PIPELINE.md), and measured checks/unfinished limits in [docs/VERIFICATION.md](docs/VERIFICATION.md). Update the relevant reference and README summary when behavior changes; update source links and both test project inclusion lists after moving files.
+Keep [README.md](README.md) a concise user introduction with downloads, setup, shortcuts, privacy, and key limitations. Behavior changes require updates to the relevant reference and README summary. Source moves require updated links and both test project inclusion lists.
 
-Pipeline, prompt, schema, or trusted-configuration changes: read [docs/PIPELINE.md](docs/PIPELINE.md). Visibility or recorder claims: read [docs/VERIFICATION.md](docs/VERIFICATION.md#capture-exclusion-checks). Agent development rules remain in this file and the scoped folder instructions.
+Settings/troubleshooting changes: read [docs/USER_GUIDE.md](docs/USER_GUIDE.md). Pipeline, prompt, schema, or trusted-configuration changes: read [docs/PIPELINE.md](docs/PIPELINE.md). Visibility or recorder claims: read [docs/VERIFICATION.md](docs/VERIFICATION.md#capture-exclusion-checks).
 
 Read [docs/PUBLISHING.md](docs/PUBLISHING.md) for builds intended for distribution or GitHub releases. Source organization and documentation updates preserve existing release tags/assets. For release, VM, or physical USB work in the parent workspace, first read its `AGENTS.md` and `PROJECT_CONTEXT.md`; record resulting private state there.
