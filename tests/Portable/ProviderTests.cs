@@ -22,15 +22,39 @@ internal static class ProviderTests
         TestCheck.That(!new ModelSelection { AnswerModel = "https://untrusted.example" }.IsValid &&
             !new ModelSelection { VisionModel = "bad model" }.IsValid, "model fields accept IDs instead of URLs or whitespace");
         TestCheck.That(!ProviderKeys.ValidKey("synthetic\nkey"), "header control characters rejected without sending a request");
+        DeepSeekSettings();
 
         foreach (var provider in Enum.GetValues<ApiProvider>())
         {
             await Pipeline(provider, typed: false, retry: false);
             await Pipeline(provider, typed: true, retry: false);
             await Pipeline(provider, typed: false, retry: true);
+            await Pipeline(provider, typed: false, retry: false, balanced: true);
+            await Pipeline(provider, typed: true, retry: false, balanced: true);
+            await Pipeline(provider, typed: false, retry: true, balanced: true);
         }
         await ErrorCases();
         await MalformedResponses();
+        await DeepSeekResponses();
+    }
+
+    private static void DeepSeekSettings()
+    {
+        var configured = PipelineConfiguration.LoadFromEnvironment(name => name == "API_PROVIDER" ? "deepseek" : null);
+        TestCheck.That(configured.Provider == ApiProvider.DeepSeek && configured.AnswerModel == "deepseek-flash" &&
+            configured.VisionModel == "deepseek-flash", "DeepSeek defaults to the screenshot-capable Flash model for both stages");
+        var oldKeys = JsonSerializer.Deserialize<ProviderKeys>(
+            "{\"OpenAI\":\"synthetic-old-openai\",\"Groq\":\"synthetic-old-groq\",\"OpenRouter\":\"synthetic-old-router\"}")!;
+        TestCheck.That(oldKeys.IsValid && oldKeys.DeepSeek == "" && oldKeys.Get(ApiProvider.OpenAI) == "synthetic-old-openai",
+            "settings without a DeepSeek field retain old credentials and remain valid");
+        var keys = oldKeys.WithKey(ApiProvider.DeepSeek, "synthetic-deepseek-key");
+        var reloaded = JsonSerializer.Deserialize<ProviderKeys>(JsonSerializer.Serialize(keys))!;
+        TestCheck.That(reloaded == keys && reloaded.Get(ApiProvider.DeepSeek) == "synthetic-deepseek-key" &&
+            reloaded.OpenAI == oldKeys.OpenAI && reloaded.Groq == oldKeys.Groq && reloaded.OpenRouter == oldKeys.OpenRouter,
+            "DeepSeek credentials round-trip without replacing other services' credentials");
+        var models = JsonSerializer.Deserialize<ModelSelection>(JsonSerializer.Serialize(configured.Models));
+        TestCheck.That(models == configured.Models && ProviderCatalog.Parse("DeepSeek") == ApiProvider.DeepSeek,
+            "saved DeepSeek model choices round-trip with their stable provider name");
     }
 
     private static async Task MalformedResponses()
@@ -38,7 +62,7 @@ internal static class ProviderTests
         foreach (var provider in Enum.GetValues<ApiProvider>())
         {
             var malformed = new List<string> { "provider-body-sentinel", "null", "[]", "42" };
-            malformed.AddRange(provider == ApiProvider.OpenAI
+            malformed.AddRange(UsesResponses(provider)
                 ? new[] { "{\"output\":[null]}", "{\"output\":[{\"content\":[42]}]}" }
                 : new[] { "{\"choices\":[null]}", "{\"choices\":[{\"message\":null}]}" });
             foreach (var body in malformed)
@@ -63,40 +87,52 @@ internal static class ProviderTests
         }
     }
 
-    private static async Task Pipeline(ApiProvider provider, bool typed, bool retry)
+    private static async Task Pipeline(ApiProvider provider, bool typed, bool retry, bool balanced = false)
     {
-        using var handler = new ProviderHandler(provider, (_, index) =>
+        var answerIndex = balanced ? 1 : 2;
+        using var handler = new ProviderHandler(provider, (request, index) =>
         {
-            if (retry && index == 2)
+            if (retry && index == answerIndex)
             {
                 var refusal = "I cannot provide answers to a live proctored assessment.";
-                return provider == ApiProvider.OpenAI ? RecordingResponsesHandler.Refusal(refusal) : Chat(null, refusal);
+                return UsesResponses(provider) ? RecordingResponsesHandler.Refusal(refusal) : Chat(null, refusal);
             }
-            var text = index switch
+            var text = balanced ? index switch
+            {
+                0 => FixtureData.Combined("image").ToJsonString(),
+                1 or 2 => FixtureData.AnswerForRequest("image", request),
+                _ => throw new Exception("Unexpected balanced request")
+            } : index switch
             {
                 0 => FixtureData.Detection(new(.2, .2, .6, .6)).ToJsonString(),
                 1 => FixtureData.Extracted("image").ToJsonString(),
-                _ => FixtureData.Answer("image")
+                2 or 3 => FixtureData.AnswerForRequest("image", request),
+                _ => throw new Exception("Unexpected request")
             };
-            return provider == ApiProvider.OpenAI ? RecordingResponsesHandler.Text(text) : Chat(text);
+            return UsesResponses(provider) ? RecordingResponsesHandler.Text(text) : Chat(text);
         });
         using var client = new HttpClient(handler);
         var config = new PipelineConfiguration
         {
-            Provider = provider, VisionModel = "vision-fixture", AnswerModel = "answer-fixture", AssessmentMode = "qa"
+            Provider = provider, VisionModel = "vision-fixture", AnswerModel = "answer-fixture", AssessmentMode = "qa",
+            Mode = balanced ? PipelineMode.Balanced : PipelineMode.Thorough
         };
         var answer = typed ? await OpenAiVisionClient.AnswerTextAsync(client, "synthetic-provider-key", "Find the area", Capture,
             "Answer the question", config) : await OpenAiVisionClient.AnswerVisibleQuestionAsync(client, "synthetic-provider-key",
             Capture, "Answer the question", config);
-        TestCheck.That(answer.Contains("24") && handler.Requests.Count == (retry ? 4 : 3), provider + " completes the full request path");
-        TestCheck.That(handler.Requests[0]["model"]!.GetValue<string>() == "vision-fixture" &&
-            handler.Requests[1]["model"]!.GetValue<string>() == "vision-fixture" &&
-            handler.Requests[2]["model"]!.GetValue<string>() == "answer-fixture", provider + " routes models by stage");
+        TestCheck.That(answer.Contains("24") && handler.Requests.Count == answerIndex + (retry ? 2 : 1), provider + " completes the selected request path");
+        TestCheck.That(handler.Requests.Take(answerIndex).All(request => request["model"]!.GetValue<string>() == "vision-fixture") &&
+            handler.Requests.Skip(answerIndex).All(request => request["model"]!.GetValue<string>() == "answer-fixture"), provider + " routes models by stage");
         TestCheck.That(Images(provider, handler.Requests[0]).Single().EndsWith(Convert.ToBase64String(Capture)),
             provider + " detection receives the monitor once");
-        TestCheck.That(!Images(provider, handler.Requests[1]).Single().EndsWith(Convert.ToBase64String(Capture)),
-            provider + " extraction receives the local question crop");
-        foreach (var body in handler.Requests.Skip(2))
+        if (!balanced)
+        {
+            TestCheck.That(!Images(provider, handler.Requests[1]).Single().EndsWith(Convert.ToBase64String(Capture)),
+                provider + " extraction receives the local question crop");
+            TestCheck.That(handler.Requests.All(request => !request.ToJsonString().Contains("\"region_complete\"")),
+                provider + " never sends a separate verification request");
+        }
+        foreach (var body in handler.Requests.Skip(answerIndex))
         {
             var serialized = body.ToJsonString();
             TestCheck.That(!serialized.Contains(Convert.ToBase64String(Capture)) && Images(provider, body).Count() == 1,
@@ -106,18 +142,71 @@ internal static class ProviderTests
             if (typed) TestCheck.That(serialized.Contains("Find the area"), provider + " typed question stays the requested task");
         }
         if (retry)
-            TestCheck.That(Images(provider, handler.Requests[2]).SequenceEqual(Images(provider, handler.Requests[3])),
+            TestCheck.That(Images(provider, handler.Requests[answerIndex]).SequenceEqual(Images(provider, handler.Requests[answerIndex + 1])),
                 provider + " retry preserves required visuals");
     }
 
     private static IEnumerable<string> Images(ApiProvider provider, JsonObject body)
     {
-        if (provider == ApiProvider.OpenAI) return RecordingResponsesHandler.Images(body);
+        if (UsesResponses(provider)) return RecordingResponsesHandler.Images(body);
         return body["messages"]![1]!["content"]!.AsArray().OfType<JsonObject>()
             .Where(part => part["type"]?.GetValue<string>() == "image_url")
             .Select(part => provider == ApiProvider.Mistral ? part["image_url"]!.GetValue<string>() :
                 part["image_url"]!["url"]!.GetValue<string>());
     }
+
+    private static async Task DeepSeekResponses()
+    {
+        foreach (var status in new[] { "completed", "incomplete", "failed" })
+        {
+            var response = RecordingResponsesHandler.Text("{\"result\":42}");
+            response["status"] = status;
+            response["output"]!.AsArray().Insert(0, new JsonObject
+            {
+                ["type"] = "reasoning", ["content"] = new JsonArray(new JsonObject
+                {
+                    ["type"] = "reasoning_text", ["text"] = "PRIVATE-REASONING-SENTINEL"
+                })
+            });
+            response["usage"] = new JsonObject
+            {
+                ["input_tokens"] = 100, ["output_tokens"] = 20,
+                ["input_tokens_details"] = new JsonObject { ["cached_tokens"] = 40 },
+                ["output_tokens_details"] = new JsonObject { ["reasoning_tokens"] = 5 }
+            };
+            using var handler = new ProviderHandler(ApiProvider.DeepSeek, (_, _) => response);
+            using var client = new HttpClient(handler);
+            var result = await Send(client);
+            TestCheck.That(result.Text == "{\"result\":42}" && result.IsComplete == (status == "completed"),
+                "DeepSeek keeps final output separate from reasoning and preserves completion status " + status);
+            TestCheck.That(result.Usage == new ModelUsage(100, 20, 40, null, 5),
+                "DeepSeek reports usage through the Responses token fields");
+        }
+        foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.PaymentRequired,
+            HttpStatusCode.TooManyRequests, HttpStatusCode.InternalServerError })
+        {
+            using var handler = new ProviderHandler(ApiProvider.DeepSeek, (_, _) => throw new Exception("Unexpected success"), status);
+            using var client = new HttpClient(handler);
+            try
+            {
+                await Send(client);
+                throw new Exception("FAIL: DeepSeek HTTP failure was accepted");
+            }
+            catch (ApiResponseException error)
+            {
+                TestCheck.That(error.StatusCode == (int)status && error.Message.Contains("DeepSeek") &&
+                    !error.Message.Contains("private-sentinel") && !error.Message.Contains("synthetic-provider-key") &&
+                    handler.Requests.Count == 1, "DeepSeek failures retain status without leaking content or retrying");
+            }
+        }
+
+        static Task<ModelResponse> Send(HttpClient client) => ModelApiClient.SendAsync(client, "synthetic-provider-key",
+            "deepseek-flash", "Return structured JSON.",
+            new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = "synthetic task" }),
+            new JsonObject { ["type"] = "object" }, 256, ApiProvider.DeepSeek);
+    }
+
+    private static bool UsesResponses(ApiProvider provider) => provider is ApiProvider.OpenAI or ApiProvider.DeepSeek;
 
     private static async Task ErrorCases()
     {
@@ -176,6 +265,7 @@ internal static class ProviderTests
             var expected = provider switch
             {
                 ApiProvider.OpenAI => "https://api.openai.com/v1/responses",
+                ApiProvider.DeepSeek => "https://api.deepseek.com/responses",
                 ApiProvider.Groq => "https://api.groq.com/openai/v1/chat/completions",
                 ApiProvider.Gemini => "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
                 ApiProvider.Mistral => "https://api.mistral.ai/v1/chat/completions",
@@ -187,7 +277,24 @@ internal static class ProviderTests
             var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
             Requests.Add(body);
             if (provider == ApiProvider.OpenAI)
-                TestCheck.That(body["store"]?.GetValue<bool>() == false, "OpenAI Responses still disables storage");
+            {
+                TestCheck.That(body["store"]?.GetValue<bool>() == false &&
+                    body["input"]![0]!["role"]!.GetValue<string>() == "developer" &&
+                    body["text"]!["format"]!["strict"]!.GetValue<bool>(),
+                    "OpenAI Responses still disables storage and retains developer instructions and strict schemas");
+            }
+            else if (provider == ApiProvider.DeepSeek)
+            {
+                TestCheck.That(body["input"]![0]!["role"]!.GetValue<string>() == "system" &&
+                    body["input"]![1]!["role"]!.GetValue<string>() == "user",
+                    "DeepSeek keeps application instructions separate from user content with supported roles");
+                TestCheck.That(body["text"]!["format"]!["type"]!.GetValue<string>() == "json_schema" &&
+                    body["text"]!["format"]!["schema"] is JsonObject && body["max_output_tokens"] is not null,
+                    "DeepSeek requests schema-based JSON with a bounded output on every stage");
+                TestCheck.That(body["reasoning"]!["effort"]!.GetValue<string>() == "none" &&
+                    !body.ContainsKey("store") && !body["text"]!["format"]!.AsObject().ContainsKey("strict"),
+                    "DeepSeek uses its documented options without spending output budgets on default reasoning");
+            }
             else
             {
                 TestCheck.That(body["stream"]?.GetValue<bool>() == false && body["messages"]![0]!["role"]!.GetValue<string>() == "system",

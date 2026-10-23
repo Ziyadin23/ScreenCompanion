@@ -121,7 +121,7 @@ internal static class AppearanceUiTests
             Button(dialog, "Panel").PerformClick();
             var background = Slider(dialog, "Background transparency");
             var text = Slider(dialog, "Text visibility");
-            var size = Descendants(dialog).OfType<NumericUpDown>().Single();
+            var size = Descendants(dialog).OfType<NumericUpDown>().Single(control => control.AccessibleName == "Answer text size");
             var theme = Descendants(dialog).OfType<ComboBox>().Single(choice => choice.AccessibleName == "Panel color theme");
             TestCheck.That(background.Value == 50 && text.Value == 40 && size.Value == 15 && (string?)theme.SelectedItem == "Forest",
                 "Panel restores independent text and background settings");
@@ -172,7 +172,15 @@ internal static class AppearanceUiTests
 
     private static void TestProviderSettings()
     {
+        foreach (var provider in new[] { ApiProvider.Gemini, ApiProvider.DeepSeek })
+            TestProviderSettings(provider);
+    }
+
+    private static void TestProviderSettings(ApiProvider provider)
+    {
         var current = VaultData.Default("synthetic-openai-key") with { CommandsShown = true };
+        var providerKey = $"synthetic-{provider}-key";
+        var selectedPipeline = provider == ApiProvider.DeepSeek ? PipelineMode.Direct : PipelineMode.Balanced;
         VaultData saved;
         using (var dialog = new SettingsDialog(current))
         {
@@ -183,31 +191,55 @@ internal static class AppearanceUiTests
             var vision = Field<ComboBox>(dialog, "_visionModel");
             var key = Field<TextBox>(dialog, "_serviceKey");
             TestCheck.That(key.UseSystemPasswordChar, "service keys are masked by default");
-            service.SelectedItem = ApiProvider.Gemini;
+            service.SelectedItem = provider;
+            if (provider == ApiProvider.DeepSeek)
+            {
+                TestCheck.That(answer.Text == "deepseek-flash" && vision.Text == "deepseek-flash",
+                    "DeepSeek appears in Settings with a screenshot-capable model suggestion");
+                TestCheck.That(answer.Items.Contains("deepseek-v4-pro") && !vision.Items.Contains("deepseek-v4-pro"),
+                    "Pro appears only in answer model suggestions");
+                Field<ComboBox>(dialog, "_thinkingChoice").SelectedItem = DeepSeekReasoning.High;
+                TestCheck.That(Field<NumericUpDown>(dialog, "_answerTokenLimit").Value == 16000,
+                    "enabling thinking suggests a visible larger output budget");
+                Field<NumericUpDown>(dialog, "_answerTokenLimit").Value = 24000;
+            }
+            var pipeline = Field<ComboBox>(dialog, "_pipelineChoice");
+            pipeline.SelectedItem = selectedPipeline;
             answer.Text = "synthetic-answer-model";
             vision.Text = "synthetic-vision-model";
-            key.Text = "synthetic-gemini-key";
+            key.Text = providerKey;
             service.SelectedItem = ApiProvider.OpenAI;
             TestCheck.That(key.Text == "synthetic-openai-key", "switching services restores the matching key");
-            service.SelectedItem = ApiProvider.Gemini;
+            TestCheck.That(!pipeline.Items.Contains(PipelineMode.Direct), "other services do not offer direct full-monitor answering");
+            service.SelectedItem = provider;
             TestCheck.That(answer.Text == "synthetic-answer-model" && vision.Text == "synthetic-vision-model" &&
-                key.Text == "synthetic-gemini-key", "service drafts survive switching within settings");
+                key.Text == providerKey, "service drafts survive switching within settings");
+            TestCheck.That((PipelineMode)pipeline.SelectedItem! == selectedPipeline &&
+                vision.Enabled == (selectedPipeline != PipelineMode.Direct),
+                "switching preserves pipeline drafts and disables the unused vision model in direct mode");
             Button(dialog, "Save").PerformClick();
             saved = dialog.Settings!;
-            TestCheck.That(saved.Models?.Provider == ApiProvider.Gemini && saved.ApiKey == "synthetic-gemini-key" &&
-                saved.ProviderKeys.OpenAI == "synthetic-openai-key", "Save selects the service and retains separate keys");
+            if (provider == ApiProvider.DeepSeek)
+                TestCheck.That(saved.Models?.Thinking == DeepSeekReasoning.High && saved.Models.AnswerTokenLimit == 24000,
+                    "reasoning level and explicitly edited budget survive service switching and Save");
+            TestCheck.That(saved.Models?.Provider == provider && saved.ApiKey == providerKey &&
+                saved.ProviderKeys.OpenAI == "synthetic-openai-key" && saved.PipelineMode == selectedPipeline,
+                "Save selects the service and pipeline and retains separate keys");
         }
         using var vault = new TemporaryUiVault(saved);
         var reloaded = ApiKeyVault.LoadForCurrentUser(vault.Path);
         TestCheck.That(reloaded == saved, "service, models and separate keys survive encrypted reload");
-        TestCheck.That(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(vault.Path)).Contains("synthetic-gemini-key"),
+        TestCheck.That(!System.Text.Encoding.UTF8.GetString(File.ReadAllBytes(vault.Path)).Contains(providerKey),
             "provider keys are absent from plaintext settings bytes");
         using (var dialog = new SettingsDialog(reloaded))
         {
             dialog.Show();
             Button(dialog, "Models & API").PerformClick();
-            TestCheck.That((ApiProvider)Field<ComboBox>(dialog, "_providerChoice").SelectedItem! == ApiProvider.Gemini &&
+            TestCheck.That((ApiProvider)Field<ComboBox>(dialog, "_providerChoice").SelectedItem! == provider &&
                 Field<ComboBox>(dialog, "_answerModel").Text == "synthetic-answer-model", "settings reopen with the saved model choice");
+            TestCheck.That((PipelineMode)Field<ComboBox>(dialog, "_pipelineChoice").SelectedItem! == selectedPipeline,
+                "saved request pipeline survives encrypted reload and settings reopening");
+            Field<ComboBox>(dialog, "_pipelineChoice").SelectedItem = PipelineMode.Thorough;
             Field<ComboBox>(dialog, "_providerChoice").SelectedItem = ApiProvider.Groq;
             Field<TextBox>(dialog, "_serviceKey").Text = "synthetic-discarded-key";
             Button(dialog, "Back").PerformClick();
@@ -547,7 +579,7 @@ internal static class AppearanceUiTests
             Button(dialog, "Panel").PerformClick();
             Slider(dialog, "Background transparency").Value = 100;
             Slider(dialog, "Text visibility").Value = 30;
-            Descendants(dialog).OfType<NumericUpDown>().Single().Value = 17;
+            Descendants(dialog).OfType<NumericUpDown>().Single(control => control.AccessibleName == "Answer text size").Value = 17;
             Button(dialog, "Save").PerformClick();
             TestCheck.That(overlay.Visible && overlay.AnswerText == "Synthetic retained answer", "Save applies settings without replacing the answer");
             var saved = ApiKeyVault.LoadForCurrentUser(vault.Path);

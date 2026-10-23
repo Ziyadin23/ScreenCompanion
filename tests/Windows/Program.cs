@@ -10,10 +10,23 @@ namespace SC;
 
 internal static class WindowsPipelineTests
 {
+    private static PipelineMode _mode = PipelineMode.Thorough;
     [STAThread]
     private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--deepseek-check"))
+        {
+            Environment.ExitCode = DeepSeekLiveTests.Run(args);
+            return;
+        }
+        if (args.Contains("--direct") && args.Any(value => value is not ("--direct" or "--ui" or "--live")))
+        {
+            Console.WriteLine("FAIL: --direct accepts only --ui or --live; comparison and other suite flags cannot be combined with it.");
+            Environment.ExitCode = 1;
+            return;
+        }
+        _mode = args.Contains("--balanced") ? PipelineMode.Balanced : PipelineMode.Thorough;
         if (args.Contains("--capture-preview")) { AppearanceUiTests.ShowPanelPreview(protectWindows: true); return; }
         if (args.Contains("--panel-preview")) { AppearanceUiTests.ShowPanelPreview(); return; }
         if (args.Contains("--appearance") || args.Contains("--hover") || args.Contains("--settings-palette"))
@@ -34,6 +47,17 @@ internal static class WindowsPipelineTests
             try
             {
                 await Task.Delay(300);
+                if (args.Contains("--compare"))
+                {
+                    failed = !await PipelineCostComparison.Run(fixture, live, args);
+                    return;
+                }
+                if (args.Contains("--direct"))
+                {
+                    await TestDirectScreenshot(fixture, ui, live);
+                    Console.WriteLine($"PASS: {TestCheck.Count} Windows Direct assertions; transport={(live ? "live DeepSeek, at most two calls" : "mocked DeepSeek")}; workflow={(ui ? "production UI" : "real monitor capture")}.");
+                    return;
+                }
                 if (ui) await TestProductionUi(fixture, live);
                 else await TestCapturedPipeline(fixture, live, args.Contains("--one"), args.Contains("--force-refusal"));
                 Console.WriteLine($"PASS: {TestCheck.Count} Windows assertions; transport={(live ? "live Responses API" : "mocked Responses API")}" +
@@ -58,7 +82,7 @@ internal static class WindowsPipelineTests
 
     private static PipelineConfiguration Configuration() => new()
     {
-        AssessmentMode = "qa", AnswerMaxOutputTokens = 2500, ExtractionMaxOutputTokens = 6000
+        AssessmentMode = "qa", AnswerMaxOutputTokens = 2500, ExtractionMaxOutputTokens = 6000, Mode = _mode
     };
 
     private static string ExistingKey()
@@ -227,6 +251,101 @@ internal static class WindowsPipelineTests
         }
     }
 
+    private static async Task TestDirectScreenshot(SyntheticQuestionWindow fixture, bool ui, bool live)
+    {
+        if (ui && live)
+            throw new InvalidOperationException("Use --direct --live without --ui; live Direct checks are limited to two requests.");
+        var key = live ? ApiKeyVault.LoadForCurrentUser(AppStorage.GetCredentialPath()).KeyFor(ApiProvider.DeepSeek)
+            : "synthetic-direct-windows-key";
+        if (string.IsNullOrWhiteSpace(key)) throw new InvalidOperationException("An existing DeepSeek key is required for --direct --live.");
+        fixture.ShowMonitoring = false;
+        fixture.SetCase("short");
+        fixture.Activate();
+        await Task.Delay(200);
+        var configuration = new PipelineConfiguration
+        {
+            Provider = ApiProvider.DeepSeek, AnswerModel = "deepseek-flash", VisionModel = "deepseek-flash",
+            Mode = PipelineMode.Direct, AssessmentMode = "standard"
+        };
+        using var handler = new DirectScreenshotHandler(fixture, live);
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(150) };
+        if (!ui)
+        {
+            var capture = ScreenCapture.CaptureMonitorJpeg(Screen.FromControl(fixture).Bounds);
+            try
+            {
+                handler.ExpectedImageHash = System.Security.Cryptography.SHA256.HashData(capture);
+                var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(client, key, capture,
+                    "Return only the numeric answer.", configuration);
+                CheckAnswer(answer);
+            }
+            finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(capture); }
+            handler.ExpectedImageHash = null;
+            fixture.SetCase("image");
+            await Task.Delay(180);
+            capture = ScreenCapture.CaptureMonitorJpeg(Screen.FromControl(fixture).Bounds);
+            try
+            {
+                handler.ExpectedImageHash = System.Security.Cryptography.SHA256.HashData(capture);
+                var answer = await OpenAiVisionClient.AnswerTextAsync(client, key, "What is 6 multiplied by 7?", capture,
+                    "Return only the numeric answer.", configuration);
+                CheckAnswer(answer);
+                TestCheck.That(handler.LastTypedQuestion == "What is 6 multiplied by 7?", "Direct typed task takes priority over a different visible question");
+            }
+            finally { System.Security.Cryptography.CryptographicOperations.ZeroMemory(capture); }
+        }
+        else
+        {
+            using var vault = new TemporaryUiVault(VaultData.Default(key) with
+            {
+                CommandsShown = true, Models = configuration.Models, PipelineMode = PipelineMode.Direct
+            });
+            // The saved Direct choice must override the supplied Thorough process default.
+            using var context = new SCContext(client, new PipelineConfiguration(), vault.Path);
+            await WaitUntil(() => Field<bool>(context, "_ready"), TimeSpan.FromSeconds(15));
+            var overlay = Field<AnswerOverlay>(context, "_overlay");
+            var body = Field<System.Windows.Controls.TextBox>(overlay, "_body");
+            var shortcuts = Field<ShortcutSet>(context, "_activeHotkeys");
+            fixture.Activate();
+            Press(shortcuts.Capture);
+            await WaitUntil(() => handler.Calls == 1 && !Field<bool>(context, "_busy"), TimeSpan.FromSeconds(20));
+            CheckAnswer(body.Text);
+            Press(shortcuts.Settings);
+            await WaitUntil(() => Field<SettingsDialog?>(context, "_settingsDialog")?.Visible == true, TimeSpan.FromSeconds(5));
+            var settings = Field<SettingsDialog>(context, "_settingsDialog");
+            Field<ComboBox>(settings, "_pipelineChoice").SelectedItem = PipelineMode.Balanced;
+            ((Button)settings.AcceptButton!).PerformClick();
+            await WaitUntil(() => Field<SettingsDialog?>(context, "_settingsDialog") is null, TimeSpan.FromSeconds(5));
+            TestCheck.That(ApiKeyVault.LoadForCurrentUser(vault.Path).PipelineMode == PipelineMode.Balanced,
+                "production Settings saves and applies a changed request pipeline");
+            Press(shortcuts.Settings);
+            await WaitUntil(() => Field<SettingsDialog?>(context, "_settingsDialog")?.Visible == true, TimeSpan.FromSeconds(5));
+            settings = Field<SettingsDialog>(context, "_settingsDialog");
+            Field<ComboBox>(settings, "_pipelineChoice").SelectedItem = PipelineMode.Direct;
+            ((Button)settings.AcceptButton!).PerformClick();
+            await WaitUntil(() => Field<SettingsDialog?>(context, "_settingsDialog") is null, TimeSpan.FromSeconds(5));
+            fixture.SetCase("image");
+            overlay.ShowInput();
+            var input = Field<System.Windows.Controls.TextBox>(overlay, "_question");
+            input.Text = "What is 6 multiplied by 7?";
+            Field<System.Windows.Controls.Button>(overlay, "_sendButton").RaiseEvent(
+                new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+            await WaitUntil(() => handler.Calls == 2 && !Field<bool>(context, "_busy"), TimeSpan.FromSeconds(20));
+            CheckAnswer(body.Text);
+            TestCheck.That(input.Text.Length == 0 && handler.LastTypedQuestion == "What is 6 multiplied by 7?",
+                "Direct production typed Send clears input and forwards the typed task");
+            TestCheck.That(ApiKeyVault.LoadForCurrentUser(vault.Path).PipelineMode == PipelineMode.Direct,
+                "production Settings restores Direct without replacing the service selection");
+        }
+        TestCheck.That(handler.Calls == 2, "two Direct workflows use exactly two model calls in total");
+
+        void CheckAnswer(string answer)
+        {
+            TestCheck.That(FixtureAnswerOracle.IsExpected(handler.LastParsedAnswer, "short"), "Direct structured primary answer is correct");
+            TestCheck.That(FixtureAnswerOracle.DisplayMatchesPrimary(handler.LastParsedAnswer, answer), "Direct display matches the structured primary answer");
+        }
+    }
+
     private static T Field<T>(object instance, string name) => (T)instance.GetType()
         .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(instance)!;
 
@@ -272,12 +391,13 @@ internal sealed class FixtureResponsesHandler : HttpMessageHandler
     public ParsedAnswerResponse? LastParsedAnswer { get; private set; }
     public string? LastQuestionId { get; private set; }
     public string? LastTypedQuestion { get; private set; }
+    public int RefusalResponses { get; private set; }
 
     public FixtureResponsesHandler(SyntheticQuestionWindow fixture, bool live)
     {
         _fixture = fixture;
         _live = live;
-        if (live) _network = new HttpMessageInvoker(new SocketsHttpHandler());
+        if (live) _network = new HttpMessageInvoker(ApiNetwork.CreateHandler());
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -294,9 +414,7 @@ internal sealed class FixtureResponsesHandler : HttpMessageHandler
             LastParsedAnswer = null;
             var context = JsonNode.Parse(RecordingResponsesHandler.UserContent(payload)[0]!["text"]!.GetValue<string>())!;
             LastTypedQuestion = context["typed_question"]?.GetValue<string>();
-            var questions = context["task"]!["questions"]!.AsArray();
-            LastQuestionId = LastTypedQuestion is null && questions.Count == 1
-                ? questions[0]!["question_id"]?.GetValue<string>() : null;
+            LastQuestionId = FixtureData.TaskIds(payload).Single();
             AnswerRequests++;
             TestCheck.That(payload["previous_response_id"] is null && !payload["input"]!.AsArray().OfType<JsonObject>()
                 .Any(item => item["role"]?.GetValue<string>() == "assistant"), "answer has no conversation or refusal history");
@@ -333,7 +451,26 @@ internal sealed class FixtureResponsesHandler : HttpMessageHandler
                 injectedRefusal = true;
                 response = RecordingResponsesHandler.Refusal("I cannot provide answers during a proctored assessment.");
             }
-            else response = RecordingResponsesHandler.Text(FixtureData.Answer(_fixture.CaseName));
+            else response = RecordingResponsesHandler.Text(FixtureData.AnswerForRequest(_fixture.CaseName, payload));
+        }
+        else if (properties.ContainsKey("question_region"))
+        {
+            using var input = Decode(images.Single());
+            var screen = Screen.FromControl(_fixture).Bounds;
+            var full = input.Width == screen.Width && input.Height == screen.Height;
+            if (full) _fullScreenImageUrl = images.Single();
+            else _questionImageUrl = images.Single();
+            var question = full ? _fixture.ScreenQuestionRegion() : new NormalizedRegion(0, 0, 1, 1);
+            NormalizedRegion? diagram = null;
+            if (_fixture.CaseName == "image")
+            {
+                var box = full ? _fixture.RectangleToScreen(_fixture.DiagramBounds) : _fixture.DiagramBounds;
+                var originX = full ? screen.X : _fixture.QuestionBounds.X;
+                var originY = full ? screen.Y : _fixture.QuestionBounds.Y;
+                diagram = new NormalizedRegion((double)(box.X - originX) / input.Width,
+                    (double)(box.Y - originY) / input.Height, (double)box.Width / input.Width, (double)box.Height / input.Height);
+            }
+            response = RecordingResponsesHandler.Text(FixtureData.Combined(_fixture.CaseName, question, diagram).ToJsonString());
         }
         else if (properties.ContainsKey("found"))
         {
@@ -341,6 +478,10 @@ internal sealed class FixtureResponsesHandler : HttpMessageHandler
             using var screenshot = Decode(images.Single());
             TestCheck.That(screenshot.Width == Screen.FromControl(_fixture).Bounds.Width, "detector uses real full-screen capture");
             response = RecordingResponsesHandler.Text(FixtureData.Detection(_fixture.ScreenQuestionRegion()).ToJsonString());
+        }
+        else if (properties.ContainsKey("region_complete"))
+        {
+            throw new InvalidOperationException("Unexpected independent extraction-verification request.");
         }
         else
         {
@@ -362,11 +503,17 @@ internal sealed class FixtureResponsesHandler : HttpMessageHandler
             {
                 Content = new StringContent(response.ToJsonString(), System.Text.Encoding.UTF8, "application/json")
             };
-        if (answerStage && result.IsSuccessStatusCode)
+        if (result.IsSuccessStatusCode)
         {
             using var document = JsonDocument.Parse(await result.Content.ReadAsStringAsync(cancellationToken));
             var model = OpenAiResponsesClient.ParseResponse(document.RootElement);
-            LastParsedAnswer = string.IsNullOrWhiteSpace(model.Refusal) ? AnswerResponseParser.Parse(model.Text) : null;
+            if (!string.IsNullOrWhiteSpace(model.Refusal)) RefusalResponses++;
+            if (answerStage)
+            {
+                LastParsedAnswer = string.IsNullOrWhiteSpace(model.Refusal) ? AnswerResponseParser.Parse(model.Text) : null;
+                if (LastParsedAnswer?.Results.Any(value => value.Disposition == AnswerDisposition.Refusal) == true)
+                    RefusalResponses++;
+            }
         }
         return result;
     }

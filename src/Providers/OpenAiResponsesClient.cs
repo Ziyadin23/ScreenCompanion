@@ -14,63 +14,74 @@ internal sealed class ApiResponseException(int statusCode, string message) : Inv
 internal sealed record ModelResponse(string Text, string Refusal, string Status)
 {
     public bool IsComplete => Status is "completed" or "";
+    public ModelUsage? Usage { get; init; }
 }
 
 // A single, stateless transport shared by extraction and answering. It never retains request content.
 internal static class OpenAiResponsesClient
 {
-    private const string Endpoint = "https://api.openai.com/v1/responses";
-    private const string UnreadableResponseMessage = "OpenAI returned an unreadable response. Try again.";
-
     public static async Task<ModelResponse> SendAsync(HttpClient client, string apiKey, string model,
         string developerInstruction, JsonArray userContent, JsonObject schema, int maxOutputTokens,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, ApiProvider provider = ApiProvider.OpenAI,
+        DeepSeekReasoning thinking = DeepSeekReasoning.None)
     {
+        var endpoint = provider switch
+        {
+            ApiProvider.OpenAI => "https://api.openai.com/v1/responses",
+            ApiProvider.DeepSeek => "https://api.deepseek.com/responses",
+            _ => throw new InvalidDataException("This service does not use the Responses transport.")
+        };
+        var serviceName = ProviderCatalog.Name(provider);
+        var format = new JsonObject
+        {
+            ["type"] = "json_schema", ["name"] = "sc_response", ["schema"] = schema
+        };
         var payload = new JsonObject
         {
             ["model"] = model,
-            ["store"] = false,
             ["max_output_tokens"] = maxOutputTokens,
             ["input"] = new JsonArray
             {
-                new JsonObject { ["role"] = "developer", ["content"] = developerInstruction },
+                // DeepSeek treats developer messages as user input, so keep app instructions in system.
+                new JsonObject { ["role"] = provider == ApiProvider.DeepSeek ? "system" : "developer",
+                    ["content"] = developerInstruction },
                 new JsonObject { ["role"] = "user", ["content"] = userContent }
             },
-            ["text"] = new JsonObject
-            {
-                ["format"] = new JsonObject
-                {
-                    ["type"] = "json_schema", ["name"] = "sc_response",
-                    ["strict"] = true, ["schema"] = schema
-                }
-            }
+            ["text"] = new JsonObject { ["format"] = format }
         };
+        if (provider == ApiProvider.OpenAI)
+        {
+            payload["store"] = false;
+            format["strict"] = true;
+        }
+        else
+        {
+            // DeepSeek Responses always returns store:false and does not accept the storage option.
+            // Existing settings keep non-thinking mode; stronger answering is an explicit saved choice.
+            payload["reasoning"] = new JsonObject { ["effort"] = thinking.ToString().ToLowerInvariant() };
+        }
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead,
-            cancellationToken);
-        var responseText = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            throw new ApiResponseException((int)response.StatusCode,
-                $"OpenAI API request failed with status {(int)response.StatusCode}.");
+        var responseText = await ApiNetwork.ReadResponseAsync(client, request, serviceName, cancellationToken);
 
         try
         {
             using var document = JsonDocument.Parse(responseText);
-            return ParseResponse(document.RootElement);
+            return ParseResponse(document.RootElement, serviceName);
         }
         catch (JsonException)
         {
-            throw new InvalidOperationException(UnreadableResponseMessage);
+            throw new InvalidOperationException($"{serviceName} returned an unreadable response. Try again.");
         }
     }
 
-    internal static ModelResponse ParseResponse(JsonElement root)
+    internal static ModelResponse ParseResponse(JsonElement root, string serviceName = "OpenAI")
     {
+        var unreadableResponseMessage = $"{serviceName} returned an unreadable response. Try again.";
         if (root.ValueKind != JsonValueKind.Object)
-            throw new InvalidOperationException(UnreadableResponseMessage);
+            throw new InvalidOperationException(unreadableResponseMessage);
         var parts = new List<string>();
         var refusals = new List<string>();
         if (root.TryGetProperty("output", out var output) && output.ValueKind == JsonValueKind.Array)
@@ -78,13 +89,13 @@ internal static class OpenAiResponsesClient
             foreach (var item in output.EnumerateArray())
             {
                 if (item.ValueKind != JsonValueKind.Object)
-                    throw new InvalidOperationException(UnreadableResponseMessage);
+                    throw new InvalidOperationException(unreadableResponseMessage);
                 if (!item.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.Array)
                     continue;
                 foreach (var part in content.EnumerateArray())
                 {
                     if (part.ValueKind != JsonValueKind.Object)
-                        throw new InvalidOperationException(UnreadableResponseMessage);
+                        throw new InvalidOperationException(unreadableResponseMessage);
                     if (!part.TryGetProperty("type", out var type) || type.ValueKind != JsonValueKind.String)
                         continue;
                     if (type.GetString() == "output_text" && part.TryGetProperty("text", out var text) &&
@@ -104,6 +115,6 @@ internal static class OpenAiResponsesClient
         var status = root.TryGetProperty("status", out var statusValue) && statusValue.ValueKind == JsonValueKind.String
             ? statusValue.GetString() ?? string.Empty : "completed";
         return new ModelResponse(string.Join(Environment.NewLine, parts).Trim(),
-            string.Join(Environment.NewLine, refusals).Trim(), status);
+            string.Join(Environment.NewLine, refusals).Trim(), status) { Usage = ModelUsage.Parse(root) };
     }
 }

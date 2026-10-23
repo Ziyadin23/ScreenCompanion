@@ -99,16 +99,22 @@ internal static class TestCheck
 internal sealed class RecordingResponsesHandler : HttpMessageHandler
 {
     private readonly Func<JsonObject, int, JsonObject> _respond;
+    private readonly ApiProvider _provider;
     public List<JsonObject> Requests { get; } = [];
 
-    public RecordingResponsesHandler(Func<JsonObject, int, JsonObject> respond) => _respond = respond;
+    public RecordingResponsesHandler(Func<JsonObject, int, JsonObject> respond, ApiProvider provider = ApiProvider.OpenAI)
+    {
+        _respond = respond;
+        _provider = provider;
+    }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
         var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(cancellationToken))!.AsObject();
         Requests.Add(body);
-        TestCheck.That(body["store"]?.GetValue<bool>() == false, "every Responses request disables storage");
+        TestCheck.That(_provider == ApiProvider.DeepSeek ? !body.ContainsKey("store") : body["store"]?.GetValue<bool>() == false,
+            "Responses requests retain the selected provider's storage options");
         var response = _respond(body, Requests.Count - 1);
         return new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -146,6 +152,16 @@ internal sealed class RecordingResponsesHandler : HttpMessageHandler
 
 internal static class FixtureData
 {
+    public static JsonObject Combined(string caseName, NormalizedRegion? question = null,
+        NormalizedRegion? diagram = null)
+    {
+        var result = Extracted(caseName, diagram);
+        result["status"] = "complete";
+        result["question_region"] = Detection(question ?? new(.1, .1, .8, .8))["region"]!.DeepClone();
+        result["evidence"] = Verification(caseName);
+        return result;
+    }
+
     public static JsonObject Extracted(string caseName, NormalizedRegion? diagram = null)
     {
         var question = new JsonObject
@@ -196,6 +212,45 @@ internal static class FixtureData
         "code" => "{\"answer\":\"10\",\"explanation\":\"sum adds 2, 3, and 5.\"}",
         "image" => "{\"answer\":\"24 cm²\",\"explanation\":\"8 times 3 is 24.\"}",
         _ => "{\"answer\":\"B\",\"answer_text\":\"ls\",\"explanation\":\"ls lists directory contents.\",\"confidence\":0.98}"
+    };
+
+    public static JsonObject Context(JsonObject request) => JsonNode.Parse(
+        (request["input"] is not null ? RecordingResponsesHandler.UserContent(request) :
+            request["messages"]![1]!["content"]!.AsArray())[0]!["text"]!.GetValue<string>())!.AsObject();
+
+    public static string[] TaskIds(JsonObject request) => Context(request)["answer_targets"]!.AsArray()
+        .Select(target => target!["question_id"]!.GetValue<string>()).ToArray();
+
+    public static string AnswerForRequest(string caseName, JsonObject request) =>
+        Structured(request, JsonNode.Parse(Answer(caseName))!.AsObject());
+
+    // Canonical synthetic responses echo the actual request contract, rather than source labels.
+    public static string Structured(JsonObject request, params JsonObject[] results)
+    {
+        var ids = TaskIds(request);
+        return new JsonObject
+        {
+            ["results"] = new JsonArray(results.Select((source, index) => (JsonNode)new JsonObject
+            {
+                ["question_id"] = ids[index], ["answer"] = source["answer"]?.DeepClone(),
+                ["answers"] = source["answers"]?.DeepClone() ?? new JsonArray(),
+                ["answer_text"] = source["answer_text"]?.DeepClone(),
+                ["explanation"] = source["explanation"]?.DeepClone() ?? JsonValue.Create(""),
+                ["confidence"] = source["confidence"]?.DeepClone(),
+                ["status"] = source["status"]?.DeepClone() ?? JsonValue.Create("answer")
+            }).ToArray())
+        }.ToJsonString();
+    }
+
+    public static JsonObject Verification(params string[] caseNames) => new()
+    {
+        ["status"] = "complete", ["region_complete"] = true,
+        ["questions"] = new JsonArray(caseNames.Select((name, index) => (JsonNode)new JsonObject
+        {
+            ["index"] = index + 1, ["required_options"] = name is "multiple" or "multi" ? 4 : 0,
+            ["requires_code"] = name == "code", ["requires_visual"] = name == "image",
+            ["transcription_complete"] = true, ["visuals_complete"] = true
+        }).ToArray())
     };
 
     public static JsonObject Detection(NormalizedRegion region) => new()

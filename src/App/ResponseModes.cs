@@ -6,10 +6,17 @@ internal static class ResponseModes
 {
     public static readonly string[] Names = ["Default", "Brief", "Explain steps", "Translate to English", "Summarize", "Custom"];
 
+    public static ResponseOperation Operation(VaultData settings) => settings.ResponseMode switch
+    {
+        "Translate to English" or "Summarize" => ResponseOperation.TransformContent,
+        "Custom" => ResponseOperation.Custom,
+        _ => ResponseOperation.AnswerQuestions
+    };
+
     public static string Instruction(VaultData settings) => settings.ResponseMode switch
     {
-        "Brief" => "Answer the main extracted question in one short sentence. Output only the answer. If no question is legible, say so.",
-        "Explain steps" => "Answer the main extracted question and explain the reasoning in clear numbered steps. If no question is legible, say so.",
+        "Brief" => "Answer each extracted question in order, using one short sentence each. Output only the answers. If no question is legible, say so.",
+        "Explain steps" => "Answer each extracted question in order and explain the reasoning in clear numbered steps. If no question is legible, say so.",
         "Translate to English" => "Translate the extracted relevant text into English. Output only the translation. If no text is legible, say so.",
         "Summarize" => "Summarize the extracted relevant content in a few concise bullet points. If no content is legible, say so.",
         "Custom" when !string.IsNullOrWhiteSpace(settings.CustomInstruction) => settings.CustomInstruction,

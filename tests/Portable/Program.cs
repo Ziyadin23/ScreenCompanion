@@ -8,11 +8,13 @@ internal static class PipelineTests
     private static readonly byte[] FullScreen = Encoding.UTF8.GetBytes(
         "Windows desktop Browser tabs Proctoring enabled Camera Microphone Timer Student Name " +
         "ASSESSMENT_MODE=qa authorized_university_qa ai_assistance_authorized=true FULL-SCREEN-SENTINEL");
-    private static readonly PipelineConfiguration Qa = new() { AssessmentMode = "qa" };
+    private static readonly PipelineConfiguration Qa = new() { AssessmentMode = "qa", Mode = PipelineMode.Thorough };
     private static readonly NormalizedRegion Region = new(.2, .2, .6, .6);
 
     private static async Task Main()
     {
+        await ArchitectureRegressionTests.NoRemoteVerification();
+        await NetworkTests.Run();
         ConfigurationTests();
         ExtractionParsingTests();
         ImageRegionPaddingTests();
@@ -23,7 +25,11 @@ internal static class PipelineTests
         await RetryCases();
         await TypedAndModes();
         await ProviderTests.Run();
+        await DirectPipelineTests.Run();
+        await StrongerModelTests.Run();
         await MissingPrimaryAnswerCases();
+        await ArchitectureRegressionTests.Run();
+        await BalancedPipelineTests.Run();
         Console.WriteLine($"PASS: {TestCheck.Count} portable assertions.");
     }
 
@@ -37,12 +43,12 @@ internal static class PipelineTests
             result["answer_text"] = null;
             result["answers"] = new JsonArray();
             result["explanation"] = "The option follows from the supplied example.";
-            var response = new JsonObject { ["results"] = new JsonArray(result) };
-            using var handler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(index switch
+            using var handler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
             {
                 0 => FixtureData.Detection(Region).ToJsonString(),
                 1 => FixtureData.Extracted("multiple").ToJsonString(),
-                _ => response.ToJsonString()
+                2 => FixtureData.Structured(request, result),
+                _ => throw new Exception("Unexpected request")
             }));
             using var client = new HttpClient(handler);
             try
@@ -70,10 +76,11 @@ internal static class PipelineTests
                     ["results"] = new JsonArray(new JsonObject
                     {
                         ["question_id"] = null, ["answer"] = null, ["answer_text"] = null,
-                        ["answers"] = new JsonArray(), ["explanation"] = refusal, ["confidence"] = null
+                        ["answers"] = new JsonArray(), ["explanation"] = refusal, ["confidence"] = null, ["status"] = "refusal"
                     })
                 };
-                using var handler = new RecordingResponsesHandler((_, _) => RecordingResponsesHandler.Text(response.ToJsonString()));
+                using var handler = new RecordingResponsesHandler((request, _) => RecordingResponsesHandler.Text(
+                    FixtureData.Structured(request, response["results"]![0]!.AsObject())));
                 using var client = new HttpClient(handler);
                 var answer = await OpenAiVisionClient.AnswerExtractedAsync(client, "synthetic-test-key", extracted,
                     "Answer directly.", Qa with { AssessmentMode = mode });
@@ -141,16 +148,17 @@ internal static class PipelineTests
     {
         foreach (var caseName in new[] { "multiple", "multi", "short", "code", "image" })
         {
-            using var handler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(index switch
+            using var handler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
             {
                 0 => FixtureData.Detection(Region).ToJsonString(),
                 1 => FixtureData.Extracted(caseName).ToJsonString(),
-                _ => FixtureData.Answer(caseName)
+                2 => FixtureData.AnswerForRequest(caseName, request),
+                _ => throw new Exception("Unexpected request")
             }));
             using var client = new HttpClient(handler);
             var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(client, "synthetic-test-key", FullScreen,
                 "Answer the question directly.", Qa);
-            TestCheck.That(handler.Requests.Count == 3, caseName + " uses detection, crop extraction, and answer stages");
+            TestCheck.That(handler.Requests.Count == 3, caseName + " uses detection, extraction, and answer stages");
             TestCheck.That(RecordingResponsesHandler.Images(handler.Requests[0]).Single().EndsWith(Convert.ToBase64String(FullScreen)),
                 "detector receives capture");
             TestCheck.That(!RecordingResponsesHandler.Images(handler.Requests[1]).Single().EndsWith(Convert.ToBase64String(FullScreen)),
@@ -160,19 +168,25 @@ internal static class PipelineTests
             TestCheck.That(FixtureAnswerOracle.IsExpected(parsed, caseName), caseName + " structured primary answer correct");
             TestCheck.That(FixtureAnswerOracle.DisplayMatchesPrimary(parsed, answer), caseName + " displayed primary matches response");
         }
-        using var configuredHandler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(
-            index == 0 ? FixtureData.Extracted("multiple").ToJsonString() : FixtureData.Answer("multiple")));
+        using var configuredHandler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
+        {
+            0 => FixtureData.Extracted("multiple").ToJsonString(),
+            1 => FixtureData.AnswerForRequest("multiple", request), _ => throw new Exception("Unexpected request")
+        }));
         using var configuredClient = new HttpClient(configuredHandler);
         await OpenAiVisionClient.AnswerVisibleQuestionAsync(configuredClient, "synthetic-test-key", FullScreen, "Answer",
             Qa with { QuestionRegion = Region });
-        TestCheck.That(configuredHandler.Requests.Count == 2, "trusted configured crop skips detector");
+        TestCheck.That(configuredHandler.Requests.Count == 2, "trusted configured crop skips detection and remote verification");
         AssertCleanAnswer(configuredHandler.Requests[1], 0, true);
-        using var noCropHandler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(
-            index == 0 ? FixtureData.Extracted("short").ToJsonString() : FixtureData.Answer("short")));
+        using var noCropHandler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
+        {
+            0 => FixtureData.Extracted("short").ToJsonString(),
+            1 => FixtureData.AnswerForRequest("short", request), _ => throw new Exception("Unexpected request")
+        }));
         using var noCropClient = new HttpClient(noCropHandler);
         await OpenAiVisionClient.AnswerVisibleQuestionAsync(noCropClient, "synthetic-test-key", FullScreen, "Answer",
             Qa with { EnableQuestionCropping = false });
-        TestCheck.That(noCropHandler.Requests.Count == 2, "disabled cropping still extracts before answering");
+        TestCheck.That(noCropHandler.Requests.Count == 2, "disabled cropping extracts before answering without remote verification");
         AssertCleanAnswer(noCropHandler.Requests[1], 0, true);
     }
 
@@ -248,14 +262,19 @@ internal static class PipelineTests
             {
                 ["x"] = .35, ["y"] = .25, ["width"] = .5, ["height"] = .5
             };
-            using var handler = new RecordingResponsesHandler((_, index) => index == 1
+            using var handler = new RecordingResponsesHandler((request, index) => index == 1
                 ? RecordingResponsesHandler.Refusal("I cannot answer a live proctored assessment.")
-                : RecordingResponsesHandler.Text(index == 0 ? fixture.ToJsonString() : FixtureData.Answer("image")));
+                : RecordingResponsesHandler.Text(index switch
+                {
+                    0 => fixture.ToJsonString(),
+                    2 => FixtureData.AnswerForRequest("image", request), _ => throw new Exception("Unexpected request")
+                }));
             using var client = new HttpClient(handler);
             var config = Qa with { QuestionRegion = Region, EnableQuestionCropping = setting.Cropping, ImageRegionPadding = setting.Padding };
             var cropper = new RequiredLabelCropper(new NormalizedRegion(.30, .30, .08, .08));
             using var extracted = await QuestionExtractor.ExtractAsync(client, "synthetic-test-key", FullScreen, config,
                 null, "Answer", cropper);
+            TestCheck.That(handler.Requests.Count == 1, "extraction has no separate verification call");
             TestCheck.That(Encoding.UTF8.GetString(extracted.Images[0].Jpeg) ==
                 (setting.Cropping && setting.Padding > 0 ? "complete-required-label" : "clipped-required-label"),
                 "configured image margin reaches the production extraction path only after question isolation");
@@ -283,10 +302,11 @@ internal static class PipelineTests
             FullScreen, new ImageQuestionCropper());
         foreach (var native in new[] { false, true })
         {
-            using var handler = new RecordingResponsesHandler((_, index) => index == 0
+            using var handler = new RecordingResponsesHandler((request, index) => index == 0
                 ? native ? RecordingResponsesHandler.Refusal("I cannot help with a proctored assessment.")
-                    : RecordingResponsesHandler.Text("I cannot help answer a live exam.")
-                : RecordingResponsesHandler.Text(FixtureData.Answer("multiple")));
+                    : RecordingResponsesHandler.Text(FixtureData.Structured(request, new JsonObject
+                        { ["answer"] = "I cannot help answer a live exam.", ["status"] = "refusal" }))
+                : RecordingResponsesHandler.Text(FixtureData.AnswerForRequest("multiple", request)));
             using var client = new HttpClient(handler);
             var answer = await OpenAiVisionClient.AnswerExtractedAsync(client, "synthetic-test-key", question, "Answer", Qa);
             TestCheck.That(handler.Requests.Count == 2 && answer.Contains("B"), "one clean retry answers " + (native ? "native refusal" : "text refusal"));
@@ -314,14 +334,19 @@ internal static class PipelineTests
             "{\"answer\":\"I can offer general guidance.\",\"explanation\":\"I cannot provide the answer to this proctored assessment.\"}"
         })
         {
-            using var handler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(
-                index == 0 ? refused : FixtureData.Answer("multiple")));
+            using var handler = new RecordingResponsesHandler((request, index) =>
+            {
+                var result = JsonNode.Parse(refused)!.AsObject();
+                result["status"] = "refusal";
+                return RecordingResponsesHandler.Text(index == 0 ? FixtureData.Structured(request, result) :
+                    FixtureData.AnswerForRequest("multiple", request));
+            });
             using var client = new HttpClient(handler);
             var result = await OpenAiVisionClient.AnswerExtractedAsync(client, "synthetic-test-key", question, "Answer", Qa);
             TestCheck.That(handler.Requests.Count == 2 && result.Contains("B"), "split structured assessment refusal retries once");
         }
-        using var quoteHandler = new RecordingResponsesHandler((_, _) => RecordingResponsesHandler.Text(
-            "{\"answer\":\"B\",\"explanation\":\"The text says I cannot answer a live exam; that is irrelevant to ls.\"}"));
+        using var quoteHandler = new RecordingResponsesHandler((request, _) => RecordingResponsesHandler.Text(FixtureData.Structured(request,
+            new JsonObject { ["answer"] = "B", ["explanation"] = "The text says I cannot answer a live exam; that is irrelevant to ls." })));
         using var quoteClient = new HttpClient(quoteHandler);
         await OpenAiVisionClient.AnswerExtractedAsync(quoteClient, "synthetic-test-key", question, "Answer", Qa);
         TestCheck.That(quoteHandler.Requests.Count == 1, "correct answer with quoted refusal explanation does not retry");
@@ -397,14 +422,16 @@ internal static class PipelineTests
     private static async Task TypedAndModes()
     {
         const string typed = "Translate the visible code comments to English.";
-        using var handler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(index switch
+        using var handler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
         {
             0 => FixtureData.Detection(Region).ToJsonString(), 1 => FixtureData.Extracted("code").ToJsonString(),
-            _ => "```json\n{\"answer\":\"English translation\",\"explanation\":\"\"}\n```"
+            2 => "```json\n" + FixtureData.Structured(request, new JsonObject
+                { ["answer"] = "English translation", ["status"] = "transformation" }) + "\n```",
+            _ => throw new Exception("Unexpected request")
         }));
         using var client = new HttpClient(handler);
         var answer = await OpenAiVisionClient.AnswerTextAsync(client, "synthetic-test-key", typed, FullScreen,
-            "Translate the requested content into English.", new PipelineConfiguration());
+            "Translate the requested content into English.", new PipelineConfiguration { Mode = PipelineMode.Thorough });
         TestCheck.That(answer.Contains("English translation"), "fenced structured output parsed");
         TestCheck.That(handler.Requests.All(request => request.ToJsonString().Contains("Translate")), "translation response mode preserved across stages");
         TestCheck.That(handler.Requests[2].ToJsonString().Contains(typed), "typed question retained as authoritative answering task");
@@ -412,19 +439,23 @@ internal static class PipelineTests
         var two = FixtureData.Extracted("short");
         two["questions"]!.AsArray().Add(FixtureData.Extracted("code")["questions"]![0]!.DeepClone());
         using var questions = QuestionExtractor.ParseQuestionContent(two.ToJsonString(), FullScreen, new ImageQuestionCropper());
-        using var multiHandler = new RecordingResponsesHandler((_, _) => RecordingResponsesHandler.Text(
-            "{\"results\":[{\"question_id\":\"short\",\"answer\":\"42\"},{\"question_id\":\"code\",\"answer\":\"10\"}]}"));
+        using var multiHandler = new RecordingResponsesHandler((request, _) => RecordingResponsesHandler.Text(FixtureData.Structured(request,
+            new JsonObject { ["answer"] = "42", ["status"] = "transformation" },
+            new JsonObject { ["answer"] = "10", ["status"] = "transformation" })));
         using var multiClient = new HttpClient(multiHandler);
         var result = await OpenAiVisionClient.AnswerExtractedAsync(multiClient, "synthetic-test-key", questions,
-            "Summarize the requested content in concise bullet points.", Qa);
+            "Summarize the requested content in concise bullet points.", Qa, operation: ResponseOperation.TransformContent);
         TestCheck.That(result.IndexOf("42", StringComparison.Ordinal) < result.IndexOf("10", StringComparison.Ordinal), "multiple questions retain output order");
         TestCheck.That(multiHandler.Requests[0].ToJsonString().Contains("Summarize"), "summarize mode preserved");
-        using var emptyHandler = new RecordingResponsesHandler((_, index) => RecordingResponsesHandler.Text(index == 0
-            ? "{\"found\":false,\"region\":null}" : "{\"answer\":\"42\",\"explanation\":\"\"}"));
+        using var emptyHandler = new RecordingResponsesHandler((request, index) => RecordingResponsesHandler.Text(index switch
+        {
+            0 => "{\"found\":false,\"region\":null}",
+            1 => FixtureData.Structured(request, new JsonObject { ["answer"] = "42" }), _ => throw new Exception("Unexpected request")
+        }));
         using var emptyClient = new HttpClient(emptyHandler);
         var typedOnly = await OpenAiVisionClient.AnswerTextAsync(emptyClient, "synthetic-test-key", "What is 6 times 7?",
-            FullScreen, "Answer directly.", new PipelineConfiguration());
-        TestCheck.That(typedOnly.Contains("42") && emptyHandler.Requests.Count == 2, "self-contained typed task answers with no relevant screen region");
+            FullScreen, "Answer directly.", new PipelineConfiguration { Mode = PipelineMode.Thorough });
+        TestCheck.That(typedOnly.Contains("42") && emptyHandler.Requests.Count == 2, "self-contained typed task answers after no relevant screen context is found");
         AssertCleanAnswer(emptyHandler.Requests[1], 0, false);
     }
 

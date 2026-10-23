@@ -26,9 +26,17 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
     private ProviderKeys _providerKeys;
     private ApiProvider _editingProvider;
     private readonly Dictionary<ApiProvider, ModelSelection> _modelDrafts = new();
+    private readonly Dictionary<ApiProvider, PipelineMode> _pipelineDrafts = new();
+    private readonly PipelineMode _defaultPipelineMode;
     private readonly ComboBox _providerChoice;
     private readonly ComboBox _answerModel;
     private readonly ComboBox _visionModel;
+    private readonly ComboBox _thinkingChoice;
+    private readonly NumericUpDown _answerTokenLimit;
+    private readonly int _defaultAnswerTokenLimit;
+    private bool _loadingModels;
+    private readonly ComboBox _pipelineChoice;
+    private readonly Label _pipelineNotice;
     private readonly TextBox _serviceKey;
     private readonly CheckBox _showKey;
     private readonly Label _providerNotice;
@@ -52,9 +60,14 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
     public SettingsDialog(VaultData current, PipelineConfiguration? configuration = null)
     {
         _original = current;
-        var models = (configuration ?? PipelineConfiguration.LoadFromEnvironment()).WithModels(current.Models).Models;
+        var processConfiguration = configuration ?? PipelineConfiguration.LoadFromEnvironment();
+        var selected = processConfiguration.WithModels(current.Models, current.PipelineMode);
+        _defaultAnswerTokenLimit = processConfiguration.AnswerMaxOutputTokens;
+        var models = selected.Models;
         _editingProvider = models.Provider;
         _modelDrafts.Add(models.Provider, models);
+        _pipelineDrafts.Add(models.Provider, selected.Mode);
+        _defaultPipelineMode = selected.Mode == PipelineMode.Direct ? PipelineMode.Thorough : selected.Mode;
         _providerKeys = current.ProviderKeys.WithKey(models.Provider, current.ApiKey);
         _appearance = current.Appearance.Normalize();
         Text = "SC settings";
@@ -170,27 +183,50 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _providerChoice = AddModelChoice(modelsPage, 26, "API service", editable: false);
         _providerChoice.Items.AddRange(Enum.GetValues<ApiProvider>().Cast<object>().ToArray());
         _providerChoice.SelectedItem = models.Provider;
-        modelsPage.Controls.Add(AddLabel("Answer model", 20, 68, 480, 24));
-        _answerModel = AddModelChoice(modelsPage, 94, "Answer model", editable: true);
-        modelsPage.Controls.Add(AddLabel("Screen-reading model", 20, 136, 480, 24));
-        _visionModel = AddModelChoice(modelsPage, 162, "Screen-reading model", editable: true);
-        modelsPage.Controls.Add(AddLabel("API key for this service", 20, 204, 480, 24));
+        modelsPage.Controls.Add(AddLabel("Request pipeline", 20, 68, 480, 24));
+        _pipelineChoice = AddModelChoice(modelsPage, 94, "Request pipeline", editable: false);
+        modelsPage.Controls.Add(AddLabel("Answer model", 20, 136, 480, 24));
+        _answerModel = AddModelChoice(modelsPage, 162, "Answer model", editable: true);
+        modelsPage.Controls.Add(AddLabel("DeepSeek reasoning", 20, 204, 230, 24));
+        _thinkingChoice = AddModelChoice(modelsPage, 230, "DeepSeek reasoning", editable: false);
+        _thinkingChoice.Width = 230;
+        _thinkingChoice.Items.AddRange(Enum.GetValues<DeepSeekReasoning>().Cast<object>().ToArray());
+        modelsPage.Controls.Add(AddLabel("Answer output token limit", 268, 204, 232, 24));
+        _answerTokenLimit = new NumericUpDown
+        {
+            Location = new Point(268, 230), Width = 232, Minimum = 256, Maximum = 32000, Increment = 512,
+            Value = _defaultAnswerTokenLimit, BackColor = UiTheme.Header, ForeColor = UiTheme.Text,
+            AccessibleName = "Answer output token limit"
+        };
+        modelsPage.Controls.Add(_answerTokenLimit);
+        modelsPage.Controls.Add(AddLabel("Screen-reading model", 20, 272, 480, 24));
+        _visionModel = AddModelChoice(modelsPage, 298, "Screen-reading model", editable: true);
+        modelsPage.Controls.Add(AddLabel("API key for this service", 20, 340, 480, 24));
         _serviceKey = new TextBox
         {
-            Location = new Point(20, 230), Width = 480, UseSystemPasswordChar = true, MaxLength = 8192,
+            Location = new Point(20, 366), Width = 480, UseSystemPasswordChar = true, MaxLength = 8192,
             BackColor = UiTheme.Header, ForeColor = UiTheme.Text, BorderStyle = BorderStyle.FixedSingle,
             AccessibleName = "Service API key"
         };
         _showKey = new CheckBox
         {
-            Text = "Show API key", Location = new Point(20, 266), Size = new Size(480, 24),
+            Text = "Show API key", Location = new Point(20, 402), Size = new Size(480, 24),
             AccessibleName = "Show API key"
         };
         _showKey.CheckedChanged += (_, _) => _serviceKey.UseSystemPasswordChar = !_showKey.Checked;
-        _providerNotice = AddLabel("", 20, 348, 480, 72);
-        modelsPage.Controls.AddRange([_serviceKey, _showKey,
-            AddLabel("Both models must support images and structured responses.\nSelect a suggestion or enter an exact model ID.", 20, 302, 480, 42),
-            _providerNotice]);
+        _pipelineNotice = AddLabel("", 20, 438, 480, 96);
+        _providerNotice = AddLabel("", 20, 542, 480, 72);
+        modelsPage.Controls.AddRange([_serviceKey, _showKey, _pipelineNotice, _providerNotice]);
+        _pipelineChoice.SelectedIndexChanged += (_, _) => UpdatePipelineState();
+        _answerModel.TextChanged += (_, _) => UpdatePipelineState();
+        _thinkingChoice.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_loadingModels && _editingProvider == ApiProvider.DeepSeek &&
+                _thinkingChoice.SelectedItem is DeepSeekReasoning thinking && thinking != DeepSeekReasoning.None &&
+                _answerTokenLimit.Value < 16000)
+                _answerTokenLimit.Value = 16000;
+            UpdatePipelineState();
+        };
         LoadProviderFields(models);
         changeKey.Click += (_, _) => { ShowPage(modelsPage); _serviceKey.Focus(); };
         _providerChoice.SelectedIndexChanged += (_, _) =>
@@ -311,22 +347,57 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         _providerKeys = _providerKeys.WithKey(_editingProvider, _serviceKey.Text.Trim());
         _modelDrafts[_editingProvider] = new ModelSelection
         {
-            Provider = _editingProvider, AnswerModel = _answerModel.Text.Trim(), VisionModel = _visionModel.Text.Trim()
+            Provider = _editingProvider, AnswerModel = _answerModel.Text.Trim(), VisionModel = _visionModel.Text.Trim(),
+            Thinking = _editingProvider == ApiProvider.DeepSeek && _thinkingChoice.SelectedItem is DeepSeekReasoning thinking
+                ? thinking : DeepSeekReasoning.None,
+            AnswerTokenLimit = _editingProvider == ApiProvider.DeepSeek ? (int)_answerTokenLimit.Value : null
         };
+        if (_pipelineChoice.SelectedItem is PipelineMode pipeline)
+            _pipelineDrafts[_editingProvider] = pipeline;
     }
 
     private void LoadProviderFields(ModelSelection models)
     {
-        foreach (var choice in new[] { _answerModel, _visionModel })
+        _loadingModels = true;
+        try
         {
-            choice.Items.Clear();
-            choice.Items.AddRange(ProviderCatalog.Models(models.Provider));
+            _answerModel.Items.Clear();
+            _answerModel.Items.AddRange(ProviderCatalog.Models(models.Provider));
+            _visionModel.Items.Clear();
+            _visionModel.Items.AddRange(ProviderCatalog.VisionModels(models.Provider));
+            _answerModel.Text = models.AnswerModel;
+            _visionModel.Text = models.VisionModel;
+            _thinkingChoice.SelectedItem = models.Thinking;
+            _answerTokenLimit.Value = models.AnswerTokenLimit ?? _defaultAnswerTokenLimit;
+            _showKey.Checked = false;
+            _serviceKey.Text = _providerKeys.Get(models.Provider);
+            _providerNotice.Text = ProviderCatalog.DataNotice(models.Provider);
+            _pipelineChoice.Items.Clear();
+            _pipelineChoice.Items.AddRange(PipelineModes.Available(models.Provider).Cast<object>().ToArray());
+            _pipelineChoice.SelectedItem = _pipelineDrafts.GetValueOrDefault(models.Provider, _defaultPipelineMode);
         }
-        _answerModel.Text = models.AnswerModel;
-        _visionModel.Text = models.VisionModel;
-        _showKey.Checked = false;
-        _serviceKey.Text = _providerKeys.Get(models.Provider);
-        _providerNotice.Text = ProviderCatalog.DataNotice(models.Provider);
+        finally { _loadingModels = false; }
+        UpdatePipelineState();
+    }
+
+    private void UpdatePipelineState()
+    {
+        var pipeline = _pipelineChoice.SelectedItem as PipelineMode?;
+        _visionModel.Enabled = pipeline != PipelineMode.Direct;
+        _thinkingChoice.Enabled = _answerTokenLimit.Enabled = _editingProvider == ApiProvider.DeepSeek;
+        _pipelineNotice.Text = pipeline switch
+        {
+            PipelineMode.Direct => "Sends the full captured monitor directly to the answer model in one call.\n" +
+                "No extraction or verification; the screen-reading model is unused.",
+            PipelineMode.Balanced => "Combines screen reading and answering in two model calls.\n" +
+                "Both models must support images and structured responses.",
+            _ => "Locates the question, extracts it, then answers in three model calls.\n" +
+                "Both models must support images and structured responses."
+        };
+        if (_editingProvider == ApiProvider.DeepSeek)
+            _pipelineNotice.Text += !ProviderCatalog.SupportsImages(_editingProvider, _answerModel.Text.Trim())
+                ? "\nPro is text-only: use Thorough/Balanced for tasks without diagrams. Direct requires Flash."
+                : "\nReasoning uses the output token budget and can increase response time and API cost.";
     }
 
     private void DrawModeItem(object? sender, DrawItemEventArgs e)
@@ -339,6 +410,8 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         using var background = new SolidBrush(selected ? UiTheme.Button : UiTheme.Header);
         e.Graphics.FillRectangle(background, e.Bounds);
         var label = choice.Items[e.Index] is ApiProvider provider ? ProviderCatalog.Name(provider) :
+            choice.Items[e.Index] is PipelineMode pipeline ? PipelineModes.Name(pipeline) :
+            choice.Items[e.Index] is DeepSeekReasoning.None ? "Off (fast)" :
             choice.Items[e.Index]?.ToString() ?? string.Empty;
         TextRenderer.DrawText(e.Graphics, label, choice.Font,
             new Rectangle(e.Bounds.X + 6, e.Bounds.Y, e.Bounds.Width - 8, e.Bounds.Height),
@@ -554,16 +627,26 @@ internal sealed class SettingsDialog : ProtectedDialog, IMessageFilter
         }
         RememberProviderFields();
         if (!_modelDrafts[_editingProvider].IsValid || !_providerKeys.IsValid ||
+            !_pipelineDrafts.TryGetValue(_editingProvider, out var pipeline) ||
+            !PipelineModes.Available(_editingProvider).Contains(pipeline) ||
             string.IsNullOrWhiteSpace(_providerKeys.Get(_editingProvider)))
         {
             MessageBox.Show(this, "Choose valid model IDs and enter the selected service's API key on Models & API.",
                 "SC", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
+        var models = _modelDrafts[_editingProvider];
+        if ((pipeline == PipelineMode.Direct && !ProviderCatalog.SupportsImages(_editingProvider, models.AnswerModel)) ||
+            (pipeline != PipelineMode.Direct && !ProviderCatalog.SupportsImages(_editingProvider, models.VisionModel)))
+        {
+            MessageBox.Show(this, "DeepSeek Pro supports text only. Use deepseek-flash for Direct screenshot and screen reading. " +
+                "Pro can answer text-only tasks through Thorough or Balanced.", "SC", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
         Settings = shortcuts.ApplyTo(_original) with
         {
             ApiKey = _providerKeys.Get(_editingProvider), ProviderKeys = _providerKeys,
-            Models = _modelDrafts[_editingProvider], ResponseMode = (string)_mode.SelectedItem!,
+            Models = _modelDrafts[_editingProvider], PipelineMode = pipeline, ResponseMode = (string)_mode.SelectedItem!,
             CustomInstruction = _instruction.Text.Trim(), Appearance = _appearance
         };
         DialogResult = DialogResult.OK;

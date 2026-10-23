@@ -3,21 +3,27 @@ using System.Text.Json.Serialization;
 namespace SC;
 
 [JsonConverter(typeof(JsonStringEnumConverter<ApiProvider>))]
-internal enum ApiProvider { OpenAI, Groq, Gemini, Mistral, OpenRouter }
+internal enum ApiProvider { OpenAI, Groq, Gemini, Mistral, OpenRouter, DeepSeek }
+
+[JsonConverter(typeof(JsonStringEnumConverter<DeepSeekReasoning>))]
+internal enum DeepSeekReasoning { None, Low, High, Max }
 
 internal sealed record ModelSelection
 {
     public ApiProvider Provider { get; init; } = ApiProvider.OpenAI;
     public string AnswerModel { get; init; } = "gpt-6-luna";
     public string VisionModel { get; init; } = "gpt-6-luna";
+    public DeepSeekReasoning Thinking { get; init; }
+    public int? AnswerTokenLimit { get; init; }
 
-    public bool IsValid => Enum.IsDefined(Provider) && ValidModel(AnswerModel) && ValidModel(VisionModel);
+    public bool IsValid => Enum.IsDefined(Provider) && ValidModel(AnswerModel) && ValidModel(VisionModel) &&
+        Enum.IsDefined(Thinking) && (AnswerTokenLimit is null or >= 256 and <= 32000);
 
     public static ModelSelection Default(ApiProvider provider) => new()
     {
         Provider = provider,
         AnswerModel = ProviderCatalog.Models(provider)[0],
-        VisionModel = ProviderCatalog.Models(provider)[0]
+        VisionModel = ProviderCatalog.VisionModels(provider)[0]
     };
 
     public static bool ValidModel(string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 160 &&
@@ -33,11 +39,12 @@ internal sealed record ProviderKeys
     public string Gemini { get; init; } = "";
     public string Mistral { get; init; } = "";
     public string OpenRouter { get; init; } = "";
+    public string DeepSeek { get; init; } = "";
 
     public string Get(ApiProvider provider) => provider switch
     {
         ApiProvider.OpenAI => OpenAI, ApiProvider.Groq => Groq, ApiProvider.Gemini => Gemini,
-        ApiProvider.Mistral => Mistral, ApiProvider.OpenRouter => OpenRouter,
+        ApiProvider.Mistral => Mistral, ApiProvider.OpenRouter => OpenRouter, ApiProvider.DeepSeek => DeepSeek,
         _ => throw new InvalidDataException("Choose a supported API service.")
     };
 
@@ -46,6 +53,7 @@ internal sealed record ProviderKeys
         ApiProvider.OpenAI => this with { OpenAI = key }, ApiProvider.Groq => this with { Groq = key },
         ApiProvider.Gemini => this with { Gemini = key }, ApiProvider.Mistral => this with { Mistral = key },
         ApiProvider.OpenRouter => this with { OpenRouter = key },
+        ApiProvider.DeepSeek => this with { DeepSeek = key },
         _ => throw new InvalidDataException("Choose a supported API service.")
     };
 
@@ -66,11 +74,18 @@ internal static class ProviderCatalog
         ApiProvider.Gemini => ["gemini-3.8-flash"],
         ApiProvider.Mistral => ["ministral-14b-2512", "ministral-8b-2512"],
         ApiProvider.OpenRouter => ["qwen/qwen3.8-27b:free"],
+        ApiProvider.DeepSeek => ["deepseek-flash", "deepseek-v4-pro"],
         _ => throw new InvalidDataException("Choose a supported API service.")
     };
 
+    public static string[] VisionModels(ApiProvider provider) => provider == ApiProvider.DeepSeek
+        ? ["deepseek-flash"] : Models(provider);
+
+    public static bool SupportsImages(ApiProvider provider, string model) => provider != ApiProvider.DeepSeek ||
+        !model.Equals("deepseek-v4-pro", StringComparison.OrdinalIgnoreCase);
+
     public static ApiProvider Parse(string value) => Enum.TryParse<ApiProvider>(value, true, out var provider) &&
-        Enum.IsDefined(provider) ? provider : throw new InvalidDataException("API_PROVIDER must be OpenAI, Groq, Gemini, Mistral, or OpenRouter.");
+        Enum.IsDefined(provider) ? provider : throw new InvalidDataException("API_PROVIDER must be OpenAI, Groq, Gemini, Mistral, OpenRouter, or DeepSeek.");
 
     public static string ChatEndpoint(ApiProvider provider) => provider switch
     {
@@ -87,6 +102,7 @@ internal static class ProviderCatalog
         ApiProvider.Mistral => "Mistral Free may use API data for training. You can turn this off in your account's Privacy settings.",
         ApiProvider.OpenRouter => "Screen content is routed to a model provider. Training and retention depend on that provider and your account settings.",
         ApiProvider.Groq => "Groq offers data retention controls in your account. This model accepts up to 3 images per request; free token limits apply.",
+        ApiProvider.DeepSeek => "Screen content is sent to DeepSeek. API credits are required; stateless requests do not guarantee zero retention.",
         _ => "Screen content is sent to OpenAI. Model access and charges depend on your API account."
     };
 }

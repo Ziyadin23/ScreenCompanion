@@ -6,6 +6,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Pipeline/CombinedQuestionExtraction.cs" Link="Production/CombinedQuestionExtraction.cs" />
+    <Compile Include="../../src/Providers/ModelUsage.cs" Link="Production/ModelUsage.cs" />
+    <Compile Include="../../src/Providers/ApiNetwork.cs" Link="Production/ApiNetwork.cs" />
+    <Compile Include="../../src/Pipeline/AnswerContract.cs" Link="Production/AnswerContract.cs" />
+    <Compile Include="../../src/Pipeline/PipelineTrace.cs" Link="Production/PipelineTrace.cs" />
+    <Compile Include="../../src/Pipeline/ExtractionVerification.cs" Link="Production/ExtractionVerification.cs" />
+    <Compile Include="../../src/App/AppDiagnostics.cs" Link="Production/AppDiagnostics.cs" />
+    <Compile Include="../../src/Storage/AppStorage.cs" Link="Production/AppStorage.cs" />
     <Compile Include="../../src/Providers/ModelSelection.cs" Link="Production/ModelSelection.cs" />
     <Compile Include="../../src/Providers/ModelApiClient.cs" Link="Production/ModelApiClient.cs" />
     <Compile Include="../../src/Pipeline/PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />

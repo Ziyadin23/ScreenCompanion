@@ -11,17 +11,22 @@ internal static class ModelApiClient
 {
     public static async Task<ModelResponse> SendAsync(HttpClient client, string apiKey, string model,
         string developerInstruction, JsonArray userContent, JsonObject schema, int maxOutputTokens,
-        ApiProvider provider, CancellationToken cancellationToken = default)
+        ApiProvider provider, CancellationToken cancellationToken = default,
+        DeepSeekReasoning thinking = DeepSeekReasoning.None)
     {
         if (!Enum.IsDefined(provider) || !ModelSelection.ValidModel(model))
             throw new InvalidDataException("Choose a supported service and a valid model ID in Settings.");
         if (string.IsNullOrWhiteSpace(apiKey) || !ProviderKeys.ValidKey(apiKey))
             throw new InvalidDataException("Enter the selected service's API key in Settings.");
-        if (provider == ApiProvider.OpenAI)
-            return await OpenAiResponsesClient.SendAsync(client, apiKey, model, developerInstruction, userContent,
-                schema, maxOutputTokens, cancellationToken);
-
+        if (!Enum.IsDefined(thinking)) throw new InvalidDataException("Choose a supported DeepSeek reasoning level.");
         var imageCount = userContent.Count(part => part?["type"]?.GetValue<string>() == "input_image");
+        if (imageCount > 0 && !ProviderCatalog.SupportsImages(provider, model))
+            throw new PipelineValidationException(PipelineCode.UnsupportedModel,
+                "DeepSeek Pro supports text only. Choose deepseek-flash for Direct screenshot or tasks containing images.");
+        if (provider is ApiProvider.OpenAI or ApiProvider.DeepSeek)
+            return await OpenAiResponsesClient.SendAsync(client, apiKey, model, developerInstruction, userContent,
+                schema, maxOutputTokens, cancellationToken, provider, thinking);
+
         if (provider == ApiProvider.Groq && imageCount > 3)
             throw new InvalidOperationException("Groq accepts up to three task images per request. Choose another service for this task.");
 
@@ -74,13 +79,10 @@ internal static class ModelApiClient
         using var request = new HttpRequestMessage(HttpMethod.Post, ProviderCatalog.ChatEndpoint(provider));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken);
-        if (!response.IsSuccessStatusCode)
-            throw new ApiResponseException((int)response.StatusCode,
-                $"{ProviderCatalog.Name(provider)} API request failed with status {(int)response.StatusCode}. Check the selected models, key, and quota.");
+        var responseText = await ApiNetwork.ReadResponseAsync(client, request, ProviderCatalog.Name(provider), cancellationToken);
         try
         {
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            using var document = JsonDocument.Parse(responseText);
             return ParseChatResponse(document.RootElement);
         }
         catch (JsonException)
@@ -115,6 +117,7 @@ internal static class ModelApiClient
         }
         if (finish == "content_filter" && refusal.Length == 0)
             refusal = "The selected service declined this request.";
-        return new ModelResponse(text.Trim(), refusal.Trim(), finish is "stop" or "content_filter" ? "completed" : "incomplete");
+        return new ModelResponse(text.Trim(), refusal.Trim(), finish is "stop" or "content_filter" ? "completed" : "incomplete")
+            { Usage = ModelUsage.Parse(root, chat: true) };
     }
 }

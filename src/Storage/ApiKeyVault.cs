@@ -15,6 +15,7 @@ internal sealed record VaultData(string ApiKey, string ResponseMode, string Cust
     public HotkeyBinding InputShortcut { get; init; } = HotkeyBinding.DefaultInput;
     public bool CommandsShown { get; init; }
     public ModelSelection? Models { get; init; }
+    public PipelineMode? PipelineMode { get; init; }
     public ProviderKeys ProviderKeys { get; init; } = new();
 
     public string KeyFor(ApiProvider provider)
@@ -165,6 +166,8 @@ internal static class ApiKeyVault
         if (data is null || string.IsNullOrWhiteSpace(data.ApiKey) ||
             !ProviderKeys.ValidKey(data.ApiKey) || data.ProviderKeys is null || !data.ProviderKeys.IsValid ||
             (data.Models is not null && !data.Models.IsValid) ||
+            (data.PipelineMode is { } pipelineMode &&
+                !PipelineModes.Available(data.Models?.Provider ?? ApiProvider.OpenAI).Contains(pipelineMode)) ||
             data.ResponseMode is null || data.CustomInstruction is null ||
             data.CustomInstruction.Length > 2000 ||
             (validateHotkeys && (data.Appearance is null || !data.Appearance.IsValid)) ||

@@ -12,17 +12,17 @@ internal readonly record struct NormalizedRegion(double X, double Y, double Widt
         if (!double.IsFinite(X) || !double.IsFinite(Y) || !double.IsFinite(Width) ||
             !double.IsFinite(Height) || X < 0 || Y < 0 || X >= 1 || Y >= 1 || Width <= 0 || Height <= 0 ||
             X + Width > 1.000001 || Y + Height > 1.000001)
-            throw new InvalidOperationException("The question region is outside the captured image.");
+            throw new PipelineValidationException(PipelineCode.IncompleteExtraction, "The question region is outside the captured image.");
 
         if (!allowWholeImage && Width * Height >= 0.98)
-            throw new InvalidOperationException("The question region could not be isolated from the full screen.");
+            throw new PipelineValidationException(PipelineCode.IncompleteExtraction, "The question region could not be isolated from the full screen.");
     }
 
     public PixelRegion ToPixelRegion(int imageWidth, int imageHeight)
     {
         Validate(allowWholeImage: true);
         if (imageWidth <= 0 || imageHeight <= 0)
-            throw new InvalidOperationException("The captured image has no usable dimensions.");
+            throw new PipelineValidationException(PipelineCode.IncompleteExtraction, "The captured image has no usable dimensions.");
 
         // Include boundary pixels rather than clipping letters or diagram edges.
         var left = Math.Clamp((int)Math.Floor(X * imageWidth), 0, imageWidth - 1);
@@ -61,7 +61,11 @@ internal sealed record QuestionContent(string? QuestionId, string Type, string Q
     };
 }
 
-internal sealed record QuestionImage(string Id, byte[] Jpeg);
+internal sealed record QuestionImage(string Id, byte[] Jpeg)
+{
+    // Actual padded region relative to the extractor input.
+    public NormalizedRegion? Region { get; init; }
+}
 
 internal sealed class ExtractedQuestionSet(IReadOnlyList<QuestionContent> questions,
     IReadOnlyList<QuestionImage> images, string? additionalContext = null) : IDisposable

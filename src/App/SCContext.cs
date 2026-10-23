@@ -32,7 +32,7 @@ internal sealed class SCContext : ApplicationContext
     public SCContext(HttpClient? httpClient = null, PipelineConfiguration? configuration = null,
         string? credentialPath = null)
     {
-        _httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(90) };
+        _httpClient = httpClient ?? ApiNetwork.CreateClient();
         _pipelineConfiguration = configuration ?? PipelineConfiguration.LoadFromEnvironment();
         var besideExecutable = Path.Combine(AppContext.BaseDirectory, "screencompanion.key");
         _legacyVaultExists = File.Exists(besideExecutable) ||
@@ -310,7 +310,9 @@ internal sealed class SCContext : ApplicationContext
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerVisibleQuestionAsync(_httpClient, _apiKey, jpeg,
-                ResponseModes.Instruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models));
+                ResponseModes.Instruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models, _settings.PipelineMode),
+                ResponseModes.Operation(_settings!), new PipelineTrace(value => AppDiagnostics.RecordPipelineEvent(value),
+                    value => AppDiagnostics.RecordPipelineCall(value)));
             if (_exiting) return;
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);
@@ -360,7 +362,9 @@ internal sealed class SCContext : ApplicationContext
             _tray?.SetWorking(true);
             stage = FailureStage.ApiRequest;
             var answer = await OpenAiVisionClient.AnswerTextAsync(_httpClient, _apiKey, question, jpeg,
-                ResponseModes.TextInstruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models));
+                ResponseModes.TextInstruction(_settings!), _pipelineConfiguration.WithModels(_settings!.Models, _settings.PipelineMode),
+                ResponseModes.Operation(_settings!), new PipelineTrace(value => AppDiagnostics.RecordPipelineEvent(value),
+                    value => AppDiagnostics.RecordPipelineCall(value)));
             if (_exiting) return;
             stage = FailureStage.Display;
             _overlay.ShowAnswer(answer);

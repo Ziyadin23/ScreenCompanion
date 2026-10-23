@@ -9,6 +9,8 @@ internal sealed class SyntheticQuestionWindow : Form
     public string CaseName { get; private set; }
     public Rectangle QuestionBounds { get; private set; }
     public Rectangle DiagramBounds { get; private set; }
+    public Rectangle RequiredDiagramBounds { get; private set; }
+    public Rectangle DrawingBounds { get; private set; }
     [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
     public bool ShowMonitoring { get; set; } = true;
     public static readonly string[] Cases = ["multiple", "multi", "short", "code", "image"];
@@ -91,12 +93,20 @@ internal sealed class SyntheticQuestionWindow : Form
         if (CaseName == "code")
             g.DrawString("values = [2, 3, 5]\nprint(sum(values))", code, Brushes.Black, x, y + 86);
         DiagramBounds = Rectangle.Empty;
+        RequiredDiagramBounds = Rectangle.Empty;
+        DrawingBounds = Rectangle.Empty;
         if (CaseName == "image")
         {
             DiagramBounds = new Rectangle(x + 90, y + 80, 490, 290);
+            DrawingBounds = new Rectangle(x + 160, y + 125, 310, 140);
             g.DrawRectangle(Pens.Blue, x + 160, y + 125, 310, 140);
             g.DrawString("8 cm", body, Brushes.Black, x + 270, y + 275);
             g.DrawString("3 cm", body, Brushes.Black, x + 480, y + 170);
+            var widthLabel = g.MeasureString("8 cm", body);
+            var heightLabel = g.MeasureString("3 cm", body);
+            RequiredDiagramBounds = Rectangle.FromLTRB(x + 158, y + 123,
+                (int)Math.Ceiling(x + 480 + heightLabel.Width),
+                (int)Math.Ceiling(y + 275 + widthLabel.Height));
         }
     }
 }
