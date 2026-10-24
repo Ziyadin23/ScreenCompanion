@@ -66,12 +66,12 @@ $env:PIPELINE_MODE = 'balanced'
 | `PIPELINE_MODE` | `thorough` | `balanced` uses combined extraction plus answering; `thorough` locates, extracts and answers without a separate verification call; DeepSeek-only `direct` sends the monitor straight to answering. Saved pipeline choice takes priority. |
 | `ASSESSMENT_MODE` | `standard` | `qa` supplies trusted authorized/non-graded test metadata. |
 | `ANSWER_MODEL` | `gpt-6-luna` | Structured answering model. |
-| `VISION_MODEL` | `gpt-6-luna` | Extraction/location/verification model. |
+| `VISION_MODEL` | `gpt-6-luna` | Extraction/location model. |
 | `ENABLE_QUESTION_CROPPING` | `true` | Enable the configured local crop or Thorough's located crop. |
 | `ENABLE_REFUSAL_RETRY` | `true` | Permit the single eligible answering retry in trusted QA mode. |
 | `QUESTION_REGION` | unset | Optional question-only `x,y,width,height` within the captured monitor. |
 | `IMAGE_REGION_PADDING` | `0.08` | Visual padding relative to question dimensions; allowed `0`–`0.2`. |
-| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location/verification request. |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location request. |
 | `ANSWER_MAX_OUTPUT_TOKENS` | `2500` | Answering output limit. |
 
 Saved service/model choices override `API_PROVIDER`, `ANSWER_MODEL`, and `VISION_MODEL`; saved pipeline choice overrides `PIPELINE_MODE`. DeepSeek model settings also retain answer-only reasoning effort (`none`, `low`, `high`, `max`) and an optional explicit answer output budget, which overrides `ANSWER_MAX_OUTPUT_TOKENS`. Old records without those fields keep non-thinking behavior and the process limit. Extraction/location retain their own existing budget and non-thinking mode. DeepSeek Pro accepts only text: image inputs fail locally with `UnsupportedModel`; Direct and screen reading require Flash. No automatic model fallback or image removal is allowed. Without a saved choice, the provider defaults to OpenAI and pipeline to Thorough; other providers use their own model defaults. Direct is accepted only with DeepSeek. See [model setup](USER_GUIDE.md#service-and-model-selection).

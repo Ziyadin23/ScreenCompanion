@@ -50,6 +50,11 @@ and reports `Excluded`, `ContentHidden` or `Failed`. Affinity assertions and
 native compilation do not establish actual exclusion from a saved recording or
 received stream. The visible tray icon remains part of the Windows taskbar.
 
+On Windows 10 version 2004 and later, SC requests omission from supported capture
+paths. Earlier Windows 10 builds request blanked window content, so the window
+itself may remain visible. If omission fails, the bridge also attempts content
+hiding and reports the resulting status. Actual output still depends on the recorder.
+
 Run the production EXE with `--capture-test-only` for a key-free test panel. Keep
 it visible locally, record/share the entire monitor using a named recorder or
 receiver, then inspect the saved video or received stream on another device.
