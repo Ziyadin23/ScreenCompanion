@@ -2,6 +2,19 @@
 
 SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
+## TypeScript rewrite in development
+
+The Windows-first Electron/TypeScript replacement is under [`desktop/`](desktop/REWRITE.md).
+It includes a React interface, request pipelines/provider adapters, and a C++ Windows bridge.
+The C# v0.4.14 application remains the release baseline until the rewrite passes its
+Windows runtime, vault interoperability, packaged distribution, and recorder checks.
+The rewrite is not a new published release.
+
+With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
+Inside the Windows VM, run `npm run preview:ui` for a key-free interface preview that makes no
+network requests and uses no real vault. Windows native build and verification
+instructions are in the [rewrite reference](desktop/REWRITE.md).
+
 ## Release status
 
 **SC v0.4.14** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)

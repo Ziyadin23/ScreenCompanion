@@ -4,7 +4,7 @@
 
 ## Shared rules
 
-- Keep source organization within the existing production assembly. Source moves require updated source/document links and both test inclusion lists, compile/link validation and existing relevant suites; file-location assertions add no coverage.
+- The approved TypeScript rewrite lives under `desktop/` with main/preload, renderer, pipeline/provider and Windows/storage boundaries. Keep the C# release baseline intact until the rewrite parity gates pass. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
 - Preserve the [privacy contract](docs/USER_GUIDE.md#privacy). Inputs remain screen capture and typed text. Thorough/Balanced keep original monitor images in detection/extraction; answering receives structured tasks and isolated visuals. Explicitly selected DeepSeek Direct sends the captured monitor to answering in one call. Dispose images and zero transient image bytes. Captures, questions, answers and history stay out of persistent app storage.
 - Provider requests remain stateless; OpenAI Responses use `store: false`. Document other providers' retention limits in the [user guide](docs/USER_GUIDE.md#service-and-model-selection).
 - Setup asks only for the API key. Encrypt keys, custom instructions, appearance, shortcuts and provider settings with Windows DPAPI CurrentUser; apply [storage compatibility](#storage-compatibility).
@@ -14,7 +14,7 @@
 
 ## Application lifecycle
 
-- Preserve the STA entry point, capture-protection lifetime and application-context disposal. Acquire/activate the instance before credential setup or shortcut registration.
+- Preserve the C# STA entry point and application-context disposal in the release baseline. The Electron replacement preserves the Windows UI-thread capture-protection lifetime and deterministic disposal of its controller/native bridge. Acquire/activate the instance before credential setup or shortcut registration.
 - Keep one request active and retain the last answer while waiting or navigating Settings.
 - Duplicate launches restore the selected answer, input or Settings surface. Retain activation until initialization is ready; restoration without an answer provides usable input.
 - Defer Settings/activation transitions during capture so app windows stay outside the fresh image. Hidden Settings may permit capture; answers wait until the user returns.
@@ -82,6 +82,8 @@ Before tests or regression runs, read [commands and fixtures](tests/README.md). 
 
 Use synthetic keys, temporary vaults and fixtures without real assessment material. Live runs use existing local credentials/model access and normal API usage, with captured content only in memory. Keep key, question, response and image content out of harness output/files.
 
+For the TypeScript replacement, run `npm run verify` under `desktop/`. Run GUI tests/previews only inside the Windows VM, with the VM using a headless frontend so its windows do not appear on Fedora. `npm run test:ui` rejects non-Windows hosts. Compile the native bridge on Windows with `npm run native:build` and run `npm run test:windows` separately. Linux tests and bundle generation do not establish Windows native/DPAPI, packaged EXE or recorder parity. The root .NET commands continue to verify only the retained C# baseline.
+
 Grade the structured primary answer and displayed first line independently. Preserve failed attempts; reject substring-only oracles accepting an expected number in an unrelated explanation. Record suite counts and actual exit statuses.
 
 For paid comparisons, include all earlier invocations in the authorized total. Partial/preflight runs cannot establish the full default-promotion gate; use the complete comparison procedure in the test reference.
@@ -98,7 +100,7 @@ Use standalone EXE launches for duplicate-process/activation cases. Visibility/r
 
 ## Documentation and status
 
-Use SC as the product name; retain historical GitHub URLs, release names and legacy storage identifiers. Read source version from [SC.csproj](SC.csproj) and publication status from [README](README.md#release-status).
+Use SC as the product name; retain historical GitHub URLs, release names and legacy storage identifiers. Read the C# release version from [SC.csproj](SC.csproj), the unpublished rewrite version from [desktop/package.json](desktop/package.json), and publication status from [README](README.md#release-status).
 
 Keep README a concise user introduction with downloads, setup, shortcuts, privacy and key limits. Before editing detailed behavior, read its owning reference: [user guide](docs/USER_GUIDE.md) for setup/controls/settings/privacy/troubleshooting; [pipeline](docs/PIPELINE.md) for configuration/request flow; [verification](docs/VERIFICATION.md) for recorded checks/unfinished limits; [tests](tests/README.md) for fixtures/commands. Keep configuration tables, measured counts and lab history in those references. Development rules live here; the single root `AGENTS.md` routes tasks.
 

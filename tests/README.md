@@ -1,5 +1,19 @@
 # Question-pipeline tests
 
+## TypeScript replacement
+
+The retained .NET projects below verify the C# baseline. The unpublished rewrite
+uses `desktop/tests/`: `npm test` runs portable, storage, controller and renderer
+fixtures; `npm run test:ui` runs the actual Electron shell in key-free synthetic
+mode inside the Windows VM. The UI runner refuses non-Windows hosts to prevent
+test windows appearing on the user's host desktop. The synthetic mode blocks native
+capture, real vault access and network requests.
+
+On Windows build the bridge with `npm run native:build` and run
+`npm run test:windows`. Native compile/runtime, standalone activation,
+C#/TypeScript vault interoperability, distribution and recorder checks are
+separate from mocked/portable assertions. See [rewrite gates](../desktop/REWRITE.md).
+
 These package-free console projects link the production source. The portable
 project injects a byte-marker cropper and mocked Responses HTTP responses. The
 Windows project uses the production screen capture and JPEG cropper with a

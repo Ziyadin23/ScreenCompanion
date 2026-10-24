@@ -1,0 +1,151 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+export interface NativeWindow {
+  handle: string; visible: boolean; enabled: boolean; affinityRead: boolean; affinity: number;
+  left: number; top: number; right: number; bottom: number; className: string;
+}
+interface Point { x: number; y: number }
+type WindowsEvent =
+  | { type: 'inspect' | 'owned' | 'focus'; handle: string }
+  | { type: 'keys'; keys: number[] }
+  | { type: 'drag'; from: Point; to: Point; alt?: boolean }
+  | { type: 'wheel'; point: Point; delta: number; busyMarker: string };
+
+// Real SendInput events exercise RegisterHotKey and the production low-level
+// mouse hook. No SendMessage shortcut substitution, clipboard access or images.
+// Use encoded PowerShell stdin-free commands, never a shell-interpolated payload.
+const nativeSource = String.raw`
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+public static class ScPreviewEvents {
+  [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] struct MouseInput {
+    public int X, Y; public uint Data, Flags, Time; public UIntPtr Extra;
+  }
+  [StructLayout(LayoutKind.Sequential)] struct KeyInput {
+    public ushort Key, Scan; public uint Flags, Time; public UIntPtr Extra;
+  }
+  [StructLayout(LayoutKind.Explicit)] struct InputUnion {
+    [FieldOffset(0)] public MouseInput Mouse;
+    [FieldOffset(0)] public KeyInput Key;
+  }
+  [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public InputUnion Value; }
+  public delegate bool EnumProc(IntPtr window, IntPtr state);
+  [DllImport("user32.dll", SetLastError=true)] static extern uint SendInput(uint count, Input[] inputs, int size);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool IsWindowEnabled(IntPtr window);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out Rect bounds);
+  [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(IntPtr window, out uint affinity);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr window);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern bool SetCursorPos(int x, int y);
+  [DllImport("user32.dll")] static extern int GetSystemMetrics(int index);
+  [DllImport("user32.dll")] static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc callback, IntPtr state);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr window, uint command);
+  [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder name, int size);
+  public static void PhysicalCoordinates() { SetThreadDpiAwarenessContext(new IntPtr(-4)); }
+  public static object Inspect(IntPtr window) {
+    Rect bounds;
+    if (!GetWindowRect(window, out bounds)) throw new InvalidOperationException("Native preview window is unavailable.");
+    uint affinity; bool read = GetWindowDisplayAffinity(window, out affinity);
+    var name = new StringBuilder(256); GetClassName(window, name, name.Capacity);
+    return new { handle=window.ToInt64().ToString(), visible=IsWindowVisible(window), enabled=IsWindowEnabled(window),
+      affinityRead=read, affinity=affinity, left=bounds.Left, top=bounds.Top, right=bounds.Right, bottom=bounds.Bottom, className=name.ToString() };
+  }
+  public static object[] Owned(IntPtr owner) {
+    var result = new List<object>();
+    EnumWindows(delegate(IntPtr window, IntPtr state) {
+      IntPtr parent = GetWindow(window, 4);
+      for (int depth=0; parent!=IntPtr.Zero && depth<64; depth++, parent=GetWindow(parent, 4)) {
+        if (parent==owner) { result.Add(Inspect(window)); break; }
+      }
+      return true;
+    }, IntPtr.Zero);
+    return result.ToArray();
+  }
+  static void Send(Input input) {
+    if (SendInput(1, new [] { input }, Marshal.SizeOf(typeof(Input)))!=1)
+      throw new InvalidOperationException("Windows rejected a native preview input event.");
+  }
+  static void Key(ushort key, bool up) {
+    Send(new Input { Type=1, Value=new InputUnion { Key=new KeyInput { Key=key, Flags=up ? 2u : 0u } } });
+  }
+  public static void Keys(ushort[] keys) {
+    int held=0;
+    try {
+      foreach (ushort key in keys) { Key(key, false); held++; Thread.Sleep(20); }
+    } finally {
+      for (int index=held-1; index>=0; index--) { Key(keys[index], true); Thread.Sleep(20); }
+    }
+  }
+  public static void Focus(IntPtr window) {
+    SetForegroundWindow(window); Thread.Sleep(80);
+    if (GetForegroundWindow()!=window) throw new InvalidOperationException("Native preview could not take foreground focus.");
+  }
+  public static void Drag(int fromX, int fromY, int toX, int toY, bool alt) {
+    bool held=false;
+    try {
+      if (!SetCursorPos(fromX, fromY)) throw new InvalidOperationException("Native preview pointer is unavailable.");
+      if (alt) { Key(18, false); Thread.Sleep(20); }
+      Send(new Input { Value=new InputUnion { Mouse=new MouseInput { Flags=2 } } }); held=true;
+      for (int step=1; step<=8; step++) {
+        Thread.Sleep(25);
+        int x=fromX+(toX-fromX)*step/8, y=fromY+(toY-fromY)*step/8;
+        // SetCursorPos alone does not exercise the low-level mouse input path.
+        Send(new Input { Value=new InputUnion { Mouse=new MouseInput {
+          X=(x-GetSystemMetrics(76))*65535/Math.Max(1,GetSystemMetrics(78)-1),
+          Y=(y-GetSystemMetrics(77))*65535/Math.Max(1,GetSystemMetrics(79)-1), Flags=0xC001
+        } } });
+      }
+      Thread.Sleep(40);
+    } finally {
+      if (held) Send(new Input { Value=new InputUnion { Mouse=new MouseInput { Flags=4 } } });
+      if (alt) Key(18, true);
+    }
+  }
+  public static void Wheel(int x, int y, int delta) {
+    if (!SetCursorPos(x,y)) throw new InvalidOperationException("Native preview pointer is unavailable.");
+    Send(new Input { Value=new InputUnion { Mouse=new MouseInput { Flags=0x800, Data=unchecked((uint)delta) } } });
+  }
+}`;
+
+export async function windowsEvent<T = void>(event: WindowsEvent): Promise<T> {
+  if (process.platform !== 'win32') throw new Error('Native preview input requires Windows.');
+  const encodedPayload = Buffer.from(JSON.stringify(event), 'utf8').toString('base64');
+  const script = `$ErrorActionPreference='Stop'
+Add-Type -TypeDefinition @'
+${nativeSource}
+'@
+[ScPreviewEvents]::PhysicalCoordinates()
+$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPayload}')) | ConvertFrom-Json
+$handle = if ($payload.handle) { [IntPtr]::new([long]$payload.handle) } else { [IntPtr]::Zero }
+switch ($payload.type) {
+ 'inspect' { [ScPreviewEvents]::Inspect($handle) | ConvertTo-Json -Compress }
+ 'owned' { ConvertTo-Json -InputObject @([ScPreviewEvents]::Owned($handle)) -Compress }
+ 'focus' { [ScPreviewEvents]::Focus($handle) }
+ 'keys' { [ScPreviewEvents]::Keys([uint16[]]$payload.keys) }
+ 'drag' { [ScPreviewEvents]::Drag($payload.from.x,$payload.from.y,$payload.to.x,$payload.to.y,[bool]$payload.alt) }
+ 'wheel' {
+   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw 'The main-thread stall ended before native wheel input.' }
+   [ScPreviewEvents]::Wheel($payload.point.x,$payload.point.y,$payload.delta)
+   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw 'The main-thread stall ended during native wheel input.' }
+ }
+ default { throw 'Unsupported native preview operation.' }
+}`;
+  const { stdout } = await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
+    Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, timeout: 15000, maxBuffer: 64 * 1024 }).catch((error: unknown) => {
+      const stderr = (error as { stderr?: string }).stderr ?? '';
+      throw new Error(`Windows native fixture ${event.type} failed. ${stderr.slice(-3000)}`);
+    });
+  return (stdout.trim() ? JSON.parse(stdout.trim()) : undefined) as T;
+}
+
+export const VK = { control: 17, alt: 18, shift: 16, enter: 13, backspace: 8, escape: 27, slash: 191,
+  space: 32, i: 73, t: 84, k: 75, a: 65, f12: 123 } as const;

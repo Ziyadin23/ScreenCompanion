@@ -2,6 +2,18 @@
 
 This records SC v0.4.14 verification separately from earlier release evidence. [Test commands and fixtures](../tests/README.md) explain how to reproduce individual suites. Private lab identifiers, recordings, and local state remain outside this repository.
 
+## TypeScript/Electron replacement
+
+The replacement under `desktop/` is unpublished development work. Its portable,
+Windows native and Electron UI results are recorded in [the rewrite reference](../desktop/REWRITE.md).
+Historical C# assertion counts and recorder evidence below do not verify the new
+native bridge or Electron surfaces. On 2026-10-24, 760 portable tests, 31 real
+Windows native checks, 8 C#/TypeScript DPAPI interoperability cases and all 11
+Electron UI workflows passed, each suite exit 0. The portable EXE/ZIP also passed
+integrity, direct Windows startup/exit, standalone activation and forced-termination
+recovery checks. Fresh-machine, mixed-DPI, Windows 10 and named-recorder checks
+remain separate gates before replacing the release baseline.
+
 ## SC v0.4.14
 
 SC v0.4.14 removes the separate remote verifier. Thorough now locates, extracts and answers in three ordinary API calls. Configured-region/disabled-cropping flows and typed tasks with no relevant region use two calls. Existing saved Thorough choices keep their serialized identifier and automatically use the new behavior. Balanced and Direct retain their existing call budgets; local crop/task and canonical-answer validation remain active.

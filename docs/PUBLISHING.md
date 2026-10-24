@@ -1,5 +1,21 @@
 # Publishing SC
 
+## Electron rewrite status
+
+The unpublished replacement has its own version in `desktop/package.json`; the
+existing C# release assets stay unchanged. On a Windows x64 desktop with Node.js
+22.12+, Visual Studio C++ Build Tools, and the Windows SDK, run `npm ci`,
+`npm run verify`, `npm run native:build`, `npm run test:windows`, and
+`npm run test:ui` from `desktop/`. Complete interactive native, vault, activation
+and recorder gates before making compatibility claims.
+
+`npm run package:win` bundles the runtime/native module into a portable EXE in
+`desktop/dist/`. `npm run package:zip` creates a matching ZIP containing exactly
+that EXE and `README.txt` and prints SHA-256 digests. Check archive entries and
+compare extracted bytes before publication, following the parent workspace
+guidance and the verification/publishing steps below. No rewrite asset is
+published automatically by these commands or CI.
+
 ## Source and documentation updates
 
 Read the source version from `SC.csproj` and publication status from the README's release status. Update those records for their respective states; agent instructions point to them rather than caching version numbers. Source organization and documentation changes can be committed without creating a new downloadable release; preserve existing tags and release assets.

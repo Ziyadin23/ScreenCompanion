@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <StartupObject>SC.VaultInteropFixture</StartupObject>
+    <AssemblyName>SC.VaultInteropFixture</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <BaselineSource>$(MSBuildThisFileDirectory)../../../../src</BaselineSource>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="$(BaselineSource)/GlobalUsings.cs" Link="Production/GlobalUsings.cs" />
+    <!-- Link the actual serializers, validators, DPAPI and migration implementation. -->
+    <Compile Include="$(BaselineSource)/Storage/ApiKeyVault.cs" Link="Production/ApiKeyVault.cs" />
+    <Compile Include="$(BaselineSource)/Storage/AppStorage.cs" Link="Production/AppStorage.cs" />
+    <Compile Include="$(BaselineSource)/Platform/HotkeyBinding.cs" Link="Production/HotkeyBinding.cs" />
+    <Compile Include="$(BaselineSource)/Platform/ShortcutSet.cs" Link="Production/ShortcutSet.cs" />
+    <Compile Include="$(BaselineSource)/Platform/NativeMethods.cs" Link="Production/NativeMethods.cs" />
+    <Compile Include="$(BaselineSource)/UI/UiAppearance.cs" Link="Production/UiAppearance.cs" />
+    <Compile Include="$(BaselineSource)/Providers/ModelSelection.cs" Link="Production/ModelSelection.cs" />
+    <!-- Transitive types required by the production pipeline enum and its validators. -->
+    <Compile Include="$(BaselineSource)/Pipeline/PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
+    <Compile Include="$(BaselineSource)/Pipeline/QuestionContent.cs" Link="Production/QuestionContent.cs" />
+    <Compile Include="$(BaselineSource)/Pipeline/PipelineTrace.cs" Link="Production/PipelineTrace.cs" />
+    <Compile Include="$(BaselineSource)/Providers/ModelUsage.cs" Link="Production/ModelUsage.cs" />
+    <Compile Include="$(BaselineSource)/Providers/OpenAiResponsesClient.cs" Link="Production/OpenAiResponsesClient.cs" />
+    <Compile Include="$(BaselineSource)/Providers/ApiNetwork.cs" Link="Production/ApiNetwork.cs" />
+  </ItemGroup>
+</Project>

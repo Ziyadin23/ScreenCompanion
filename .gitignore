@@ -10,3 +10,11 @@ screencompanion.key.new
 *.p12
 .env
 .env.*
+node_modules/
+desktop/out/
+desktop/dist/
+desktop/coverage/
+desktop/test-results/
+desktop/playwright-report/
+desktop/native/build/
+desktop/.cache/
