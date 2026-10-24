@@ -1,0 +1,20 @@
+{
+  "tag": "v0.4.14",
+  "commit": "16b344d7ab20bd99f93c543ffa3e57148c237a49",
+  "files": {
+    "GlobalUsings.cs": "8cc27e25fc569c6eba243f0ebc635ba382f429b482ef3054bc307ebf4ff024fa",
+    "Storage/ApiKeyVault.cs": "f3f3bd70557fe407c2b70f797a78c68fc63d2062b45e6b0fd5dbb1685a3208d2",
+    "Storage/AppStorage.cs": "ff345fbb6d3284e7835ba1d5af60316ce0eb1b5e7e8dfc9eb86e946ee9892005",
+    "Platform/HotkeyBinding.cs": "9123152480a02aca9145b512b72dc999319c464ac30f0ca0f4977765abbc4548",
+    "Platform/ShortcutSet.cs": "19ba5b6e0877e18bce8b545c8b80f3de4d7de070fe35503ebc0ee32ac86522c8",
+    "Platform/NativeMethods.cs": "b772083ff0f8074de7073a038d1f0dd5dc781bf54c32e19a10b071f66a0981b6",
+    "UI/UiAppearance.cs": "d3eb89be0bfcda552f4c2036a52a974e2d493290683fd571be681a344c105264",
+    "Providers/ModelSelection.cs": "8ba0f59b3736a1e9043e774b098f2e3ed3024fe7142e6279d7fbaa6c1f3ddacc",
+    "Pipeline/PipelineConfiguration.cs": "6dcd798dab51b8a9ef13dc710f2715c103fd21d5a5269158c57ee0eb63764378",
+    "Pipeline/QuestionContent.cs": "91a225a5a180555676308f7cef7ce8d3c93ffe17b1cfd726ebc4121c12e951a9",
+    "Pipeline/PipelineTrace.cs": "d99bec0e49df29b629c41d85d572b634b8d0a5122403cbe252695b87b51f36ea",
+    "Providers/ModelUsage.cs": "98f6e05181e3c99f40fb3f731e3681fdf6f106be082a2feda653a7b9e137de37",
+    "Providers/OpenAiResponsesClient.cs": "db369581ac8e18c6abbb41f17a6dad60d3274923f3614050bbb974a24531571d",
+    "Providers/ApiNetwork.cs": "aac715be4197ac3592731c471fd59187d33feaa6fd8b061d5fd44229a1aa8b3b"
+  }
+}

@@ -4,7 +4,7 @@
 
 ## Shared rules
 
-- The approved TypeScript rewrite lives under `desktop/` with main/preload, renderer, pipeline/provider and Windows/storage boundaries. Keep the C# release baseline intact until the rewrite parity gates pass. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
+- The primary TypeScript application lives under `desktop/` with main/preload, renderer, pipeline/provider and Windows/storage boundaries. The C# application is archived in existing release tags; preserve those tags/assets and the frozen test-only vault fixture under `desktop/tests/windows/interop/legacy/`. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
 - Preserve the [privacy contract](docs/USER_GUIDE.md#privacy). Inputs remain screen capture and typed text. Thorough/Balanced keep original monitor images in detection/extraction; answering receives structured tasks and isolated visuals. Explicitly selected DeepSeek Direct sends the captured monitor to answering in one call. Dispose images and zero transient image bytes. Captures, questions, answers and history stay out of persistent app storage.
 - Provider requests remain stateless; OpenAI Responses use `store: false`. Document other providers' retention limits in the [user guide](docs/USER_GUIDE.md#service-and-model-selection).
 - Setup asks only for the API key. Encrypt keys, custom instructions, appearance, shortcuts and provider settings with Windows DPAPI CurrentUser; apply [storage compatibility](#storage-compatibility).
@@ -14,7 +14,7 @@
 
 ## Application lifecycle
 
-- Preserve the C# STA entry point and application-context disposal in the release baseline. The Electron replacement preserves the Windows UI-thread capture-protection lifetime and deterministic disposal of its controller/native bridge. Acquire/activate the instance before credential setup or shortcut registration.
+- Preserve the Windows UI-thread capture-protection lifetime and deterministic disposal of the Electron controller/native bridge. Acquire/activate the instance before credential setup or shortcut registration.
 - Keep one request active and retain the last answer while waiting or navigating Settings.
 - Duplicate launches restore the selected answer, input or Settings surface. Retain activation until initialization is ready; restoration without an answer provides usable input.
 - Defer Settings/activation transitions during capture so app windows stay outside the fresh image. Hidden Settings may permit capture; answers wait until the user returns.
@@ -23,7 +23,7 @@
 - Preserve persisted response-mode names and the 2,000-character custom-instruction limit.
 - Keep `--capture-test-only` an API-key-free production preview.
 
-Verify with Windows `--ui` and relevant appearance tests. Single-instance changes also require standalone launches from different paths and visible/hidden Settings restoration.
+Verify with `npm run test:ui` on Windows and relevant renderer tests. Single-instance changes also require standalone launches from different paths and visible/hidden Settings restoration.
 
 ## Pipeline contracts
 
@@ -63,7 +63,7 @@ Verify migration, existing-vault priority, byte preservation and Save/Back with 
 - Register all shortcut actions; restore the previous set if new registration fails. Reject reserved/invalid/duplicate bindings; visibility and exit remain active during shortcut recording.
 - Hover-wheel scrolling needs its dedicated native hook/message thread even while the UI thread is busy; dispose both cleanly.
 
-After native changes, compile the Windows test project and run relevant capture/crop, `--appearance` and `--ui` checks on Windows. Hook, activation and exclusion changes also require corresponding standalone or named-recorder checks; report these separately from compilation.
+After native changes, compile the Windows bridge with `npm run native:build` and run relevant native, vault and Electron UI checks on Windows. Hook, activation and exclusion changes also require corresponding standalone or named-recorder checks; report these separately from compilation.
 
 ## UI behavior
 
@@ -71,10 +71,10 @@ Before panel, Settings/setup, tray or appearance changes, read [setup and contro
 
 - Background transparency and text visibility remain independent. Panel/input colors use `AppearanceSettings`; Settings/key setup use the fixed readable `UiTheme`. Panel choices must not recolor Settings.
 - Preview drafts; Save encrypts/applies them and returns to the retained answer; Back discards them. Settings and answers are mutually exclusive. Hide/restore owned native color pickers and message boxes with Settings.
-- Coordinate shortcut changes with `HotkeyHost`, including rollback on rejected bindings or save failures.
+- Coordinate shortcut changes with the controller and Windows bridge, including rollback on rejected bindings or save failures.
 - Apply dialog exclusion when handles are created; cover startup/setup/Settings and owned popups throughout the production capture-protection lifetime.
 
-Use `--appearance` for layout, migration, palette and popup checks; `--ui` for production workflows. Visibility/rendering changes also require named-recorder evidence below.
+Use renderer and Windows UI tests for layout, palette, popups and production workflows, and vault interoperability tests for migration. Visibility/rendering changes also require named-recorder evidence below.
 
 ## Verification
 
@@ -82,7 +82,7 @@ Before tests or regression runs, read [commands and fixtures](tests/README.md). 
 
 Use synthetic keys, temporary vaults and fixtures without real assessment material. Live runs use existing local credentials/model access and normal API usage, with captured content only in memory. Keep key, question, response and image content out of harness output/files.
 
-For the TypeScript replacement, run `npm run verify` under `desktop/`. Run GUI tests/previews only inside the Windows VM, with the VM using a headless frontend so its windows do not appear on Fedora. `npm run test:ui` rejects non-Windows hosts. Compile the native bridge on Windows with `npm run native:build` and run `npm run test:windows` separately. Linux tests and bundle generation do not establish Windows native/DPAPI, packaged EXE or recorder parity. The root .NET commands continue to verify only the retained C# baseline.
+Run `npm run verify` under `desktop/`. Run GUI tests/previews only inside the Windows VM, with the VM using a headless frontend so its windows do not appear on Fedora. `npm run test:ui` rejects non-Windows hosts. Compile the native bridge on Windows with `npm run native:build` and run `npm run test:windows` separately. Linux tests and bundle generation do not establish Windows native/DPAPI, packaged EXE or recorder parity. The only .NET project is the test-only historical vault interoperability fixture; the application does not require .NET.
 
 Grade the structured primary answer and displayed first line independently. Preserve failed attempts; reject substring-only oracles accepting an expected number in an unrelated explanation. Record suite counts and actual exit statuses.
 
@@ -90,17 +90,17 @@ For paid comparisons, include all earlier invocations in the authorized total. P
 
 ### Portable tests
 
-Keep explicit production links current; capture, WinForms, WPF and DPAPI belong in Windows tests. The injected `ImageQuestionCropper.cs` is a byte-marker fixture for request boundaries and retained visuals, not JPEG/monitor verification. Synthetic HTTP handlers fail unexpected calls. Preserve assertions excluding original monitor images and prior answers from Thorough/Balanced answering/retry requests; Direct tests require exactly one original-image call with no retry or extraction.
+Keep injected production boundaries current; real capture and DPAPI belong in Windows tests. Portable crop fixtures check request boundaries and retained visuals, not real JPEG/monitor behavior. Synthetic HTTP handlers fail unexpected calls. Preserve assertions excluding original monitor images and prior answers from Thorough/Balanced answering/retry requests; Direct tests require exactly one original-image call with no retry or extraction.
 
 ### Windows tests
 
-Keep the `SC.WindowsPipelineTests` entry point so tests run the harness. Use the [documented fixture modes](tests/README.md) for capture/crop, appearance, production UI and focused `--settings-palette` checks. Mocked UI runs neither read nor replace the user's key; use isolated synthetic DPAPI vaults. Clean up forms, hooks, hotkeys, vaults and fixture windows; keep other app instances outside the shortcut session.
+Keep the native verifier, vault interoperability suite and Electron UI runner as separate checks. Use the [documented commands](tests/README.md) for capture/crop, storage and production UI workflows. Mocked UI runs neither read nor replace the user's key; use isolated synthetic DPAPI vaults. Clean up windows, hooks, hotkeys and vaults; keep other app instances outside the shortcut session.
 
 Use standalone EXE launches for duplicate-process/activation cases. Visibility/rendering changes and exclusion claims require the [named-recorder procedure](docs/VERIFICATION.md#capture-exclusion-checks): confirm surfaces visible locally and inspect saved/received output. Record named paths, counts, exit statuses and limits; compilation and harness affinity assertions provide separate evidence. Use the parent workspace's recorded state and authorized setup for interactive labs; keep private VM/recorder evidence there.
 
 ## Documentation and status
 
-Use SC as the product name; retain historical GitHub URLs, release names and legacy storage identifiers. Read the C# release version from [SC.csproj](SC.csproj), the unpublished rewrite version from [desktop/package.json](desktop/package.json), and publication status from [README](README.md#release-status).
+Use SC as the product name; retain historical GitHub URLs, release names and legacy storage identifiers. Read the application version from [desktop/package.json](desktop/package.json) and publication status from [README](README.md#release-status). Historical C# versions and source remain in their release tags.
 
 Keep README a concise user introduction with downloads, setup, shortcuts, privacy and key limits. Before editing detailed behavior, read its owning reference: [user guide](docs/USER_GUIDE.md) for setup/controls/settings/privacy/troubleshooting; [pipeline](docs/PIPELINE.md) for configuration/request flow; [verification](docs/VERIFICATION.md) for recorded checks/unfinished limits; [tests](tests/README.md) for fixtures/commands. Keep configuration tables, measured counts and lab history in those references. Development rules live here; the single root `AGENTS.md` routes tasks.
 

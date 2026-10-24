@@ -1,23 +1,21 @@
-# SC desktop rewrite
+# SC desktop development and verification
 
 Development version: **0.5.0-beta.2**. Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
-The reference application remains available until the replacement passes the
-Windows, storage, UI, pipeline, distribution and recorder parity gates. No
-existing release is replaced by this source change.
+The TypeScript/Electron application is the primary source on `main`. The previous
+C# application remains available in the [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
+and existing release downloads. This source transition does not publish a beta
+release or close the unfinished compatibility and recorder gates below.
 
-## Ownership
+## Source layout
 
-- Integration lead: contracts, defaults, main process, preload, configuration,
-  dependencies, integration tests, CI, packaging and public documentation.
-- Windows/storage agent: native bridge, platform/storage adapters and their tests.
-- Pipeline/provider agent: pipeline/provider modules and their portable tests.
-- Interface agent: renderer and UI tests.
-
-Only the lead changes shared contracts and dependency manifests. Other agents
-request changes through the coordinator. All agents read the root coding
-standards and relevant owning references before implementation and verification.
+- `src/main`, `src/preload`, `src/contracts`: lifecycle, IPC and shared contracts.
+- `src/renderer`: React answer/input, Settings and setup interface.
+- `src/pipeline`, `src/providers`: request flow, validation and API adapters.
+- `src/platform`, `src/storage`, `native`: Windows integration and encrypted settings.
+- `tests`: portable, Windows-native, vault and Electron workflow fixtures. The
+  [frozen legacy vault oracle](tests/windows/interop/README.md) is test-only.
 
 ## Parity gates
 
@@ -200,4 +198,5 @@ not the private build path. Both artifacts remain unpublished.
 Named-recorder results remain a separate gate.
 Windows 10, mixed-DPI monitors, every resize edge, competing-process shortcut
 rollback and foreign-account vault rejection still need dedicated checks. The
-C# release baseline has not been removed.
+C# application is archived in the existing release tags; its runtime is no longer
+part of the current source tree.

@@ -13,7 +13,7 @@ const execute = promisify(execFile);
 const project = fileURLToPath(new URL('./interop/VaultInterop.csproj', import.meta.url));
 const addon = fileURLToPath(new URL('../../native/build/Release/sc_windows.node', import.meta.url));
 
-// Deliberately independent expected values: the C# fixture uses the retained production
+// Deliberately independent expected values: the C# fixture uses the frozen v0.4.14
 // serializer/DPAPI/validators and constructs its matching sample in Program.cs.
 function sample(typescript: boolean): VaultData {
   const prefix = typescript ? 'synthetic-ts' : 'synthetic-csharp';

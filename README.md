@@ -2,14 +2,14 @@
 
 SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
-## TypeScript rewrite in development
+## TypeScript desktop application
 
-The Windows-first Electron/TypeScript replacement is under [`desktop/`](desktop/REWRITE.md).
-It includes a React interface, request pipelines/provider adapters, and a C++ Windows bridge.
-The C# v0.4.14 application remains the release baseline until the rewrite passes its
-Windows runtime, vault interoperability, packaged distribution, and recorder checks.
-The rewrite is not a new published release.
-Development build **0.5.0-beta.2** protects settings during early relaunches, rejects malformed
+The `main` branch develops the Windows Electron/TypeScript application under
+[`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
+The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
+and its existing releases. Only its frozen vault-compatibility test fixture remains here.
+The current TypeScript build is **0.5.0-beta.2** and has not been published as a GitHub release.
+It protects settings during early relaunches, rejects malformed
 API status fields, preserves the latest panel size and shows your active shortcuts in help.
 
 With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
@@ -19,13 +19,16 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 
 ## Release status
 
-**SC v0.4.14** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
+**Latest published release: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
 
-This release adds DeepSeek Flash for screenshots, Pro for text-only answers, saved reasoning strength, an answer output-token limit, and a saved choice of request pipeline. Thorough now locates, extracts and answers without a separate extraction-verification request. Existing encrypted settings are retained; downloads contain no API key.
+Existing downloads and tags are retained. They contain the C# application, while
+source builds from `main` produce the TypeScript beta. The beta keeps compatible
+encrypted settings and the same three pipelines. Moving development to `main`
+does not establish stable-release parity; see [verification limits](docs/VERIFICATION.md).
 
 ## Quick start
 
-1. Download the EXE, or extract it from the ZIP, and open it on a Windows 10/11 x64 PC. No installer or separate .NET runtime is required. Windows 11 has been tested; see [platform limits](docs/VERIFICATION.md#platform-support) for Windows 10.
+1. Use the TypeScript beta built from this branch, or download the previous C# release above. Open the EXE on a Windows x64 PC; it includes its runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
 2. Enter your own provider's API key in the first-launch dialog. It is labelled **OpenAI**, but accepts your key without making a model request. An OpenAI key is not required to use another service.
 3. Press **Ctrl+I**, open **Models & API**, choose the service matching your key, enter its key and click **Save**. For DeepSeek, select `deepseek-flash` for both **Answer model** and **Screen-reading model**. You need an internet connection, model access and any required credits on your provider account.
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
@@ -74,23 +77,34 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 - SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
 - Recording exclusion is best effort, and the tray icon remains visible. Verify the received stream or saved recording for your capture app.
 
-v0.4.14 passed portable and mocked Windows 11 checks. The small real DeepSeek campaign included a failed automatic Thorough diagram answer; a separate fixed-region follow-up passed without resolving that failure. Answer accuracy is not guaranteed. Windows 10 runtime and current whole-monitor recorder paths remain unverified; OBS evidence applies to v0.4.8. See [verification results and limitations](docs/VERIFICATION.md) for counts and test scope.
+The beta passed 846 portable tests, 31 Windows native checks, 8 legacy-vault
+interoperability tests and 11 Electron UI workflows. Mocked provider tests do not
+establish live model quality. Fresh-machine, Windows 10, mixed-DPI and actual
+recorder-output checks remain open. Historical C# model/recorder results retain
+their original scope. See [verification results and limitations](docs/VERIFICATION.md).
 
 ## Build and further documentation
 
-With the .NET 10 SDK on Windows, compile production code from the repository root:
+With Node.js 22.12 or later, verify and bundle the application:
 
-```powershell
-dotnet build SC.csproj -c Release
+```sh
+cd desktop
+npm ci
+npm run verify
 ```
 
-For a distributable executable, follow [publishing](docs/PUBLISHING.md) and run:
+On Windows x64, install Visual Studio C++ Build Tools and the Windows SDK, then
+build the native bridge and distributable executable from `desktop/`:
 
 ```powershell
-.\publish.ps1
+npm run native:build
+npm run package:win
+npm run package:zip
 ```
 
-Build output: `publish\win-x64\SC-v0.4.14.exe` and `README.txt`.
+Build output: `desktop/dist/SC-v0.5.0-beta.2.exe` and the matching ZIP containing
+that EXE and `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
+The .NET 10 SDK is needed only for the legacy-vault interoperability tests.
 
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.
 - [Pipeline reference](docs/PIPELINE.md): request flow and advanced environment configuration.

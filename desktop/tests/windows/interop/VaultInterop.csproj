@@ -9,25 +9,25 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <BaselineSource>$(MSBuildThisFileDirectory)../../../../src</BaselineSource>
+    <LegacySource>$(MSBuildThisFileDirectory)legacy</LegacySource>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <Compile Include="$(BaselineSource)/GlobalUsings.cs" Link="Production/GlobalUsings.cs" />
-    <!-- Link the actual serializers, validators, DPAPI and migration implementation. -->
-    <Compile Include="$(BaselineSource)/Storage/ApiKeyVault.cs" Link="Production/ApiKeyVault.cs" />
-    <Compile Include="$(BaselineSource)/Storage/AppStorage.cs" Link="Production/AppStorage.cs" />
-    <Compile Include="$(BaselineSource)/Platform/HotkeyBinding.cs" Link="Production/HotkeyBinding.cs" />
-    <Compile Include="$(BaselineSource)/Platform/ShortcutSet.cs" Link="Production/ShortcutSet.cs" />
-    <Compile Include="$(BaselineSource)/Platform/NativeMethods.cs" Link="Production/NativeMethods.cs" />
-    <Compile Include="$(BaselineSource)/UI/UiAppearance.cs" Link="Production/UiAppearance.cs" />
-    <Compile Include="$(BaselineSource)/Providers/ModelSelection.cs" Link="Production/ModelSelection.cs" />
-    <!-- Transitive types required by the production pipeline enum and its validators. -->
-    <Compile Include="$(BaselineSource)/Pipeline/PipelineConfiguration.cs" Link="Production/PipelineConfiguration.cs" />
-    <Compile Include="$(BaselineSource)/Pipeline/QuestionContent.cs" Link="Production/QuestionContent.cs" />
-    <Compile Include="$(BaselineSource)/Pipeline/PipelineTrace.cs" Link="Production/PipelineTrace.cs" />
-    <Compile Include="$(BaselineSource)/Providers/ModelUsage.cs" Link="Production/ModelUsage.cs" />
-    <Compile Include="$(BaselineSource)/Providers/OpenAiResponsesClient.cs" Link="Production/OpenAiResponsesClient.cs" />
-    <Compile Include="$(BaselineSource)/Providers/ApiNetwork.cs" Link="Production/ApiNetwork.cs" />
+    <Compile Include="$(LegacySource)/GlobalUsings.cs" Link="Legacy/GlobalUsings.cs" />
+    <!-- Frozen v0.4.14 serializers, validators, DPAPI and migration implementation. -->
+    <Compile Include="$(LegacySource)/Storage/ApiKeyVault.cs" Link="Legacy/ApiKeyVault.cs" />
+    <Compile Include="$(LegacySource)/Storage/AppStorage.cs" Link="Legacy/AppStorage.cs" />
+    <Compile Include="$(LegacySource)/Platform/HotkeyBinding.cs" Link="Legacy/HotkeyBinding.cs" />
+    <Compile Include="$(LegacySource)/Platform/ShortcutSet.cs" Link="Legacy/ShortcutSet.cs" />
+    <Compile Include="$(LegacySource)/Platform/NativeMethods.cs" Link="Legacy/NativeMethods.cs" />
+    <Compile Include="$(LegacySource)/UI/UiAppearance.cs" Link="Legacy/UiAppearance.cs" />
+    <Compile Include="$(LegacySource)/Providers/ModelSelection.cs" Link="Legacy/ModelSelection.cs" />
+    <!-- Transitive types required by the legacy pipeline enum and its validators. -->
+    <Compile Include="$(LegacySource)/Pipeline/PipelineConfiguration.cs" Link="Legacy/PipelineConfiguration.cs" />
+    <Compile Include="$(LegacySource)/Pipeline/QuestionContent.cs" Link="Legacy/QuestionContent.cs" />
+    <Compile Include="$(LegacySource)/Pipeline/PipelineTrace.cs" Link="Legacy/PipelineTrace.cs" />
+    <Compile Include="$(LegacySource)/Providers/ModelUsage.cs" Link="Legacy/ModelUsage.cs" />
+    <Compile Include="$(LegacySource)/Providers/OpenAiResponsesClient.cs" Link="Legacy/OpenAiResponsesClient.cs" />
+    <Compile Include="$(LegacySource)/Providers/ApiNetwork.cs" Link="Legacy/ApiNetwork.cs" />
   </ItemGroup>
 </Project>
