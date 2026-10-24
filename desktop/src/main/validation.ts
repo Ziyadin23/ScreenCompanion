@@ -25,6 +25,7 @@ export const settingsDraftSchema = z.object({
 });
 export const setupKeySchema = key.min(1).refine(value => value.trim().length > 0);
 export const colorSchema = color;
+export const updateActionSchema = z.enum(['check', 'download', 'install']);
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['capture', 'showInput', 'toggleVisibility', 'settings', 'captureTest', 'exit', 'escape', 'beginMove']) }),
   z.object({ type: z.literal('submit'), question: z.string().min(1).max(4000).refine(value => value.trim().length > 0) }),

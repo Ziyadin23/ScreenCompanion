@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import electronUpdater from 'electron-updater';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
@@ -7,7 +8,8 @@ import { createSettingsStore, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
-import { commandSchema, colorSchema, settingsDraftSchema, setupKeySchema } from './validation';
+import { commandSchema, colorSchema, settingsDraftSchema, setupKeySchema, updateActionSchema } from './validation';
+import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import packageManifest from '../../package.json';
 
@@ -16,9 +18,11 @@ const synthetic = process.argv.includes('--synthetic-ui');
 const captureTest = process.argv.includes('--capture-test-only');
 const preview = synthetic || (captureTest && process.platform !== 'win32');
 const version = packageManifest.version;
+if (process.platform === 'win32') app.setAppUserModelId(packageManifest.build.appId);
 const localData = process.env.LOCALAPPDATA;
 const diagnostics = createDiagnostics(preview ? null : localData ? join(localData, 'SC') : null, version);
 let controller: ApplicationController | null = null;
+let updates: ApplicationUpdates | null = null;
 let platform: WindowsPlatform | null = null;
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -139,7 +143,8 @@ function bindIpc(): void {
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
     discardSettings: () => controller!.discardSettings(),
-    chooseColor: value => controller!.chooseColor(colorSchema.parse(value))
+    chooseColor: value => controller!.chooseColor(colorSchema.parse(value)),
+    update: value => updates!.action(updateActionSchema.parse(value))
   };
   for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`sc:${name}`, async (event, value: unknown) => {
     trustedSender(event);
@@ -174,6 +179,11 @@ async function boot(): Promise<void> {
     mode: synthetic ? 'synthetic' : captureTest ? 'captureTest' : 'production',
     host: { publish, panelHandle: () => window!.getNativeWindowHandle(), scroll: delta => { window?.webContents.send('sc:scroll', delta); }, exit: () => app.quit(),
       activate: () => { if (window && readyToShow) { window.show(); window.focus(); } } } });
+  updates = new ApplicationUpdates({
+    client: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && !preview && !captureTest ? electronUpdater.autoUpdater : null,
+    version, diagnostics, publish: state => controller?.setUpdateState(state), canInstall: () => controller?.canInstallUpdate() ?? false
+  });
+  controller.setUpdateState(updates.getState());
   controller.setCaptureProtection(lastCaptureProtection); bindIpc();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
@@ -204,9 +214,10 @@ async function boot(): Promise<void> {
   else await window.loadFile(join(directory, '../renderer/index.html'));
   await controller.initialize();
   if (activationPending) { activationPending = false; controller.restore(); }
+  void updates.action('check');
 }
 app.on('window-all-closed', () => {});
-app.on('before-quit', () => { closing = true; controller?.dispose(); platform?.dispose(); tray?.destroy(); tray = null; });
+app.on('before-quit', () => { closing = true; updates?.dispose(); controller?.dispose(); platform?.dispose(); tray?.destroy(); tray = null; });
 void app.whenReady().then(boot).catch(error => {
   const report = diagnostics.failure('Startup', error);
   // Protected native setup is unavailable if initialization itself failed. Keep output content-free.

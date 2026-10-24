@@ -1,6 +1,6 @@
 # Verification and limitations
 
-`main` develops the TypeScript/Electron application, currently **0.5.0-beta.2**.
+`main` develops the TypeScript/Electron application, currently **0.5.0-beta.3**.
 The previous C# application and its published releases remain available through
 existing tags/assets. This source transition does not publish a new release or
 establish that every compatibility gate has passed.
@@ -10,7 +10,38 @@ run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
 
-## Current beta evidence
+## Beta.3 installer verification
+
+Linux and Windows `npm run verify` passed **865 tests in 14 files**, strict
+type checking, lint and production bundles, exit 0. Windows native compilation,
+**31 native checks**, **8 isolated vault interoperability cases / 136 C# fixture
+checks**, and **12 Electron UI workflows**, none skipped, also exited 0.
+Update-controller fixtures cover explicit actions, blocked restarts, safe failure
+messages, disabled portable/previews and retained Settings drafts. These mocked
+checks are separate from actual installer/update delivery.
+
+The per-user NSIS installation and local HTTP update from a test installation of
+beta.2 to the unchanged beta.3 installer passed **17 checks**, exit 0. The real
+updater recovered from an unavailable feed, rejected a same-size corrupted
+installer, downloaded the valid installer, restarted at beta.3 READY and retained
+the synthetic DPAPI vault byte for byte. A separate isolated relaunch loaded the
+saved key; uninstall exited 0 and retained that vault. The Windows shell restart
+used the normal account profile, whose existing vault hashes were checked
+separately. No model request or key export was needed. This verifies local update
+mechanics; a published GitHub installer feed is still required for public updates.
+
+The beta.3 portable package also passed five standalone duplicate launches,
+retained Settings/input drafts, system-only-PATH startup, x64 payload, READY
+version and normal exit. ZIP entries/CRCs/EXE bytes and installer metadata
+SHA-512/size were checked separately. The first packaging follow-up expected a
+`beta.yml` file, but this GitHub configuration generates `latest.yml` even for a
+prerelease; copying the actual generated metadata resolved that harness issue.
+Two retained installer attempts stopped on harness limitations (main-context
+import and an incorrect assumption about the post-update profile) before the
+corrected full scenario passed. Those attempts remain separate from the passing
+result; no production workaround was made.
+
+## Beta.2 evidence
 
 The stabilized source passed these checks on 2026-10-24, each command exit 0:
 
@@ -63,9 +94,14 @@ Windows and recorder versions, capture method, counts, exit status where
 applicable and observed limits. A browser-tab recording does not test whole-monitor
 capture. Successful OBS output cannot establish a Discord or browser result.
 
-Actual named-recorder/receiver output has not been verified for the TypeScript
-beta. Historical OBS 32.2.2 Display Capture evidence applies only to C# v0.4.8.
-Capture exclusion remains best effort.
+For beta.3, **Settings → Updates** was visibly present locally and omitted from
+one saved **Microsoft Edge 156.0.4314.42 whole-monitor getDisplayMedia / VP8 WebM**
+recording on Windows 11. The track reported `displaySurface: monitor`, 1920×1080;
+recorded frames while Settings was visible matched the underlying background
+when hidden. This evidence covers that pane in that recorder path only. Other
+surfaces, Chrome/OBS/Discord paths and receiver output remain unverified for the
+TypeScript beta. Historical OBS 32.2.2 Display Capture evidence applies only to
+C# v0.4.8. Capture exclusion remains best effort.
 
 ## Live providers and model quality
 

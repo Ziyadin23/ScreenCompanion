@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current version is 0.5.0-beta.2 and has
+[README](../README.md#release-status). The current version is 0.5.0-beta.3 and has
 not been published as a GitHub release. Existing C# releases, assets and tags stay
 unchanged; the full previous application can be built from the
 [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14).
@@ -39,9 +39,11 @@ use SC; historical URLs and asset names retain their actual identifiers.
 
    The .NET 10 SDK and Windows Desktop runtime are needed only by the test-only
    legacy vault fixture. The application includes its Electron runtime.
-4. `package:win` writes the portable EXE under `desktop/dist/`. `package:zip`
-   creates its matching ZIP containing exactly that EXE and `README.txt` and
-   prints SHA-256 digests. Neither command publishes a GitHub release.
+4. `package:win` writes both `SC-Setup-v<version>.exe` (NSIS per-user installer)
+   and `SC-v<version>.exe` (portable) under `desktop/dist/`. `package:installer`
+   builds only the installer. `package:zip` creates the portable ZIP containing
+   exactly its EXE and `README.txt`, and prints SHA-256 digests. All packaging
+   commands use `--publish never`; none publishes a GitHub release.
 5. Complete the applicable [verification gates](VERIFICATION.md), including
    packaged startup, standalone activation, clean-account/machine and named-recorder
    output checks before making corresponding compatibility claims.
@@ -49,7 +51,7 @@ use SC; historical URLs and asset names retain their actual identifiers.
 ## Local beta handoff
 
 After beta application changes, build a new version and leave its verified EXE,
-matching two-file ZIP and README in the local transfer folder configured in the
+matching portable two-file ZIP, installer and README in the local transfer folder configured in the
 parent workspace's private instructions. Retain earlier versioned artifacts and
 update the local latest-build record with the version, filenames and SHA-256
 digests. Verify the copied bytes before reporting completion; source-only changes
@@ -59,11 +61,39 @@ private delivery evidence in the parent `PROJECT_CONTEXT.md`, outside this repos
 Test the packaged version with an isolated key-free profile. Local beta delivery
 does not publish a GitHub release or change the latest stable download.
 
+## Installer update feed
+
+`electron-updater` reads the packaged GitHub feed for
+`Ziyadin23/ScreenCompanion`. Installed builds check at startup; downloading and
+installation are explicit actions in Settings. Portable and preview builds have
+no updater. The installer is per-user, never requests elevation, creates Desktop
+and Start menu shortcuts and preserves existing local vault files on uninstall.
+No GitHub token or user API key is shipped to the update feed.
+
+For every installer release, upload the matching `SC-Setup-v<version>.exe`,
+its `.blockmap` and the generated `latest.yml` metadata to the same GitHub
+release. With this GitHub provider, beta releases also use `latest.yml`; the
+release prerelease flag and application version control beta eligibility. Preserve generated
+SHA-512 values and sizes; verify them against the actual installer. Mark beta
+releases as prereleases and stable releases as stable. Do not repoint a stable
+channel to a beta. Published C# assets cannot serve as Electron update packages.
+The feed does not offer draft releases.
+
+Keep `appId` and install identity stable. Test a real per-user installation and a
+local HTTP update from an older installed version with isolated profiles before
+claiming update delivery. Verify restart, version, stored settings, failed
+checks/downloads and explicit installation. Keep local feed overrides and lab
+paths outside public source. Unsigned builds retain HTTPS and file-digest checks;
+when signing credentials become available, configure Windows signing so updater
+publisher verification can additionally apply. Do not embed signing credentials
+or disable signature verification.
+
 ## Verify and publish
 
 1. Verify the EXE's platform, embedded version, product name, size and SHA-256.
    Check ZIP integrity and exact entries; compare archived EXE/README bytes with
-   the intended source assets. Assets contain only key-free builds/documentation;
+   the intended source assets. Also check installer/update metadata and blockmap
+   consistency. Assets contain only key-free builds/documentation;
    vaults, private bundles, credentials, screenshots and recordings stay outside them.
 2. Update the README and release notes with the actual publication state, named
    runtime/recorder checks and remaining limits. Keep mocked assertions, real

@@ -42,6 +42,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .tabs button[aria-selected="true"] { background: #4c5c75; border-color: #93a4c0; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 20px 16px; }
 .settings-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .settings-fields > .choice { margin-bottom: 14px; }
 .hint { margin: 14px 0; }
 .dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; flex-shrink: 0; }

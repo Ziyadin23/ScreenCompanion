@@ -1,8 +1,9 @@
-import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineRunner, SettingsDraft, SettingsStore, VaultData, WindowsPlatform } from '../contracts';
+import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineRunner, SettingsDraft, SettingsStore, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultSettings } from '../contracts/defaults';
 import { commandsText } from '../contracts/shortcut-display';
 import { AppError, type Diagnostics } from './diagnostics';
+import { disabledUpdates } from './updates';
 
 export interface DesktopHost {
   publish(state: AppState, capturing: boolean): void;
@@ -31,13 +32,19 @@ export class ApplicationController {
   private recording = false;
   private hiddenByUser = false;
   private detachWheel: (() => void) | null = null;
+  private settingsActions = 0;
   constructor(private readonly deps: ControllerDependencies) {
     const defaults = defaultSettings('');
     this.state = { ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
-      version: deps.version, setupLegacyNotice: false };
+      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates() };
   }
   getState(): AppState { return structuredClone(this.state); }
+  setUpdateState(state: UpdateState): void { this.state.updates = { ...state }; this.publish(); }
+  canInstallUpdate(): boolean {
+    return this.state.ready && !this.exiting && !this.state.busy && this.settingsActions === 0 &&
+      this.state.surface === 'settings' && this.state.visible;
+  }
   private shortcuts(settings: VaultData): AppState['shortcuts'] {
     return Object.fromEntries(Object.entries(shortcutFields).map(([action, field]) => [action, { ...settings[field] }])) as AppState['shortcuts'];
   }
@@ -134,6 +141,7 @@ export class ApplicationController {
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
     if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
+    if (this.state.updates.status === 'installing') return;
     if (!this.state.ready && this.vaultState !== 'missing') {
       if (command.type === 'toggleVisibility') this.pendingActivation = true;
       return;
@@ -195,6 +203,12 @@ export class ApplicationController {
     return settings.ProviderKeys[provider] || (provider === (settings.Models?.Provider ?? this.deps.configuration(settings).provider) ? settings.ApiKey : '');
   }
   async saveSettings(draft: SettingsDraft): Promise<void> {
+    if (this.state.updates.status === 'installing') throw new AppError('UPDATEBUSY', 'Wait for SC to restart.');
+    this.settingsActions++;
+    try { await this.saveSettingsDraft(draft); }
+    finally { this.settingsActions--; }
+  }
+  private async saveSettingsDraft(draft: SettingsDraft): Promise<void> {
     if (!this.settings || this.state.surface !== 'settings') throw new AppError('NOTREADY', 'Open Settings before saving.');
     const previous = this.settings;
     const keys = { ...previous.ProviderKeys };
@@ -226,7 +240,9 @@ export class ApplicationController {
   }
   async chooseColor(initialColor: string): Promise<string | null> {
     if (this.state.surface !== 'settings' || !this.state.visible) return null;
-    return this.deps.platform.chooseColor(this.deps.host.panelHandle(), initialColor);
+    this.settingsActions++;
+    try { return await this.deps.platform.chooseColor(this.deps.host.panelHandle(), initialColor); }
+    finally { this.settingsActions--; }
   }
   private async request(typedQuestion?: string): Promise<void> {
     if (!this.settings || this.state.busy || (this.state.surface === 'settings' && this.state.visible) || (typedQuestion !== undefined && !typedQuestion)) return;

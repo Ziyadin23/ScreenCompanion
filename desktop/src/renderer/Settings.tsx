@@ -3,12 +3,13 @@ import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, Hotk
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { Choice } from './Choice';
+import { Updates } from './Updates';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
 
-type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands';
-const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands'];
+type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
+const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates'];
 const COLOR_FIELDS = [{ field: 'BackgroundColor', label: 'Background' }, { field: 'TextColor', label: 'Text' }, { field: 'AccentColor', label: 'Buttons' }] as const;
 const PIPELINE_NOTICE: Record<PipelineMode, string> = {
   Thorough: 'Locates the question, extracts it, then answers in three model calls. Both models must support structured responses; screen reading requires images.',
@@ -274,6 +275,7 @@ export function Settings({ state }: { state: AppState }) {
         </>}
         {page === 'Commands' && <><pre className="commands-text">{commandsText(state.shortcuts)}</pre>
           <button type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</button></>}
+        {page === 'Updates' && <Updates state={state} />}
       </fieldset>}
     </div>
     {error && <p className="dialog-error" role="alert">{error}</p>}

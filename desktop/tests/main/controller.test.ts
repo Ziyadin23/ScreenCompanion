@@ -33,6 +33,33 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
 }
 describe('production lifecycle with injected native boundaries', () => {
+  it('permits update restart only from idle visible Settings, after settings writes and dialogs finish', async () => {
+    const f = fixture(); expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.initialize(); expect(f.controller.canInstallUpdate()).toBe(false);
+    const request = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.run).toHaveBeenCalled());
+    await f.controller.command({ type: 'settings' }); expect(f.controller.canInstallUpdate()).toBe(false);
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' }); await request;
+    expect(f.controller.canInstallUpdate()).toBe(true);
+    const saved = deferred<void>(); f.save.mockReturnValueOnce(saved.promise);
+    const writing = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await vi.waitFor(() => expect(f.save).toHaveBeenCalled()); expect(f.controller.canInstallUpdate()).toBe(false);
+    saved.resolve(); await writing;
+    await f.controller.command({ type: 'settings' });
+    const color = deferred<string | null>(); f.platform.chooseColor = vi.fn(() => color.promise);
+    const choosing = f.controller.chooseColor('#123456'); expect(f.controller.canInstallUpdate()).toBe(false);
+    color.resolve(null); await choosing; expect(f.controller.canInstallUpdate()).toBe(true);
+    await f.controller.command({ type: 'toggleVisibility' }); expect(f.controller.canInstallUpdate()).toBe(false);
+    f.controller.dispose(); expect(f.controller.canInstallUpdate()).toBe(false);
+  });
+  it('does not start a capture or write settings once update installation starts', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    f.controller.setUpdateState({ status: 'installing', version: '0.5.0-beta.4', progress: 100, message: 'Restarting' });
+    await f.controller.command({ type: 'showInput' }); await f.controller.command({ type: 'capture' });
+    await expect(f.controller.saveSettings(draft)).rejects.toMatchObject({ code: 'UPDATEBUSY' });
+    expect(f.controller.getState().surface).toBe('settings'); expect(f.platform.captureMonitor).not.toHaveBeenCalled(); expect(f.save).not.toHaveBeenCalled();
+  });
   it('waits for setup before registering shortcuts and makes no model request', async () => {
     const f = fixture(null); await f.controller.initialize();
     expect(f.controller.getState().surface).toBe('setup'); expect(f.platform.applyShortcuts).not.toHaveBeenCalled();

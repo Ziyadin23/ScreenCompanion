@@ -8,9 +8,10 @@ The `main` branch develops the Windows Electron/TypeScript application under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current TypeScript build is **0.5.0-beta.2** and has not been published as a GitHub release.
-It protects settings during early relaunches, rejects malformed
-API status fields, preserves the latest panel size and shows your active shortcuts in help.
+The current TypeScript build is **0.5.0-beta.3** and has not been published as a GitHub release.
+It adds a per-user Windows installer and **Settings → Updates** for checking,
+downloading and installing newer versions. Downloads and restart require your action;
+keys and settings stay in the existing encrypted storage. A portable EXE remains available.
 
 With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
 Inside the Windows VM, run `npm run preview:ui` for a key-free interface preview that makes no
@@ -28,13 +29,13 @@ does not establish stable-release parity; see [verification limits](docs/VERIFIC
 
 ## Quick start
 
-1. Use the TypeScript beta built from this branch, or download the previous C# release above. Open the EXE on a Windows x64 PC; it includes its runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
+1. Use the TypeScript beta built from this branch, or download the previous C# release above. For the beta, run `SC-Setup-v0.5.0-beta.3.exe` once to install SC for your Windows account, without administrator rights. Launch SC from its shortcut. The separate `SC-v0.5.0-beta.3.exe` runs without installation; both include their runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
 2. Enter your own provider's API key in the first-launch dialog. It is labelled **OpenAI**, but accepts your key without making a model request. An OpenAI key is not required to use another service.
 3. Press **Ctrl+I**, open **Models & API**, choose the service matching your key, enter its key and click **Save**. For DeepSeek, select `deepseek-flash` for both **Answer model** and **Screen-reading model**. You need an internet connection, model access and any required credits on your provider account.
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
-Close an older running release before upgrading. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
+Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC; updates become available when an installer release is published. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
 
 ## Models and request pipelines
 
@@ -77,9 +78,9 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 - SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
 - Recording exclusion is best effort, and the tray icon remains visible. Verify the received stream or saved recording for your capture app.
 
-The beta passed 846 portable tests, 31 Windows native checks, 8 legacy-vault
-interoperability tests and 11 Electron UI workflows. Mocked provider tests do not
-establish live model quality. Fresh-machine, Windows 10, mixed-DPI and actual
+The beta passed 865 portable tests, 31 Windows native checks, 8 legacy-vault
+interoperability tests and 12 Electron UI workflows. Mocked provider tests do not
+establish live model quality. Fresh-machine, Windows 10, mixed-DPI and other
 recorder-output checks remain open. Historical C# model/recorder results retain
 their original scope. See [verification results and limitations](docs/VERIFICATION.md).
 
@@ -102,8 +103,8 @@ npm run package:win
 npm run package:zip
 ```
 
-Build output: `desktop/dist/SC-v0.5.0-beta.2.exe` and the matching ZIP containing
-that EXE and `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
+Build output: `desktop/dist/SC-Setup-v0.5.0-beta.3.exe`, the portable
+`SC-v0.5.0-beta.3.exe` and its matching two-file ZIP with `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
 The .NET 10 SDK is needed only for the legacy-vault interoperability tests.
 
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.

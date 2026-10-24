@@ -14,7 +14,8 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     ready: true, surface: 'answer', visible: true, busy: false, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
-    captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false, ...stateOverrides
+    captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false,
+    updates: { status: 'idle', version: null, progress: null, message: 'Check for a newer version of SC.' }, ...stateOverrides
   };
   const listeners = new Set<(state: AppState) => void>();
   const scrollListeners = new Set<(delta: number) => void>();
@@ -40,6 +41,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     }),
     discardSettings: vi.fn(async () => { emit({ surface: 'answer' }); }),
     chooseColor: vi.fn(async (_initial: string) => '#123456' as string | null),
+    update: vi.fn(async (_action) => {}),
     subscribe: vi.fn((listener: (value: AppState) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
     onScroll: vi.fn((listener: (delta: number) => void) => { scrollListeners.add(listener); return () => { scrollListeners.delete(listener); }; })
   } satisfies DesktopApi;

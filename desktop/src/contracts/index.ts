@@ -87,10 +87,16 @@ export interface PipelineResult { text: string; requestId: string }
 export interface PipelineRunner { run(input: PipelineInput): Promise<PipelineResult> }
 export interface DisplayError { message: string; code: string; reportId: string; hint: string; logSaved: boolean }
 export type Surface = 'setup' | 'answer' | 'input' | 'settings' | 'captureTest';
+export type UpdateAction = 'check' | 'download' | 'install';
+export interface UpdateState {
+  status: 'disabled' | 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error';
+  version: string | null; progress: number | null; message: string;
+}
 export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
+  updates: UpdateState;
 }
 export interface SettingsDraft {
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
@@ -110,6 +116,7 @@ export interface DesktopApi {
   saveSettings(draft: SettingsDraft): Promise<void>;
   discardSettings(): Promise<void>;
   chooseColor(initialColor: string): Promise<string | null>;
+  update(action: UpdateAction): Promise<void>;
   subscribe(listener: (state: AppState) => void): () => void;
   onScroll(listener: (delta: number) => void): () => void;
 }

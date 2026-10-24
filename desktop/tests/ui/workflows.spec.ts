@@ -27,6 +27,14 @@ async function choice(page: Page, name: string, option: string) {
   await page.getByRole('option', { name: option, exact: true }).click();
 }
 
+test('Updates explains installed-only updates without making requests in the key-free preview', async ({ scPage: page }) => {
+  await settings(page, 'Updates');
+  await expect(page.getByLabel('SC updates')).toContainText('In-app updates are available in the installed Windows version of SC.');
+  await expect(page.getByRole('button', { name: 'Check for updates' })).toHaveCount(0);
+  await page.getByTestId('settings-back').click();
+  await expect(page.getByTestId('answer-text')).toHaveText('Synthetic SC answer');
+});
+
 test('answer-only surface is selectable plain text with independent alpha and invisible resize edges', async ({ scPage: page }) => {
   await expect(page.getByRole('button')).toHaveCount(0);
   await expect(page.getByTestId('question-input')).toHaveCount(0);

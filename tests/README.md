@@ -20,7 +20,10 @@ all six mocked provider adapters, network failures, injected platform/storage,
 lifecycle and React workflows. Fake transports reject unexpected requests.
 Injected crop fixtures do not establish real JPEG/monitor behavior.
 
-Beta.2 passed **846 tests in 12 files**, exit 0, on Linux and Windows. Coverage
+Beta.3 passed **865 tests in 14 files**, exit 0, on Linux and Windows. Update
+coverage includes explicit download/install, blocked restarts, failed feeds and
+downloads, safe metadata/diagnostics, portable isolation and Settings draft retention.
+Beta.2 previously passed **846 tests in 12 files**. Coverage
 includes delayed/failed vault loads, early activation, overlapping setup writes,
 ordered panel-size saves, applied shortcut help and malformed completion status.
 The first beta.2 Linux CI attempt failed **845/846** because the input-focus
@@ -67,8 +70,8 @@ npm run test:ui
 npm run preview:ui
 ```
 
-The runner rejects non-Windows hosts. All **11 UI workflows** previously passed
-on Windows 11, none skipped, exit 0: five synthetic shell workflows and six using
+The runner rejects non-Windows hosts. All **12 UI workflows** passed for beta.3
+on Windows 11, none skipped, exit 0: six synthetic shell workflows and six using
 the production bridge. Native cases exercise shortcuts, Settings Save/Back,
 protected color-dialog hide/restore/cancel, Alt-drag, corner resizing, selectable
 output and hover scrolling while the main JavaScript thread is busy.
@@ -78,8 +81,23 @@ windows, hooks, hotkeys and temporary vaults.
 
 Standalone packaged launches, different executable paths, early activation,
 mixed-DPI monitors, every resize edge and competing shortcut registration retain
-separate evidence. For actual exclusion claims, follow the
-[named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
+separate evidence. Beta.3 Settings → Updates also has a separately inspected Edge whole-monitor
+recording; it does not verify other surfaces or recorders. For actual exclusion
+claims, follow the [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
+
+## Installed updates
+
+The beta.3 installer has a separately recorded **17-check** Windows scenario:
+per-user install and shortcuts, unavailable-feed recovery, real metadata lookup,
+corrupt-file rejection, explicit valid download, automatic update/restart,
+version, isolated DPAPI retention and uninstall. The older test installer used
+beta.2 version metadata with the same updater implementation; the historical
+portable beta.2 has no updater. The unchanged final beta.3 installer was the
+update payload. A loopback HTTP feed exercised the actual updater without
+publishing a GitHub release. The Windows shell restarts into the normal account
+profile; a separate isolated relaunch checked the synthetic vault. Check real
+vault hashes independently before/after. Keep private feed overrides and runner
+paths outside source and release assets.
 
 ## Recorded evidence and live requests
 
