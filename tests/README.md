@@ -33,6 +33,12 @@ direct portable startup/version/exit check. Archive entries, CRCs and bytes were
 verified before local delivery. The [rewrite reference](../desktop/REWRITE.md)
 records the new package hashes separately from historical beta.1 evidence.
 
+The first beta.2 push exposed a Linux CI focus-assertion race: the Question input
+was present before React's passive focus effect ran (**845 passed / 1 failed**).
+The renderer workflow now waits for the same strict active-element condition;
+it uses no fixed sleep or test retry. This test-only correction does not require
+a different application build.
+
 These package-free console projects link the production source. The portable
 project injects a byte-marker cropper and mocked Responses HTTP responses. The
 Windows project uses the production screen capture and JPEG cropper with a

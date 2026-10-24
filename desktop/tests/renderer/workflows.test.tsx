@@ -28,7 +28,7 @@ describe('answer and temporary input', () => {
   it('retains the last answer while busy, disables input, and submits once with Enter/Send', async () => {
     const driver = fixture({ surface: 'input' }); render(<App />);
     const input = await screen.findByRole('textbox', { name: 'Question' });
-    expect(document.activeElement).toBe(input);
+    await waitFor(() => expect(document.activeElement).toBe(input));
     expect((input as HTMLInputElement).maxLength).toBe(4000);
     fireEvent.change(input, { target: { value: '  What is 2 + 2?  ' } });
     fireEvent.submit(input.closest('form')!); fireEvent.submit(input.closest('form')!);
