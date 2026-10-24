@@ -33,6 +33,11 @@ beforeEach(async () => { root = await fs.mkdtemp(join(tmpdir(), 'sc-storage-synt
 afterEach(async () => { vi.restoreAllMocks(); await fs.rm(root, { force: true, recursive: true }); });
 const current = () => join(root, 'SC', 'sc.user.key');
 const legacy = () => join(root, 'ScreenCompanion', 'screencompanion.user.key');
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(yes => { resolve = yes; });
+  return { promise, resolve };
+}
 async function rawVault(path: string, value: unknown, crypt = encryption()) {
   await fs.mkdir(join(path, '..'), { recursive: true });
   const plain = Buffer.from(JSON.stringify(value));
@@ -165,6 +170,42 @@ describe('copy-only migration and panel size', () => {
     expect(await store.saveWindowSize({ Width: 800, Height: 600 })).toBe(true);
     expect(await store.loadWindowSize()).toEqual({ Width: 800, Height: 600 });
     expect(await fs.readFile(join(root, 'ScreenCompanion', 'window-size.json'), 'utf8')).toBe('{"Width":640,"Height":480}');
+  });
+  it('persists the last requested panel size when an earlier publication is delayed and snapshots queued dimensions', async () => {
+    const store = createSettingsStore(encryption(), root);
+    const { rename } = await vi.importActual<typeof fs>('node:fs/promises');
+    const entered = deferred(), release = deferred();
+    vi.spyOn(fs, 'rename').mockImplementationOnce(async (source, target) => {
+      entered.resolve(); await release.promise; await rename(source, target);
+    });
+    const writes = vi.spyOn(fs, 'mkdir');
+    const first = store.saveWindowSize({ Width: 800, Height: 600 });
+    await entered.promise;
+    const requested = { Width: 900, Height: 700 };
+    const last = store.saveWindowSize(requested);
+    requested.Width = 1200; requested.Height = 800;
+    try {
+      // Let an unordered later write finish first; a FIFO queue keeps it pending.
+      if (writes.mock.calls.length > 1) await last;
+    } finally { release.resolve(); }
+    expect(await Promise.all([first, last])).toEqual([true, true]);
+    expect(await store.loadWindowSize()).toEqual({ Width: 900, Height: 700 });
+    expect(await fs.readdir(join(root, 'SC'))).toEqual(['window-size.json']);
+  });
+  it('continues saving queued panel sizes after an atomic publication fails', async () => {
+    const store = createSettingsStore(encryption(), root);
+    const entered = deferred(), release = deferred();
+    vi.spyOn(fs, 'rename').mockImplementationOnce(async () => {
+      entered.resolve(); await release.promise;
+      throw Object.assign(new Error('synthetic publication failure'), { code: 'EACCES' });
+    });
+    const first = store.saveWindowSize({ Width: 800, Height: 600 });
+    await entered.promise;
+    const next = store.saveWindowSize({ Width: 900, Height: 700 });
+    release.resolve();
+    expect(await Promise.all([first, next])).toEqual([false, true]);
+    expect(await store.loadWindowSize()).toEqual({ Width: 900, Height: 700 });
+    expect(await fs.readdir(join(root, 'SC'))).toEqual(['window-size.json']);
   });
   it.each(['{}', '{"Width":0,"Height":100}', '{"Width":1.5,"Height":100}', '{"Width":16385,"Height":100}', 'invalid', ' '.repeat(4097)])('falls back for malformed or unbounded panel sizes', async json => {
     await fs.mkdir(join(root, 'SC')); await fs.writeFile(join(root, 'SC', 'window-size.json'), json);

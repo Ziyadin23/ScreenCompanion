@@ -83,7 +83,7 @@ export function parseModelResponse(value: unknown, provider: ApiProvider): Model
   const text = typeof message.content === 'string' ? message.content : Array.isArray(message.content)
     ? message.content.filter(isObject).filter(part => part.type === 'text' && typeof part.text === 'string').map(part => part.text).join('\n') : '';
   if (choice.finish_reason === 'content_filter' && !refusal) refusal = 'The selected service declined this request.';
-  return { text: text.trim(), refusal, status: ['stop', 'content_filter'].includes(String(choice.finish_reason)) ? 'completed' : 'incomplete',
+  return { text: text.trim(), refusal, status: typeof choice.finish_reason === 'string' && ['stop', 'content_filter'].includes(choice.finish_reason) ? 'completed' : 'incomplete',
     usage: parseUsage(value, true) };
 }
 

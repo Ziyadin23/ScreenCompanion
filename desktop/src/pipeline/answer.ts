@@ -45,7 +45,7 @@ export function parseCanonicalAnswer(text: string): QuestionAnswer[] | string {
         !nonblank(item.question_id) || !(item.answer === null || typeof item.answer === 'string') ||
         !(item.answer_text === null || typeof item.answer_text === 'string') || typeof item.explanation !== 'string' ||
         !Array.isArray(item.answers) || !item.answers.every(nonblank) ||
-        !['answer', 'transformation', 'refusal', 'missing_information'].includes(String(item.status)) ||
+        typeof item.status !== 'string' || !['answer', 'transformation', 'refusal', 'missing_information'].includes(item.status) ||
         !(item.confidence === null || (typeof item.confidence === 'number' && Number.isFinite(item.confidence) && item.confidence >= 0 && item.confidence <= 1)))
       throw malformed();
     return item as unknown as QuestionAnswer;

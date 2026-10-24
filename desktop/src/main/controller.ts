@@ -1,6 +1,7 @@
 import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineRunner, SettingsDraft, SettingsStore, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultSettings } from '../contracts/defaults';
+import { commandsText } from '../contracts/shortcut-display';
 import { AppError, type Diagnostics } from './diagnostics';
 
 export interface DesktopHost {
@@ -20,6 +21,7 @@ export interface ControllerDependencies {
 const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
 export class ApplicationController {
   private settings: VaultData | null = null;
+  private vaultState: 'loading' | 'missing' | 'saving' | 'loaded' | 'failed' = 'loading';
   private state: AppState;
   private capturing = false;
   private exiting = false;
@@ -55,17 +57,25 @@ export class ApplicationController {
     const mode = this.deps.mode ?? 'production';
     if (mode !== 'production') {
       this.settings = defaultSettings('synthetic-preview-key'); this.settings.CommandsShown = true;
+      this.vaultState = 'loaded';
       await this.completeInitialization();
       this.state.surface = mode === 'captureTest' ? 'captureTest' : 'answer';
       this.state.answer = mode === 'captureTest' ? this.captureTestText() : 'Synthetic SC answer';
       this.state.visible = true; this.publish(); return;
     }
-    this.settings = await this.deps.store.load();
-    if (!this.settings) {
-      this.state.setupLegacyNotice = await this.deps.store.legacyPasswordVaultExists(this.deps.executableDirectory);
-      this.state.surface = 'setup'; this.state.visible = true; this.publish(); return;
-    }
-    await this.completeInitialization();
+    try {
+      const settings = await this.deps.store.load();
+      if (this.exiting) return;
+      this.settings = settings;
+      if (!settings) {
+        const notice = await this.deps.store.legacyPasswordVaultExists(this.deps.executableDirectory);
+        if (this.exiting) return;
+        this.vaultState = 'missing'; this.state.setupLegacyNotice = notice;
+        this.state.surface = 'setup'; this.state.visible = true; this.publish(); return;
+      }
+      this.vaultState = 'loaded';
+      await this.completeInitialization();
+    } catch (error) { this.vaultState = 'failed'; throw error; }
   }
   private async completeInitialization(): Promise<void> {
     if (!this.settings) return;
@@ -82,7 +92,7 @@ export class ApplicationController {
     if (!this.settings.CommandsShown) {
       const updated = { ...this.settings, CommandsShown: true };
       await this.deps.store.save(updated); this.settings = updated;
-      this.state.answer = this.commandsText(); this.state.visible = true;
+      this.state.answer = commandsText(this.state.shortcuts); this.state.visible = true;
     }
     this.deps.diagnostics.event('READY');
     if (this.pendingActivation) this.restore();
@@ -90,17 +100,27 @@ export class ApplicationController {
   }
   async setup(apiKey: string): Promise<void> {
     if (this.settings || this.exiting) return;
+    if (this.vaultState !== 'missing') throw new AppError('NOTREADY', 'Wait for SC to finish loading settings before entering an API key.');
     const trimmed = apiKey.trim();
     if (!trimmed) throw new AppError('INVALIDKEY', 'Enter an API key.');
     const candidate = defaultSettings(trimmed);
+    this.vaultState = 'saving';
     try {
       this.deps.validateSettings(candidate); await this.deps.store.save(candidate);
-      this.settings = candidate; this.state.error = null; await this.completeInitialization();
-    } catch (error) { this.fail('Credentials', error); throw new AppError('SAVEFAILED', 'SC could not save the API key. The existing file was left unchanged.'); }
+      if (this.exiting) return;
+      this.settings = candidate; this.vaultState = 'loaded'; this.state.error = null; await this.completeInitialization();
+    } catch (error) {
+      if (!this.settings) this.vaultState = 'missing';
+      this.fail('Credentials', error); throw new AppError('SAVEFAILED', 'SC could not save the API key. The existing file was left unchanged.');
+    }
   }
   restore(): void {
     if (this.exiting) return;
-    if (!this.state.ready) { this.pendingActivation = true; this.state.visible = true; this.publish(); return; }
+    if (!this.state.ready) {
+      this.pendingActivation = true;
+      if (this.vaultState === 'missing') { this.state.visible = true; this.publish(); }
+      return;
+    }
     this.pendingActivation = false;
     if (this.defer(() => this.restore())) return;
     if (this.state.surface === 'answer' && !this.state.answer.trim()) this.state.surface = 'input';
@@ -114,6 +134,10 @@ export class ApplicationController {
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
     if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
+    if (!this.state.ready && this.vaultState !== 'missing') {
+      if (command.type === 'toggleVisibility') this.pendingActivation = true;
+      return;
+    }
     if (command.type === 'toggleVisibility') {
       if (this.defer(() => { void this.command(command); })) return;
       this.state.visible = !this.state.visible;
@@ -238,9 +262,6 @@ export class ApplicationController {
       jpeg?.fill(0); this.finishCapture(); this.state.busy = false; this.cancellation = null;
       this.publish();
     }
-  }
-  private commandsText(): string {
-    return 'Ctrl+Alt+Space — capture and answer\nCtrl+Enter — type a question\nCtrl+/ — show or hide\nCtrl+I — Settings\nCtrl+Backspace — exit\nCtrl+Alt+T — capture test\n\nMouse wheel — scroll\nAlt + left drag — move\nDrag an edge — resize\n\nRecording exclusion is best effort. Verify each recording or stream.';
   }
   captureTestText(): string {
     return `CAPTURE EXCLUSION TEST\n\nVerify this panel using an entire-monitor recording or received stream. Capture exclusion is best effort.\n\nWindows status: ${this.state.captureProtection}.\n\nCtrl+/ hides or shows. Ctrl+Alt+T closes or reopens. Ctrl+Backspace exits.`;

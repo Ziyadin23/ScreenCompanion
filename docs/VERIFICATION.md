@@ -14,6 +14,25 @@ integrity, direct Windows startup/exit, standalone activation and forced-termina
 recovery checks. Fresh-machine, mixed-DPI, Windows 10 and named-recorder checks
 remain separate gates before replacing the release baseline.
 
+The subsequent beta stabilization source passed **846 portable/controller/renderer
+tests**, type checking, ESLint and bundle generation on Linux, exit 0. It closes
+early-setup, malformed-status, panel-size ordering and shortcut-help regressions;
+the initial packaged-build evidence above retains its own scope. Current source
+Windows checks also passed: **846 tests**, **31 native checks**, **8 vault
+interoperability tests** and **11 Electron UI workflows**, each command exit 0.
+Separate standalone source-runtime checks passed seven duplicate launches and
+final-size restoration after restart, preserving real vault bytes. Retained
+automation failures and the limits of those checks are in the rewrite reference;
+these source checks preceded the local beta.2 package checks below.
+
+The local **0.5.0-beta.2** EXE/ZIP then passed Windows packaging, repeated native
+and vault interoperability checks, five packaged duplicate launches, direct
+portable startup/normal exit with version verification, and host ZIP CRC/entry/byte
+checks. The native module matches the tested x64 build and retains no private PDB
+path. Verified artifacts were delivered through the configured local transfer
+folder. Actual hashes, retained validation failures and remaining platform/recorder
+limits are in the rewrite reference; this is not a public beta release.
+
 ## SC v0.4.14
 
 SC v0.4.14 removes the separate remote verifier. Thorough now locates, extracts and answers in three ordinary API calls. Configured-region/disabled-cropping flows and typed tasks with no relevant region use two calls. Existing saved Thorough choices keep their serialized identifier and automatically use the new behavior. Balanced and Direct retain their existing call budgets; local crop/task and canonical-answer validation remain active.

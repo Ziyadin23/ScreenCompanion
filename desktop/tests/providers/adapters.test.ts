@@ -109,6 +109,13 @@ describe('provider response envelopes', () => {
     else value.choices[0].finish_reason = status;
     expect(parseModelResponse(value, provider).status).not.toBe('completed');
   });
+  it.each(PROVIDERS.filter(provider => !usesResponses(provider)).flatMap(provider =>
+    [null, 0, {}, { toString: 'stop' }, ['stop'], [['stop']], ['content_filter']].map(finishReason => ({ provider, finishReason }))))('$provider keeps non-string completion $finishReason incomplete', async ({ provider, finishReason }) => {
+    const value = envelope(provider, '42'); value.choices[0].finish_reason = finishReason;
+    const transport = new StrictTransport([() => value], provider);
+    await expect(sendModel(transport, request(provider))).resolves.toEqual({ text: '42', refusal: '', status: 'incomplete', usage: null });
+    transport.done(); transport.cleared();
+  });
   it.each(PROVIDERS.filter(provider => !usesResponses(provider)))('%s turns content filtering into a visible native refusal', provider => {
     const value = { choices: [{ finish_reason: 'content_filter', message: { content: null } }] };
     expect(parseModelResponse(value, provider)).toMatchObject({ status: 'completed', refusal: 'The selected service declined this request.' });

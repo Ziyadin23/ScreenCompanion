@@ -1,6 +1,6 @@
 # SC desktop rewrite
 
-Development version: **0.5.0-beta.1**. Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.2**. Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
 The reference application remains available until the replacement passes the
@@ -73,6 +73,83 @@ Owned image/request/response/plaintext byte buffers are cleared on cleanup.
 JavaScript strings and runtime/network-internal copies are garbage collected;
 the application does not claim guaranteed erasure of those copies.
 
+## Local 0.5.0-beta.2 build (2026-10-24)
+
+The stabilization fixes below are now included in a locally delivered Windows
+beta. `npm run verify` passed **846 tests in 12 files**, type checking, ESLint and
+bundles, exit 0. Windows `npm run package:win`, `npm run test:windows` (**31 native
+checks**, **8 vault interoperability tests**, linked C# fixture 136), and
+`npm run package:zip` all exited 0.
+
+The packaged runtime reported **0.5.0-beta.2** with development tools absent from
+PATH. Five duplicate portable launches exited 0 across different paths and
+visible/hidden Settings, preserving drafts and temporary input. A separate direct
+portable launch reached READY as **0.5.0-beta.2**, ran its x64 payload, requested
+capture protection and exited normally with launcher exit 0. All runtime checks
+used isolated synthetic profiles; real current/legacy vault bytes stayed unchanged.
+
+The portable wrapper's version labels are **0.5.0-beta.2**. The runtime FileVersion
+label and application version are also **0.5.0-beta.2**; its numeric ProductVersion
+resource is **0.5.0.0**. An initial private finalization check incorrectly expected
+the numeric resource to contain the prerelease label. A separate PowerShell 5
+array-wrapping mistake in that check was also corrected. Those failed validation
+attempts were retained; the final resource/archive validation passed.
+
+ZIP CRCs, its exact EXE/README entries and both files' bytes were verified again on
+the host. The README matches the current source, and the packaged native module
+matches the tested build, is x64 and records only `sc_windows.pdb`. The latest
+verified key-free EXE, ZIP and README were copied to the configured local transfer
+folder, with matching copied bytes and a latest-build record. This is a local beta
+handoff; fresh-machine, Windows 10, mixed-DPI and named-recorder gates remain open.
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.2.exe` | 111,361,886 | `0e22e9766529d2fa8c11ec49c05d877d6909cec0e96adde0b9aeaa28ed9ccbdb` |
+| `SC-v0.5.0-beta.2.zip` | 111,378,960 | `46e47e74cdae1877a72a925b7d5748ab6a54733995005ce033cd6506ce42c635` |
+
+## Beta stabilization source follow-up (2026-10-24)
+
+- Setup is permitted only after loading confirms the vault is absent. Early
+  activation and visibility requests wait for initialization; a failed load never
+  enables replacement-key setup. Concurrent setup writes are rejected, and a
+  failed save can be retried.
+- Canonical answer status must be a string. Malformed statuses fail at
+  ValidateAnswer without a model retry; malformed Chat Completions finish reasons
+  remain incomplete. Existing call budgets and refusal rules are unchanged.
+- Panel-size saves run in call order, snapshot each requested size and continue
+  after a failed write. Atomic replacement and transient-buffer clearing remain.
+- Initial help and Settings Commands share a pure shortcut formatter and show
+  the bindings actually applied, including shortcut-registration fallback.
+
+Before correction, the targeted regressions failed: controller **6 failed / 9
+passed**, pipeline/provider **54 failed / 413 passed**, and storage **1 failed /
+32 passed**, each exit 1. The integrated host `npm run verify` then passed
+**846 tests in 12 files**, type checking, ESLint and production bundles, exit 0.
+These source checks preceded the 0.5.0-beta.2 packaging recorded above.
+
+The same source then passed the following checks in the headless Windows 11 VM:
+
+- `npm run verify`: **846 tests in 12 files**, type checking, ESLint and bundles,
+  exit 0.
+- `npm run native:build`: exit 0; the existing nonfatal compiler warnings remain.
+- `npm run test:windows`: **31 native checks** and **8 vault interoperability
+  tests**, including 136 linked C# fixture checks, exit 0.
+- `npm run test:ui`: **11 passed, none skipped**, exit 0.
+- A separate standalone Electron runtime check passed seven duplicate-process
+  launches, including another runtime directory, visible/hidden Settings drafts,
+  temporary typed input, and restoration of the final saved panel dimensions on
+  restart, exit 0. It used an isolated synthetic DPAPI vault and made no model
+  requests. Real current/legacy vault bytes also stayed unchanged.
+
+Earlier standalone automation failures were retained: renaming a development
+Electron executable changed its packaged-path selection, and a size-file check
+read before asynchronous publication completed. The final check used a complete
+runtime copy with the original filename and waited for publication. In the
+retained intermediate attempt, two duplicates dispatched before READY both exited
+0; deterministic delayed-load controller tests establish the loading-race guard.
+These are source-runtime checks, not a new packaged-distribution, recorder,
+mixed-DPI or fresh-machine result.
+
 ## Recorded host checks (2026-10-24)
 
 - `npm run verify`: exit 0; strict type checking, ESLint, **760 portable/controller/renderer tests in 12 files**, and production bundle generation passed.
@@ -94,7 +171,7 @@ Electron's disabled resizing. Test setup/cleanup failures and diagnostic attempt
 were retained separately; their failures were not counted as passes. Existing
 encrypted user vaults remained unchanged, and no live provider calls were made.
 
-## Local package checks (2026-10-24)
+## Earlier 0.5.0-beta.1 package checks (2026-10-24)
 
 `npm run package:win`, a final `npm run test:windows`, and `npm run package:zip`
 all exited 0. The portable EXE is **111,329,103 bytes**. Its 32-bit NSIS loader

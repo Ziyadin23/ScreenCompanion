@@ -16,6 +16,22 @@ compare extracted bytes before publication, following the parent workspace
 guidance and the verification/publishing steps below. No rewrite asset is
 published automatically by these commands or CI.
 
+## Local beta handoff
+
+After beta application changes, build a new version and leave its verified EXE,
+matching two-file ZIP and README in the local transfer folder configured in the
+parent workspace's private instructions. Retain earlier versioned artifacts and
+update the local latest-build record with the version, filenames and SHA-256
+digests. Verify the copied bytes before reporting completion; source-only changes
+are not a runnable handoff. Keep the folder path and private delivery evidence in
+the parent `PROJECT_CONTEXT.md`, outside this public repository.
+
+For the Electron beta, update `desktop/package.json` and both root package-version
+fields in `desktop/package-lock.json`. Run `npm run package:win` and
+`npm run package:zip` on Windows, verify the archive entries and bytes, and test
+the packaged version with an isolated key-free profile. Local beta delivery does
+not publish a GitHub release or replace the stable C# release.
+
 ## Source and documentation updates
 
 Read the source version from `SC.csproj` and publication status from the README's release status. Update those records for their respective states; agent instructions point to them rather than caching version numbers. Source organization and documentation changes can be committed without creating a new downloadable release; preserve existing tags and release assets.

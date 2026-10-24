@@ -213,6 +213,23 @@ describe('settings drafts and protected controls', () => {
     expect(screen.queryByRole('listbox')).toBeNull(); expect(screen.getByTestId('settings-back')).toBeTruthy();
     fireEvent.keyDown(combo, { key: 'Escape' }); await screen.findByTestId('answer-text');
   });
+  it('shows all six active custom shortcuts in Commands without stale defaults', async () => {
+    const shortcuts: AppState['shortcuts'] = {
+      capture: { Modifiers: 6, Key: 81 }, visibility: { Modifiers: 1, Key: 87 },
+      test: { Modifiers: 4, Key: 116 }, settings: { Modifiers: 2, Key: 82 },
+      exit: { Modifiers: 3, Key: 69 }, input: { Modifiers: 0, Key: 90 }
+    };
+    fixture({ shortcuts }); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Commands');
+    const help = screen.getByText(/Recording\/stream exclusion is best effort/).textContent!;
+    expect(help.split('\n').slice(0, 6)).toEqual([
+      'Ctrl+Shift+Q — capture and answer', 'Alt+W — show or hide panel',
+      'Shift+F5 — capture test', 'Ctrl+R — open settings',
+      'Ctrl+Alt+E — exit app', 'Z — type a question'
+    ]);
+    for (const shortcut of ['Ctrl+Alt+Space', 'Ctrl+/', 'Ctrl+Alt+T', 'Ctrl+I', 'Ctrl+Backspace', 'Ctrl+Enter']) {
+      expect(help).not.toContain(shortcut);
+    }
+  });
   it('records six shortcuts, rejects duplicates and F12, notifies native host and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });

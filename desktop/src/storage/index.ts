@@ -118,6 +118,7 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
   const legacy = join(localAppData, 'ScreenCompanion', 'screencompanion.user.key');
   const sizePath = join(localAppData, 'SC', 'window-size.json');
   const legacySize = join(localAppData, 'ScreenCompanion', 'window-size.json');
+  let sizeWrites: Promise<void> = Promise.resolve();
   async function migrate(): Promise<void> {
     if (await exists(current) || !await exists(legacy)) return;
     await fs.mkdir(dirname(current), { recursive: true });
@@ -170,7 +171,9 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
     async saveWindowSize(size) {
       if (!validSize(size)) return false;
       const bytes = Buffer.from(JSON.stringify({ Width: size.Width, Height: size.Height }));
-      try { await atomicWrite(sizePath, bytes); return true; } catch { return false; } finally { bytes.fill(0); }
+      const write = sizeWrites.then(() => atomicWrite(sizePath, bytes));
+      sizeWrites = write.catch(() => {});
+      try { await write; return true; } catch { return false; } finally { bytes.fill(0); }
     },
     async legacyPasswordVaultExists(executableDirectory) {
       try {

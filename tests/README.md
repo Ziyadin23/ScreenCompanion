@@ -14,6 +14,25 @@ On Windows build the bridge with `npm run native:build` and run
 C#/TypeScript vault interoperability, distribution and recorder checks are
 separate from mocked/portable assertions. See [rewrite gates](../desktop/REWRITE.md).
 
+The beta stabilization source passed **846 tests in 12 files** with `npm run
+verify` on the Linux host, exit 0. New fixtures cover delayed/failed vault loads,
+early activation/visibility and overlapping setup writes, custom/fallback shortcut
+help, ordered panel-size saves after delays/failures, and malformed answer and
+provider completion status types. Slow-load races are tested deterministically
+with injected storage; these tests do not establish Windows runtime behavior.
+The same source subsequently passed Windows verification with **846 tests**,
+**31 native checks**, **8 vault interoperability tests** and **11 Electron UI
+workflows**, each command exit 0. A separate standalone source-runtime check
+passed seven duplicate launches and final-size restoration after restart; its
+retained failed automation attempts and evidence boundaries are recorded in the
+rewrite reference.
+
+The local **0.5.0-beta.2** package passed the repeated **31 native checks / 8 vault
+interoperability tests**, five duplicate-process packaged workflows and a separate
+direct portable startup/version/exit check. Archive entries, CRCs and bytes were
+verified before local delivery. The [rewrite reference](../desktop/REWRITE.md)
+records the new package hashes separately from historical beta.1 evidence.
+
 These package-free console projects link the production source. The portable
 project injects a byte-marker cropper and mocked Responses HTTP responses. The
 Windows project uses the production screen capture and JPEG cropper with a

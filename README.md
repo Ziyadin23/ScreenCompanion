@@ -9,6 +9,8 @@ It includes a React interface, request pipelines/provider adapters, and a C++ Wi
 The C# v0.4.14 application remains the release baseline until the rewrite passes its
 Windows runtime, vault interoperability, packaged distribution, and recorder checks.
 The rewrite is not a new published release.
+Development build **0.5.0-beta.2** protects settings during early relaunches, rejects malformed
+API status fields, preserves the latest panel size and shows your active shortcuts in help.
 
 With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
 Inside the Windows VM, run `npm run preview:ui` for a key-free interface preview that makes no

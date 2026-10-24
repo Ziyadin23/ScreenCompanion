@@ -12,10 +12,13 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   platform.activeMonitor = vi.fn(() => ({ x: -1920, y: 0, width: 1920, height: 1080 }));
   platform.monitorForWindow = vi.fn(() => ({ x: 0, y: 0, width: 1920, height: 1080 }));
   platform.captureMonitor = vi.fn(async bounds => ({ jpeg, bounds }));
-  platform.applyShortcuts = vi.fn(async () => {});
+  const applyShortcuts = vi.fn(async () => {});
+  platform.applyShortcuts = applyShortcuts;
   platform.setOwnedDialogsVisible = vi.fn();
   platform.closeOwnedDialogs = vi.fn();
   platform.dispose = vi.fn();
+  const load = vi.fn(async () => structuredClone(initial));
+  const legacyPasswordVaultExists = vi.fn(async () => false);
   const save = vi.fn(async (_value: VaultData) => {});
   const outcome = deferred<PipelineResult>();
   const run = vi.fn((_input: PipelineInput) => outcome.promise);
@@ -23,11 +26,11 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   const configuration: PipelineConfiguration = { provider: 'OpenAI', answerModel: 'gpt-6-luna', visionModel: 'gpt-6-luna', mode: 'Thorough',
     assessmentMode: 'standard', enableQuestionCropping: true, enableRefusalRetry: true, imageRegionPadding: .08,
     questionRegion: null, extractionMaxOutputTokens: 6000, answerMaxOutputTokens: 2500, thinking: 'None' };
-  const controller = new ApplicationController({ platform, store: { load: async () => structuredClone(initial), save,
-    loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists: async () => false },
+  const controller = new ApplicationController({ platform, store: { load, save,
+    loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host: { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: state => states.push(state), scroll() {}, exit() {} },
     diagnostics: createDiagnostics(null, 'test'), configuration: () => configuration, validateSettings() {}, version: 'test', captureDelayMs: 0 });
-  return { controller, platform, save, run, outcome, states, jpeg };
+  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
 }
 describe('production lifecycle with injected native boundaries', () => {
   it('waits for setup before registering shortcuts and makes no model request', async () => {
@@ -40,6 +43,93 @@ describe('production lifecycle with injected native boundaries', () => {
   it('opens usable input on activation without an answer', async () => {
     const f = fixture(); f.controller.restore(); await f.controller.initialize();
     expect(f.controller.getState()).toMatchObject({ surface: 'input', visible: true });
+  });
+  it.each(['activation', 'visibility'] as const)('defers early %s while an existing vault is loading', async action => {
+    const f = fixture(), loaded = deferred<VaultData | null>();
+    f.load.mockReturnValueOnce(loaded.promise);
+    const initialization = f.controller.initialize();
+    if (action === 'activation') f.controller.restore();
+    else await f.controller.command({ type: 'toggleVisibility' });
+    expect(f.controller.getState().visible).toBe(false);
+    await expect(f.controller.setup('synthetic-replacement')).rejects.toMatchObject({ code: 'NOTREADY' });
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.platform.applyShortcuts).not.toHaveBeenCalled();
+    loaded.resolve({ ...defaultSettings('existing-synthetic-key'), CommandsShown: true });
+    await initialization;
+    expect(f.controller.getState()).toMatchObject({ ready: true, surface: 'input', visible: true });
+    expect(f.platform.applyShortcuts).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ ApiKey: 'existing-synthetic-key' }), false, expect.any(Function));
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.states.some(state => state.surface === 'setup' && state.visible)).toBe(false);
+  });
+  it('allows setup only after loading confirms that the vault is absent', async () => {
+    const f = fixture(null), loaded = deferred<VaultData | null>();
+    f.load.mockReturnValueOnce(loaded.promise);
+    const initialization = f.controller.initialize();
+    f.controller.restore(); await f.controller.command({ type: 'toggleVisibility' });
+    await expect(f.controller.setup('synthetic-new-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    expect(f.save).not.toHaveBeenCalled(); expect(f.controller.getState().visible).toBe(false);
+    loaded.resolve(null); await initialization;
+    expect(f.controller.getState()).toMatchObject({ ready: false, surface: 'setup', visible: true });
+    expect(f.save).not.toHaveBeenCalled();
+    await f.controller.setup('synthetic-new-key');
+    expect(f.controller.getState().ready).toBe(true); expect(f.run).not.toHaveBeenCalled();
+  });
+  it('does not expose setup while its legacy-vault notice is still loading', async () => {
+    const f = fixture(null), notice = deferred<boolean>();
+    f.legacyPasswordVaultExists.mockReturnValueOnce(notice.promise);
+    const initialization = f.controller.initialize();
+    await vi.waitFor(() => expect(f.legacyPasswordVaultExists).toHaveBeenCalled());
+    f.controller.restore();
+    await expect(f.controller.setup('synthetic-new-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    expect(f.controller.getState().visible).toBe(false); expect(f.save).not.toHaveBeenCalled();
+    notice.resolve(true); await initialization;
+    expect(f.controller.getState()).toMatchObject({ surface: 'setup', visible: true, setupLegacyNotice: true });
+  });
+  it('blocks overlapping setup writes and permits retry after a failed save', async () => {
+    const f = fixture(null), saved = deferred<void>(); await f.controller.initialize();
+    f.save.mockReturnValueOnce(saved.promise);
+    const first = f.controller.setup('synthetic-first-key');
+    await expect(f.controller.setup('synthetic-overlapping-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    expect(f.save).toHaveBeenCalledTimes(1);
+    const failure = expect(first).rejects.toMatchObject({ code: 'SAVEFAILED' });
+    saved.reject(new Error('synthetic write failure')); await failure;
+    expect(f.controller.getState()).toMatchObject({ ready: false, surface: 'setup' });
+    await f.controller.setup('synthetic-retry-key');
+    expect(f.controller.getState()).toMatchObject({ ready: true, error: null });
+    expect(f.save.mock.calls.every(([settings]) => settings.ApiKey !== 'synthetic-overlapping-key')).toBe(true);
+  });
+  it('keeps setup unavailable after a failed vault load and further activation', async () => {
+    const f = fixture(), loaded = deferred<VaultData | null>();
+    f.load.mockReturnValueOnce(loaded.promise);
+    const initialization = f.controller.initialize();
+    f.controller.restore(); await f.controller.command({ type: 'toggleVisibility' });
+    const failure = expect(initialization).rejects.toThrow('synthetic read failure');
+    loaded.reject(new Error('synthetic read failure')); await failure;
+    f.controller.restore(); await f.controller.command({ type: 'toggleVisibility' });
+    await expect(f.controller.setup('synthetic-replacement')).rejects.toMatchObject({ code: 'NOTREADY' });
+    expect(f.controller.getState()).toMatchObject({ ready: false, visible: false });
+    expect(f.save).not.toHaveBeenCalled(); expect(f.platform.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.states.some(state => state.surface === 'setup' && state.visible)).toBe(false);
+  });
+  it('shows all applied custom shortcuts in the initial commands', async () => {
+    const settings = defaultSettings('synthetic-key');
+    settings.Capture = { Modifiers: 2, Key: 81 }; settings.Visibility = { Modifiers: 2, Key: 87 };
+    settings.Test = { Modifiers: 2, Key: 69 }; settings.SettingsShortcut = { Modifiers: 2, Key: 82 };
+    settings.ExitShortcut = { Modifiers: 2, Key: 84 }; settings.InputShortcut = { Modifiers: 2, Key: 89 };
+    const f = fixture(settings); await f.controller.initialize();
+    const text = f.controller.getState().answer;
+    for (const line of ['Ctrl+Q — capture and answer', 'Ctrl+W — show or hide panel', 'Ctrl+E — capture test',
+      'Ctrl+R — open settings', 'Ctrl+T — exit app', 'Ctrl+Y — type a question']) expect(text).toContain(line);
+    expect(text).not.toContain('Ctrl+Alt+Space'); expect(text).not.toContain('Ctrl+Backspace');
+  });
+  it('shows the active fallback shortcuts if initial registration fails', async () => {
+    const settings = defaultSettings('synthetic-key'); settings.Capture = { Modifiers: 2, Key: 81 };
+    const f = fixture(settings); f.applyShortcuts.mockRejectedValueOnce(new Error('synthetic conflict'));
+    await f.controller.initialize();
+    expect(f.controller.getState().shortcuts.capture).toEqual(defaultSettings('').Capture);
+    expect(f.controller.getState().answer).toContain('Ctrl+Alt+Space — capture and answer');
+    expect(f.controller.getState().answer).not.toContain('Ctrl+Q');
   });
   it('captures once, blocks a second request, and zeroes the image after answering', async () => {
     const f = fixture(); await f.controller.initialize();

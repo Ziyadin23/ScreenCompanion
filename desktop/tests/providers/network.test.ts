@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROVIDERS, type ApiProvider, type HttpRequest, type HttpTransport } from '../../src/contracts';
-import { sendModel, type ModelRequest } from '../../src/providers';
+import { sendModel, usesResponses, type ModelRequest } from '../../src/providers';
 import { createPipelineRunner } from '../../src/pipeline';
 import { canonical, combined, configuration, envelope, pipelineInput, StrictTransport, TrackingCropper, type Payload } from '../pipeline/fixtures';
 
@@ -66,6 +66,25 @@ describe('network interception and provider failures', () => {
 });
 
 describe('all-provider incomplete successes stop without extraction repair or fallback', () => {
+  it.each(PROVIDERS.filter(provider => !usesResponses(provider)).flatMap(provider =>
+    ['Extract', 'Answer'].map(stage => ({ provider, stage }))))('$provider rejects array completion in $stage without retry', async ({ provider, stage }) => {
+    const first = () => {
+      const value = envelope(provider, combined('image'));
+      if (stage === 'Extract') value.choices[0].finish_reason = ['stop'];
+      return value;
+    };
+    const answer = (payload: Payload) => {
+      const value = envelope(provider, canonical(payload, '24'));
+      value.choices[0].finish_reason = ['stop']; return value;
+    };
+    const transport = new StrictTransport(stage === 'Extract' ? [first] : [first, answer], provider);
+    const cropper = new TrackingCropper();
+    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Balanced', assessmentMode: 'qa' }) });
+    await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({
+      stage, pipelineCode: stage === 'Extract' ? 'IncompleteExtraction' : 'IncompleteResponse'
+    });
+    transport.done(); transport.cleared(); cropper.cleared(); expect(input.jpeg[0]).not.toBe(0);
+  });
   it.each(PROVIDERS.flatMap(provider => ['extraction-incomplete', 'answer-incomplete', 'answer-missing', 'extraction-refusal'].map(kind => ({ provider, kind }))))('$provider $kind stops at its current stage', async ({ provider, kind }) => {
     const first = () => {
       const value: Payload = envelope(provider, combined('image'), kind === 'extraction-refusal' ? 'A native refusal.' : undefined);

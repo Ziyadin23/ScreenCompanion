@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import type { ResponseMode } from '../../src/contracts';
 import { createPipelineRunner } from '../../src/pipeline';
 import { canonical, combined, configuration, context, detection, envelope, expectFirstLine, extraction, images, noContext, pipelineInput,
-  StrictTransport, TrackingCropper, type Payload } from './fixtures';
+  refusal, StrictTransport, TrackingCropper, type Payload } from './fixtures';
 
 async function answerRun(respond: (payload: Payload) => unknown, mode: 'Thorough' | 'Balanced' | 'Direct' = 'Balanced', fixture = combined('short')) {
   const provider = mode === 'Direct' ? 'DeepSeek' : 'OpenAI';
@@ -25,6 +26,9 @@ describe('canonical production answer envelope', () => {
     ['invalid confidence', payload => canonical(payload, '42', { confidence: 2 }), 'MalformedResponse'],
     ['negative confidence', payload => canonical(payload, '42', { confidence: -.01 }), 'MalformedResponse'],
     ['invalid status', payload => canonical(payload, '42', { status: 'solved' }), 'MalformedResponse'],
+    ...[null, 1, {}, { toString: 'answer' }, ['answer'], [['answer']], ['transformation'], ['refusal'], ['missing_information']]
+      .map((status): [string, (payload: Payload) => unknown, string] =>
+        ['non-string status ' + JSON.stringify(status), payload => canonical(payload, '42', { status }), 'MalformedResponse']),
     ['invalid selected item', payload => canonical(payload, '42', { answers: [''] }), 'MalformedResponse'],
     ['partial list', payload => ({ results: [...canonical(payload).results, {}] }), 'MalformedResponse'],
     ['duplicate JSON field', payload => JSON.stringify(canonical(payload)).replace('"results":', '"results":[],"results":'), 'MalformedResponse'],
@@ -61,6 +65,26 @@ describe('canonical production answer envelope', () => {
     await expect(createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode, provider }) })))
       .rejects.toMatchObject({ stage: 'Answer', pipelineCode: 'IncompleteResponse' });
     transport.done(); transport.cleared();
+  });
+});
+
+describe('malformed status cannot bypass answer behavior or authorize retries', () => {
+  const cases: { name: string; responseMode: ResponseMode; kind: 'multiple' | 'short' | 'image'; fields: Payload }[] = [
+    { name: 'invalid option', responseMode: 'Default', kind: 'multiple', fields: { answer: 'Z', status: ['answer'] } },
+    { name: 'untransformed content', responseMode: 'Translate to English', kind: 'short', fields: { answer: 'Untransformed content', status: ['answer'] } },
+    { name: 'explanation without primary', responseMode: 'Default', kind: 'short', fields: { answer: '', explanation: 'Only an explanation', status: ['answer'] } },
+    { name: 'assessment refusal', responseMode: 'Default', kind: 'image', fields: { answer: refusal, status: ['refusal'] } }
+  ];
+  it.each(cases.flatMap(value => (['Thorough', 'Balanced', 'Direct'] as const).map(mode => ({ ...value, mode }))))('$mode rejects $name before displaying it or retrying', async ({ mode, responseMode, kind, fields }) => {
+    const provider = mode === 'Direct' ? 'DeepSeek' : 'OpenAI';
+    const first = mode === 'Direct' ? [] : mode === 'Thorough'
+      ? [() => envelope(provider, detection()), () => envelope(provider, extraction(kind))]
+      : [() => envelope(provider, combined(kind))];
+    const transport = new StrictTransport([...first, payload => envelope(provider, canonical(payload, '42', fields))], provider);
+    const cropper = new TrackingCropper();
+    const input = pipelineInput({ responseMode, configuration: configuration({ provider, mode, assessmentMode: 'qa' }) });
+    await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({ stage: 'ValidateAnswer', pipelineCode: 'MalformedResponse' });
+    transport.done(); transport.cleared(); cropper.cleared(); expect(input.jpeg[0]).not.toBe(0);
   });
 });
 
