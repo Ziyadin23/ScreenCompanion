@@ -1,0 +1,6 @@
+// A reason classifier only; trusted process configuration alone authorizes QA retries.
+const assessment = /\b(?:proctor(?:ed|ing)?|exam(?:ination)?|assessment|graded|academic\s+integrity|cheat(?:ing)?)\b|\b(?:live|active|ongoing|proctored|graded|academic|school|university|college|classroom)\s+(?:\w+\s+){0,2}(?:test|quiz)\b|\b(?:test|quiz)\b.{0,40}\b(?:graded|proctored|academic\s+integrity)\b|экзамен|проктор|оцениваем|аттестаци|академическ\S*\s+честност/i;
+const refusal = /\b(?:cannot|can['’]?t|couldn['’]?t|won['’]?t|unable|not\s+(?:able|allowed|permitted)|decline|refuse|must\s+not|should\s+not)\b|\b(?:can\s+only|instead\s+of|rather\s+than)\b.{0,100}\b(?:direct\s+answers?|answering|(?:correct|right|specific)\s+(?:option|choice|answer)|hints?|general\s+guidance|conceptual\s+(?:help|guidance))\b|\b(?:no|not|not\s+provide|without\s+providing)\s+(?:the\s+)?direct\s+answers?\b|не\s+могу|не\s+буду|не\s+разрешено|отказываюсь/is;
+const assistance = /\b(?:help|assist|answer(?:s|ing)?|provide|give|offer|guide|explain|solve|complete|do\s+that)\b|помо(?:чь|гать)|ответ|реш(?:ить|ени)|предостав/i;
+export const hasRefusalLanguage = (text: string): boolean => refusal.test(text) && assistance.test(text);
+export const isAssessmentRefusal = (text: string): boolean => assessment.test(text) && hasRefusalLanguage(text);

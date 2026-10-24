@@ -14,3 +14,5 @@ Before code, test or build edits or regression runs, read [shared rules](CODING_
 | Answer/input, Settings/setup, tray, appearance | [UI](CODING_STANDARDS.md#ui-behavior) |
 
 Documentation-only, naming, version or publication changes: read [documentation and status](CODING_STANDARDS.md#documentation-and-status). Distribution follows [publishing](docs/PUBLISHING.md). Release, VM or physical USB work in the parent workspace first requires its `AGENTS.md` and `PROJECT_CONTEXT.md`; record resulting private state there.
+
+For beta application changes, complete the [local beta handoff](docs/PUBLISHING.md#local-beta-handoff): leave the latest verified runnable build in the transfer folder configured by the parent workspace before reporting completion.

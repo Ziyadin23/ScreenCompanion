@@ -2,7 +2,11 @@
 
 Technical reference for contributors and coding agents changing request flow, prompts, crop handling, or trusted process configuration. Apply the [pipeline development contracts](../CODING_STANDARDS.md#pipeline-contracts) when changing this behavior.
 
-**SC v0.4.14** removes the separate remote extraction-verification step from Thorough. Saved Thorough identifiers remain compatible and now use the three-call flow. The earlier v0.4.8 also used three ordinary calls. The combined extractor is in `src/Pipeline/CombinedQuestionExtraction.cs`; the separate location/extraction path is in `QuestionExtraction.cs`. `ExtractionVerification.cs` now contains only Balanced's local same-response evidence validator and schema.
+The TypeScript application preserves the three-call Thorough flow introduced in
+C# v0.4.14, without a separate remote extraction-verification request. Saved mode
+identifiers remain compatible. Both extraction paths and Balanced's local evidence
+checks live in [extraction.ts](../desktop/src/pipeline/extraction.ts); schemas,
+answer validation and provider adapters live beside it under `desktop/src/`.
 
 ## Pipeline modes
 
@@ -54,7 +58,7 @@ Native assessment refusals, and explicit structured assessment refusals for an u
 
 ```powershell
 $env:PIPELINE_MODE = 'balanced'
-& .\publish\win-x64\SC-v0.4.14.exe
+& .\desktop\dist\SC-v0.5.0-beta.2.exe
 ```
 
 | Variable | Default | Purpose |
@@ -62,12 +66,12 @@ $env:PIPELINE_MODE = 'balanced'
 | `PIPELINE_MODE` | `thorough` | `balanced` uses combined extraction plus answering; `thorough` locates, extracts and answers without a separate verification call; DeepSeek-only `direct` sends the monitor straight to answering. Saved pipeline choice takes priority. |
 | `ASSESSMENT_MODE` | `standard` | `qa` supplies trusted authorized/non-graded test metadata. |
 | `ANSWER_MODEL` | `gpt-6-luna` | Structured answering model. |
-| `VISION_MODEL` | `gpt-6-luna` | Extraction/location/verification model. |
+| `VISION_MODEL` | `gpt-6-luna` | Extraction/location model. |
 | `ENABLE_QUESTION_CROPPING` | `true` | Enable the configured local crop or Thorough's located crop. |
 | `ENABLE_REFUSAL_RETRY` | `true` | Permit the single eligible answering retry in trusted QA mode. |
 | `QUESTION_REGION` | unset | Optional question-only `x,y,width,height` within the captured monitor. |
 | `IMAGE_REGION_PADDING` | `0.08` | Visual padding relative to question dimensions; allowed `0`–`0.2`. |
-| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location/verification request. |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location request. |
 | `ANSWER_MAX_OUTPUT_TOKENS` | `2500` | Answering output limit. |
 
 Saved service/model choices override `API_PROVIDER`, `ANSWER_MODEL`, and `VISION_MODEL`; saved pipeline choice overrides `PIPELINE_MODE`. DeepSeek model settings also retain answer-only reasoning effort (`none`, `low`, `high`, `max`) and an optional explicit answer output budget, which overrides `ANSWER_MAX_OUTPUT_TOKENS`. Old records without those fields keep non-thinking behavior and the process limit. Extraction/location retain their own existing budget and non-thinking mode. DeepSeek Pro accepts only text: image inputs fail locally with `UnsupportedModel`; Direct and screen reading require Flash. No automatic model fallback or image removal is allowed. Without a saved choice, the provider defaults to OpenAI and pipeline to Thorough; other providers use their own model defaults. Direct is accepted only with DeepSeek. See [model setup](USER_GUIDE.md#service-and-model-selection).
@@ -78,7 +82,13 @@ Bounded, content-free stage events retain request/stage/attempt, outcome, elapse
 
 Logs contain no screen content, task text, answers, preferences, raw provider bodies, credentials or exception messages. Observer/write failures cannot change request outcomes. Captures and owned crop buffers remain transient; OpenAI requests retain `store:false` and other services retain stateless requests with their documented retention limitations.
 
-The bounded Windows comparison uses identical synthetic captures for the two modes, alternating order, and reports counts, fidelity, primary-answer correctness, latency and reported token usage. Mocked transport cannot establish accuracy or dollar savings. Dollar estimates require known usage and date-stamped pricing; the request reduction alone does not establish a corresponding monetary percentage.
+The historical C# Windows comparison used identical synthetic captures for the
+two modes, alternating order, and reported fidelity, primary-answer correctness,
+latency and reported usage. Its [harness and procedure](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/tests/README.md)
+remain in the release tag; the TypeScript application has no equivalent paid
+comparison harness. Mocked transport cannot establish accuracy or dollar savings.
+Dollar estimates require known usage and date-stamped pricing; the request
+reduction alone does not establish a corresponding monetary percentage.
 
 ## Historical pipeline changes
 
