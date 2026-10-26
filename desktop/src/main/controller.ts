@@ -1,6 +1,6 @@
-import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineRunner, SettingsDraft, SettingsStore, UpdateState, VaultData, WindowsPlatform } from '../contracts';
+import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
-import { defaultSettings } from '../contracts/defaults';
+import { defaultModels, defaultSettings } from '../contracts/defaults';
 import { commandsText } from '../contracts/shortcut-display';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
@@ -17,7 +17,7 @@ export interface ControllerDependencies {
   diagnostics: Diagnostics; configuration(settings: VaultData): PipelineConfiguration;
   validateSettings(settings: VaultData): void; version: string;
   mode?: 'production' | 'captureTest' | 'synthetic'; captureDelayMs?: number;
-  executableDirectory?: string;
+  executableDirectory?: string; defaultPipelineMode?: PipelineMode;
 }
 const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
 export class ApplicationController {
@@ -37,12 +37,12 @@ export class ApplicationController {
     const defaults = defaultSettings('');
     this.state = { ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
-      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates() };
+      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsDirty: false };
   }
   getState(): AppState { return structuredClone(this.state); }
   setUpdateState(state: UpdateState): void { this.state.updates = { ...state }; this.publish(); }
   canInstallUpdate(): boolean {
-    return this.state.ready && !this.exiting && !this.state.busy && this.settingsActions === 0 &&
+    return this.state.ready && !this.exiting && !this.state.busy && this.settingsActions === 0 && !this.state.settingsDirty && !this.recording &&
       this.state.surface === 'settings' && this.state.visible;
   }
   private shortcuts(settings: VaultData): AppState['shortcuts'] {
@@ -105,15 +105,18 @@ export class ApplicationController {
     if (this.pendingActivation) this.restore();
     this.publish();
   }
-  async setup(apiKey: string): Promise<void> {
+  async setup(request: SetupRequest): Promise<void> {
     if (this.settings || this.exiting) return;
     if (this.vaultState !== 'missing') throw new AppError('NOTREADY', 'Wait for SC to finish loading settings before entering an API key.');
-    const trimmed = apiKey.trim();
+    const trimmed = request.apiKey.trim();
     if (!trimmed) throw new AppError('INVALIDKEY', 'Enter an API key.');
     const candidate = defaultSettings(trimmed);
+    candidate.Models = defaultModels(request.provider);
+    candidate.ProviderKeys[request.provider] = trimmed;
+    if (this.deps.defaultPipelineMode === 'Direct' && request.provider !== 'DeepSeek') candidate.PipelineMode = 'Thorough';
     this.vaultState = 'saving';
     try {
-      this.deps.validateSettings(candidate); await this.deps.store.save(candidate);
+      this.deps.validateSettings(candidate); this.deps.configuration(candidate); await this.deps.store.save(candidate);
       if (this.exiting) return;
       this.settings = candidate; this.vaultState = 'loaded'; this.state.error = null; await this.completeInitialization();
     } catch (error) {
@@ -160,6 +163,7 @@ export class ApplicationController {
       case 'submit': await this.request(command.question.trim()); break;
       case 'settings':
         if (this.defer(() => { void this.command(command); })) return;
+        if (this.state.surface !== 'settings') this.state.settingsDirty = false;
         this.state.surface = 'settings'; this.state.visible = true; this.hiddenByUser = false;
         this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), true); this.publish(); this.deps.host.activate?.(); break;
       case 'showInput':
@@ -179,6 +183,9 @@ export class ApplicationController {
         if (this.state.surface === 'settings') await this.discardSettings();
         else if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
         else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
+        break;
+      case 'settingsDraftChanged':
+        if (this.state.surface === 'settings') { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
       case 'recordShortcut': if (this.state.surface === 'settings') await this.setRecording(command.recording); break;
       case 'beginMove': this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
@@ -229,12 +236,14 @@ export class ApplicationController {
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
     this.state.shortcuts = this.shortcuts(candidate); this.state.error = null;
     this.deps.platform.closeOwnedDialogs(this.deps.host.panelHandle());
+    this.state.settingsDirty = false;
     this.state.surface = 'answer'; this.state.visible = true; this.hiddenByUser = false; this.publish();
   }
   async discardSettings(): Promise<void> {
     await this.setRecording(false);
     if (this.state.surface === 'settings') {
       this.deps.platform.closeOwnedDialogs(this.deps.host.panelHandle());
+      this.state.settingsDirty = false;
       this.state.surface = 'answer'; this.state.visible = true; this.hiddenByUser = false; this.publish();
     }
   }

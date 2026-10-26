@@ -20,6 +20,8 @@ all six mocked provider adapters, network failures, injected platform/storage,
 lifecycle and React workflows. Fake transports reject unexpected requests.
 Injected crop fixtures do not establish real JPEG/monitor behavior.
 
+Beta.4 passed **1,065 tests in 21 files** on Linux, exit 0, including **143 lab tests in seven files**. See [current recorded results](../docs/VERIFICATION.md#beta4-setup-and-reliability-checks-2026-10-25) for Windows and live boundaries.
+
 Beta.3 passed **865 tests in 14 files**, exit 0, on Linux and Windows. Update
 coverage includes explicit download/install, blocked restarts, failed feeds and
 downloads, safe metadata/diagnostics, portable isolation and Settings draft retention.
@@ -70,7 +72,10 @@ npm run test:ui
 npm run preview:ui
 ```
 
-The runner rejects non-Windows hosts. All **12 UI workflows** passed for beta.3
+The runner rejects non-Windows hosts. Beta.4 passed **16 UI workflows**, none
+skipped, exit 0, including real service/key setup and five early-close relaunches.
+
+All **12 UI workflows** passed for beta.3
 on Windows 11, none skipped, exit 0: six synthetic shell workflows and six using
 the production bridge. Native cases exercise shortcuts, Settings Save/Back,
 protected color-dialog hide/restore/cancel, Alt-drag, corner resizing, selectable
@@ -104,14 +109,52 @@ paths outside source and release assets.
 [Development evidence](../desktop/REWRITE.md) records beta.1/beta.2 Windows runs,
 EXE/ZIP hashes, retained failed automation attempts and their limits. The beta.2
 package passed five duplicate-process workflows, direct portable startup/version/
-normal exit, and archive CRC/entry/byte checks. Application source is unchanged
-by promoting this branch to `main`; the already verified beta.2 remains current.
+normal exit, and archive CRC/entry/byte checks. Those dated results describe the beta.2 artifact; current beta.4 evidence is
+recorded separately in the verification reference.
 
 Mocked tests do not establish provider-account access or real model-answer
 quality. A paid campaign needs explicit scope and a cumulative request budget
 including all earlier attempts. Keep failed attempts, grade structured primary
 answers and displayed first lines independently, and never use substring-only
-oracles. No equivalent TypeScript paid-comparison harness exists yet.
+oracles. The current TypeScript harness and its separate evidence are described below.
+
+## Synthetic visual lab and bounded DeepSeek campaign
+
+The [lab reference](../desktop/tests/lab/README.md) owns fixtures, run IDs,
+strict grading and the persistent campaign ledger. New lab code is TS/JS with
+HTML/CSS/SVG fixtures; it is excluded from application release assets.
+
+```sh
+npm run test:lab
+npm run test:deepseek -- --plan
+```
+
+These commands are portable and make no provider requests. On an interactive
+Windows desktop, after building the native module:
+
+```powershell
+npm run test:lab -- --windows
+npm run test:lab -- --preview diagram proctoring
+```
+
+The proctoring variant is a visual simulation with invented identities and
+static indicators. It does not activate camera/microphone monitoring or connect
+to OES. Native capture/crop checks, model quality and named-recorder output are
+separate results.
+
+Live execution requires explicit `--live`, private absolute `--ledger` and
+`--results` paths, and the existing Windows-user encrypted DeepSeek key. Use
+one ledger for the entire authorized campaign, including preflights, failures,
+restarts and repeats. The hard ceiling is **120 actual send attempts**: 96
+planned and 24 reserved. The historical exhausted campaign is separate and
+must never be reset. No live requests run under `verify` or ordinary CI.
+
+Live harness runs use production pipeline/provider methods and actual Windows
+capture/crops. They are distinct from production hotkey and typed-Send GUI
+workflows. Captures, task/response content and credentials remain in memory;
+durable output is allowlisted technical metadata and grading outcomes only.
+Strict oracles grade primary answers and formatted first lines independently,
+retain failures and reject an expected number found only in an explanation.
 
 ## Historical C# suites
 

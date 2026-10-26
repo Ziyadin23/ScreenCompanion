@@ -96,7 +96,7 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState;
+  updates: UpdateState; settingsDirty: boolean;
 }
 export interface SettingsDraft {
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
@@ -107,10 +107,12 @@ export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string }
   | { type: 'recordShortcut'; recording: boolean }
+  | { type: 'settingsDraftChanged'; dirty: boolean }
   | { type: 'beginResize'; edge: ResizeEdge };
+export interface SetupRequest { provider: ApiProvider; apiKey: string }
 export interface DesktopApi {
   getState(): Promise<AppState>;
-  setup(apiKey: string): Promise<void>;
+  setup(request: SetupRequest): Promise<void>;
   command(command: AppCommand): Promise<void>;
   getSettingsDraft(): Promise<SettingsDraft>;
   saveSettings(draft: SettingsDraft): Promise<void>;

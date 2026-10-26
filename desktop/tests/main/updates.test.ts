@@ -5,11 +5,21 @@ import type { UpdateState } from '../../src/contracts';
 import { createDiagnostics } from '../../src/main/diagnostics';
 import { updateActionSchema } from '../../src/main/validation';
 
+function checkResult(version = '0.5.0-beta.4', isUpdateAvailable = true) {
+  const info = { version, files: [], releaseDate: '2026-10-25', releaseNotes: '<script>private</script>' };
+  return { isUpdateAvailable, updateInfo: info, versionInfo: info };
+}
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
 class Client extends EventEmitter {
   autoDownload = true; autoInstallOnAppQuit = true; allowPrerelease = false; allowDowngrade = true;
   disableWebInstaller = false; logger: unknown = console;
-  checkForUpdates = vi.fn(async (): Promise<object | null> => {
-    this.emit('update-available', { version: '0.5.0-beta.4', releaseNotes: '<script>private</script>' }); return {};
+  checkForUpdates = vi.fn(async (): Promise<ReturnType<typeof checkResult> | null> => {
+    const result = checkResult(); this.emit('update-available', result.updateInfo); return result;
   });
   downloadUpdate = vi.fn(async () => {
     this.emit('download-progress', { percent: 51.2 });
@@ -60,7 +70,7 @@ describe('installed application updates', () => {
   });
   it('blocks overlapping checks until the original request completes', async () => {
     const f = fixture(); let finish!: () => void;
-    f.client.checkForUpdates.mockImplementationOnce(() => new Promise(resolve => { finish = () => { f.client.emit('update-not-available'); resolve({}); }; }));
+    f.client.checkForUpdates.mockImplementationOnce(() => new Promise(resolve => { finish = () => { f.client.emit('update-not-available'); resolve(checkResult('0.5.0-beta.3', false)); }; }));
     const checking = f.updates.action('check');
     await f.updates.action('check'); await f.updates.action('download'); await f.updates.action('install');
     expect(f.client.checkForUpdates).toHaveBeenCalledTimes(1); expect(f.client.downloadUpdate).not.toHaveBeenCalled();
@@ -80,14 +90,24 @@ describe('installed application updates', () => {
     });
     await f.updates.action('download');
     expect(f.updates.getState().status).toBe('error'); expect(f.failure).toHaveBeenCalledTimes(1);
+    expect(f.failure).toHaveBeenCalledWith('Updates', expect.objectContaining({ code: 'UPDATEFAILED', message: 'SC could not complete the update.' }));
     expect(JSON.stringify([f.states, f.failure.mock.calls])).not.toContain('private-');
     await f.updates.action('install'); expect(f.client.quitAndInstall).not.toHaveBeenCalled();
-    await f.updates.action('check'); await f.updates.action('download'); expect(f.updates.getState().status).toBe('downloaded');
+    expect(f.updates.getState().version).toBe('0.5.0-beta.4');
+    await f.updates.action('download'); expect(f.updates.getState().status).toBe('downloaded');
+    expect(f.client.checkForUpdates).toHaveBeenCalledTimes(1);
   });
   it.each(['invalid-version', '<script>', '1.2.3\nsecret'])('rejects invalid release metadata %s', async version => {
-    const f = fixture(); f.client.checkForUpdates.mockImplementationOnce(async () => { f.client.emit('update-available', { version }); return {}; });
+    const f = fixture(); f.client.checkForUpdates.mockImplementationOnce(async () => { f.client.emit('update-available', { version }); return checkResult(version); });
     await f.updates.action('check'); await f.updates.action('download');
     expect(f.updates.getState().status).toBe('error'); expect(f.client.downloadUpdate).not.toHaveBeenCalled();
+  });
+  it('accepts a bounded release version with build metadata', async () => {
+    const f = fixture(); const version = '0.5.0-beta.4+build.1';
+    f.client.checkForUpdates.mockResolvedValueOnce(checkResult(version));
+    f.client.downloadUpdate.mockImplementationOnce(async () => { f.client.emit('update-downloaded', { version }); return ['private-path']; });
+    await f.updates.action('check'); await f.updates.action('download');
+    expect(f.updates.getState()).toMatchObject({ status: 'downloaded', version });
   });
   it('does not accept an unrelated or mismatched downloaded event', async () => {
     const f = fixture(); f.client.emit('update-downloaded', { version: '0.5.0-beta.4' });
@@ -106,6 +126,113 @@ describe('installed application updates', () => {
     f.client.quitAndInstall.mockImplementationOnce(() => f.client.emit('error', new Error('private-path')));
     await f.updates.action('install'); expect(f.updates.getState().status).toBe('error');
     await f.updates.action('check'); expect(f.updates.getState().status).toBe('available');
+  });
+  it('keeps checking until the check promise settles and uses its result instead of stale release events', async () => {
+    const f = fixture(); const pending = deferred<ReturnType<typeof checkResult>>();
+    f.client.checkForUpdates.mockImplementationOnce(() => pending.promise);
+    const checking = f.updates.action('check');
+    f.client.emit('update-available', { version: '0.5.0-beta.99' });
+    f.client.emit('update-not-available', { version: '0.5.0-beta.3' });
+    expect(f.updates.getState().status).toBe('checking');
+    pending.resolve(checkResult()); await checking;
+    expect(f.updates.getState()).toMatchObject({ status: 'available', version: '0.5.0-beta.4' });
+    await f.updates.action('download'); expect(f.updates.getState().status).toBe('downloaded');
+  });
+  it('does not offer a downgrade when the completed check reports the installed version is current', async () => {
+    const f = fixture();
+    f.client.checkForUpdates.mockImplementationOnce(async () => {
+      f.client.emit('update-available', { version: '0.4.14' }); return checkResult('0.4.14', false);
+    });
+    await f.updates.action('check'); await f.updates.action('download');
+    expect(f.updates.getState().status).toBe('current'); expect(f.client.downloadUpdate).not.toHaveBeenCalled();
+  });
+  it('does not offer installation until download bookkeeping finishes', async () => {
+    const f = fixture(); await f.updates.action('check'); const pending = deferred<string[]>();
+    f.client.downloadUpdate.mockImplementationOnce(() => pending.promise);
+    const downloading = f.updates.action('download');
+    f.client.emit('update-downloaded', { version: '0.5.0-beta.4', downloadedFile: 'private-path' });
+    expect(f.updates.getState().status).toBe('downloading');
+    await f.updates.action('check'); await f.updates.action('download'); await f.updates.action('install');
+    expect(f.client.downloadUpdate).toHaveBeenCalledTimes(1); expect(f.client.quitAndInstall).not.toHaveBeenCalled();
+    pending.resolve(['private-path']); await downloading;
+    await f.updates.action('install'); expect(f.client.quitAndInstall).toHaveBeenCalledTimes(1);
+  });
+  it('turns a download failure after the downloaded event into an explicit retry', async () => {
+    const f = fixture(); await f.updates.action('check'); const pending = deferred<string[]>();
+    f.client.downloadUpdate.mockImplementationOnce(() => pending.promise);
+    const downloading = f.updates.action('download');
+    f.client.emit('update-downloaded', { version: '0.5.0-beta.4' });
+    pending.reject(new Error('private-cache-path')); await downloading;
+    expect(f.updates.getState()).toMatchObject({ status: 'error', version: '0.5.0-beta.4', progress: null });
+    expect(f.states.some(state => state.status === 'downloaded')).toBe(false);
+    expect(f.failure).toHaveBeenCalledTimes(1);
+    await f.updates.action('install'); expect(f.client.quitAndInstall).not.toHaveBeenCalled();
+    await f.updates.action('download'); expect(f.updates.getState().status).toBe('downloaded');
+  });
+  it('ignores uncorrelated error events and uses the network promise to decide failure', async () => {
+    const f = fixture(); f.client.emit('error', new Error('private-old-check'));
+    expect(f.updates.getState().status).toBe('idle');
+    const pending = deferred<ReturnType<typeof checkResult>>();
+    f.client.checkForUpdates.mockImplementationOnce(() => pending.promise);
+    const checking = f.updates.action('check'); f.client.emit('error', new Error('private-stale-download'));
+    expect(f.updates.getState().status).toBe('checking');
+    pending.resolve(checkResult()); await checking;
+    f.client.emit('error', new Error('private-old-check'));
+    expect(f.updates.getState().status).toBe('available');
+    await f.updates.action('download'); f.client.emit('error', new Error('private-old-download'));
+    expect(f.updates.getState().status).toBe('downloaded'); expect(f.failure).not.toHaveBeenCalled();
+  });
+  it('fails a check with no usable result and can retry', async () => {
+    const f = fixture(); f.client.checkForUpdates.mockResolvedValueOnce(null);
+    await f.updates.action('check'); expect(f.updates.getState()).toMatchObject({ status: 'error', version: null });
+    await f.updates.action('check'); expect(f.updates.getState().status).toBe('available');
+  });
+  it('fails a completed download with no matching completion event instead of staying busy', async () => {
+    const f = fixture(); await f.updates.action('check'); f.client.downloadUpdate.mockResolvedValueOnce(['private-path']);
+    await f.updates.action('download'); expect(f.updates.getState()).toMatchObject({ status: 'error', version: '0.5.0-beta.4' });
+    await f.updates.action('download'); expect(f.updates.getState().status).toBe('downloaded');
+  });
+  it.each([null, undefined, {}, { version: null }])('handles malformed download completion metadata safely: %j', async info => {
+    const f = fixture(); await f.updates.action('check'); const pending = deferred<string[]>();
+    f.client.downloadUpdate.mockImplementationOnce(() => pending.promise);
+    const downloading = f.updates.action('download');
+    expect(() => f.client.emit('update-downloaded', info)).not.toThrow();
+    pending.resolve(['private-path']); await downloading;
+    expect(f.updates.getState().status).toBe('error'); expect(f.failure).toHaveBeenCalledTimes(1);
+  });
+  it('ignores invalid progress and clamps valid progress without processing late completion events', async () => {
+    const f = fixture(); await f.updates.action('check'); const pending = deferred<string[]>();
+    f.client.downloadUpdate.mockImplementationOnce(() => pending.promise);
+    const downloading = f.updates.action('download');
+    for (const value of [null, undefined, {}, { percent: NaN }, { percent: Infinity }, { percent: 'private' }]) {
+      expect(() => f.client.emit('download-progress', value)).not.toThrow();
+    }
+    expect(f.updates.getState().progress).toBe(0);
+    f.client.emit('download-progress', { percent: -4 }); expect(f.updates.getState().progress).toBe(0);
+    f.client.emit('download-progress', { percent: 150 }); expect(f.updates.getState().progress).toBe(100);
+    f.client.emit('update-downloaded', { version: '0.5.0-beta.4' }); pending.resolve(['private-path']); await downloading;
+    const count = f.states.length;
+    f.client.emit('download-progress', { percent: 1 }); f.client.emit('update-downloaded', { version: '0.5.0-beta.5' });
+    expect(f.states).toHaveLength(count); expect(f.updates.getState()).toMatchObject({ status: 'downloaded', version: '0.5.0-beta.4' });
+  });
+  it('reports safe restart guidance for a thrown or asynchronous installation failure', async () => {
+    const f = fixture(); await f.updates.action('check'); await f.updates.action('download');
+    f.client.quitAndInstall.mockImplementationOnce(() => { throw new Error('private-executable-path'); });
+    await f.updates.action('install');
+    expect(f.updates.getState()).toMatchObject({ status: 'error', version: null });
+    expect(f.updates.getState().message).toMatch(/close SC.*reopen/iu);
+    expect(JSON.stringify([f.states, f.failure.mock.calls])).not.toContain('private-');
+    await f.updates.action('check'); await f.updates.action('download'); await f.updates.action('install');
+    f.client.emit('error', new Error('private-spawn-error'));
+    expect(f.updates.getState().status).toBe('error'); expect(f.failure).toHaveBeenCalledTimes(2);
+  });
+  it.each(['check', 'download'] as const)('does not publish or diagnose an in-flight %s after disposal', async action => {
+    const f = fixture(); const pending = deferred<never>();
+    if (action === 'check') f.client.checkForUpdates.mockImplementationOnce(() => pending.promise);
+    else { await f.updates.action('check'); f.client.downloadUpdate.mockImplementationOnce(() => pending.promise); }
+    const running = f.updates.action(action); const count = f.states.length;
+    f.updates.dispose(); pending.reject(new Error('private-late-error')); await running;
+    expect(f.states).toHaveLength(count); expect(f.failure).not.toHaveBeenCalled(); expect(f.client.eventNames()).toHaveLength(0);
   });
   it('ignores late events and removes its listeners on disposal', async () => {
     const f = fixture(); f.updates.dispose();

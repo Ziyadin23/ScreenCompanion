@@ -8,7 +8,7 @@ import { createSettingsStore, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
-import { commandSchema, colorSchema, settingsDraftSchema, setupKeySchema, updateActionSchema } from './validation';
+import { commandSchema, colorSchema, settingsDraftSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import packageManifest from '../../package.json';
@@ -108,7 +108,7 @@ function publish(state: AppState, capturing: boolean): void {
     if (isPanel(state.surface)) { window.setMinimumSize(180, 80); if (panelBounds) setBounds(clampBounds(panelBounds)); }
     else {
       const width = Math.min(state.surface === 'setup' ? 560 : 760, area.width);
-      const height = Math.min(state.surface === 'setup' ? 330 : 680, area.height);
+      const height = Math.min(state.surface === 'setup' ? 480 : 680, area.height);
       window.setMinimumSize(Math.min(420, area.width), Math.min(300, area.height));
       setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
     }
@@ -138,7 +138,7 @@ function trustedSender(event: Electron.IpcMainInvokeEvent): void {
 function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
-    setup: value => controller!.setup(setupKeySchema.parse(value)),
+    setup: value => controller!.setup(setupRequestSchema.parse(value)),
     command: value => controller!.command(commandSchema.parse(value)),
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
@@ -156,6 +156,7 @@ async function boot(): Promise<void> {
   if (process.platform !== 'win32') throw new AppError('WINDOWSREQUIRED', 'Run the SC interface and GUI tests inside the Windows VM. No application window was opened on this host.');
   platform = preview ? createPreviewPlatform() : createWindowsPlatform({ nativePath: app.isPackaged ? join(process.resourcesPath, 'native/sc_windows.node') : resolve(directory, '../../native/build/Release/sc_windows.node') });
   if (!await platform.acquireInstance(() => { if (controller) controller.restore(); else activationPending = true; })) { app.quit(); return; }
+  if (closing) return;
   platform.startCaptureProtection(); diagnostics.event('PROCESSSTARTED');
   const store: SettingsStore = preview || captureTest ? createPreviewStore() : createSettingsStore(platform, localData ?? (() => { throw new AppError('PROFILEMISSING', 'Windows did not report the local application settings directory.'); })());
   const area = screen.getPrimaryDisplay().workArea;
@@ -166,6 +167,7 @@ async function boot(): Promise<void> {
   window.setMenu(null); window.setContentProtection(true);
   lastCaptureProtection = preview ? 'Failed' : platform.protectWindow(window.getNativeWindowHandle());
   const savedSize = await store.loadWindowSize();
+  if (closing) return;
   if (savedSize) {
     manualPanelSize = true;
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
@@ -174,7 +176,7 @@ async function boot(): Promise<void> {
   panelBounds = window.getBounds();
   const config = loadPipelineConfiguration(preview || captureTest ? {} : undefined);
   controller = new ApplicationController({ platform, store, pipeline: createPipelineRunner({ transport: platform, cropper: platform }),
-    diagnostics, configuration: settings => withSavedSettings(config, settings), validateSettings, version,
+    diagnostics, configuration: settings => withSavedSettings(config, settings), defaultPipelineMode: config.mode, validateSettings, version,
     executableDirectory: dirname(process.execPath),
     mode: synthetic ? 'synthetic' : captureTest ? 'captureTest' : 'production',
     host: { publish, panelHandle: () => window!.getNativeWindowHandle(), scroll: delta => { window?.webContents.send('sc:scroll', delta); }, exit: () => app.quit(),
@@ -212,13 +214,17 @@ async function boot(): Promise<void> {
   window.webContents.once('did-finish-load', () => { readyToShow = true; if (controller) publish(controller.getState(), false); });
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else await window.loadFile(join(directory, '../renderer/index.html'));
+  if (closing) return;
   await controller.initialize();
+  if (closing) return;
   if (activationPending) { activationPending = false; controller.restore(); }
   void updates.action('check');
 }
 app.on('window-all-closed', () => {});
 app.on('before-quit', () => { closing = true; updates?.dispose(); controller?.dispose(); platform?.dispose(); tray?.destroy(); tray = null; });
 void app.whenReady().then(boot).catch(error => {
+  // Quitting can destroy the renderer while its startup load is still pending.
+  if (closing) return;
   const report = diagnostics.failure('Startup', error);
   // Protected native setup is unavailable if initialization itself failed. Keep output content-free.
   console.error(`${report.code} / ${report.reportId}: ${report.message}`);

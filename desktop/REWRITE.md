@@ -1,9 +1,9 @@
 # SC desktop development and verification
 
-Development version: **0.5.0-beta.3**. Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.4**. Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
-The TypeScript/Electron application is the primary source on `main`. The previous
+The TypeScript/Electron application is the primary development source. The previous
 C# application remains available in the [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and existing release downloads. This source transition does not publish a beta
 release or close the unfinished compatibility and recorder gates below.
@@ -29,7 +29,7 @@ release or close the unfinished compatibility and recorder gates below.
 - [x] Portable and Electron workflow tests; real Windows native/DPAPI checks.
 - [x] Packaged Windows executable, ZIP integrity and standalone startup with development tools removed from PATH.
 - [ ] Fresh Windows account/machine startup without installed development tools.
-- [ ] Named recorder output checked independently of mocked/affinity assertions.
+- [x] Beta.4 Edge received/saved output and independent OBS saved-video inspection; see recorded scope and OBS automation failure below.
 
 Live model quality and paid campaigns remain separate from synthetic tests.
 Private credentials, lab identifiers, vaults and recordings must stay outside
@@ -71,6 +71,36 @@ or packaged-runtime result is inferred from portable tests or a Vite build.
 Owned image/request/response/plaintext byte buffers are cleared on cleanup.
 JavaScript strings and runtime/network-internal copies are garbage collected;
 the application does not claim guaranteed erasure of those copies.
+
+## Local 0.5.0-beta.4 and release preparation (2026-10-26)
+
+The setup/Settings, update recovery and early-shutdown changes passed **1,065
+portable tests / 21 files** on Linux and Windows, types, lint and bundles, exit 0.
+Windows native compilation, **31 native checks**, **8 vault cases / 136 legacy
+fixture checks**, and **16 UI workflows**, none skipped, passed. The unchanged
+installer passed the actual historical beta.3 → beta.4 **22-check** update scenario.
+Five packaged duplicate launches, ten early-close relaunches and direct portable
+startup passed separately. Artifact hashes and build provenance are recorded in
+the [release notes](../docs/releases/v0.5.0-beta.4.md).
+
+The corrected fixture-readiness probe accepted **120/120 native frames** without
+provider calls. The separate live campaign exhausted its **120 attempts**, retaining
+the initial stale-fixture caveat and targeted answer/validation/fidelity failures.
+It does not establish a representative model-quality gate.
+
+Edge whole-monitor output passed 24 manual local/received/saved phases. OBS
+saved-video inspection covered 24 phases independently; its automated report
+retains exit 1 for a final receiver-preview failure. Both cover six SC surfaces
+in plain and simulated-proctoring layouts in one Windows 11 VM. The
+[verification record](../docs/VERIFICATION.md#beta4-final-packaged-and-recorder-checks-2026-10-26)
+owns exact methods, retained failures and compatibility limits.
+
+Release preparation adds MIT licensing, third-party notices and upstream sources
+alongside the already verified binaries. Its portable verification again passed
+1,065 tests, types, lint and bundling. The compiled UI and preload match the
+packaged bytes; the main bundle differs only in the license metadata declaration.
+The original binaries and packaged README retain their build snapshot. No new
+Windows runtime or paid-model result is inferred from this documentation work.
 
 ## Local 0.5.0-beta.3 installer (2026-10-24)
 

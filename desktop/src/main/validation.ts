@@ -23,12 +23,13 @@ export const settingsDraftSchema = z.object({
   keyPresence: z.record(z.enum(PROVIDERS), z.boolean()),
   keyUpdates: z.partialRecord(z.enum(PROVIDERS), key)
 });
-export const setupKeySchema = key.min(1).refine(value => value.trim().length > 0);
+export const setupRequestSchema = z.object({ provider: z.enum(PROVIDERS), apiKey: key.min(1).refine(value => value.trim().length > 0) });
 export const colorSchema = color;
 export const updateActionSchema = z.enum(['check', 'download', 'install']);
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['capture', 'showInput', 'toggleVisibility', 'settings', 'captureTest', 'exit', 'escape', 'beginMove']) }),
   z.object({ type: z.literal('submit'), question: z.string().min(1).max(4000).refine(value => value.trim().length > 0) }),
   z.object({ type: z.literal('recordShortcut'), recording: z.boolean() }),
+  z.object({ type: z.literal('settingsDraftChanged'), dirty: z.boolean() }),
   z.object({ type: z.literal('beginResize'), edge: z.enum(['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right']) })
 ]);

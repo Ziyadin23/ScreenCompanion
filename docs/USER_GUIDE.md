@@ -1,11 +1,11 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.3. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
+Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.4. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
 
 ## Setup and migration
 
-1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). Run `SC-Setup-v0.5.0-beta.3.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. A separate portable `SC-v0.5.0-beta.3.exe` and matching ZIP containing that EXE and `README.txt` remain available. It includes its runtime and needs no .NET installation. Windows 11 has been checked; Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
-2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, enter your own API key; the initial dialog is labelled OpenAI and checks only that a key was entered. There is no app password and setup makes no model request. Before asking a question, open **Settings → Models & API**, select the service matching your key, enter that service's key and **Save**. You do not need an OpenAI key to use DeepSeek or another service. Internet access, model access and any required credits must be available on your selected provider account; the initial default is OpenAI `gpt-6-luna`.
+1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). Run `SC-Setup-v0.5.0-beta.4.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. A separate portable `SC-v0.5.0-beta.4.exe` and matching ZIP containing that EXE and `README.txt` remain available. It includes its runtime and needs no .NET installation. Windows 11 has been checked; Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
+2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. Commands appear once after setup or an upgrade from settings without the help marker. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to submit. Esc returns to the answer. The app captures the monitor containing the answer panel once; the typed question determines the task.
 
@@ -58,6 +58,8 @@ For the portable version, close SC before replacing its EXE manually.
 
 ## Service and model selection
 
+Settings groups related controls and reports unsaved changes. **Models & API** keeps the service, key and pipeline together; expand **Advanced model settings** for editable model IDs, DeepSeek reasoning and output-token limits. A validation error opens the relevant page and focuses the affected field. Settings load failures offer a retry. Save applies changes; Back discards them.
+
 Open **Settings → Models & API** to choose OpenAI, Groq, Google Gemini, Mistral, OpenRouter or DeepSeek. Choose an **Answer model** and a **Screen-reading model**, or type their exact model IDs. The screen-reading model must support images and structured JSON. The answer model must support structured JSON and any retained task images; DeepSeek Pro is a text-only answering option. Suggestions are editable; access, free quotas, and model availability depend on your own provider account. The app contains no shared API keys.
 
 Enter the selected service's API key and click **Save**. The service and model selection apply to subsequent capture and typed requests without restarting. Keys for each service are stored separately inside the existing Windows-user encrypted settings file. Switching services restores that service's key; **Back** discards edits. The active model selection persists across restarts. Model drafts for other services are retained only while the Settings window remains open. Existing settings without these fields keep the previous configuration until saved.
@@ -73,6 +75,23 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
 All six provider adapters have mocked transport coverage, and Windows encrypted-settings/UI checks passed. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
+
+## Installed and portable updates
+
+**Settings → Updates** identifies whether this copy supports in-app updates.
+Installed SC checks on startup; **Download update** and **Restart and install**
+remain explicit actions. A failed download offers **Retry download**. A completed
+download becomes installable only after its local cache work has finished.
+
+Save your Settings changes or use Back to discard them before restarting, then
+reopen Updates. Restart is unavailable during an answer, settings write, shortcut
+recording or native color dialog. Closing SC normally never installs an update.
+If the installer cannot start, close and reopen SC or run the latest setup EXE
+manually. Public update discovery requires a published installer release.
+
+Portable copies use manual replacement: close SC before replacing their EXE.
+Run the setup EXE to obtain an installed copy with update support. Installing,
+upgrading and uninstalling preserve the encrypted settings for your Windows account.
 
 ## Diagnose a failure
 

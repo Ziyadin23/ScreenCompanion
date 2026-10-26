@@ -4,7 +4,7 @@ html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; back
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled, input:disabled { cursor: default; opacity: .55; }
-button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 2px solid #96b8ee; outline-offset: 2px; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid #96b8ee; outline-offset: 2px; }
 .answer-panel { height: 100%; width: 100%; display: flex; flex-direction: column; position: relative; font-family: "Segoe UI", sans-serif; outline: none; }
 .answer-text { flex: 1; min-height: 0; margin: 7px; padding: 12px; overflow-y: auto; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; line-height: 1.35; outline: none; scrollbar-width: none; }
 .answer-text::-webkit-scrollbar { display: none; }
@@ -33,21 +33,39 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .fixed-theme .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
 .fixed-theme input:read-only, .fixed-theme textarea:read-only { color: var(--dialog-muted); }
 .fixed-theme .shortcut-row input.recording { background: #444e60; color: #fff; }
+.fixed-theme [aria-invalid="true"] { border-color: #ffc8bb !important; }
+.fixed-theme button.primary-action { background: #4c5c75; border-color: #93a4c0; font-weight: 600; }
+.fixed-theme button.primary-action:hover:not(:disabled) { background: #5b6d87; }
 .settings { height: 100%; width: 100%; display: flex; flex-direction: column; }
 .dialog-header { display: flex; gap: 8px; align-items: center; justify-content: space-between; min-height: 44px; padding: 10px 20px; background: var(--dialog-header); flex-shrink: 0; }
 .dialog-header h1 { margin: 0; font-size: 15px; font-weight: 600; }
 .dialog-header span { font-size: 11px; color: var(--dialog-muted); }
-.tabs { display: flex; flex-shrink: 0; gap: 6px; padding: 10px 20px; }
-.tabs button { padding: 6px 9px; flex: 1; white-space: nowrap; }
+.tabs { display: flex; flex-shrink: 0; gap: 6px; padding: 10px 20px; border-bottom: 1px solid var(--dialog-border); }
+.tabs button { padding: 6px 9px; flex: 1; min-width: 0; white-space: normal; }
 .tabs button[aria-selected="true"] { background: #4c5c75; border-color: #93a4c0; }
-.settings-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 20px 16px; }
+.settings-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 18px 20px; scrollbar-gutter: stable; scroll-padding: 12px; }
 .settings-fields { margin: 0; padding: 0; border: 0; min-width: 0; }
+.page-intro { margin-bottom: 20px; }
+.page-intro h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.page-intro .hint { margin: 5px 0 0; }
+.form-section { margin: 0 0 22px; }
+.form-section + .form-section { padding-top: 18px; border-top: 1px solid var(--dialog-border); }
+.form-section h3 { font-size: 13px; font-weight: 600; margin: 0 0 14px; }
+.form-section > .choice, .advanced-content > .choice, .setup form > .choice { margin-bottom: 16px; }
+.form-section .hint { margin: 8px 0 14px; }
+.settings-loading { min-height: 100px; padding-top: 8px; }
+.advanced-settings { border-top: 1px solid var(--dialog-border); border-bottom: 1px solid var(--dialog-border); margin: 16px 0; }
+.advanced-settings summary { padding: 12px 2px; cursor: pointer; font-weight: 600; }
+.advanced-content { padding: 0 2px 4px; }
+.model-summary { overflow-wrap: anywhere; }
+.model-summary strong { font-weight: 400; color: var(--dialog-text); }
 .update-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .settings-fields > .choice { margin-bottom: 14px; }
 .hint { margin: 14px 0; }
-.dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; flex-shrink: 0; }
+.dialog-footer { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; flex-shrink: 0; border-top: 1px solid var(--dialog-border); }
 .dialog-footer button { min-width: 78px; }
-.dialog-error { color: #ffc8bb; margin: 6px 20px; flex-shrink: 0; }
+.footer-status { margin-right: auto; color: var(--dialog-muted); font-size: 12px; }
+.dialog-error { color: #ffc8bb; margin: 6px 20px 10px; flex-shrink: 0; overflow-wrap: anywhere; }
 .shortcut-fields { display: grid; gap: 10px; }
 .shortcut-row { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.08fr); align-items: center; gap: 12px; }
 .shortcut-row label { margin: 0; }
@@ -73,9 +91,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:fo
 .choice-list [role="option"] { padding: 6px 9px; cursor: pointer; overflow-wrap: anywhere; }
 .choice-list [role="option"].active { background: #4d5767; }
 .choice-list [aria-selected="true"] { font-weight: 600; }
-.setup { min-height: 100%; }
-.setup form { padding: 20px 20px 0; }
+.setup { height: 100%; overflow-y: auto; }
+.setup form { padding: 0 20px; }
+.setup-intro { margin: 18px 0; }
+.setup form .dialog-error { margin-left: 0; margin-right: 0; }
 .setup .dialog-footer { padding-right: 0; padding-left: 0; }
 .startup-error { padding: 20px; height: 100%; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 480px) { .tabs { gap: 4px; padding: 10px; } .tabs button { padding: 5px; white-space: normal; } .settings-body { padding-left: 12px; padding-right: 12px; } .model-budget-row { gap: 8px; } }
+@media (max-width: 480px) {
+  .tabs { gap: 4px; padding: 10px; flex-wrap: wrap; }
+  .tabs button { padding: 5px; flex-basis: 28%; }
+  .settings-body { padding-left: 12px; padding-right: 12px; }
+  .model-budget-row { grid-template-columns: 1fr; gap: 12px; }
+  .shortcut-row { grid-template-columns: 1fr; gap: 4px; }
+  .dialog-footer { padding: 10px 12px; }
+}

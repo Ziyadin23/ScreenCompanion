@@ -1,9 +1,9 @@
 {
   "name": "sc-desktop",
-  "version": "0.5.0-beta.3",
+  "version": "0.5.0-beta.4",
   "private": true,
   "description": "SC Windows desktop companion",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
   "engines": {
@@ -22,7 +22,9 @@
     "package:win": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis portable --x64 --publish never",
     "package:zip": "node scripts/package-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",
-    "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never"
+    "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never",
+    "test:lab": "node scripts/lab-tests.mjs",
+    "test:deepseek": "node scripts/deepseek-tests.mjs"
   },
   "dependencies": {
     "electron-updater": "6.8.11",

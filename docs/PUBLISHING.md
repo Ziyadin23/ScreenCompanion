@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current version is 0.5.0-beta.3 and has
+[README](../README.md#release-status). This release branch prepares 0.5.0-beta.4, which has
 not been published as a GitHub release. Existing C# releases, assets and tags stay
 unchanged; the full previous application can be built from the
 [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14).
@@ -19,11 +19,16 @@ use SC; historical URLs and asset names retain their actual identifiers.
 
 ## Distribution build
 
-1. Read the parent workspace's `AGENTS.md` and `PROJECT_CONTEXT.md` for current
-   artifacts, lab state and unfinished checks before release or local delivery work.
+1. Read the parent workspace's `AGENTS.md` and follow its private-operations route
+   to current artifacts, lab state and unfinished checks before release or local
+   delivery work.
 2. Use a new version for each changed application binary intended for distribution.
    Update `desktop/package.json` and both root package-version fields in
    `desktop/package-lock.json`, then reconcile README/status and private context.
+   Search `README.md`, `docs/` and `desktop/REWRITE.md` for the previous current
+   version; update operational instructions and current-status text against the
+   package version and README release status, preserving dated evidence for
+   earlier builds.
 3. On Windows x64, install Node.js 22.12+, Visual Studio C++ Build Tools and the
    Windows SDK. From `desktop/`, run:
 
@@ -105,6 +110,42 @@ or disable signature verification.
    the public release.
 5. Record commit/tag, asset hashes, publication status and resulting private lab
    state in the parent workspace's `PROJECT_CONTEXT.md`.
+
+## Licensing and beta.4 release materials
+
+SC project code uses the root [MIT license](../LICENSE). Keep `license: "MIT"`
+synchronized in `desktop/package.json` and the root package entry of its lockfile.
+The copyright attribution uses the maintainer's public handle, Ziyadin23.
+[Third-party notices](../THIRD_PARTY_NOTICES.txt) cover the pinned production npm
+dependencies, native headers, Electron and installer components. Review them
+when dependencies or packaging change. Retain Electron's `LICENSE.electron.txt`
+and `LICENSES.chromium.html` inside both application payloads.
+
+The beta.4 release reuses the already verified executables and two-file ZIP.
+Publish their original README snapshot alongside the
+[current release notes](releases/v0.5.0-beta.4.md); later evidence must not be
+presented as if it were in the original packaged README. Licensing was selected
+after the build, so its embedded package metadata retains `UNLICENSED`; the
+separate MIT license grants the current rights for SC-owned code. A changed
+executable, including a rebuild to embed new licensing files, needs a new version
+and the applicable Windows verification/local delivery checks.
+
+Upload these additional assets with the binaries/update files:
+
+- `LICENSE.txt`, byte-identical to the root license.
+- `THIRD_PARTY_NOTICES.txt`, byte-identical to the source notice.
+- `ThirdPartySources-v0.5.0-beta.4.zip`, with upstream StdUtils 1.14 source,
+  Nsis7z 19.00 overlay/distribution, matching 7-Zip 19.00 source and SpiderBanner
+  source. Include original licenses, origin URLs and archive checksums. Verify
+  the bundled StdUtils/Nsis7z DLLs against the upstream distributions.
+- `SHA256SUMS.txt`, covering every uploaded asset except itself.
+
+Create the GitHub release as a **draft prerelease** with `make_latest: false`.
+Check successful CI for its exact source commit, remote annotated tag identity,
+all uploaded sizes/digests, local archive integrity and update metadata before
+publishing the draft. Draft assets do not activate public updates. Retain the
+stable v0.4.14 release and historical tags/assets. Record the draft URL, source
+commit and remaining checks in the private workspace context.
 
 Changes to source-only documentation after a release do not rewrite its packaged
 README or binaries. The previous C# publishing procedure remains available in

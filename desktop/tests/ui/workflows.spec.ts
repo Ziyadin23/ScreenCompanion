@@ -84,6 +84,8 @@ test('service replacement drafts survive switching and are absent after Save', a
   await settings(page, 'Models & API');
   await expect(page.getByTestId('service-key')).toHaveValue('');
   await expect(page.getByText('A key is saved for this service.')).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Answer model', exact: true })).toHaveCount(0);
+  await page.getByText('Advanced model settings', { exact: true }).click();
   await choice(page, 'API service', 'DeepSeek');
   await page.getByTestId('service-key').fill('synthetic-ui-key');
   await choice(page, 'Request pipeline', 'Direct screenshot (DeepSeek)');
@@ -99,6 +101,51 @@ test('service replacement drafts survive switching and are absent after Save', a
   await settings(page, 'Models & API');
   await expect(page.getByTestId('service-key')).toHaveValue('');
   await expect(page.getByRole('combobox', { name: 'API service', exact: true })).toHaveText('DeepSeek');
+});
+
+test('Settings navigation uses one keyboard tab stop and keeps every page inside the dialog', async ({ scPage: page }) => {
+  await settings(page);
+  await expect(page.getByRole('heading', { name: 'Answer & shortcuts', exact: true })).toBeFocused();
+  const first = page.getByRole('tab', { name: 'Answer & shortcuts', exact: true });
+  await first.focus(); await first.press('ArrowRight');
+  const panel = page.getByRole('tab', { name: 'Panel', exact: true });
+  await expect(panel).toBeFocused(); await expect(panel).toHaveAttribute('aria-selected', 'true');
+  await panel.press('Tab'); await expect(page.getByRole('tabpanel', { name: 'Panel', exact: true })).toBeFocused();
+  await page.getByRole('tabpanel').press('Tab'); await expect(page.getByRole('slider', { name: 'Background transparency', exact: true })).toBeFocused();
+  await panel.focus(); await panel.press('End'); await expect(page.getByRole('tab', { name: 'Updates', exact: true })).toBeFocused();
+  await page.getByRole('tab', { name: 'Updates', exact: true }).press('Home'); await expect(first).toBeFocused();
+  for (const name of ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates']) {
+    await page.getByRole('tab', { name, exact: true }).click();
+    await expect(page.getByRole('tabpanel', { name, exact: true })).toBeVisible();
+    await expect(page.getByTestId('settings-save')).toBeInViewport(); await expect(page.getByTestId('settings-back')).toBeInViewport();
+    const layout = await page.locator('.settings').evaluate((element) => {
+      const body = element.querySelector('.settings-body')!;
+      const tabs = [...element.querySelectorAll<HTMLElement>('[role=tab]')];
+      return { fits: body.scrollWidth <= body.clientWidth, tabStops: tabs.filter((tab) => tab.tabIndex === 0).length,
+        referencesValid: [...element.querySelectorAll('[aria-labelledby]')].every((item) => item.getAttribute('aria-labelledby')!.split(/\s+/).every((id) => !!document.getElementById(id))) };
+    });
+    expect(layout).toEqual({ fits: true, tabStops: 1, referencesValid: true });
+  }
+  expect(await page.evaluate(async () => (await window.sc.getState()).settingsDirty)).toBe(false);
+  await page.getByTestId('settings-back').click();
+});
+
+test('advanced model validation opens the right page and focuses the invalid control before Save', async ({ scPage: page }) => {
+  await settings(page, 'Models & API');
+  const summary = page.getByText('Advanced model settings', { exact: true });
+  await summary.focus(); await summary.press('Enter');
+  await expect(page.getByRole('combobox', { name: 'Answer model', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Answer model', exact: true }).fill('invalid model id');
+  await summary.click(); await page.getByRole('tab', { name: 'Panel', exact: true }).click();
+  await page.getByTestId('settings-save').click();
+  const model = page.getByRole('combobox', { name: 'Answer model', exact: true });
+  await expect(page.getByRole('tab', { name: 'Models & API', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(model).toBeFocused(); await expect(model).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByRole('alert')).toContainText('Enter a valid answer model ID');
+  expect(await page.evaluate(async () => (await window.sc.getState()).settingsDirty)).toBe(true);
+  await model.fill('gpt-6-luna'); await page.getByTestId('settings-save').click();
+  await expect(page.getByTestId('answer-text')).toHaveText('Synthetic SC answer');
+  expect(await page.evaluate(async () => (await window.sc.getState()).settingsDirty)).toBe(false);
 });
 
 test('hidden Settings retain drafts and Commands/capture test explain recording limits', async ({ scPage: page }) => {

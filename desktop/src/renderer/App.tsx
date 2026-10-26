@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AppCommand, AppState, ResizeEdge } from '../contracts';
+import type { ApiProvider, AppCommand, AppState, ResizeEdge } from '../contracts';
+import { PROVIDERS } from '../contracts';
+import { Choice } from './Choice';
 import { Settings } from './Settings';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
@@ -7,30 +9,43 @@ import { formatShortcut } from './shortcuts';
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
 function Setup({ legacyNotice, onCommand }: { legacyNotice: boolean; onCommand: (command: AppCommand) => void }) {
+  const [provider, setProvider] = useState<ApiProvider>('OpenAI');
   const [key, setKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
   const alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
+  const keyInput = useRef<HTMLInputElement>(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const service = provider === 'Gemini' ? 'Google Gemini' : provider;
   async function save() {
     if (pending.current) return;
-    if (!key.trim()) { setError('Enter your OpenAI API key.'); return; }
+    if (!key.trim() || /[\u0000-\u001f\u007f]/.test(key)) {
+      setError(`Enter your ${service} API key without line breaks or control characters.`); keyInput.current?.focus(); return;
+    }
     pending.current = true; setSaving(true); setError('');
-    try { await window.sc.setup(key.trim()); if (alive.current) setKey(''); }
+    try { await window.sc.setup({ provider, apiKey: key.trim() }); if (alive.current) { setKey(''); setShowKey(false); } }
     catch { if (alive.current) setError('The key could not be saved. Try again.'); }
     finally { pending.current = false; if (alive.current) setSaving(false); }
   }
-  return <section className="setup fixed-theme" aria-label="Set up SC">
+  return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
     <header className="dialog-header"><h1>Set up SC</h1></header>
-    <form onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <label htmlFor="setup-key">OpenAI API key (protected by your Windows account)</label>
-      <input id="setup-key" data-testid="setup-key" type="password" aria-label="OpenAI API key" autoComplete="off" spellCheck={false}
-        maxLength={8192} autoFocus value={key} disabled={saving} onChange={(event) => setKey(event.target.value)} />
-      <p className="hint">Enter the key you want to use with SC. Setup saves the key without making a model request. Choose your service in Settings → Models &amp; API.</p>
+    <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
+      <p className="setup-intro">Choose your service and enter its API key to get started.</p>
+      <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus
+        display={(value) => value === 'Gemini' ? 'Google Gemini' : value} onChange={(value) => {
+          setProvider(value as ApiProvider); setError(''); setShowKey(false); keyInput.current?.focus();
+        }} />
+      <label htmlFor="setup-key">{service} API key</label>
+      <input ref={keyInput} id="setup-key" data-testid="setup-key" type={showKey ? 'text' : 'password'} aria-label={`${service} API key`} autoComplete="off" spellCheck={false}
+        aria-invalid={!!error} aria-describedby={`setup-privacy${error ? ' setup-error' : ''}`}
+        maxLength={8192} value={key} disabled={saving} onChange={(event) => { setKey(event.target.value); setError(''); }} />
+      <label className="checkbox-row"><input type="checkbox" checked={showKey} disabled={saving} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
+      <p className="hint" id="setup-privacy">Your key is encrypted for your Windows account. Setup saves your service and key without contacting the service or checking access. You can change them in Settings → Models &amp; API.</p>
       {legacyNotice && <p className="hint" role="note">An older key file was found. Enter your API key once more. The old file will be left unchanged.</p>}
-      {error && <p className="dialog-error" role="alert">{error}</p>}
-      <footer className="dialog-footer"><button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+      {error && <p className="dialog-error" id="setup-error" role="alert">{error}</p>}
+      <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving setup…' : ''}</span><button className="primary-action" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
         <button type="button" disabled={saving} onClick={() => onCommand({ type: 'exit' })}>Cancel</button></footer>
     </form>
   </section>;
