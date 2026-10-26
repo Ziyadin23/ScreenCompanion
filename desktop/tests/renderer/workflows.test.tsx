@@ -174,9 +174,10 @@ describe('settings drafts and protected controls', () => {
     expect(screen.getByRole('region', { name: 'SC settings' }).getAttribute('aria-busy')).toBe('true');
     expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    await waitFor(() => expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(1));
     await act(async () => resolve({ ...driver.getDraft(), keyUpdates: { OpenAI: 'must-never-hydrate' } }));
     await screen.findByRole('combobox', { name: 'Answer mode' });
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Answer & shortcuts' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Answer & shortcuts' })));
     tab('Models & API'); expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('');
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'settingsDraftChanged')).toEqual([]);
   });

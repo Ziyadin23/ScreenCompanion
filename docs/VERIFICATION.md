@@ -120,6 +120,15 @@ The [release notes](releases/v0.5.0-beta.4.md) identify unchanged artifact hashe
 and the later source-only licensing work. Public GitHub update delivery is still
 separate from the passing local HTTP update mechanism.
 
+Publication CI for the frozen beta.4 tag retained one intermittent renderer-test
+failure: **1,064/1,065 passed**, with `resolve is not a function` in the Settings
+hydration fixture. Loading text can render before the passive effect starts the
+mocked draft request. The source follow-up waits for that actual request before
+resolving it and waits for the existing strict heading-focus assertion. It uses
+no fixed sleeps or assertion relaxation. This test-only correction changes no
+application source or distributed bytes; the original tag and failed attempt are
+preserved.
+
 ## Beta.3 installer verification
 
 Linux and Windows `npm run verify` passed **865 tests in 14 files**, strict
