@@ -4,8 +4,9 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). This release branch prepares 0.5.0-beta.4, which has
-not been published as a GitHub release. Existing C# releases, assets and tags stay
+[README](../README.md#release-status). Version 0.5.0-beta.4 was published as a
+[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
+on 2026-10-26. Existing C# releases, assets and tags stay
 unchanged; the full previous application can be built from the
 [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14).
 
@@ -146,6 +147,14 @@ all uploaded sizes/digests, local archive integrity and update metadata before
 publishing the draft. Draft assets do not activate public updates. Retain the
 stable v0.4.14 release and historical tags/assets. Record the draft URL, source
 commit and remaining checks in the private workspace context.
+
+The beta.4 draft was published on **2026-10-26 at 12:53:02 UTC**, retaining its
+prerelease flag and `make_latest: false`. All ten published asset sizes/SHA-256
+digests match the verified local files. Its annotated tag still points to
+`035ba31d9da59cb8b965358dfa22a60f97e79ab4`; later test/documentation changes do not
+rewrite that tag or the packaged README. The GitHub latest-stable endpoint remains
+v0.4.14. Public asset availability does not establish an installed-client update
+result; the documented local HTTP update checks retain their separate scope.
 
 Changes to source-only documentation after a release do not rewrite its packaged
 README or binaries. The previous C# publishing procedure remains available in

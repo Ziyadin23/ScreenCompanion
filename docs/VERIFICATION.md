@@ -2,8 +2,9 @@
 
 This source tree contains the TypeScript/Electron application, **0.5.0-beta.4**.
 The previous C# application and its published releases remain available through
-existing tags/assets. This source transition does not publish a new release or
-establish that every compatibility gate has passed.
+existing tags/assets. Beta.4 is available as a
+[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
+publication does not establish that every compatibility gate has passed.
 
 [Commands and fixtures](../tests/README.md) describe the current suites. Detailed
 run history, failed automation attempts, package hashes and evidence boundaries

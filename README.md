@@ -8,8 +8,9 @@ SC's Windows Electron/TypeScript application lives under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current TypeScript build is **0.5.0-beta.4**. Its GitHub prerelease is being
-prepared; it has not been published. See the [release notes](docs/releases/v0.5.0-beta.4.md).
+The current TypeScript build is **0.5.0-beta.4**, published as a
+[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4).
+See the [release notes](docs/releases/v0.5.0-beta.4.md).
 It includes service-aware key setup, clearer Settings and a per-user Windows
 installer with **Settings → Updates**. Downloads and restart require your action;
 keys and settings stay in the existing encrypted storage. A portable EXE remains available.
@@ -21,7 +22,9 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 
 ## Release status
 
-**Latest published release: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
+**Latest beta: SC v0.5.0-beta.4 (Electron/TypeScript)** — [Download installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-Setup-v0.5.0-beta.4.exe) · [Download portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-v0.5.0-beta.4.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
+
+**Latest stable: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
 
 Existing downloads and tags are retained. They contain the C# application, while
 source builds from this branch produce the TypeScript beta. The beta keeps compatible
@@ -30,13 +33,13 @@ does not establish stable-release parity; see [verification limits](docs/VERIFIC
 
 ## Quick start
 
-1. Use the TypeScript beta built from this branch, or download the previous C# release above. For the beta, run `SC-Setup-v0.5.0-beta.4.exe` once to install SC for your Windows account, without administrator rights. Launch SC from its shortcut. The separate `SC-v0.5.0-beta.4.exe` runs without installation; both include their runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
+1. Download the TypeScript beta above, or build from this branch. Run `SC-Setup-v0.5.0-beta.4.exe` once to install SC for your Windows account, without administrator rights. Launch SC from its shortcut. The separate `SC-v0.5.0-beta.4.exe` runs without installation; both include their runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
 2. Choose your API service in the first-launch dialog, enter its API key and click **Save**. Setup saves the key without making a model request.
 3. Open **Settings → Models & API** to adjust models, pipeline and keys later. For DeepSeek, Flash supports screenshots; Pro is a text-only answering option. Your provider account needs model access and any required credits.
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
-Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC; updates become available when an installer release is published. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
+Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC. The published beta includes installer update metadata; delivery through the public feed still needs an installed-client check. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
 
 ## Models and request pipelines
 
