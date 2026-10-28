@@ -53,9 +53,11 @@ An isolated, key-free packaged beta.6 preview started and closed successfully.
 Direct portable and duplicate-launch checks remain pending. An Edge recorder
 attempt passed the manually inspected preflight and one hidden-answer phase,
 then stopped because it could not obtain the current received marker for the
-visible-answer phase. It remains a failed run and does not establish capture
-exclusion; OBS and live qualification also remain pending. The beta.5 results
-below remain tied to the earlier candidate.
+visible-answer phase. A separate OBS attempt stopped at preflight after local
+and saved frames showed OBS windows covering the marker; its original OBS
+configuration was independently verified as restored. Both attempts remain
+failed and do not establish capture exclusion. Live qualification also remains
+pending. The beta.5 results below remain tied to the earlier candidate.
 
 ## Beta.5 implementation and verification
 
