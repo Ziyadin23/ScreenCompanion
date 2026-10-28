@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The source version is 0.5.0-beta.5; it has
+[README](../README.md#release-status). The source version is 0.5.0-beta.6; it has
 not been published. Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
 on 2026-10-26. Existing C# releases, assets and tags stay

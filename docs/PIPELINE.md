@@ -34,6 +34,12 @@ Each necessary visual must lie inside the question rectangle. Padding is measure
 
 The local consistency gate checks task count, required option counts, code/visual requirements, transcription/visual completeness indicators, unique option/image identifiers and required image references. It does not independently read the pixels. The final answer contract assigns fresh application-owned task IDs, requires exact coverage, restores source order and validates applicable choices and canonical option text. Printed source IDs remain display labels; typed requests keep one answering target.
 
+Both extraction prompts ask the model to retain choice types for option tasks,
+even when code or visuals are attached. For non-choice tasks they prioritize
+relevant code, then required visuals, then short answers; transformation source
+material remains content. Required options, code and visuals remain attached
+regardless of type. This guidance does not independently verify classification.
+
 ## Thorough extraction and fixed regions
 
 Thorough's detector locates the question rectangle; extraction receives the local question crop. The extracted text and necessary padded visual crops then go straight to answering. There is no independent comparison against the original capture and no remote verification call. Local parsing still rejects malformed tasks, missing required choices/code/image references and invalid crop coordinates; canonical answer validation also remains active.
@@ -58,7 +64,7 @@ Native assessment refusals, and explicit structured assessment refusals for an u
 
 ```powershell
 $env:PIPELINE_MODE = 'balanced'
-& .\desktop\dist\SC-v0.5.0-beta.5.exe
+& .\desktop\dist\SC-v0.5.0-beta.6.exe
 ```
 
 | Variable | Default | Purpose |

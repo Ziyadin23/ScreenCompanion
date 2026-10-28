@@ -1,10 +1,10 @@
-SC 0.5.0-beta.5 — Third-party notices
+SC 0.5.0-beta.6 — Third-party notices
 ===================================
 
 SC project code is licensed under the MIT license in the bundled LICENSE.txt.
 Third-party components retain the licenses and copyright notices below.
 Versions come from desktop/package-lock.json and retain the component versions
-inspected in beta.4. This notice and the MIT license are included in beta.5
+inspected in beta.4. This notice and the MIT license are included in beta.6
 application resources. The original beta.4 release assets remain unchanged.
 
 Electron 45.0.0 includes Chromium, Node.js, V8 and other components. Its runtime

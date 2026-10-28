@@ -29,6 +29,37 @@ describe('fixed extraction components and actual production crop coverage (in me
     expect(JSON.stringify(metadata)).not.toContain('PRIVATE');
     for (const bytes of [...fake.responses, ...fake.requests.map(request => request.body), ...cropper.buffers]) expect(bytes.every(byte => byte === 0)).toBe(true);
   });
+  // Injected type controls test the strict lab gate, not a model's ability to follow the prompt.
+  const diagramTypes = campaign().filter(run => run.caseId === 'diagram' && run.mode !== 'Direct').flatMap(run =>
+    (['image', 'short_answer', 'content'] as const).map(type => ({ run, type })));
+  it.each(diagramTypes)('$run.id grades injected $type independently of a correct numeric answer and transcribed labels', async ({ run, type }) => {
+    const fake = new FixtureTransport(run);
+    const labels = 'Rectangle labels: 8 cm and 3 cm.';
+    const transport: HttpTransport = { async send(request) {
+      const response = await fake.send(request), envelope = JSON.parse(response.body.toString('utf8'));
+      const part = envelope.output[0].content[0], content = JSON.parse(part.text);
+      if (Array.isArray(content.questions)) {
+        content.questions[0].type = type; content.questions[0].additional_context = labels;
+        part.text = JSON.stringify(content); response.body.fill(0);
+        response.body = Buffer.from(JSON.stringify(envelope)); fake.responses.push(response.body);
+      }
+      return response;
+    } };
+    const cropper = new FixtureCropper();
+    const metadata = await measureRun({ run, attempt: 1, ledger, transport, cropper, jpeg: Buffer.from('synthetic'),
+      apiKey: 'synthetic-only', signal: new AbortController().signal, requiredVisuals: FAKE_REQUIRED_VISUALS });
+    const correctType = type === 'image';
+    expect(metadata).toMatchObject({ status: correctType ? 'passed' : 'failed', stage: null, pipelineCode: null,
+      canonicalPrimary: true, displayedFirstLine: true, displayedCoverage: true, budgetMatched: true,
+      actualSends: run.expectedCalls, extractionFidelity: correctType,
+      extractionComponents: { observed: true, taskCount: true, taskTypes: correctType, questionText: true,
+        optionIds: true, optionText: true, code: true, imageReferences: true },
+      visualCoverage: { observed: true, diagram: true, labels: true } });
+    expect(fake.requests).toHaveLength(run.expectedCalls);
+    expect(cropper.buffers).toHaveLength(run.mode === 'Thorough' ? 2 : 1);
+    expect(JSON.stringify(metadata)).not.toContain(labels);
+    for (const bytes of [...fake.responses, ...fake.requests.map(request => request.body), ...cropper.buffers]) expect(bytes.every(byte => byte === 0)).toBe(true);
+  });
   it('distinguishes every fixed component and preserves source ordering', () => {
     const fixture = visualCase('mcq'), baseline = fakeExtraction(fixture).questions;
     expect(gradeExtractionComponents(fixture, null)).toEqual({ observed: false, taskCount: false, taskTypes: false, questionText: false, optionIds: false, optionText: false, code: false, imageReferences: false });

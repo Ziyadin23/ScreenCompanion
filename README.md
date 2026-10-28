@@ -8,9 +8,10 @@ SC's Windows Electron/TypeScript application lives under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current source version is **0.5.0-beta.5**, with verification in progress and
-no GitHub release. It tightens Direct answer formatting, cancels active panel
-drags when hidden, and adds Windows control and update checks. The latest published beta is
+The current source version is **0.5.0-beta.6**, with verification in progress and
+no GitHub release. It clarifies extraction types for tasks with diagrams, tightens
+Direct answer formatting, cancels active panel drags when hidden, and adds Windows
+control and update checks. The latest published beta is
 [v0.5.0-beta.4](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
 see its [release notes](docs/releases/v0.5.0-beta.4.md).
 It includes service-aware key setup, clearer Settings and a per-user Windows
@@ -116,8 +117,8 @@ npm run package:win
 npm run package:zip
 ```
 
-Build output: `desktop/dist/SC-Setup-v0.5.0-beta.5.exe`, the portable
-`SC-v0.5.0-beta.5.exe` and its matching two-file ZIP with `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
+Build output: `desktop/dist/SC-Setup-v0.5.0-beta.6.exe`, the portable
+`SC-v0.5.0-beta.6.exe` and its matching two-file ZIP with `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
 The .NET 10 SDK is needed only for the legacy-vault interoperability tests.
 
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.

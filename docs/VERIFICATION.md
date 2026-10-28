@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the TypeScript/Electron application, **0.5.0-beta.5**
+This source tree contains the TypeScript/Electron application, **0.5.0-beta.6**
 (unpublished; verification in progress).
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -11,6 +11,16 @@ publication does not establish that every compatibility gate has passed.
 run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
+
+## Beta.6 extraction guidance
+
+Beta.6 clarifies extraction-type precedence for choices, code and necessary
+visuals. Linux `npm run verify` passed **1,257 tests in 27 files**, including
+type checking, lint and production bundles, exit 0. The lab suite passed **266
+tests in 11 files**, exit 0. These synthetic results do not establish model
+compliance. Windows, packaged, recorder and live qualification checks for this
+candidate are pending; the beta.5 results below remain tied to the earlier
+candidate.
 
 ## Beta.5 implementation and verification
 
@@ -81,7 +91,9 @@ local/received marker preflight, then stopped at application process identity
 verification, exit 1, before any surface review. Its recording was finalized and
 temporary resources were cleaned up. A separate key-free probe reproduced that
 the recorder harness checked its launcher's shell process instead of the app
-process; a corrected harness still needs verification. None of these attempts
+process. The corrected private harness passed 135 synthetic checks on Windows
+and key-free packaged-app identity and deliberate attribution-failure probes;
+its named-recorder output still needs verification. None of the earlier attempts
 establishes recorded-output behavior.
 The final packaged candidate passed five duplicate-launch scenarios, including
 restoring hidden Settings and retaining its draft, plus ten immediate-close
@@ -92,10 +104,16 @@ their copied bytes and archive contents were verified. These checks do not
 establish recorded output or model accuracy. Live qualification and
 named-recorder checks remain pending.
 Both live model preflights passed, using two authorized transport attempts. The
-subsequent diagnostic stopped before its first model request because the native
+first diagnostic stopped before its first model request because the native
 screen capture did not pass the synthetic presentation pixel check. Later
-key-free runs reproduced the presentation failure; it remains separate from
-model quality and is under investigation.
+key-free runs reproduced the failure. After an ordinary click on the synthetic
+fixture, the unchanged native visual suite passed all **12 cases**, exit 0.
+The subsequent diagnostic completed eight operations using 11 requests: six
+passed strict grading and two Balanced diagram cases failed extraction fidelity
+because their task types differed from the fixture. Both retained the required
+visual and produced the expected displayed answer. The cumulative beta.5 count
+is **13 of 120** authorized attempts, including both preflights. These diagnostic
+results do not establish the separate fresh full-campaign qualification.
 The historical results below retain their original build scope.
 
 ## Beta.4 setup and reliability checks (2026-10-25)
