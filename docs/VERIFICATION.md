@@ -47,7 +47,11 @@ exited 1 when the postflight required every check label to be unique despite
 four intentionally repeated labels. A separate read-only postflight verified
 the ordered checks, current profile, journal, cache and build. The generic
 rejection does not prove that the label defect was its only cause, and the
-original wrapper result remains failed; a clean end-to-end run is still pending.
+original wrapper result remains failed. A third beta.5 → beta.6 update run
+passed all **31 ordered checks**, exit 0, including target restart, Settings,
+corrupt-download rejection and uninstall. A separate read-only check verified
+the restored profile, closed journal, retained updater cache and absence of the
+test installation and shortcuts. The earlier failed attempts remain recorded.
 
 An isolated, key-free packaged beta.6 preview started and closed successfully.
 A separate duplicate-launch test reached its deadline waiting for the first
