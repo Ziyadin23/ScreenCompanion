@@ -55,11 +55,13 @@ test installation and shortcuts. The earlier failed attempts remain recorded.
 
 An isolated, key-free packaged beta.6 preview started and closed successfully.
 A separate duplicate-launch test reached its deadline waiting for the first
-portable launcher and reported an unsettled process. Duplicate-launch and
-direct portable checks remain open. An Edge recorder
-attempt passed the manually inspected preflight and one hidden-answer phase,
-then stopped because it could not obtain the current received marker for the
-visible-answer phase. A separate OBS attempt stopped at preflight after local
+portable launcher and reported an unsettled process. A later isolated standalone
+portable launch reached ready and its launcher and main process exited normally.
+It used a different test environment and does not resolve the earlier failure;
+the remaining duplicate-launch and direct portable checks remain open. An Edge
+recorder attempt passed the manually inspected preflight and one hidden-answer
+phase, then stopped because it could not obtain the current received marker for
+the visible-answer phase. A separate OBS attempt stopped at preflight after local
 and saved frames showed OBS windows covering the marker; its original OBS
 configuration was independently verified as restored. Both attempts remain
 failed and do not establish capture exclusion. Live qualification also remains
