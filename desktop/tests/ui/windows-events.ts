@@ -39,6 +39,14 @@ public static class ScPreviewEvents {
     [FieldOffset(0)] public KeyInput Key;
   }
   [StructLayout(LayoutKind.Sequential)] struct Input { public uint Type; public InputUnion Value; }
+  [StructLayout(LayoutKind.Sequential)] struct Message {
+    public IntPtr Window; public uint Code; public UIntPtr WParam; public IntPtr LParam;
+    public uint Time; public int X, Y; public uint Private;
+  }
+  [DllImport("user32.dll", SetLastError=true)] static extern bool RegisterHotKey(IntPtr window, int id, uint modifiers, uint key);
+  [DllImport("user32.dll", SetLastError=true)] static extern bool UnregisterHotKey(IntPtr window, int id);
+  [DllImport("user32.dll")] static extern bool PeekMessage(out Message message, IntPtr window, uint minimum, uint maximum, uint remove);
+  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int key);
   public delegate bool EnumProc(IntPtr window, IntPtr state);
   [DllImport("user32.dll", SetLastError=true)] static extern uint SendInput(uint count, Input[] inputs, int size);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);
@@ -95,7 +103,38 @@ public static class ScPreviewEvents {
     }
   }
   public static void Focus(IntPtr window) {
+    if (!IsWindowVisible(window) || !IsWindowEnabled(window)) throw new InvalidOperationException("Native preview focus target is unavailable.");
     SetForegroundWindow(window); Thread.Sleep(80);
+    if (GetForegroundWindow()==window) return;
+    // A temporary, thread-owned hotkey supplies real foreground activation
+    // permission without clicking a control on the tested window.
+    foreach (int key in new int[] { 1, 2, 4, 5, 6, 16, 17, 18, 91, 92, 135 }) {
+      if ((GetAsyncKeyState(key) & 0x8000) != 0) throw new InvalidOperationException("Native preview focus requires released input.");
+    }
+    const int id=0x5343; const uint wmHotkey=0x0312, noRepeat=0x4000, f24=135;
+    Message message; PeekMessage(out message, IntPtr.Zero, wmHotkey, wmHotkey, 0);
+    if (!RegisterHotKey(IntPtr.Zero, id, noRepeat, f24)) throw new InvalidOperationException("Native preview focus hotkey is unavailable.");
+    bool held=false, received=false;
+    try {
+      Key((ushort)f24, false); held=true;
+      var deadline=System.Diagnostics.Stopwatch.StartNew();
+      while (deadline.ElapsedMilliseconds < 3000) {
+        if (PeekMessage(out message, IntPtr.Zero, wmHotkey, wmHotkey, 1)) {
+          if (message.WParam.ToUInt64() != (ulong)id || unchecked((uint)message.LParam.ToInt64()) != (f24 << 16))
+            throw new InvalidOperationException("Unexpected native preview focus hotkey message.");
+          received=true;
+          Key((ushort)f24, true); held=false;
+          SetForegroundWindow(window); break;
+        }
+        Thread.Sleep(10);
+      }
+      if (!received) throw new InvalidOperationException("Native preview focus hotkey was not received.");
+    } finally {
+      try { if (held) Key((ushort)f24, true); }
+      finally { if (!UnregisterHotKey(IntPtr.Zero, id)) throw new InvalidOperationException("Native preview focus hotkey could not be released."); }
+    }
+    var foregroundDeadline=System.Diagnostics.Stopwatch.StartNew();
+    while (GetForegroundWindow()!=window && foregroundDeadline.ElapsedMilliseconds < 1000) Thread.Sleep(20);
     if (GetForegroundWindow()!=window) throw new InvalidOperationException("Native preview could not take foreground focus.");
   }
   public static void Drag(int fromX, int fromY, int toX, int toY, bool alt) {

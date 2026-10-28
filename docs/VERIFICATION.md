@@ -15,12 +15,23 @@ recordings and local state belong outside this repository.
 ## Beta.6 extraction guidance
 
 Beta.6 clarifies extraction-type precedence for choices, code and necessary
-visuals. Linux `npm run verify` passed **1,257 tests in 27 files**, including
-type checking, lint and production bundles, exit 0. The lab suite passed **266
-tests in 11 files**, exit 0. These synthetic results do not establish model
-compliance. Windows, packaged, recorder and live qualification checks for this
-candidate are pending; the beta.5 results below remain tied to the earlier
-candidate.
+visuals. Linux and Windows `npm run verify` each passed **1,257 tests in 27
+files**, including type checking, lint and production bundles, exit 0. The lab
+suite passed **266 tests in 11 files** on both systems, exit 0. Windows native
+verification passed **54 checks**, and vault interoperability passed **8 cases /
+136 C# checks**, exit 0. These results do not establish model compliance.
+
+The first beta.6 Windows UI run finished **10 passed / 22 failed / 5 not run**,
+exit 1: each failure stopped at the test fixture's foreground-focus precondition.
+A separate isolated probe reproduced the denial with a visible, enabled panel;
+a real click on that panel established focus, but did not prepare later test
+windows. The test-only fixture now uses a temporary registered hotkey when the
+ordinary focus attempt is denied and retains the exact foreground-window check.
+Windows probes verified focus, no F24 events in the target, rejection of an
+occupied hotkey without input, and independent re-registration after cleanup.
+The full UI suite with the revised fixture is in progress. Packaged runtime,
+recorder and live qualification checks for this candidate remain pending; the
+beta.5 results below remain tied to the earlier candidate.
 
 ## Beta.5 implementation and verification
 
