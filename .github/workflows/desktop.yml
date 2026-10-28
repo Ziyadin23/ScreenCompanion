@@ -30,6 +30,16 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Resolve the Windows temporary directory
+        shell: pwsh
+        run: |
+          $originalTemp = node -p "require('node:path').resolve(require('node:os').tmpdir())"
+          if ($LASTEXITCODE -ne 0 -or -not $originalTemp) { throw 'Unable to read the temporary directory' }
+          $canonicalTemp = node -p "require('node:fs').realpathSync(require('node:os').tmpdir())"
+          if ($LASTEXITCODE -ne 0 -or -not $canonicalTemp) { throw 'Unable to resolve the temporary directory' }
+          Write-Output "Temporary path already canonical: $($originalTemp -ieq $canonicalTemp)"
+          "TEMP=$canonicalTemp" >> $env:GITHUB_ENV
+          "TMP=$canonicalTemp" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run verify
       - run: npm run native:build
