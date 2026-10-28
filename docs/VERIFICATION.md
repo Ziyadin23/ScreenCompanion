@@ -50,7 +50,9 @@ rejection does not prove that the label defect was its only cause, and the
 original wrapper result remains failed; a clean end-to-end run is still pending.
 
 An isolated, key-free packaged beta.6 preview started and closed successfully.
-Direct portable and duplicate-launch checks remain pending. An Edge recorder
+A separate duplicate-launch test reached its deadline waiting for the first
+portable launcher and reported an unsettled process. Duplicate-launch and
+direct portable checks remain open. An Edge recorder
 attempt passed the manually inspected preflight and one hidden-answer phase,
 then stopped because it could not obtain the current received marker for the
 visible-answer phase. A separate OBS attempt stopped at preflight after local
