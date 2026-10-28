@@ -41,9 +41,21 @@ including the target restart, Settings load and uninstall, but exited 1 during
 restoration. Review found that its test-only restoration helper does not accept
 the beta.6 target recorded by that run. A separate recovery restored and
 independently verified the original profile and updater cache. The
-failed update run remains a failure; a corrected update verification is pending.
-Packaged runtime, recorder and live qualification checks for this candidate also
-remain pending; the beta.5 results below remain tied to the earlier candidate.
+failed update run remains a failure. A second local update scenario completed all
+31 ordered checks and reported the original profile restored, but its wrapper
+exited 1 when the postflight required every check label to be unique despite
+four intentionally repeated labels. A separate read-only postflight verified
+the ordered checks, current profile, journal, cache and build. The generic
+rejection does not prove that the label defect was its only cause, and the
+original wrapper result remains failed; a clean end-to-end run is still pending.
+
+An isolated, key-free packaged beta.6 preview started and closed successfully.
+Direct portable and duplicate-launch checks remain pending. An Edge recorder
+attempt passed the manually inspected preflight and one hidden-answer phase,
+then stopped because it could not obtain the current received marker for the
+visible-answer phase. It remains a failed run and does not establish capture
+exclusion; OBS and live qualification also remain pending. The beta.5 results
+below remain tied to the earlier candidate.
 
 ## Beta.5 implementation and verification
 
