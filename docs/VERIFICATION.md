@@ -29,9 +29,21 @@ windows. The test-only fixture now uses a temporary registered hotkey when the
 ordinary focus attempt is denied and retains the exact foreground-window check.
 Windows probes verified focus, no F24 events in the target, rejection of an
 occupied hotkey without input, and independent re-registration after cleanup.
-The full UI suite with the revised fixture is in progress. Packaged runtime,
-recorder and live qualification checks for this candidate remain pending; the
-beta.5 results below remain tied to the earlier candidate.
+A subsequent full UI run with the revised fixture timed out after **31 cases
+passed**, with six native-preview cases unreported and no test failure reported
+before the timeout. A separate run passed those **six cases**, with no skips or
+retries and unchanged candidate, package and profile checks. All 37 distinct
+cases therefore have passing evidence across the two attempts; the timeout and
+potentially interrupted case remain recorded.
+
+An installed local beta.5 → beta.6 update run recorded **31 scenario checks**,
+including the target restart, Settings load and uninstall, but exited 1 during
+restoration. Review found that its test-only restoration helper does not accept
+the beta.6 target recorded by that run. A separate recovery restored and
+independently verified the original profile and updater cache. The
+failed update run remains a failure; a corrected update verification is pending.
+Packaged runtime, recorder and live qualification checks for this candidate also
+remain pending; the beta.5 results below remain tied to the earlier candidate.
 
 ## Beta.5 implementation and verification
 
