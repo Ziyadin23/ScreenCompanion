@@ -1,6 +1,6 @@
 # SC desktop development and verification
 
-Development version: **0.5.0-beta.4**. Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.5** (unpublished; verification in progress). Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
 The TypeScript/Electron application is the primary development source. The previous
@@ -24,7 +24,8 @@ release or close the unfinished compatibility and recorder gates below.
 - [x] Six mocked provider adapters, saved model/reasoning preferences and network failures.
 - [x] Compatible SSK3 vaults, atomic migration/save and damaged-byte preservation, including real Windows/C# interoperability.
 - [x] Windows 11 affinity, owned picker visibility, dedicated wheel hook, shortcuts and standalone activation.
-- [ ] Mixed-DPI placement, every resize edge and competing-process shortcut rollback.
+- [x] Single-monitor resize edges and competing-process shortcut rollback on Windows 11.
+- [ ] Mixed-DPI placement and resize behavior.
 - [x] Panel/input/Settings previews, Save/Back and native shortcut/picker/mouse workflows.
 - [x] Portable and Electron workflow tests; real Windows native/DPAPI checks.
 - [x] Packaged Windows executable, ZIP integrity and standalone startup with development tools removed from PATH.

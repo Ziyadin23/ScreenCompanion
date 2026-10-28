@@ -3,7 +3,7 @@ import type { AppState, PipelineConfiguration, PipelineMode, PipelineInput, Pipe
 import { PROVIDERS } from '../../src/contracts';
 import { withSavedSettings } from '../../src/pipeline/configuration';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
-import { ApplicationController } from '../../src/main/controller';
+import { ApplicationController, canResizePanel } from '../../src/main/controller';
 import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
 
@@ -35,6 +35,41 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
 }
 describe('production lifecycle with injected native boundaries', () => {
+  it('permits native edge resizing for the three visible panel surfaces, including while waiting for an answer', () => {
+    const state = { ...fixture().controller.getState(), ready: true, visible: true, busy: true };
+    for (const surface of ['answer', 'input', 'captureTest'] as const) expect(canResizePanel({ ...state, surface }, false)).toBe(true);
+  });
+  it('keeps Settings, setup, hidden, uninitialized and capturing surfaces outside native edge resizing', () => {
+    const state = { ...fixture().controller.getState(), ready: true, visible: true, surface: 'answer' as const };
+    for (const surface of ['settings', 'setup'] as const) expect(canResizePanel({ ...state, surface }, false)).toBe(false);
+    expect(canResizePanel({ ...state, visible: false }, false)).toBe(false);
+    expect(canResizePanel({ ...state, ready: false }, false)).toBe(false);
+    expect(canResizePanel(state, true)).toBe(false);
+  });
+  it('drops move and resize IPC while hidden or capturing, then permits a visible interaction', async () => {
+    const f = fixture();
+    f.platform.beginMove = vi.fn(); f.platform.beginResize = vi.fn();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).not.toHaveBeenCalled(); expect(f.platform.beginResize).not.toHaveBeenCalled();
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).toHaveBeenCalledOnce(); expect(f.platform.beginResize).toHaveBeenCalledOnce();
+    const capture = deferred<Awaited<ReturnType<typeof f.platform.captureMonitor>>>();
+    f.platform.captureMonitor = vi.fn(() => capture.promise);
+    const request = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.platform.captureMonitor).toHaveBeenCalledOnce());
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).toHaveBeenCalledOnce(); expect(f.platform.beginResize).toHaveBeenCalledOnce();
+    capture.resolve({ jpeg: f.jpeg, bounds: { x: 0, y: 0, width: 1920, height: 1080 } });
+    f.outcome.resolve({ text: 'Synthetic answer', requestId: 'synthetic' }); await request;
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'right' });
+    expect(f.platform.beginMove).toHaveBeenCalledTimes(2); expect(f.platform.beginResize).toHaveBeenCalledTimes(2);
+  });
   it('permits update restart only from idle visible Settings, after settings writes and dialogs finish', async () => {
     const f = fixture(); expect(f.controller.canInstallUpdate()).toBe(false);
     await f.controller.initialize(); expect(f.controller.canInstallUpdate()).toBe(false);

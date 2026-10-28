@@ -20,7 +20,16 @@ all six mocked provider adapters, network failures, injected platform/storage,
 lifecycle and React workflows. Fake transports reject unexpected requests.
 Injected crop fixtures do not establish real JPEG/monitor behavior.
 
-Beta.4 passed **1,065 tests in 21 files** on Linux, exit 0, including **143 lab tests in seven files**. See [current recorded results](../docs/VERIFICATION.md#beta4-setup-and-reliability-checks-2026-10-25) for Windows and live boundaries.
+Beta.5 passed **1,167 tests in 25 files** on Linux and Windows, exit 0. After
+the initial lab-ledger recovery fix, Linux and Windows verification passed
+**1,181 tests in 25 files** and the standalone lab selftest passed **220 tests
+in ten files**, exit 0. After further continuity hardening, Linux and Windows
+verification passed **1,215 tests in 26 files** and the lab selftest passed
+**254 tests in 11 files**, exit 0. See
+[current recorded results](../docs/VERIFICATION.md#beta5-implementation-and-verification)
+for the separate native, UI, package and live boundaries.
+
+Beta.4 passed **1,065 tests in 21 files** on Linux, exit 0, including **143 lab tests in seven files**. Its dated evidence remains in the verification reference.
 
 Beta.3 passed **865 tests in 14 files**, exit 0, on Linux and Windows. Update
 coverage includes explicit download/install, blocked restarts, failed feeds and
@@ -43,8 +52,9 @@ npm run native:build
 npm run test:windows
 ```
 
-The native harness runs **31 checks** for real JPEG capture/crops, DPAPI,
-loopback WinHTTP/proxy-interception/timeout/cancellation, activation and cleanup.
+The native harness runs **54 checks** for real JPEG capture/crops, DPAPI,
+loopback WinHTTP/proxy-interception/timeout/cancellation, activation, real OS
+shortcut contention/rollback/reclamation and cleanup.
 The following **8 interoperability cases** check C#/TypeScript SSK3 settings,
 atomic migration, existing-vault priority and damaged-byte preservation, using
 isolated temporary profiles. The C# fixture reports **136 checks**. Both commands
@@ -72,8 +82,12 @@ npm run test:ui
 npm run preview:ui
 ```
 
-The runner rejects non-Windows hosts. Beta.4 passed **16 UI workflows**, none
-skipped, exit 0, including real service/key setup and five early-close relaunches.
+The runner rejects non-Windows hosts. Beta.5 passed **37 UI workflows** on
+Windows 11, none skipped, exit 0, including every panel resize edge and actual
+shortcut contention. An earlier run had one visibility-restoration failure that
+was not reproduced in the subsequent run; see the [recorded evidence](../docs/VERIFICATION.md#beta5-implementation-and-verification).
+Beta.4 passed **16 UI workflows**, none skipped, exit 0, including real service/key
+setup and five early-close relaunches.
 
 All **12 UI workflows** passed for beta.3
 on Windows 11, none skipped, exit 0: six synthetic shell workflows and six using
@@ -142,12 +156,18 @@ static indicators. It does not activate camera/microphone monitoring or connect
 to OES. Native capture/crop checks, model quality and named-recorder output are
 separate results.
 
-Live execution requires explicit `--live`, private absolute `--ledger` and
-`--results` paths, and the existing Windows-user encrypted DeepSeek key. Use
-one ledger for the entire authorized campaign, including preflights, failures,
-restarts and repeats. The hard ceiling is **120 actual send attempts**: 96
-planned and 24 reserved. The historical exhausted campaign is separate and
-must never be reset. No live requests run under `verify` or ordinary CI.
+Live execution requires explicit `--live`, `--phase` and an executed `--candidate`
+identity, the coordinator-initialized fixed private registry, and the existing
+Windows-user encrypted DeepSeek key. Run `npm run test:deepseek -- --identity`
+on Windows after the native build. The [lab reference](../desktop/tests/lab/README.md#fixed-beta5-registry-and-executed-identity)
+owns initialization and exact commands; live path/budget overrides are rejected.
+One ledger covers preflights, failures, restarts and repeats. Beta.5 permits at
+most **120 additional attempts**: 2 initial preflights, 11 diagnostic sends,
+96 sends for a fresh full 49-operation qualification and 11 explicit reserve
+attempts. The historical exhausted campaign stays immutable. Qualification
+requires all 49 strict passes under the frozen final code/native identity;
+targeted repeats cannot erase a failed qualification. No live requests run under
+`verify` or ordinary CI.
 
 Live harness runs use production pipeline/provider methods and actual Windows
 capture/crops. They are distinct from production hotkey and typed-Send GUI

@@ -1,9 +1,10 @@
 import * as fs from 'node:fs/promises';
 import { once } from 'node:events';
+import { dirname, join } from 'node:path';
 import { app, BrowserWindow, nativeImage, screen, type NativeImage } from 'electron';
 import type { CapturedFrame, PixelBounds, WindowsPlatform } from '../../src/contracts';
 import { createWindowsPlatform } from '../../src/platform';
-import { ALL_CASES, campaign, CAPTURE_CASES, LAYOUTS, visualCase, type Layout, type VisualCase } from './cases';
+import { ALL_CASES, CAPTURE_CASES, LAYOUTS, visualCase, type Layout, type VisualCase } from './cases';
 import { CampaignExecutionError, executeCampaign } from './execution';
 import { CampaignLedger } from './ledger';
 import { measureRun } from './measure';
@@ -13,6 +14,10 @@ import { bitmap, PresentationDeadline, PresentationError, questionPixels, sameBo
   type Bitmap, type PresentationGeometry } from './readiness';
 import { readNormalDeepSeekKey } from './vault';
 import { fixtureHtml } from './visual';
+import { liveRegistry, phaseRuns } from './campaign';
+import type { RequiredVisual } from './coverage';
+import { requireCandidate, sourceIdentity } from './identity.mjs';
+import { CampaignContinuity } from './transport';
 
 if (process.platform !== 'win32') { console.error('Windows visual/native/live lab was NOT RUN: this host is not Windows.'); process.exit(1); }
 const temporary = process.env.SC_LAB_TEMP;
@@ -167,42 +172,72 @@ async function windowsVerification(): Promise<void> {
   }
   console.log(JSON.stringify({ status: 'passed', checks, actualSends: 0, recorderVerified: false }));
 }
+/** Renderer coordinates are used only in memory to grade actual production visual crops. */
+async function requiredVisuals(): Promise<RequiredVisual[]> {
+  if (!shown || !panel || !accepted) throw new PresentationError('Unavailable');
+  const result: RequiredVisual[] = await panel.webContents.executeJavaScript(`(() => {
+    const rect = element => { const r = element.getBoundingClientRect(); return {x:r.x/innerWidth,y:r.y/innerHeight,width:r.width/innerWidth,height:r.height/innerHeight}; };
+    return [...document.querySelectorAll('svg.diagram')].map(svg => ({diagram:rect(svg.querySelector('[data-required-diagram]')),
+      labels:[...svg.querySelectorAll('[data-required-label]')].map(rect)}));
+  })()`);
+  await validateAcceptedPresentation();
+  return result;
+}
 async function liveCampaign(): Promise<boolean> {
   const options = liveOptions(args);
-  await privateDestinations(process.env.SC_LAB_PROJECT_ROOT!, options.ledger, options.results);
-  const ledger = await CampaignLedger.open(options.ledger, options.priorCalls);
+  requireCandidate(process.env.SC_LAB_CANDIDATE ?? '', options.candidate);
+  const validateCandidateSources = async (): Promise<void> => {
+    try { requireCandidate(await sourceIdentity(join(process.env.SC_LAB_PROJECT_ROOT!, 'desktop')), process.env.SC_LAB_SOURCE_IDENTITY); }
+    catch { abort.abort(); throw new CampaignExecutionError('scope'); }
+  };
+  await validateCandidateSources();
+  const registry = liveRegistry(process.env.LOCALAPPDATA);
+  await privateDestinations(process.env.SC_LAB_PROJECT_ROOT!, registry, join(dirname(registry), 'ledger.jsonl'));
+  await privateDestinations(process.env.SC_LAB_PROJECT_ROOT!, join(dirname(registry), 'ledger.jsonl'), join(dirname(registry), 'results.jsonl'));
+  const ledger = await CampaignLedger.open(registry, { candidate: options.candidate, phase: options.phase });
   let results: MetadataResults | undefined;
   let frame: CapturedFrame | undefined;
   let frameId = '';
   const credentials: { apiKey?: string } = {};
   try {
-    results = await MetadataResults.open(options.results);
-    const selected = campaign().filter(run => !options.only || options.only.includes(run.id));
+    results = await MetadataResults.open(ledger.resultsPath);
+    ledger.reconcile(results.records);
+    const continuity = new CampaignContinuity(ledger, results);
+    const selected = phaseRuns(options.phase).filter(run => !options.only || options.only.includes(run.id));
     await executeCampaign({ selected, fullCampaign: options.only === null, repeat: options.repeat, ledger, signal: abort.signal,
       async execute(run, attempt) {
+        await continuity.verify();
+        await validateCandidateSources();
         if (run.caseId && frameId !== `${run.caseId}-${run.layout}`) {
           frame?.jpeg.fill(0); frame = undefined;
           await showFixture(visualCase(run.caseId), run.layout);
           frame = await capture(); frameId = `${run.caseId}-${run.layout}`;
         }
         if (run.caseId) await validateAcceptedPresentation();
+        const required = run.caseId ? await requiredVisuals() : undefined;
         if (!credentials.apiKey) credentials.apiKey = await readNormalDeepSeekKey(platform!);
-        return measureRun({ run, attempt, ledger: { async reserve(...reservation) {
+        return measureRun({ run, attempt, requiredVisuals: required, ledger: { identity: ledger.identity, async reserve(...reservation) {
           // Validate before a paid reservation, and again after its asynchronous durable write.
+          await validateCandidateSources();
           if (run.caseId) await validateAcceptedPresentation();
           abort.signal.throwIfAborted();
-          const result = await ledger.reserve(...reservation);
+          const result = await continuity.reserve(...reservation);
+          await validateCandidateSources();
           if (run.caseId) validateNativeSendTarget();
+          await continuity.verify();
           abort.signal.throwIfAborted(); return result;
-        } }, transport: { send(request, signal) {
+        } }, transport: { async send(request, signal) {
+          await validateCandidateSources();
           if (run.caseId) validateNativeSendTarget();
+          await continuity.verify();
           signal?.throwIfAborted(); return platform!.send(request, signal);
         } }, cropper: platform!,
           jpeg: frame?.jpeg ?? Buffer.alloc(0), apiKey: credentials.apiKey!, signal: abort.signal });
-      }, record: metadata => results!.append(metadata) });
+      }, async record(metadata) { await continuity.verify(); await results!.append(metadata); } });
     const passed = selected.every(run => ledger.latestStatus(run.id) === 'passed');
     console.log(JSON.stringify({ status: passed ? 'passed' : 'failed', cumulativeCalls: ledger.count, remainingCalls: ledger.remaining,
-      selectedRuns: selected.length, scopeComplete: campaign().every(run => ledger.latestStatus(run.id) === 'passed') }));
+      selectedRuns: selected.length, candidate: ledger.identity.candidate, phase: ledger.identity.phase,
+      scopeComplete: ledger.qualificationPassed() }));
     return passed;
   } finally { delete credentials.apiKey; frame?.jpeg.fill(0); try { await results?.close(); } finally { await ledger.close(); } }
 }

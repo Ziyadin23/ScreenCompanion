@@ -1,9 +1,65 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
+import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider';
+import type { AppUpdater } from 'electron-updater';
+import type { ProviderRuntimeOptions } from 'electron-updater/out/providers/Provider';
+import { HttpError } from 'builder-util-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { ApplicationUpdates } from '../../src/main/updates';
 import type { UpdateState } from '../../src/contracts';
 import { createDiagnostics } from '../../src/main/diagnostics';
 import { updateActionSchema } from '../../src/main/validation';
+
+describe('pinned GitHub provider channel compatibility', () => {
+  function providerFixture(options: { beta?: string; latest?: string; allowPrerelease?: boolean } = {}) {
+    const require = createRequire(import.meta.url);
+    expect((require('electron-updater/package.json') as { version: string }).version).toBe('6.8.11');
+    const currentVersion = (require('semver') as { parse(value: string): AppUpdater['currentVersion'] }).parse('0.5.0-beta.3');
+    const requests: string[] = [];
+    const feed = '<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>Synthetic beta</title>' +
+      '<link href="https://github.com/fixture/fixture/releases/tag/v0.5.0-beta.4"/><content>Synthetic</content></entry></feed>';
+    const metadata = 'version: 0.5.0-beta.4\nfiles:\n  - url: SC-Setup-v0.5.0-beta.4.exe\n    sha512: c3ludGhldGlj\n    size: 42\n';
+    const executor = { request: vi.fn(async (request: { path: string }) => {
+      requests.push(request.path);
+      if (request.path === '/fixture/fixture/releases.atom') return feed;
+      if (request.path === '/fixture/fixture/releases/latest') return JSON.stringify({ tag_name: 'v0.5.0-beta.4' });
+      if (request.path === '/fixture/fixture/releases/download/v0.5.0-beta.4/beta.yml') {
+        if (options.beta) return options.beta; throw new HttpError(404, 'Synthetic missing beta channel');
+      }
+      if (request.path === '/fixture/fixture/releases/download/v0.5.0-beta.4/latest.yml') {
+        if (options.latest === 'missing') throw new HttpError(404, 'Synthetic missing latest channel');
+        return options.latest ?? metadata;
+      }
+      throw new Error('Unexpected fixture HTTP request.');
+    }) };
+    const provider = new GitHubProvider({ provider: 'github', owner: 'fixture', repo: 'fixture' },
+      { allowPrerelease: options.allowPrerelease ?? true, currentVersion, fullChangelog: false } as AppUpdater,
+      { platform: 'win32', isUseMultipleRangeRequest: false, executor } as unknown as ProviderRuntimeOptions);
+    return { provider, requests, metadata };
+  }
+  it('falls back from beta.yml 404 to unchanged latest.yml and resolves the same real asset name', async () => {
+    const f = providerFixture();
+    const info = await f.provider.getLatestVersion();
+    expect(info.version).toBe('0.5.0-beta.4');
+    expect(f.requests).toEqual(['/fixture/fixture/releases.atom', '/fixture/fixture/releases/download/v0.5.0-beta.4/beta.yml',
+      '/fixture/fixture/releases/download/v0.5.0-beta.4/latest.yml']);
+    const files = f.provider.resolveFiles(info);
+    expect(files).toHaveLength(1);
+    expect(files[0]!.url.href).toBe('https://github.com/fixture/fixture/releases/download/v0.5.0-beta.4/SC-Setup-v0.5.0-beta.4.exe');
+    expect(files[0]!.info).toMatchObject({ sha512: 'c3ludGhldGlj', size: 42 });
+  });
+  it('uses an available beta.yml without reading latest.yml', async () => {
+    const seed = providerFixture();
+    const f = providerFixture({ beta: seed.metadata });
+    expect((await f.provider.getLatestVersion()).version).toBe('0.5.0-beta.4');
+    expect(f.requests.at(-1)).toMatch(/\/beta.yml$/u); expect(f.requests).toHaveLength(2);
+  });
+  it('retains an unavailable-feed error if both channel files are missing', async () => {
+    const f = providerFixture({ latest: 'missing' });
+    await expect(f.provider.getLatestVersion()).rejects.toMatchObject({ code: 'ERR_UPDATER_CHANNEL_FILE_NOT_FOUND' });
+    expect(f.requests.at(-1)).toMatch(/\/latest.yml$/u); expect(f.requests).toHaveLength(3);
+  });
+});
 
 function checkResult(version = '0.5.0-beta.4', isUpdateAvailable = true) {
   const info = { version, files: [], releaseDate: '2026-10-25', releaseNotes: '<script>private</script>' };

@@ -12,7 +12,7 @@ let native: Record<string, ReturnType<typeof vi.fn>>;
 let platform: WindowsPlatform;
 beforeEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
-  native = Object.fromEntries(['acquireInstance', 'startCaptureProtection', 'protectWindow', 'activeMonitor', 'monitorForWindow', 'captureMonitor', 'crop', 'applyShortcuts', 'attachPanel', 'detachPanel', 'setHoverInputHeight', 'beginMove', 'beginResize', 'chooseColor', 'setOwnedDialogsVisible', 'closeOwnedDialogs', 'protectData', 'unprotectData', 'send', 'cancelRequest', 'dispose'].map(name => [name, vi.fn()]));
+  native = Object.fromEntries(['acquireInstance', 'startCaptureProtection', 'protectWindow', 'activeMonitor', 'monitorForWindow', 'captureMonitor', 'crop', 'applyShortcuts', 'attachPanel', 'detachPanel', 'setHoverInputHeight', 'setPanelResizeEnabled', 'beginMove', 'beginResize', 'chooseColor', 'setOwnedDialogsVisible', 'closeOwnedDialogs', 'protectData', 'unprotectData', 'send', 'cancelRequest', 'dispose'].map(name => [name, vi.fn()]));
   native.acquireInstance!.mockResolvedValue(true); native.protectWindow!.mockReturnValue('Excluded');
   mock.load.mockReset().mockReturnValue({ createBridge: mock.create.mockReset().mockImplementation(callback => { mock.callback = callback; return native; }) });
   platform = createWindowsPlatform({ nativePath: 'synthetic-bridge.node' });
@@ -79,6 +79,25 @@ describe('native platform boundary (injected addon; no Windows runtime claim)', 
     expect(native.setOwnedDialogsVisible).toHaveBeenCalledWith(handle, false);
     await expect(pending).resolves.toBeNull();
     expect(() => platform.closeOwnedDialogs(Buffer.alloc(8))).toThrow('handle');
+  });
+  it('cancels panel interaction without detaching the dedicated hover subscription', () => {
+    const wheel = vi.fn(); platform.attachPanel(handle, wheel);
+    native.cancelPanelInteraction = vi.fn();
+    platform.cancelPanelInteraction(handle);
+    expect(native.cancelPanelInteraction).toHaveBeenCalledExactlyOnceWith(handle);
+    expect(native.detachPanel).not.toHaveBeenCalled();
+    mock.callback?.({ type: 'wheel', delta: 120 }); expect(wheel).toHaveBeenCalledWith(120);
+    expect(() => platform.cancelPanelInteraction(Buffer.alloc(8))).toThrow('handle');
+  });
+  it('sends explicit resize eligibility without disturbing hover and rejects invalid permission inputs', () => {
+    const wheel = vi.fn(); platform.attachPanel(handle, wheel);
+    platform.setPanelResizeEnabled(handle, true); platform.setPanelResizeEnabled(handle, false);
+    expect(native.setPanelResizeEnabled!.mock.calls).toEqual([[handle, true], [handle, false]]);
+    expect(native.detachPanel).not.toHaveBeenCalled();
+    mock.callback?.({ type: 'wheel', delta: 120 }); expect(wheel).toHaveBeenCalledWith(120);
+    expect(() => platform.setPanelResizeEnabled(Buffer.alloc(8), true)).toThrow('handle');
+    expect(() => platform.setPanelResizeEnabled(handle, 1 as unknown as boolean)).toThrow('resize');
+    expect(native.setPanelResizeEnabled).toHaveBeenCalledTimes(2);
   });
   it('rejects invalid handles, dimensions and crop boundaries before native work', async () => {
     expect(() => platform.protectWindow(Buffer.alloc(8))).toThrow('handle');

@@ -15,7 +15,9 @@ class Bridge final : public Napi::ObjectWrap<Bridge> {
       InstanceMethod("protectData", &Bridge::ProtectData), InstanceMethod("unprotectData", &Bridge::UnprotectData),
       InstanceMethod("applyShortcuts", &Bridge::Apply), InstanceMethod("attachPanel", &Bridge::Attach),
       InstanceMethod("detachPanel", &Bridge::Detach), InstanceMethod("setHoverInputHeight", &Bridge::InputHeight),
+      InstanceMethod("setPanelResizeEnabled", &Bridge::ResizeEnabled),
       InstanceMethod("beginMove", &Bridge::Move), InstanceMethod("beginResize", &Bridge::Resize),
+      InstanceMethod("cancelPanelInteraction", &Bridge::CancelDrag),
       InstanceMethod("chooseColor", &Bridge::Choose), InstanceMethod("setOwnedDialogsVisible", &Bridge::DialogsVisible),
       InstanceMethod("closeOwnedDialogs", &Bridge::CloseDialogs),
       InstanceMethod("send", &Bridge::Send), InstanceMethod("cancelRequest", &Bridge::CancelRequest), InstanceMethod("dispose", &Bridge::Dispose)
@@ -79,7 +81,13 @@ class Bridge final : public Napi::ObjectWrap<Bridge> {
   Napi::Value Attach(const Napi::CallbackInfo& info) { Check(); runtime_->Attach(Handle(info[0])); return info.Env().Undefined(); }
   Napi::Value Detach(const Napi::CallbackInfo& info) { Check(); runtime_->Detach(); return info.Env().Undefined(); }
   Napi::Value InputHeight(const Napi::CallbackInfo& info) { Check(); runtime_->InputHeight(info[0].As<Napi::Number>().Int32Value()); return info.Env().Undefined(); }
+  Napi::Value ResizeEnabled(const Napi::CallbackInfo& info) {
+    Check();
+    if (!info[1].IsBoolean()) throw std::runtime_error("The panel resize state is invalid.");
+    runtime_->SetPanelResizeEnabled(Handle(info[0]), info[1].As<Napi::Boolean>().Value()); return info.Env().Undefined();
+  }
   Napi::Value Move(const Napi::CallbackInfo& info) { Check(); runtime_->BeginDrag(Handle(info[0]), 0); return info.Env().Undefined(); }
+  Napi::Value CancelDrag(const Napi::CallbackInfo& info) { Check(); runtime_->CancelDrag(Handle(info[0])); return info.Env().Undefined(); }
   Napi::Value Resize(const Napi::CallbackInfo& info) {
     Check(); std::map<std::string, int> edges {{"left", 1}, {"right", 2}, {"top", 4}, {"bottom", 8}, {"top-left", 5}, {"top-right", 6}, {"bottom-left", 9}, {"bottom-right", 10}};
     auto edge = info[1].As<Napi::String>().Utf8Value(); if (!edges.contains(edge)) throw std::runtime_error("The resize edge is invalid.");

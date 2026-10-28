@@ -1,6 +1,7 @@
 import { campaign } from './cases';
+import { isCandidate, isPhase, phaseRuns, type CampaignIdentity } from './campaign';
 
-export interface LiveOptions { ledger: string; results: string; only: string[] | null; repeat: boolean; priorCalls: number }
+export interface LiveOptions extends CampaignIdentity { only: string[] | null; repeat: boolean }
 export function liveOptions(args: string[]): LiveOptions {
   const values = new Map<string, string>();
   let live = false, repeat = false;
@@ -8,14 +9,14 @@ export function liveOptions(args: string[]): LiveOptions {
     const flag = args[index]!;
     if (flag === '--live' && !live) live = true;
     else if (flag === '--repeat' && !repeat) repeat = true;
-    else if (['--ledger', '--results', '--only', '--prior-calls'].includes(flag) && !values.has(flag) && args[index + 1] && !args[index + 1]!.startsWith('--')) values.set(flag, args[++index]!);
+    else if (['--phase', '--candidate', '--only'].includes(flag) && !values.has(flag) && args[index + 1] && !args[index + 1]!.startsWith('--')) values.set(flag, args[++index]!);
     else throw new Error('Unknown or duplicate live harness option.');
   }
-  if (!live || !values.get('--ledger') || !values.get('--results')) throw new Error('Live requests require explicit --live, --ledger and --results options.');
+  const phase = values.get('--phase'), candidate = values.get('--candidate');
+  if (!live || !isPhase(phase) || !isCandidate(candidate)) throw new Error('Live requests require explicit --live, --phase and frozen --candidate identity.');
   const only = values.get('--only')?.split(',') ?? null;
   if (only && (!only.length || new Set(only).size !== only.length || only.some(id => !campaign().some(run => run.id === id)))) throw new Error('Unknown or duplicate campaign run ID.');
-  if (repeat && !only) throw new Error('Reserve repeats require an explicit --only run ID list.');
-  const prior = values.get('--prior-calls') ?? '0';
-  if (!/^\d+$/.test(prior) || Number(prior) > 120) throw new Error('Prior call count must be an integer from 0 to 120.');
-  return { ledger: values.get('--ledger')!, results: values.get('--results')!, only, repeat, priorCalls: Number(prior) };
+  if (only?.some(id => !phaseRuns(phase).some(run => run.id === id))) throw new Error('Run ID is outside the fixed phase scope.');
+  if (phase === 'reserve' ? !repeat || !only : repeat) throw new Error('Explicit --only and --repeat are required exclusively for the reserve phase.');
+  return { phase, candidate, only, repeat };
 }

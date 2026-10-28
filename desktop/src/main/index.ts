@@ -6,7 +6,7 @@ import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../con
 import { createWindowsPlatform } from '../platform';
 import { createSettingsStore, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
-import { ApplicationController } from './controller';
+import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
 import { commandSchema, colorSchema, settingsDraftSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
@@ -38,7 +38,6 @@ let expectedBounds: Electron.Rectangle | null = null;
 let measurement = 0;
 let measuredContent = '';
 
-function isPanel(value: AppState['surface']): boolean { return value === 'answer' || value === 'input' || value === 'captureTest'; }
 function trayImage(working: boolean): Electron.NativeImage {
   const size = 24; const pixels = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
@@ -57,6 +56,11 @@ function setBounds(bounds: Electron.Rectangle): void {
   if (!window) return;
   expectedBounds = bounds; settingBounds = true;
   try { window.setBounds(bounds); } finally { settingBounds = false; }
+}
+function hidePanel(): void {
+  if (!window) return;
+  platform?.cancelPanelInteraction(window.getNativeWindowHandle());
+  window.hide();
 }
 function measurePanel(state: AppState): void {
   if (!window || !readyToShow || !isPanel(state.surface) || manualPanelSize || state.busy) return;
@@ -100,7 +104,7 @@ function publish(state: AppState, capturing: boolean): void {
     }
   }
   if (state.surface !== surface) {
-    window.hide();
+    hidePanel();
     if (isPanel(surface)) panelBounds = window.getBounds();
     const area = screen.getDisplayMatching(window.getBounds()).workArea;
     surface = state.surface;
@@ -116,12 +120,13 @@ function publish(state: AppState, capturing: boolean): void {
   }
   if (readyToShow) window.webContents.send('sc:state', state);
   if (platform && state.ready) {
+    platform.setPanelResizeEnabled(window.getNativeWindowHandle(), readyToShow && canResizePanel(state, capturing));
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
     platform.setHoverInputHeight(state.surface === 'settings' || state.surface === 'setup'
       ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(56 * scale) : 0);
   }
   tray?.setImage(trayImage(state.busy));
-  if (capturing || !state.visible || !readyToShow) window.hide();
+  if (capturing || !state.visible || !readyToShow) hidePanel();
   else if (!window.isVisible()) {
     if (state.surface === 'input' || state.surface === 'settings' || state.surface === 'setup') window.show();
     else window.showInactive();
@@ -165,6 +170,7 @@ async function boot(): Promise<void> {
     alwaysOnTop: true, skipTaskbar: true, hasShadow: false, minWidth: 180, minHeight: 80,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false } });
   window.setMenu(null); window.setContentProtection(true);
+  window.on('hide', () => { if (!closing && window) platform?.cancelPanelInteraction(window.getNativeWindowHandle()); });
   lastCaptureProtection = preview ? 'Failed' : platform.protectWindow(window.getNativeWindowHandle());
   const savedSize = await store.loadWindowSize();
   if (closing) return;

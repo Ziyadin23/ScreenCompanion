@@ -20,6 +20,10 @@ export interface ControllerDependencies {
   executableDirectory?: string; defaultPipelineMode?: PipelineMode;
 }
 const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
+export function isPanelSurface(surface: AppState['surface']): boolean { return surface === 'answer' || surface === 'input' || surface === 'captureTest'; }
+export function canResizePanel(state: Pick<AppState, 'ready' | 'visible' | 'surface'>, capturing: boolean): boolean {
+  return state.ready && state.visible && !capturing && isPanelSurface(state.surface);
+}
 export class ApplicationController {
   private settings: VaultData | null = null;
   private vaultState: 'loading' | 'missing' | 'saving' | 'loaded' | 'failed' = 'loading';
@@ -188,8 +192,11 @@ export class ApplicationController {
         if (this.state.surface === 'settings') { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
       case 'recordShortcut': if (this.state.surface === 'settings') await this.setRecording(command.recording); break;
-      case 'beginMove': this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
-      case 'beginResize': if (this.state.surface === 'answer' || this.state.surface === 'input' || this.state.surface === 'captureTest') this.deps.platform.beginResize(this.deps.host.panelHandle(), command.edge); break;
+      case 'beginMove': if (this.state.visible && !this.capturing) this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
+      case 'beginResize':
+        if (canResizePanel(this.state, this.capturing))
+          this.deps.platform.beginResize(this.deps.host.panelHandle(), command.edge);
+        break;
     }
   }
   private async setRecording(recording: boolean): Promise<void> {

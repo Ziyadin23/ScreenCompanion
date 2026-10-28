@@ -67,16 +67,23 @@ export function gradeAnswer(fixture: VisualCase, mode: PipelineMode, answers: re
   }) : displayedFirstLine;
   return { canonicalPrimary, displayedFirstLine, displayedCoverage };
 }
+export const FIDELITY_FLAGS = ['observed', 'taskCount', 'taskTypes', 'questionText', 'optionIds', 'optionText', 'code', 'imageReferences'] as const;
+export type ExtractionComponents = Record<typeof FIDELITY_FLAGS[number], boolean>;
+/** Fixed component flags only; compared transcription and values never leave memory. Source order is intentional. */
+export function gradeExtractionComponents(fixture: VisualCase, extracted: readonly QuestionContent[] | null): ExtractionComponents | null {
+  if (fixture.typed) return null;
+  const sameCount = extracted !== null && extracted.length === fixture.questions.length;
+  const every = (check: (item: QuestionContent, index: number) => boolean): boolean => sameCount && extracted!.every(check);
+  return { observed: extracted !== null, taskCount: sameCount,
+    taskTypes: every((item, i) => item.type === fixture.questions[i]!.type),
+    questionText: every((item, i) => clean(item.question) === clean(fixture.questions[i]!.text)),
+    optionIds: every((item, i) => item.options.length === (fixture.questions[i]!.options?.length ?? 0) && item.options.every((option, j) => option.id === String.fromCharCode(65 + j))),
+    optionText: every((item, i) => item.options.length === (fixture.questions[i]!.options?.length ?? 0) && item.options.every((option, j) => clean(option.text) === clean(fixture.questions[i]!.options![j]!))),
+    code: every((item, i) => { const wanted = fixture.questions[i]!.code; return wanted ? item.code?.replaceAll('\r', '').trim() === wanted : !item.code?.trim(); }),
+    imageReferences: every((item, i) => fixture.questions[i]!.diagram ? item.image_ids.length > 0 : item.image_ids.length === 0) };
+}
 /** Transcription fidelity is independent of answer correctness; Direct has no extraction evidence. */
 export function gradeExtraction(fixture: VisualCase, extracted: readonly QuestionContent[] | null): boolean | null {
-  if (fixture.typed) return null;
-  if (!extracted) return false;
-  return extracted.length === fixture.questions.length && extracted.every((item, index) => {
-    const wanted = fixture.questions[index]!;
-    return item.type === wanted.type && clean(item.question) === clean(wanted.text) &&
-      item.options.length === (wanted.options?.length ?? 0) && item.options.every((option, i) =>
-        option.id === String.fromCharCode(65 + i) && clean(option.text) === clean(wanted.options![i]!)) &&
-      (wanted.code ? item.code?.replaceAll('\r', '').trim() === wanted.code : !item.code?.trim()) &&
-      (wanted.diagram ? item.image_ids.length > 0 : item.image_ids.length === 0);
-  });
+  const flags = gradeExtractionComponents(fixture, extracted);
+  return flags === null ? null : Object.values(flags).every(Boolean);
 }

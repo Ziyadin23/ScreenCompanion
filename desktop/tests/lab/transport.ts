@@ -5,6 +5,8 @@ import { parseCanonicalAnswer, type QuestionAnswer } from '../../src/pipeline/an
 import { extractionObject, type QuestionContent } from '../../src/pipeline/extraction';
 import type { CampaignRun } from './cases';
 import type { CampaignLedger, ContactStage } from './ledger';
+import type { MetadataResults } from './results';
+import { boundedCount, httpStatus } from './technical';
 
 export interface ContactMetadata {
   sequence: number; stage: ContactStage; status: 'returned' | 'failed';
@@ -13,6 +15,15 @@ export interface ContactMetadata {
 export interface StageMetadata {
   stage: string; attempt: number; status: 'Started' | 'Completed' | 'Failed';
   elapsedMilliseconds: number; httpStatus: number | null;
+}
+/** Both durable histories must still match before each charge and at the transport boundary. */
+export class CampaignContinuity {
+  constructor(private readonly ledger: Pick<CampaignLedger, 'reserve' | 'verify'>, private readonly results: Pick<MetadataResults, 'verify'>) {}
+  async verify(): Promise<void> { await this.results.verify(); await this.ledger.verify(); }
+  async reserve(...reservation: Parameters<CampaignLedger['reserve']>): ReturnType<CampaignLedger['reserve']> {
+    await this.verify();
+    return this.ledger.reserve(...reservation);
+  }
 }
 function targets(request: HttpRequest): string[] {
   const root: unknown = parseJson(request.body.toString('utf8'));
@@ -54,12 +65,13 @@ export class ObservedTransport implements HttpTransport {
   constructor(private readonly inner: HttpTransport, private readonly ledger: Pick<CampaignLedger, 'reserve'>,
     private readonly run: CampaignRun, private readonly attempt: number) { this.stage = run.group === 'preflight' ? 'Preflight' : 'Answer'; }
   get actualSends(): number { return this.sends; }
+  get currentStage(): ContactStage { return this.stage; }
   onEvent = (event: PipelineEvent): void => {
     if (event.kind !== 'pipeline') return;
     if (event.outcome === 'Started' && ['Locate', 'Extract', 'Answer'].includes(event.stage)) this.stage = event.stage as ContactStage;
     if (['Locate', 'Crop', 'Extract', 'Answer', 'ValidateAnswer'].includes(event.stage) &&
-        ['Started', 'Completed', 'Failed'].includes(event.outcome ?? '')) this.stages.push({ stage: event.stage, attempt: event.attempt,
-      status: event.outcome as StageMetadata['status'], elapsedMilliseconds: event.elapsedMilliseconds ?? 0, httpStatus: event.httpStatus ?? null });
+        ['Started', 'Completed', 'Failed'].includes(event.outcome ?? '')) this.stages.push({ stage: event.stage, attempt: boundedCount(event.attempt) ?? 0,
+      status: event.outcome as StageMetadata['status'], elapsedMilliseconds: boundedCount(event.elapsedMilliseconds) ?? 0, httpStatus: httpStatus(event.httpStatus) });
   };
   async send(request: HttpRequest, signal?: AbortSignal): Promise<HttpResponse> {
     if (request.url !== 'https://api.deepseek.com/responses' || this.sends >= this.run.expectedCalls) throw new Error('Lab request boundary rejected an unexpected send.');
@@ -75,7 +87,7 @@ export class ObservedTransport implements HttpTransport {
     try {
       ++this.sends; // Actual transport invocation, distinct from a pipeline's planned/model-call counters.
       const response = await this.inner.send(request, signal);
-      metadata.status = 'returned'; metadata.httpStatus = response.status;
+      metadata.status = 'returned'; metadata.httpStatus = httpStatus(response.status);
       if (response.status >= 200 && response.status < 300) {
         try {
           const parsed = parseModelResponse(parseJson(response.body.toString('utf8')), 'DeepSeek');

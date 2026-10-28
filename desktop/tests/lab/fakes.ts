@@ -2,6 +2,37 @@ import type { HttpRequest, HttpResponse, HttpTransport, ImageCropper, Normalized
 import type { QuestionAnswer } from '../../src/pipeline/answer';
 import type { VisualCase, Expected, CampaignRun } from './cases';
 import { visualCase } from './cases';
+import * as fs from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { CAMPAIGN_ID, type CampaignIdentity } from './campaign';
+import { CampaignLedger } from './ledger';
+import type { RequiredVisual } from './coverage';
+
+export const FAKE_CANDIDATE = 'a'.repeat(64);
+export const FAKE_IDENTITY: CampaignIdentity = { candidate: FAKE_CANDIDATE, phase: 'qualification' };
+export async function initializeFakeCampaign(directory: string, qualificationCandidate: string | null = FAKE_CANDIDATE): Promise<void> {
+  await fs.writeFile(join(directory, 'campaign.json'), JSON.stringify({ schema: 2, campaign: CAMPAIGN_ID, maxAdditionalAttempts: 120,
+    diagnosticCandidate: FAKE_CANDIDATE, qualificationCandidate }) + '\n', { flag: 'wx' });
+  await fs.writeFile(join(directory, 'ledger.jsonl'), JSON.stringify({ kind: 'header', schema: 2, campaign: CAMPAIGN_ID,
+    cap: 120, diagnosticCandidate: FAKE_CANDIDATE, qualificationCandidate: null }) + '\n', { flag: 'wx' });
+  await fs.writeFile(join(directory, 'results.jsonl'), '', { flag: 'wx' });
+}
+/** Test-only initialization with synthetic identities. No live entry imports these helpers. */
+export async function openFakeLedger(path: string, identity = FAKE_IDENTITY): Promise<CampaignLedger> {
+  const registry = join(dirname(path), 'campaign.json');
+  try { await fs.access(registry); }
+  catch {
+    await initializeFakeCampaign(dirname(path));
+    // The standalone metadata-only integration fixture is separate from the campaign results.
+    await fs.writeFile(join(dirname(path), 'metadata-only.jsonl'), '', { flag: 'wx' });
+  }
+  return CampaignLedger.open(registry, identity);
+}
+// Distinct synthetic monitor bounds covered by both composed Thorough and original-relative Balanced crops.
+export const FAKE_REQUIRED_VISUALS: readonly RequiredVisual[] = [{
+  diagram: { x: .37, y: .37, width: .08, height: .04 },
+  labels: [{ x: .37, y: .43, width: .04, height: .02 }, { x: .49, y: .38, width: .015, height: .02 }]
+}];
 
 export const QUESTION_REGION = { x: .15, y: .15, width: .7, height: .7 };
 export function expectedPrimary(expected: Expected): string {

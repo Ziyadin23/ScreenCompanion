@@ -46,8 +46,10 @@ export interface WindowsPlatform extends HttpTransport, ImageCropper {
   applyShortcuts(settings: VaultData, recording: boolean, onAction: (action: AppAction) => void): Promise<void>;
   attachPanel(handle: Buffer, onWheel: (delta: number) => void): () => void;
   setHoverInputHeight(heightPixels: number): void;
+  setPanelResizeEnabled(handle: Buffer, enabled: boolean): void;
   beginMove(handle: Buffer): void;
   beginResize(handle: Buffer, edge: ResizeEdge): void;
+  cancelPanelInteraction(handle: Buffer): void;
   chooseColor(owner: Buffer, initialColor: string): Promise<string | null>;
   setOwnedDialogsVisible(owner: Buffer, visible: boolean): void;
   closeOwnedDialogs(owner: Buffer): void;

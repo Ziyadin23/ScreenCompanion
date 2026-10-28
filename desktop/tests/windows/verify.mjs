@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
+import { startShortcutHolder } from './shortcut-contention.mjs';
 
 if (process.platform !== 'win32') {
   console.log('SKIP Windows native capture/crop, DPAPI, affinity, hook cleanup, activation, shortcuts and WinHTTP: host is not Windows.');
@@ -12,11 +13,11 @@ if (process.platform !== 'win32') {
 const { app, BrowserWindow, nativeImage } = await import('electron');
 const require = createRequire(import.meta.url);
 const nativePath = fileURLToPath(new URL('../../native/build/Release/sc_windows.node', import.meta.url));
-let bridge, second, panel, server;
+let bridge, second, panel, server, holder;
 let checks = 0;
 const check = (condition, message) => { assert.ok(condition, message); ++checks; console.log(`PASS native check ${checks}: ${message}`); };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const deadline = setTimeout(() => { console.error(`FAIL Windows native verification deadline after ${checks} checks.`); app.exit(1); }, 45000);
+const deadline = setTimeout(() => { console.error(`FAIL Windows native verification deadline after ${checks} checks.`); app.exit(1); }, 90000);
 const secrets = [];
 const sockets = new Set();
 // Let the ESM entry finish loading before Electron emits ready.
@@ -72,7 +73,28 @@ try {
   const bindings = [{ id: 1, modifiers: 3, key: 32 }, { id: 2, modifiers: 3, key: 84 }, { id: 3, modifiers: 2, key: 191 }, { id: 4, modifiers: 2, key: 73 }, { id: 5, modifiers: 2, key: 8 }, { id: 6, modifiers: 2, key: 13 }];
   bridge.applyShortcuts(bindings); bridge.applyShortcuts(bindings.filter(b => [3, 5].includes(b.id)));
   assert.throws(() => bridge.applyShortcuts([{ id: 1, modifiers: 2, key: 123 }])); ++checks;
-  bridge.applyShortcuts([]);
+  bridge.applyShortcuts(bindings);
+  holder = await startShortcutHolder();
+  const fresh = { id: 701, modifiers: 6, key: 120 }, occupied = { id: 702, modifiers: 6, key: 121 };
+  check((await holder.request({ operation: 'probe', ...fresh })).ok, 'first candidate is genuinely free before partial registration');
+  check((await holder.request({ operation: 'hold', ...occupied })).ok, 'independent process owns the second candidate through RegisterHotKey');
+  // Runtime::Apply visits ascending IDs: candidate 1 registers before candidate 2 fails.
+  assert.throws(() => bridge.applyShortcuts([{ ...fresh, id: 1 }, { ...occupied, id: 2 }, ...bindings.slice(2)])); ++checks;
+  check((await holder.request({ operation: 'probe', ...fresh })).ok, 'partial failure frees the successfully registered first candidate');
+  for (const binding of bindings) {
+    check(!(await holder.request({ operation: 'probe', ...binding, id: 710 + binding.id })).ok, 'partial failure restores each prior OS binding');
+  }
+  for (const [index, action] of ['capture', 'test', 'visibility', 'settings', 'exit', 'input'].entries()) {
+    const binding = bindings[index], prior = events.filter(event => event.type === 'action' && event.action === action).length;
+    await holder.request({ operation: 'send', keys: [...(binding.modifiers & 2 ? [17] : []), ...(binding.modifiers & 1 ? [18] : []), binding.key] });
+    for (const deadline = Date.now() + 2000; Date.now() < deadline && events.filter(event => event.type === 'action' && event.action === action).length === prior;) await pause(20);
+    check(events.filter(event => event.type === 'action' && event.action === action).length === prior + 1, 'partial rollback preserves each real SendInput shortcut action');
+  }
+  await holder.request({ operation: 'release', id: occupied.id });
+  bridge.applyShortcuts([{ ...fresh, id: 1 }, { ...occupied, id: 2 }, ...bindings.slice(2)]);
+  check(!(await holder.request({ operation: 'probe', ...fresh })).ok && !(await holder.request({ operation: 'probe', ...occupied })).ok,
+    'the same candidate set succeeds after the external owner releases it');
+  bridge.applyShortcuts(bindings);
   second = createBridge(() => {}); check(!await second.acquireInstance(), 'duplicate owner activates instead of acquiring session');
   await pause(100); check(events.some(e => e.type === 'activation'), 'real message-only activation delivered');
   second.dispose(); second = undefined;
@@ -101,11 +123,15 @@ try {
   const timed = bridge.send({ ...request('/stall'), timeoutMs: 150 }, 3); await assert.rejects(timed, /12002/); ++checks;
   const cancelled = bridge.send(request('/stall'), 4); setTimeout(() => bridge.cancelRequest(4), 100); await assert.rejects(cancelled, /12017/); ++checks;
   bridge.dispose(); bridge.dispose(); bridge = undefined; ++checks;
+  for (const binding of bindings) {
+    check((await holder.request({ operation: 'probe', ...binding, id: 710 + binding.id })).ok, 'native disposal releases each registered OS binding');
+  }
+  await holder.close(); holder = undefined;
   // Reacquisition proves mutex/hotkey/message-thread ownership was released.
   bridge = createBridge(() => {}); check(await bridge.acquireInstance(), 'native disposal releases session ownership');
   bridge.applyShortcuts(bindings); bridge.applyShortcuts([]); ++checks;
   console.log(`PASS Windows native verification: ${checks} checks; real JPEG capture/crop, DPAPI, local WinHTTP, activation and disposal.`);
-  console.log('PENDING separate Windows UI/recorder gates: color picker pre-display/hide/restore, wheel while JS is busy, Alt-drag/edge resize, rollback with a competing process, abandoned owner recovery, launches from different paths, multi-DPI placement and named recorder/receiver output.');
+  console.log('PENDING separate Windows UI/recorder gates: panel geometry and real-store size, Settings rollback/help/draft, color picker, wheel while JS is busy, abandoned owner recovery, launches from different paths, multi-DPI placement and named recorder/receiver output.');
 } catch (error) {
   // Fixed failure text and assertion code only; never output image/content/native exception messages.
   console.error(`FAIL Windows native verification: ${checks} checks completed; ${error?.code === 'ERR_ASSERTION' ? 'assertion failed' : 'native operation failed'}.`);
@@ -113,6 +139,7 @@ try {
 } finally {
   clearTimeout(deadline);
   second?.dispose(); bridge?.dispose(); panel?.destroy();
+  await holder?.close();
   for (const socket of sockets) socket.destroy();
   if (server?.listening) await new Promise(resolve => server.close(resolve));
   for (const secret of secrets) secret.fill(0);

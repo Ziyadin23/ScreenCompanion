@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { HttpTransport } from '../../src/contracts';
 import type { QuestionAnswer } from '../../src/pipeline/answer';
-import { answerInstruction, standardInstruction } from '../../src/pipeline/prompts';
+import { answerInstruction, directInstruction, standardInstruction } from '../../src/pipeline/prompts';
+import { answerSchema, directAnswerSchema } from '../../src/pipeline/schemas';
 import { campaign, type CampaignRun } from './cases';
-import { FixtureCropper } from './fakes';
+import { openFakeLedger, FixtureCropper } from './fakes';
 import { CampaignLedger } from './ledger';
 import { measureRun } from './measure';
 import { isRunMetadata } from './results';
@@ -16,7 +17,7 @@ describe('text-only preflight canonical contract (synthetic responses only)', ()
   let ledger: CampaignLedger;
   beforeAll(async () => {
     directory = await fs.mkdtemp(join(tmpdir(), 'sc-fake-preflight-contract-'));
-    ledger = await CampaignLedger.open(join(directory, 'fake-only.jsonl'));
+    ledger = await openFakeLedger(join(directory, 'ledger.jsonl'));
   });
   afterAll(async () => { await ledger.close(); await fs.rm(directory, { recursive: true, force: true }); });
 
@@ -32,7 +33,8 @@ describe('text-only preflight canonical contract (synthetic responses only)', ()
       expect(payload.max_output_tokens).toBe(run.answerTokens);
       expect(payload.input).toHaveLength(2);
       // Use the production instructions: the schema alone does not specify the semantics of nullable fields.
-      expect(payload.input[0]).toEqual({ role: 'system', content: standardInstruction + answerInstruction });
+      expect(payload.input[0]).toEqual({ role: 'system', content: standardInstruction +
+        (run.answerModel === 'deepseek-flash' ? directInstruction : answerInstruction) });
       expect(payload.input[1].role).toBe('user');
       expect(payload.input[1].content).toHaveLength(1);
       expect(payload.input[1].content[0].type).toBe('input_text');
@@ -45,6 +47,8 @@ describe('text-only preflight canonical contract (synthetic responses only)', ()
       expect(target).toMatchObject({ source_question_id: null, source_question_index: null });
       expect(target.question_id).toMatch(/^task_[a-f0-9]+_1$/);
       ids.push(target.question_id);
+      expect(payload.text.format.schema).toEqual(run.answerModel === 'deepseek-flash'
+        ? directAnswerSchema(target.question_id) : answerSchema([target.question_id]));
       const fields = payload.text.format.schema.properties.results.items;
       expect(fields.properties.question_id.enum).toEqual([target.question_id]);
       expect(fields.required).toEqual(expect.arrayContaining(['question_id', 'answer', 'answers', 'answer_text', 'explanation', 'confidence', 'status']));
@@ -67,6 +71,7 @@ describe('text-only preflight canonical contract (synthetic responses only)', ()
     expect(isRunMetadata(metadata)).toBe(true);
     expect(metadata).toMatchObject({ actualSends: 1, expectedCalls: 1, budgetMatched: true,
       contacts: [{ stage: 'Preflight', status: 'returned', httpStatus: 200, usage: { inputTokens: 322, outputTokens: 61 } }] });
+    await ledger.finish(run.id, metadata.attempt, metadata.status);
     return { metadata, id: ids[0]! };
   }
 

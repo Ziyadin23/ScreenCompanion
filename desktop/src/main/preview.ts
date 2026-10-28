@@ -8,8 +8,8 @@ export function createPreviewPlatform(): WindowsPlatform {
   return {
     acquireInstance: async () => true, startCaptureProtection() {}, protectWindow: () => 'Failed',
     activeMonitor: unavailable, monitorForWindow: unavailable, captureMonitor: unavailable, crop: unavailable,
-    applyShortcuts: async () => {}, attachPanel: () => () => {}, setHoverInputHeight() {},
-    beginMove() {}, beginResize() {}, chooseColor: async () => null, setOwnedDialogsVisible() {}, closeOwnedDialogs() {},
+    applyShortcuts: async () => {}, attachPanel: () => () => {}, setHoverInputHeight() {}, setPanelResizeEnabled() {},
+    beginMove() {}, beginResize() {}, cancelPanelInteraction() {}, chooseColor: async () => null, setOwnedDialogsVisible() {}, closeOwnedDialogs() {},
     protectData: unavailable, unprotectData: unavailable, send: unavailable, dispose() {}
   };
 }

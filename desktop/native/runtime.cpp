@@ -181,23 +181,47 @@ void Runtime::Attach(HWND panel) {
       mouseHook_ = SetWindowsHookExW(WH_MOUSE_LL, MouseProc, GetModuleHandleW(nullptr), 0);
       if (!mouseHook_) throw Failure("Could not start hover scrolling");
     }
+    if (panel_ != panel) { panelResizeEnabled_ = false; drag_.window = nullptr; dragCancelled_ = true; }
     panel_ = panel;
   });
 }
 void Runtime::Detach() {
-  Call([&] { drag_.window = nullptr; panel_ = nullptr; if (mouseHook_) { UnhookWindowsHookEx(mouseHook_); mouseHook_ = nullptr; } });
+  Call([&] { drag_.window = nullptr; dragCancelled_ = true; panelResizeEnabled_ = false; panel_ = nullptr; if (mouseHook_) { UnhookWindowsHookEx(mouseHook_); mouseHook_ = nullptr; } });
+}
+void Runtime::SetPanelResizeEnabled(HWND window, bool enabled) {
+  Call([&] {
+    if (window != panel_) {
+      if (enabled) throw std::runtime_error("The panel resize owner is not attached.");
+      return; // Startup may disable resizing before the panel is attached.
+    }
+    panelResizeEnabled_ = enabled;
+    if (!enabled && drag_.edge != 0) { drag_.window = nullptr; dragCancelled_ = true; }
+  });
 }
 void Runtime::BeginDrag(HWND window, int edge) {
-  Attach(window);
   Call([&] {
+    // A delayed renderer command cannot revive a press canceled by hiding,
+    // even if the same window has already been shown again.
+    if (window != panel_ || (edge != 0 && !panelResizeEnabled_) || dragCancelled_ || !IsWindowVisible(window) || !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) return;
     POINT pointer {};
     if (!GetCursorPos(&pointer) || !ConfigureDrag(window, edge, pointer)) throw Failure("The panel could not begin moving");
   });
 }
+void Runtime::CancelDrag(HWND window) {
+  DWORD process = 0;
+  if (GetWindowThreadProcessId(window, &process) != GetCurrentThreadId() || process != GetCurrentProcessId())
+    throw std::runtime_error("Panel interaction must be canceled on its owning UI thread.");
+  Call([&] { drag_.window = nullptr; dragCancelled_ = true; });
+  // Electron's resizable outer frame can run a separate Win32 move/size loop.
+  // Cancel that loop and its owned capture on the UI thread as well.
+  SendMessageW(window, WM_CANCELMODE, 0, 0);
+  HWND captured = GetCapture();
+  if (captured && (captured == window || IsChild(window, captured))) ReleaseCapture();
+}
 bool Runtime::ConfigureDrag(HWND window, int edge, POINT pointer) {
   MONITORINFO monitor {sizeof(MONITORINFO)};
   RECT bounds {};
-  if (!GetWindowRect(window, &bounds) || !GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor)) return false;
+  if (!IsWindowVisible(window) || !GetWindowRect(window, &bounds) || !GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &monitor)) return false;
   UINT dpi = GetDpiForWindow(window); if (!dpi) dpi = 96;
   drag_.window = window; drag_.intercepted = false; drag_.edge = edge; drag_.pointer = pointer; drag_.rectangle = bounds; drag_.workArea = monitor.rcWork;
   drag_.minWidth = std::min(MulDiv(180, dpi, 96), static_cast<int>(monitor.rcWork.right - monitor.rcWork.left));
@@ -212,19 +236,33 @@ LRESULT Runtime::Mouse(int code, WPARAM message, LPARAM data) {
   const auto& mouse = *reinterpret_cast<MSLLHOOKSTRUCT*>(data);
   RECT bounds {};
   bool hover = panel_ && IsWindowVisible(panel_) && GetWindowRect(panel_, &bounds) && PtInRect(&bounds, mouse.pt);
+  if (message == WM_LBUTTONDOWN) { drag_.window = nullptr; dragCancelled_ = !hover; drag_.intercepted = false; }
   if (message == WM_LBUTTONDOWN && hover && (GetAsyncKeyState(VK_MENU) & 0x8000)) {
     if (ConfigureDrag(panel_, 0, mouse.pt)) { drag_.intercepted = true; return 1; }
   }
+  if (message == WM_LBUTTONDOWN && hover && panelResizeEnabled_ &&
+      GetAncestor(WindowFromPoint(mouse.pt), GA_ROOT) == panel_) {
+    // The outer Win32 frame can consume an edge press before the renderer.
+    // Own that press too, so every resize uses our work-area and anchor rules.
+    // Electron can enter native sizing without the WS_THICKFRAME style bit;
+    // the displayed application surface supplies the resize permission.
+    UINT dpi = GetDpiForWindow(panel_); if (!dpi) dpi = 96;
+    int border = std::max(1, MulDiv(7, dpi, 96));
+    int edge = mouse.pt.x < bounds.left + border ? 1 : mouse.pt.x >= bounds.right - border ? 2 : 0;
+    if (mouse.pt.y < bounds.top + border) edge |= 4;
+    else if (mouse.pt.y >= bounds.bottom - border) edge |= 8;
+    if (edge && ConfigureDrag(panel_, edge, mouse.pt)) { drag_.intercepted = true; return 1; }
+  }
   if (message == WM_LBUTTONUP) {
-    bool intercepted = drag_.window && drag_.intercepted;
-    drag_.window = nullptr;
+    bool intercepted = drag_.intercepted;
+    drag_.window = nullptr; dragCancelled_ = true; drag_.intercepted = false;
     if (intercepted) return 1;
   }
   if (drag_.window && message == WM_MOUSEMOVE) {
-    // A swallowed Alt-down never updates Windows' asynchronous button state.
-    // Its matching hook-delivered up ends the drag; ordinary edge drags can
-    // additionally use the asynchronous state to discard stale IPC requests.
-    if ((!drag_.intercepted && !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) || !IsWindow(drag_.window) || !IsWindowVisible(drag_.window)) drag_.window = nullptr;
+    // A swallowed Alt/edge-down never updates the asynchronous button state.
+    // Its hook-delivered up ends the drag; renderer-started drags can also use
+    // the asynchronous state to discard stale IPC requests.
+    if ((!drag_.intercepted && !(GetAsyncKeyState(VK_LBUTTON) & 0x8000)) || !IsWindow(drag_.window) || !IsWindowVisible(drag_.window)) { drag_.window = nullptr; dragCancelled_ = true; }
     else {
       LONG dx = mouse.pt.x - drag_.pointer.x, dy = mouse.pt.y - drag_.pointer.y;
       RECT r = drag_.rectangle;

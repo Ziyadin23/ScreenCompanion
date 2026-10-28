@@ -1,19 +1,22 @@
-SC 0.5.0-beta.4 — Third-party notices
+SC 0.5.0-beta.5 — Third-party notices
 ===================================
 
-SC project code is licensed under the MIT license in LICENSE.
+SC project code is licensed under the MIT license in the bundled LICENSE.txt.
 Third-party components retain the licenses and copyright notices below.
-Versions come from desktop/package-lock.json and the inspected beta.4 payload.
-This notice accompanies the verified beta.4 binaries as a separate release asset.
+Versions come from desktop/package-lock.json and retain the component versions
+inspected in beta.4. This notice and the MIT license are included in beta.5
+application resources. The original beta.4 release assets remain unchanged.
 
 Electron 45.0.0 includes Chromium, Node.js, V8 and other components. Its runtime
 ships LICENSE.electron.txt and LICENSES.chromium.html. Preserve both files when
 redistributing the runtime. The Electron notice is also reproduced below.
 
-ThirdPartySources-v0.5.0-beta.4.zip contains the unmodified StdUtils 1.14 source,
+ThirdPartySources-v0.5.0-beta.4.zip from the published beta.4 release contains
+the unmodified StdUtils 1.14 source,
 Nsis7z 19.00 distribution/source overlay, 7-Zip 19.00 source and SpiderBanner
 source. Origin URLs and checksums are recorded inside it. These upstream
 projects are separate from the SC application source archive.
+Source archive: https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/ThirdPartySources-v0.5.0-beta.4.zip
 
 
 argparse 2.0.1 — Python-2.0

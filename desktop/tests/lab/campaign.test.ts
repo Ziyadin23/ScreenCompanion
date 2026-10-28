@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { HttpTransport } from '../../src/contracts';
 import { campaign } from './cases';
-import { FixtureCropper, FixtureTransport } from './fakes';
+import { openFakeLedger, FAKE_REQUIRED_VISUALS, FixtureCropper, FixtureTransport } from './fakes';
 import { CampaignLedger } from './ledger';
 import { measureRun, runConfiguration } from './measure';
 import { isRunMetadata, MetadataResults } from './results';
@@ -12,7 +12,7 @@ import { isRunMetadata, MetadataResults } from './results';
 describe('production pipeline/provider with synthetic in-memory transport (NOT live model quality)', () => {
   let directory: string;
   let ledger: CampaignLedger;
-  beforeAll(async () => { directory = await fs.mkdtemp(join(tmpdir(), 'sc-fake-campaign-')); ledger = await CampaignLedger.open(join(directory, 'fake-only.jsonl')); });
+  beforeAll(async () => { directory = await fs.mkdtemp(join(tmpdir(), 'sc-fake-campaign-')); ledger = await openFakeLedger(join(directory, 'ledger.jsonl')); });
   afterAll(async () => { await ledger.close(); await fs.rm(directory, { recursive: true, force: true }); });
   it.each(campaign())('grades and counts $id with production parsing/cleanup', async run => {
     const transport = new FixtureTransport(run), cropper = new FixtureCropper();
@@ -38,7 +38,7 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
       signal?.throwIfAborted();
       return transport.send(request);
     } };
-    const metadata = await measureRun({ run, attempt: 1, ledger, transport: checked, cropper, jpeg, apiKey: 'synthetic-only', signal: new AbortController().signal });
+    const metadata = await measureRun({ requiredVisuals: FAKE_REQUIRED_VISUALS, run, attempt: 1, ledger, transport: checked, cropper, jpeg, apiKey: 'synthetic-only', signal: new AbortController().signal });
     expect(metadata).toMatchObject({ status: 'passed', canonicalPrimary: true, displayedFirstLine: true, displayedCoverage: true,
       actualSends: run.expectedCalls, budgetMatched: true, refusal: false, stage: null });
     expect(isRunMetadata(metadata)).toBe(true);
@@ -55,9 +55,10 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
   });
   it('has exactly 96 actually invoked fake transport sends after the baseline', () => expect(ledger.count).toBe(96));
   it('preserves a wrong-primary attempt whose explanation contains the expected number', async () => {
+    await ledger.close(); ledger = await openFakeLedger(join(directory, 'ledger.jsonl'), { candidate: 'a'.repeat(64), phase: 'reserve' });
     const run = campaign().find(item => item.id === 'main-numeric-plain-direct')!;
     const transport = new FixtureTransport(run, true), cropper = new FixtureCropper();
-    const metadata = await measureRun({ run, attempt: 2, ledger, transport, cropper, jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal: new AbortController().signal });
+    const metadata = await measureRun({ requiredVisuals: FAKE_REQUIRED_VISUALS, run, attempt: 2, ledger, transport, cropper, jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal: new AbortController().signal });
     expect(metadata.status).toBe('failed'); expect(metadata.canonicalPrimary).toBe(false); expect(metadata.displayedFirstLine).toBe(false);
     expect(metadata.actualSends).toBe(1); expect(ledger.count).toBe(97);
     expect(JSON.stringify(metadata)).not.toContain('explanation');
@@ -66,7 +67,7 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
   });
   it('never serializes raw network errors or extra result fields', async () => {
     const run = campaign()[0]!;
-    const metadata = await measureRun({ run, attempt: 2, ledger, transport: { async send() { throw new Error('PRIVATE_KEY_QUESTION_ANSWER_IMAGE'); } },
+    const metadata = await measureRun({ requiredVisuals: FAKE_REQUIRED_VISUALS, run, attempt: 2, ledger, transport: { async send() { throw new Error('PRIVATE_KEY_QUESTION_ANSWER_IMAGE'); } },
       cropper: new FixtureCropper(), jpeg: Buffer.alloc(0), apiKey: 'synthetic-only', signal: new AbortController().signal });
     expect(metadata.status).toBe('failed'); expect(metadata.actualSends).toBe(1); expect(JSON.stringify(metadata)).not.toContain('PRIVATE');
     expect(isRunMetadata({ ...metadata, answer: 'private' })).toBe(false);
@@ -93,7 +94,7 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
       }
       return response;
     } };
-    const metadata = await measureRun({ run, attempt: 2, ledger, transport, cropper: new FixtureCropper(),
+    const metadata = await measureRun({ requiredVisuals: FAKE_REQUIRED_VISUALS, run, attempt: 2, ledger, transport, cropper: new FixtureCropper(),
       jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal: new AbortController().signal });
     // The actual pipeline accepts/answers this non-choice extraction; missing evidence must independently fail the lab.
     expect(metadata.stage).toBeNull(); expect(metadata.canonicalPrimary).toBe(true); expect(metadata.displayedFirstLine).toBe(true);

@@ -18,7 +18,7 @@ Choose **Request pipeline** under Settings → Models & API. Its encrypted saved
 | Thorough | Capture once → locate → local question crop → extract → answer → local answer validation | 3 |
 | Direct (DeepSeek only) | Capture once → send full captured monitor to answer model → local answer validation | 1 |
 
-Direct uses the answer model; the screen-reading model and crop/extraction settings are unused. It performs no extraction completeness check or independent verification, so it cannot produce an extraction-verification failure. It validates one screen-level canonical answer with a fresh application-owned task ID, rather than independently extracted question coverage or choices. Multiple visible answers are returned in that single answer text. Typed tasks take priority, response operations/preferences still apply, and incomplete or malformed answers remain readable errors. Direct never automatically retries, even in trusted QA, and never falls back to another mode. Its one request receives the whole captured monitor, including unrelated visible content; normal provider policies still apply.
+Direct uses the answer model; the screen-reading model and crop/extraction settings are unused. It performs no extraction completeness check or independent verification, so it cannot produce an extraction-verification failure. It validates one screen-level canonical answer with a fresh application-owned task ID, rather than independently extracted question coverage or choices. Multiple visible answers are returned in that single answer text. Typed tasks take priority, response operations/preferences still apply, and incomplete or malformed answers remain readable errors. Its wire schema requires exactly one result for that target, empty selections, null alternative text and confidence from zero to one or null. Local validation rejects a non-null alternative text field. Direct never automatically retries, even in trusted QA, and never falls back to another mode. Its one request receives the whole captured monitor, including unrelated visible content; normal provider policies still apply.
 
 Invalid or incomplete extraction stops before answering. Balanced does not automatically invoke Thorough, repair extraction, or retry network/authentication errors. An eligible refusal in trusted QA mode can add **one** answering call: at most three in Balanced or four in automatically located Thorough. Native refusals remain visible.
 
@@ -58,7 +58,7 @@ Native assessment refusals, and explicit structured assessment refusals for an u
 
 ```powershell
 $env:PIPELINE_MODE = 'balanced'
-& .\desktop\dist\SC-v0.5.0-beta.2.exe
+& .\desktop\dist\SC-v0.5.0-beta.5.exe
 ```
 
 | Variable | Default | Purpose |
@@ -85,8 +85,11 @@ Logs contain no screen content, task text, answers, preferences, raw provider bo
 The historical C# Windows comparison used identical synthetic captures for the
 two modes, alternating order, and reported fidelity, primary-answer correctness,
 latency and reported usage. Its [harness and procedure](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/tests/README.md)
-remain in the release tag; the TypeScript application has no equivalent paid
-comparison harness. Mocked transport cannot establish accuracy or dollar savings.
+remain in the release tag. The [TypeScript lab](../desktop/tests/lab/README.md)
+uses synthetic fixtures, native presentation checks, independent primary/display
+grading and bounded persistent campaign accounting. Its recorded targeted runs
+do not establish a representative quality gate. Mocked transport cannot establish
+accuracy or dollar savings.
 Dollar estimates require known usage and date-stamped pricing; the request
 reduction alone does not establish a corresponding monetary percentage.
 

@@ -5,14 +5,18 @@ import { fakeAnswer } from './fakes';
 import { gradeAnswer, matchesExpected } from './oracle';
 import { liveOptions } from './options';
 import { fixtureHtml } from './visual';
+import { DIAGNOSTIC_IDS, PHASE_LIMITS, phaseRuns } from './campaign';
+import { FAKE_CANDIDATE } from './fakes';
 
 describe('fixed synthetic visual campaign', () => {
-  it('has the accepted 96-call baseline and 24-call reserve, with unique stable IDs', () => {
+  it('has the accepted2+11+96+11 schedule with fresh49 and unique stable IDs', () => {
     const runs = campaign();
     expect(runs).toHaveLength(49);
     expect(new Set(runs.map(run => run.id)).size).toBe(49);
     expect(runs.reduce((sum, run) => sum + run.expectedCalls, 0)).toBe(BASELINE_CALLS);
-    expect(CAMPAIGN_CAP - BASELINE_CALLS).toBe(24);
+    expect(Object.values(PHASE_LIMITS).reduce((sum, value) => sum + value, 0)).toBe(CAMPAIGN_CAP);
+    expect(phaseRuns('diagnostic').map(run => run.id)).toEqual(DIAGNOSTIC_IDS);
+    expect(phaseRuns('diagnostic').reduce((sum, run) => sum + run.expectedCalls, 0)).toBe(11);
     expect(Object.fromEntries(['main', 'typed', 'translation', 'pro', 'preflight'].map(group => [group,
       runs.filter(run => run.group === group).reduce((sum, run) => sum + run.expectedCalls, 0)]))).toEqual({ main: 72, typed: 11, translation: 6, pro: 5, preflight: 2 });
     expect(runs.filter(run => run.group === 'main').every(run => run.answerModel === 'deepseek-flash' && run.thinking === 'None' && run.answerTokens === 2500)).toBe(true);
@@ -84,8 +88,10 @@ describe('strict independent primary and displayed-first-line oracles', () => {
 describe('explicit live authorization options', () => {
   it.each([[], ['--ledger', 'x', '--results', 'y'], ['--live'], ['--live', '--ledger', 'x'], ['--live', '--ledger', 'x', '--results', 'y', '--repeat'],
     ['--live', '--ledger', 'x', '--results', 'y', '--only', 'unknown']].map(args => ({ args })))('fails closed on incomplete or invalid options $args', ({ args }) => expect(() => liveOptions(args)).toThrow());
-  it('selects an explicit scoped repeat and prior contacts without resetting an existing ledger', () => {
-    expect(liveOptions(['--live', '--ledger', 'private-a', '--results', 'private-b', '--only', 'preflight-flash', '--repeat', '--prior-calls', '5'])).toEqual({
-      ledger: 'private-a', results: 'private-b', only: ['preflight-flash'], repeat: true, priorCalls: 5 });
+  it('selects explicit fixed-phase scope without any CLI budget/path authority', () => {
+    expect(liveOptions(['--live', '--phase', 'reserve', '--candidate', FAKE_CANDIDATE, '--only', 'preflight-flash', '--repeat'])).toEqual({
+      phase: 'reserve', candidate: FAKE_CANDIDATE, only: ['preflight-flash'], repeat: true });
+    expect(liveOptions(['--live', '--phase', 'qualification', '--candidate', FAKE_CANDIDATE])).toEqual({ phase: 'qualification', candidate: FAKE_CANDIDATE, only: null, repeat: false });
+    for (const flag of ['--ledger', '--results', '--prior-calls', '--budget', '--cap']) expect(() => liveOptions(['--live', '--phase', 'qualification', '--candidate', FAKE_CANDIDATE, flag, '120'])).toThrow();
   });
 });

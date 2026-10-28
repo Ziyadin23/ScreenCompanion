@@ -1,6 +1,7 @@
 # Verification and limitations
 
-This source tree contains the TypeScript/Electron application, **0.5.0-beta.4**.
+This source tree contains the TypeScript/Electron application, **0.5.0-beta.5**
+(unpublished; verification in progress).
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
@@ -10,6 +11,92 @@ publication does not establish that every compatibility gate has passed.
 run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
+
+## Beta.5 implementation and verification
+
+Direct now uses a single-target schema with empty selections, null alternative
+text and bounded confidence. Its task-general instructions keep the primary
+answer in the answer field, including selected options and ordered visible tasks.
+Strict local validation remains authoritative; provider flags and mode call
+budgets are unchanged.
+
+The focused Direct contract suite passed 31 tests after four initial synthetic
+failures, and the pipeline/provider suites passed 785 tests in eight files.
+These cases do not recover the unknown historical live response defects.
+The earlier Linux and Windows `npm run verify` passed **1,167 tests in 25 files**,
+type checking, lint and production bundles, exit 0. After the initial lab-ledger
+recovery fix, Linux and Windows verification passed **1,181 tests in 25 files**,
+exit 0. After further lab continuity hardening, Linux and Windows verification
+passed **1,215 tests in 26 files**, exit 0.
+The final candidate's native module
+passed **54 native checks** and **8 vault interoperability cases / 136 C#
+checks**, exit 0. The focused answer/left-resize and answer/input Alt-drag
+hide/restore checks passed all three cases. The first full 37-workflow UI run
+finished **24 passed / 13 failed**, exit 1, none skipped. Twelve vertical/corner
+cases exposed a work-area clamp and stationary-edge defect. The other failure
+came from the test fixture querying Playwright's process mapping after intentional
+native Exit. Its cleanup was corrected; explicit native focus and recorded-chord
+checks also fixed a separately retained shortcut-fixture precondition failure.
+The complete external-contention workflow then passed, exit 0. The first native correction still failed the top-edge regression. A minimal
+reproduction then showed that the frameless panel entered Windows sizing without
+`WS_THICKFRAME`; two separate drags shifted the stationary edge by four pixels.
+An explicit application-owned resize permission now guards native edge presses
+and renderer resize commands. The same reproduction retained every edge exactly,
+and the original top and bottom-right workflows passed, exit 0. A later full
+run of the unchanged 37-workflow matrix finished **36 passed / 1 failed**,
+exit 1: the answer panel did not become visible to Windows during one held-pointer
+hide/restore sequence. Three repeats of that unchanged workflow passed, as did
+ten shorter diagnostic cycles with no measured edge drift. A subsequent full run
+of all **37 workflows passed**, none skipped, exit 0. The earlier visibility
+failure remains unexplained and is retained as a separate result.
+
+An actual public beta.3 → beta.4 update passed **29 checks**, exit 0, using the
+unchanged GitHub provider and genuine release assets. It checked ordinary quit
+without installation, explicit restart to the target version, retained settings,
+installer identity and shortcuts, then verified original profile/cache restoration.
+The separate local beta.4 → earlier beta.5 candidate update passed **31 checks**, exit 0:
+unavailable feed, same-size corrupt-download rejection, explicit Retry, ordinary
+quit without installation, dirty-draft restart blocking, actual beta.5 READY,
+retained settings, installer identity/shortcuts, uninstall and original
+profile/cache restoration. This used that candidate's generated metadata and
+installer through a runtime-only loopback feed override. The corrected final
+candidate then passed the same **31 checks**, exit 0, from the genuine beta.4
+installer to the final beta.5 installer. An independent post-update check confirmed
+that the original profile, size files and updater cache were restored and no test
+installation or shortcuts remained. An interrupted earlier attempt remains
+retained with its separate verified recovery.
+
+The beta.5 installer and portable were built without publication. Static payload
+auditing passed 13 checks, including matching decoded application/native bytes,
+embedded versions, exact MIT/notices, feed digests and the interim two-file ZIP.
+The native visual suite passed 12 cases, followed by 120 independent frame checks,
+with no model requests. Recorder preparation passed 44 synthetic tests on the
+Windows local filesystem; two fixture tests had failed on the VM shared folder.
+The first final-candidate Edge recorder attempt stopped at its backdrop-size
+preflight, exit 1, before any surface review; its temporary resources were
+cleaned up. A second attempt with a full-size backdrop stopped at its received
+marker check, exit 1, before any surface review; its recording was finalized and
+temporary resources were cleaned up. A third attempt passed its manually inspected
+local/received marker preflight, then stopped at application process identity
+verification, exit 1, before any surface review. Its recording was finalized and
+temporary resources were cleaned up. A separate key-free probe reproduced that
+the recorder harness checked its launcher's shell process instead of the app
+process; a corrected harness still needs verification. None of these attempts
+establishes recorded-output behavior.
+The final packaged candidate passed five duplicate-launch scenarios, including
+restoring hidden Settings and retaining its draft, plus ten immediate-close
+launches. Its portable EXE reached READY with a system-only PATH, ran the x64
+payload and exited normally while preserving an isolated synthetic sentinel.
+The runnable beta.5 installer and portable archive were delivered locally after
+their copied bytes and archive contents were verified. These checks do not
+establish recorded output or model accuracy. Live qualification and
+named-recorder checks remain pending.
+Both live model preflights passed, using two authorized transport attempts. The
+subsequent diagnostic stopped before its first model request because the native
+screen capture did not pass the synthetic presentation pixel check. Later
+key-free runs reproduced the presentation failure; it remains separate from
+model quality and is under investigation.
+The historical results below retain their original build scope.
 
 ## Beta.4 setup and reliability checks (2026-10-25)
 

@@ -3,10 +3,10 @@ import type { Layout, SyntheticQuestion, VisualCase } from './cases';
 const escape = (text: string): string => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 const diagram = `<svg class="diagram" viewBox="0 0 500 220" role="img" aria-label="Rectangle, width 8 centimetres and height 3 centimetres">
   <defs><marker id="arrow" markerWidth="7" markerHeight="7" refX="3.5" refY="3.5" orient="auto-start-reverse"><path d="M7 0 L0 3.5 L7 7" fill="none" stroke="#435c79"/></marker></defs>
-  <rect x="96" y="48" width="288" height="108" rx="3" fill="#e9f2ff" stroke="#335c9b" stroke-width="3"/>
+  <rect data-required-diagram x="96" y="48" width="288" height="108" rx="3" fill="#e9f2ff" stroke="#335c9b" stroke-width="3"/>
   <path d="M96 183H384 M412 48V156" stroke="#435c79" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
-  <text x="240" y="209" text-anchor="middle" fill="#152b48" font-size="23">8 cm</text>
-  <text x="425" y="111" fill="#152b48" font-size="23">3 cm</text>
+  <text data-required-label x="240" y="209" text-anchor="middle" fill="#152b48" font-size="23">8 cm</text>
+  <text data-required-label x="425" y="111" fill="#152b48" font-size="23">3 cm</text>
 </svg>`;
 function question(item: SyntheticQuestion, count: number): string {
   const options = item.options?.map((option, i) => `<div class="option"><span class="${item.type === 'multiple_selection' ? 'checkbox' : 'radio'}"></span><strong>${String.fromCharCode(65 + i)}.</strong> ${escape(option)}</div>`).join('') ?? '';
