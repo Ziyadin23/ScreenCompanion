@@ -2,6 +2,8 @@
 
 SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
+[Visit the SC website](https://ziyadin23.github.io/screencompanion-website/).
+
 ## TypeScript desktop application
 
 SC's Windows Electron/TypeScript application lives under
