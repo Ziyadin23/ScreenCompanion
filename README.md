@@ -2,6 +2,8 @@
 
 SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
+[Visit the SC website](https://ziyadin23.github.io/screencompanion-website/).
+
 ## TypeScript desktop application
 
 SC's Windows Electron/TypeScript application lives under
@@ -11,7 +13,8 @@ and its existing releases. Only its frozen vault-compatibility test fixture rema
 The current source version is **0.5.0-beta.6**, with verification in progress and
 no GitHub release. It clarifies extraction types for tasks with diagrams, tightens
 Direct answer formatting, cancels active panel drags when hidden, and adds Windows
-control and update checks. The latest published beta is
+control and update checks. Recorder exclusion, duplicate-launch behavior and live
+answer quality still need verification. The latest published beta is
 [v0.5.0-beta.4](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
 see its [release notes](docs/releases/v0.5.0-beta.4.md).
 It includes service-aware key setup, clearer Settings and a per-user Windows
