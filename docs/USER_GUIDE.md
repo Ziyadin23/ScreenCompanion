@@ -1,11 +1,11 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.2. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
+Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.6 (unpublished). The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
 
 ## Setup and migration
 
-1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). Its Windows package contains `SC-v0.5.0-beta.2.exe`, with a matching ZIP containing the EXE and `README.txt`. It includes its runtime and needs no .NET installation. Windows 11 has been checked; Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
-2. Double-click the EXE. On first launch, enter your own API key; the initial dialog is labelled OpenAI and checks only that a key was entered. There is no app password and setup makes no model request. Before asking a question, open **Settings → Models & API**, select the service matching your key, enter that service's key and **Save**. You do not need an OpenAI key to use DeepSeek or another service. Internet access, model access and any required credits must be available on your selected provider account; the initial default is OpenAI `gpt-6-luna`.
+1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The build also produces a portable `SC-v0.5.0-beta.6.exe` and matching ZIP containing that EXE and `README.txt`. It includes its runtime and needs no .NET installation. Earlier beta builds were checked on Windows 11; beta.6 verification is in progress, and Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
+2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. Commands appear once after setup or an upgrade from settings without the help marker. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to submit. Esc returns to the answer. The app captures the monitor containing the answer panel once; the typed question determines the task.
 
@@ -26,11 +26,39 @@ The following shortcuts and panel controls apply to the TypeScript beta:
 
 The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the selected panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. All six shortcuts can be changed: click a field and press the desired key or combination. Click elsewhere to stop recording, or use Restore shortcuts. The current visibility and exit shortcuts remain active even while recording a new shortcut. Windows may reject reserved or occupied combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps.
 
-The normal answer view has no header, close button, permanent input, footer, or visible scrollbar. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. The chosen size is saved for later launches under `%LOCALAPPDATA%\SC\window-size.json`; no answer is saved there. The tray icon indicates a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
+The normal answer view has no header, close button, permanent input, footer, or visible scrollbar. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. Hiding the panel or switching its surface ends the current drag; release and press again to move or resize. The chosen size is saved for later launches under `%LOCALAPPDATA%\SC\window-size.json`; no answer is saved there. The tray icon indicates a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
 
 Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or pick custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the default transparent background, 80% text visibility, and 11-point text. Settings and key setup stay opaque. Existing saved colors/transparency are preserved; missing fields receive the new defaults. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
 
+## Application updates
+
+Installed SC checks GitHub Releases at startup. Open **Settings → Updates** to
+check again, choose **Download update**, then **Restart and install**. Download
+progress and failures appear in that page without replacing the last answer.
+Installation is blocked while a model request, settings save or color picker is
+active. Save Settings edits before restarting; unsaved drafts are temporary.
+Closing SC normally does not install a downloaded update automatically.
+
+Beta builds accept newer beta and stable releases; stable builds accept stable
+releases. Updates never intentionally downgrade SC. The public release must
+include its installer and matching update metadata; the existing C# releases
+cannot supply Electron updates. Until an installer release is published, checking
+can report that no update feed is available. A local installer delivery does not
+publish a GitHub release.
+
+API keys, model preferences, shortcuts and appearance remain in the same
+Windows-account encrypted vault across installation and updates. Uninstalling SC
+leaves this existing settings storage intact. To move to another account or PC,
+enter your API key again there. The current local beta is unsigned, so Windows or
+managed-PC policy may warn or block it as with the portable build.
+
+The portable EXE, development builds and key-free previews do not check for or
+install updates. Their Updates page explains the installed-version requirement.
+For the portable version, close SC before replacing its EXE manually.
+
 ## Service and model selection
+
+Settings groups related controls and reports unsaved changes. **Models & API** keeps the service, key and pipeline together; expand **Advanced model settings** for editable model IDs, DeepSeek reasoning and output-token limits. A validation error opens the relevant page and focuses the affected field. Settings load failures offer a retry. Save applies changes; Back discards them.
 
 Open **Settings → Models & API** to choose OpenAI, Groq, Google Gemini, Mistral, OpenRouter or DeepSeek. Choose an **Answer model** and a **Screen-reading model**, or type their exact model IDs. The screen-reading model must support images and structured JSON. The answer model must support structured JSON and any retained task images; DeepSeek Pro is a text-only answering option. Suggestions are editable; access, free quotas, and model availability depend on your own provider account. The app contains no shared API keys.
 
@@ -47,6 +75,23 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
 All six provider adapters have mocked transport coverage, and Windows encrypted-settings/UI checks passed. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
+
+## Installed and portable updates
+
+**Settings → Updates** identifies whether this copy supports in-app updates.
+Installed SC checks on startup; **Download update** and **Restart and install**
+remain explicit actions. A failed download offers **Retry download**. A completed
+download becomes installable only after its local cache work has finished.
+
+Save your Settings changes or use Back to discard them before restarting, then
+reopen Updates. Restart is unavailable during an answer, settings write, shortcut
+recording or native color dialog. Closing SC normally never installs an update.
+If the installer cannot start, close and reopen SC or run the latest setup EXE
+manually. Public update discovery requires a published installer release.
+
+Portable copies use manual replacement: close SC before replacing their EXE.
+Run the setup EXE to obtain an installed copy with update support. Installing,
+upgrading and uninstalling preserve the encrypted settings for your Windows account.
 
 ## Diagnose a failure
 

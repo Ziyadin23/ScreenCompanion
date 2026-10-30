@@ -46,8 +46,10 @@ export interface WindowsPlatform extends HttpTransport, ImageCropper {
   applyShortcuts(settings: VaultData, recording: boolean, onAction: (action: AppAction) => void): Promise<void>;
   attachPanel(handle: Buffer, onWheel: (delta: number) => void): () => void;
   setHoverInputHeight(heightPixels: number): void;
+  setPanelResizeEnabled(handle: Buffer, enabled: boolean): void;
   beginMove(handle: Buffer): void;
   beginResize(handle: Buffer, edge: ResizeEdge): void;
+  cancelPanelInteraction(handle: Buffer): void;
   chooseColor(owner: Buffer, initialColor: string): Promise<string | null>;
   setOwnedDialogsVisible(owner: Buffer, visible: boolean): void;
   closeOwnedDialogs(owner: Buffer): void;
@@ -87,10 +89,16 @@ export interface PipelineResult { text: string; requestId: string }
 export interface PipelineRunner { run(input: PipelineInput): Promise<PipelineResult> }
 export interface DisplayError { message: string; code: string; reportId: string; hint: string; logSaved: boolean }
 export type Surface = 'setup' | 'answer' | 'input' | 'settings' | 'captureTest';
+export type UpdateAction = 'check' | 'download' | 'install';
+export interface UpdateState {
+  status: 'disabled' | 'idle' | 'checking' | 'current' | 'available' | 'downloading' | 'downloaded' | 'installing' | 'error';
+  version: string | null; progress: number | null; message: string;
+}
 export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
+  updates: UpdateState; settingsDirty: boolean;
 }
 export interface SettingsDraft {
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
@@ -101,15 +109,18 @@ export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string }
   | { type: 'recordShortcut'; recording: boolean }
+  | { type: 'settingsDraftChanged'; dirty: boolean }
   | { type: 'beginResize'; edge: ResizeEdge };
+export interface SetupRequest { provider: ApiProvider; apiKey: string }
 export interface DesktopApi {
   getState(): Promise<AppState>;
-  setup(apiKey: string): Promise<void>;
+  setup(request: SetupRequest): Promise<void>;
   command(command: AppCommand): Promise<void>;
   getSettingsDraft(): Promise<SettingsDraft>;
   saveSettings(draft: SettingsDraft): Promise<void>;
   discardSettings(): Promise<void>;
   chooseColor(initialColor: string): Promise<string | null>;
+  update(action: UpdateAction): Promise<void>;
   subscribe(listener: (state: AppState) => void): () => void;
   onScroll(listener: (delta: number) => void): () => void;
 }

@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppState, PipelineConfiguration, PipelineInput, PipelineResult, VaultData } from '../../src/contracts';
-import { defaultSettings } from '../../src/contracts/defaults';
-import { ApplicationController } from '../../src/main/controller';
+import type { AppState, PipelineConfiguration, PipelineMode, PipelineInput, PipelineResult, VaultData } from '../../src/contracts';
+import { PROVIDERS } from '../../src/contracts';
+import { withSavedSettings } from '../../src/pipeline/configuration';
+import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
+import { ApplicationController, canResizePanel } from '../../src/main/controller';
 import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
 
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }) {
+function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough') {
   const platform = createPreviewPlatform();
   const jpeg = Buffer.from('synthetic-monitor');
   platform.activeMonitor = vi.fn(() => ({ x: -1920, y: 0, width: 1920, height: 1080 }));
@@ -23,22 +25,134 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   const outcome = deferred<PipelineResult>();
   const run = vi.fn((_input: PipelineInput) => outcome.promise);
   const states: AppState[] = [];
-  const configuration: PipelineConfiguration = { provider: 'OpenAI', answerModel: 'gpt-6-luna', visionModel: 'gpt-6-luna', mode: 'Thorough',
+  const configuration: PipelineConfiguration = { provider: processMode === 'Direct' ? 'DeepSeek' : 'OpenAI', answerModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', visionModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', mode: processMode,
     assessmentMode: 'standard', enableQuestionCropping: true, enableRefusalRetry: true, imageRegionPadding: .08,
     questionRegion: null, extractionMaxOutputTokens: 6000, answerMaxOutputTokens: 2500, thinking: 'None' };
   const controller = new ApplicationController({ platform, store: { load, save,
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host: { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: state => states.push(state), scroll() {}, exit() {} },
-    diagnostics: createDiagnostics(null, 'test'), configuration: () => configuration, validateSettings() {}, version: 'test', captureDelayMs: 0 });
+    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0 });
   return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
 }
 describe('production lifecycle with injected native boundaries', () => {
+  it('permits native edge resizing for the three visible panel surfaces, including while waiting for an answer', () => {
+    const state = { ...fixture().controller.getState(), ready: true, visible: true, busy: true };
+    for (const surface of ['answer', 'input', 'captureTest'] as const) expect(canResizePanel({ ...state, surface }, false)).toBe(true);
+  });
+  it('keeps Settings, setup, hidden, uninitialized and capturing surfaces outside native edge resizing', () => {
+    const state = { ...fixture().controller.getState(), ready: true, visible: true, surface: 'answer' as const };
+    for (const surface of ['settings', 'setup'] as const) expect(canResizePanel({ ...state, surface }, false)).toBe(false);
+    expect(canResizePanel({ ...state, visible: false }, false)).toBe(false);
+    expect(canResizePanel({ ...state, ready: false }, false)).toBe(false);
+    expect(canResizePanel(state, true)).toBe(false);
+  });
+  it('drops move and resize IPC while hidden or capturing, then permits a visible interaction', async () => {
+    const f = fixture();
+    f.platform.beginMove = vi.fn(); f.platform.beginResize = vi.fn();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).not.toHaveBeenCalled(); expect(f.platform.beginResize).not.toHaveBeenCalled();
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).toHaveBeenCalledOnce(); expect(f.platform.beginResize).toHaveBeenCalledOnce();
+    const capture = deferred<Awaited<ReturnType<typeof f.platform.captureMonitor>>>();
+    f.platform.captureMonitor = vi.fn(() => capture.promise);
+    const request = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.platform.captureMonitor).toHaveBeenCalledOnce());
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'left' });
+    expect(f.platform.beginMove).toHaveBeenCalledOnce(); expect(f.platform.beginResize).toHaveBeenCalledOnce();
+    capture.resolve({ jpeg: f.jpeg, bounds: { x: 0, y: 0, width: 1920, height: 1080 } });
+    f.outcome.resolve({ text: 'Synthetic answer', requestId: 'synthetic' }); await request;
+    await f.controller.command({ type: 'beginMove' });
+    await f.controller.command({ type: 'beginResize', edge: 'right' });
+    expect(f.platform.beginMove).toHaveBeenCalledTimes(2); expect(f.platform.beginResize).toHaveBeenCalledTimes(2);
+  });
+  it('permits update restart only from idle visible Settings, after settings writes and dialogs finish', async () => {
+    const f = fixture(); expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.initialize(); expect(f.controller.canInstallUpdate()).toBe(false);
+    const request = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.run).toHaveBeenCalled());
+    await f.controller.command({ type: 'settings' }); expect(f.controller.canInstallUpdate()).toBe(false);
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' }); await request;
+    expect(f.controller.canInstallUpdate()).toBe(true);
+    const saved = deferred<void>(); f.save.mockReturnValueOnce(saved.promise);
+    const writing = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await vi.waitFor(() => expect(f.save).toHaveBeenCalled()); expect(f.controller.canInstallUpdate()).toBe(false);
+    saved.resolve(); await writing;
+    await f.controller.command({ type: 'settings' });
+    const color = deferred<string | null>(); f.platform.chooseColor = vi.fn(() => color.promise);
+    const choosing = f.controller.chooseColor('#123456'); expect(f.controller.canInstallUpdate()).toBe(false);
+    color.resolve(null); await choosing; expect(f.controller.canInstallUpdate()).toBe(true);
+    await f.controller.command({ type: 'toggleVisibility' }); expect(f.controller.canInstallUpdate()).toBe(false);
+    f.controller.dispose(); expect(f.controller.canInstallUpdate()).toBe(false);
+  });
+  it('does not start a capture or write settings once update installation starts', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    f.controller.setUpdateState({ status: 'installing', version: '0.5.0-beta.4', progress: 100, message: 'Restarting' });
+    await f.controller.command({ type: 'showInput' }); await f.controller.command({ type: 'capture' });
+    await expect(f.controller.saveSettings(draft)).rejects.toMatchObject({ code: 'UPDATEBUSY' });
+    expect(f.controller.getState().surface).toBe('settings'); expect(f.platform.captureMonitor).not.toHaveBeenCalled(); expect(f.save).not.toHaveBeenCalled();
+  });
   it('waits for setup before registering shortcuts and makes no model request', async () => {
     const f = fixture(null); await f.controller.initialize();
     expect(f.controller.getState().surface).toBe('setup'); expect(f.platform.applyShortcuts).not.toHaveBeenCalled();
-    await f.controller.setup('synthetic-new-key');
+    await f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-new-key' });
     expect(f.save).toHaveBeenCalled(); expect(f.controller.getState().ready).toBe(true); expect(f.run).not.toHaveBeenCalled();
     const state = JSON.stringify(f.controller.getState()); expect(state).not.toContain('synthetic-new-key');
+  });
+  it.each(PROVIDERS)('saves %s setup with its model defaults and uses that service on the first request', async provider => {
+    const f = fixture(null); await f.controller.initialize();
+    await f.controller.setup({ provider, apiKey: '  synthetic-service-key  ' });
+    expect(f.save.mock.calls[0]?.[0]).toMatchObject({ ApiKey: 'synthetic-service-key', Models: defaultModels(provider),
+      ProviderKeys: { [provider]: 'synthetic-service-key' } });
+    expect(f.controller.getSettingsDraft()).toMatchObject({ values: { Models: defaultModels(provider) }, keyPresence: { [provider]: true } });
+    expect(f.run).not.toHaveBeenCalled();
+    const request = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.run).toHaveBeenCalledOnce());
+    expect(f.run.mock.calls[0]?.[0]).toMatchObject({ apiKey: 'synthetic-service-key', configuration: { provider, answerModel: defaultModels(provider).AnswerModel } });
+    f.outcome.resolve({ text: 'Synthetic answer', requestId: 'synthetic' }); await request;
+    expect(JSON.stringify(f.controller.getState())).not.toContain('synthetic-service-key');
+  });
+  it.each(PROVIDERS.flatMap(provider => (['Balanced', 'Direct'] as const).map(processMode => ({ provider, processMode }))))(
+    'keeps setup usable for $provider with inherited $processMode, including after restart', async ({ provider, processMode }) => {
+      const f = fixture(null, processMode); await f.controller.initialize();
+      await f.controller.setup({ provider, apiKey: 'synthetic-provider-key' });
+      const expected = processMode === 'Direct' && provider !== 'DeepSeek' ? 'Thorough' : processMode;
+      expect(f.controller.getSettingsDraft().values.PipelineMode).toBe(expected);
+      const saved = f.save.mock.calls.at(-1)![0];
+      const restarted = fixture(saved, processMode); await restarted.controller.initialize();
+      expect(restarted.controller.getSettingsDraft()).toMatchObject({ values: { PipelineMode: expected, Models: { Provider: provider } }, keyPresence: { [provider]: true } });
+      expect(f.run).not.toHaveBeenCalled(); expect(restarted.run).not.toHaveBeenCalled();
+    });
+  it('retains unsaved Settings across activation and hide/restore, blocking update restart until discarded', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
+    expect(f.controller.canInstallUpdate()).toBe(true);
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.command({ type: 'toggleVisibility' }); f.controller.restore();
+    await f.controller.command({ type: 'settings' });
+    expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.discardSettings(); await f.controller.command({ type: 'settings' });
+    expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
+  });
+  it('keeps failed saves dirty and clears the update guard only after a successful save', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    const draft = f.controller.getSettingsDraft(); draft.values.CustomInstruction = 'Synthetic changed preference';
+    f.save.mockRejectedValueOnce(new Error('synthetic storage failure'));
+    await expect(f.controller.saveSettings(draft)).rejects.toMatchObject({ code: 'SAVEFAILED' });
+    expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.saveSettings(draft); await f.controller.command({ type: 'settings' });
+    expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
+  });
+  it('blocks update restart while a shortcut is being recorded', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'recordShortcut', recording: true }); expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.command({ type: 'recordShortcut', recording: false }); expect(f.controller.canInstallUpdate()).toBe(true);
   });
   it('opens usable input on activation without an answer', async () => {
     const f = fixture(); f.controller.restore(); await f.controller.initialize();
@@ -51,7 +165,7 @@ describe('production lifecycle with injected native boundaries', () => {
     if (action === 'activation') f.controller.restore();
     else await f.controller.command({ type: 'toggleVisibility' });
     expect(f.controller.getState().visible).toBe(false);
-    await expect(f.controller.setup('synthetic-replacement')).rejects.toMatchObject({ code: 'NOTREADY' });
+    await expect(f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-replacement' })).rejects.toMatchObject({ code: 'NOTREADY' });
     expect(f.save).not.toHaveBeenCalled();
     expect(f.platform.applyShortcuts).not.toHaveBeenCalled();
     loaded.resolve({ ...defaultSettings('existing-synthetic-key'), CommandsShown: true });
@@ -67,12 +181,12 @@ describe('production lifecycle with injected native boundaries', () => {
     f.load.mockReturnValueOnce(loaded.promise);
     const initialization = f.controller.initialize();
     f.controller.restore(); await f.controller.command({ type: 'toggleVisibility' });
-    await expect(f.controller.setup('synthetic-new-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    await expect(f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-new-key' })).rejects.toMatchObject({ code: 'NOTREADY' });
     expect(f.save).not.toHaveBeenCalled(); expect(f.controller.getState().visible).toBe(false);
     loaded.resolve(null); await initialization;
     expect(f.controller.getState()).toMatchObject({ ready: false, surface: 'setup', visible: true });
     expect(f.save).not.toHaveBeenCalled();
-    await f.controller.setup('synthetic-new-key');
+    await f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-new-key' });
     expect(f.controller.getState().ready).toBe(true); expect(f.run).not.toHaveBeenCalled();
   });
   it('does not expose setup while its legacy-vault notice is still loading', async () => {
@@ -81,7 +195,7 @@ describe('production lifecycle with injected native boundaries', () => {
     const initialization = f.controller.initialize();
     await vi.waitFor(() => expect(f.legacyPasswordVaultExists).toHaveBeenCalled());
     f.controller.restore();
-    await expect(f.controller.setup('synthetic-new-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    await expect(f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-new-key' })).rejects.toMatchObject({ code: 'NOTREADY' });
     expect(f.controller.getState().visible).toBe(false); expect(f.save).not.toHaveBeenCalled();
     notice.resolve(true); await initialization;
     expect(f.controller.getState()).toMatchObject({ surface: 'setup', visible: true, setupLegacyNotice: true });
@@ -89,13 +203,13 @@ describe('production lifecycle with injected native boundaries', () => {
   it('blocks overlapping setup writes and permits retry after a failed save', async () => {
     const f = fixture(null), saved = deferred<void>(); await f.controller.initialize();
     f.save.mockReturnValueOnce(saved.promise);
-    const first = f.controller.setup('synthetic-first-key');
-    await expect(f.controller.setup('synthetic-overlapping-key')).rejects.toMatchObject({ code: 'NOTREADY' });
+    const first = f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-first-key' });
+    await expect(f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-overlapping-key' })).rejects.toMatchObject({ code: 'NOTREADY' });
     expect(f.save).toHaveBeenCalledTimes(1);
     const failure = expect(first).rejects.toMatchObject({ code: 'SAVEFAILED' });
     saved.reject(new Error('synthetic write failure')); await failure;
     expect(f.controller.getState()).toMatchObject({ ready: false, surface: 'setup' });
-    await f.controller.setup('synthetic-retry-key');
+    await f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-retry-key' });
     expect(f.controller.getState()).toMatchObject({ ready: true, error: null });
     expect(f.save.mock.calls.every(([settings]) => settings.ApiKey !== 'synthetic-overlapping-key')).toBe(true);
   });
@@ -107,7 +221,7 @@ describe('production lifecycle with injected native boundaries', () => {
     const failure = expect(initialization).rejects.toThrow('synthetic read failure');
     loaded.reject(new Error('synthetic read failure')); await failure;
     f.controller.restore(); await f.controller.command({ type: 'toggleVisibility' });
-    await expect(f.controller.setup('synthetic-replacement')).rejects.toMatchObject({ code: 'NOTREADY' });
+    await expect(f.controller.setup({ provider: 'OpenAI', apiKey: 'synthetic-replacement' })).rejects.toMatchObject({ code: 'NOTREADY' });
     expect(f.controller.getState()).toMatchObject({ ready: false, visible: false });
     expect(f.save).not.toHaveBeenCalled(); expect(f.platform.applyShortcuts).not.toHaveBeenCalled();
     expect(f.states.some(state => state.surface === 'setup' && state.visible)).toBe(false);

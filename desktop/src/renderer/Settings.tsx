@@ -3,12 +3,22 @@ import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, Hotk
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { Choice } from './Choice';
+import { Updates } from './Updates';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
 
-type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands';
-const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands'];
+type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
+const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates'];
+const PAGE_IDS: Record<Page, string> = { 'Answer & shortcuts': 'answer', Panel: 'panel', 'Models & API': 'models', Commands: 'commands', Updates: 'updates' };
+const PAGE_HINTS: Record<Page, string> = {
+  'Answer & shortcuts': 'Choose how SC answers and the keys you use to control it.',
+  Panel: 'Preview the answer panel. Settings always keeps this readable palette.',
+  'Models & API': 'Connect your service. Model and processing options are available below.',
+  Commands: 'Use these shortcuts from any app. Change them in Answer & shortcuts.',
+  Updates: 'Check your version and choose when to download or install an update.'
+};
+interface ValidationProblem { message: string; page: Page; field: string; advanced?: boolean; provider?: ApiProvider }
 const COLOR_FIELDS = [{ field: 'BackgroundColor', label: 'Background' }, { field: 'TextColor', label: 'Text' }, { field: 'AccentColor', label: 'Buttons' }] as const;
 const PIPELINE_NOTICE: Record<PipelineMode, string> = {
   Thorough: 'Locates the question, extracts it, then answers in three model calls. Both models must support structured responses; screen reading requires images.',
@@ -26,7 +36,17 @@ const DATA_NOTICE: Record<ApiProvider, string> = {
 
 export function Settings({ state }: { state: AppState }) {
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
+  const draftRef = useRef<SettingsDraft | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const dirtyRef = useRef(false);
   const [page, setPage] = useState<Page>('Answer & shortcuts');
+  const body = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [advanced, setAdvanced] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<{ field: string } | null>(null);
+  const [invalidField, setInvalidField] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelSelection>>>({});
   const [pipelines, setPipelines] = useState<Partial<Record<ApiProvider, PipelineMode | null>>>({});
   const [showKey, setShowKey] = useState(false);
@@ -39,26 +59,55 @@ export function Settings({ state }: { state: AppState }) {
   const [choosingColor, setChoosingColor] = useState(false);
   const savingRef = useRef(false);
   const alive = useRef(true);
+  const loaded = draft !== null;
 
   useEffect(() => {
     alive.current = true;
     let cancelled = false;
+    setLoadFailed(false); setError('');
     void window.sc.getSettingsDraft().then((result) => {
       if (cancelled) return;
       const copy = structuredClone(result);
       // Saved secrets never cross the renderer boundary, even as masked text.
       copy.keyUpdates = {};
+      draftRef.current = copy;
       setDraft(copy);
       const models = copy.values.Models ?? defaultModels();
       setModelDrafts({ [models.Provider]: models });
       setPipelines({ [models.Provider]: copy.values.PipelineMode });
-    }).catch(() => { if (!cancelled) setError('Settings could not be loaded. Return and try again.'); });
+    }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
     return () => {
       cancelled = true; alive.current = false;
       if (recordingRef.current) void window.sc.command({ type: 'recordShortcut', recording: false }).catch(() => {});
       recordingRef.current = null;
     };
-  }, []);
+  }, [loadAttempt]);
+
+  useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
+  // Focus once after loading, so status updates and draft edits never steal it.
+  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded]);
+  useEffect(() => {
+    if (!focusRequest) return;
+    const field = document.getElementById(focusRequest.field);
+    field?.focus(); field?.scrollIntoView?.({ block: 'nearest' });
+  }, [focusRequest]);
+
+  function markDirty(value: boolean) {
+    if (dirtyRef.current === value) return;
+    dirtyRef.current = value;
+    if (alive.current) setDirty(value);
+    void window.sc.command({ type: 'settingsDraftChanged', dirty: value }).catch(() => {
+      if (alive.current) setError('Settings edit status could not be updated. Save your changes or use Back before restarting.');
+    });
+  }
+  function replaceDraft(next: SettingsDraft) { draftRef.current = next; setDraft(next); }
+  function modifyDraft(change: (previous: SettingsDraft) => SettingsDraft) {
+    const previous = draftRef.current;
+    if (!previous || savingRef.current) return;
+    const next = change(previous);
+    if (JSON.stringify(previous) === JSON.stringify(next)) return;
+    replaceDraft(next); markDirty(true); setError(''); setInvalidField(null);
+  }
 
   function stopRecording() {
     if (!recordingRef.current) return;
@@ -75,7 +124,7 @@ export function Settings({ state }: { state: AppState }) {
   useEffect(() => { if (!state.visible) stopRecording(); }, [state.visible]);
 
   function updateValues(patch: Partial<SettingsDraft['values']>) {
-    setDraft((previous) => previous && { ...previous, values: { ...previous.values, ...patch } });
+    modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
   }
   const models = draft?.values.Models ?? defaultModels();
   const provider = models.Provider;
@@ -84,10 +133,11 @@ export function Settings({ state }: { state: AppState }) {
     updateValues({ Models: { ...models, ...patch } });
   }
   function changeProvider(selected: ApiProvider) {
-    if (!draft) return;
+    if (!draft || selected === provider) return;
     setModelDrafts((previous) => ({ ...previous, [provider]: models }));
     setPipelines((previous) => ({ ...previous, [provider]: draft.values.PipelineMode }));
-    updateValues({ Models: modelDrafts[selected] ?? defaultModels(selected), PipelineMode: pipelines[selected] ?? (pipeline === 'Direct' ? 'Thorough' : draft.values.PipelineMode) });
+    updateValues({ Models: modelDrafts[selected] ?? defaultModels(selected),
+      PipelineMode: selected in pipelines ? pipelines[selected]! : pipeline === 'Direct' ? 'Thorough' : draft.values.PipelineMode });
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
@@ -108,26 +158,41 @@ export function Settings({ state }: { state: AppState }) {
     }
     updateValues({ [field]: binding }); stopRecording();
   }
-  function validation(): string | null {
-    if (!draft) return 'Settings are still loading.';
-    if (draft.values.ResponseMode === 'Custom' && !draft.values.CustomInstruction.trim()) return 'Enter a custom instruction or choose another answer mode.';
-    if (draft.values.CustomInstruction.length > 2000) return 'Custom instructions must be 2,000 characters or fewer.';
-    if (duplicateShortcut(draft.values)) return 'Each action needs a different shortcut.';
-    if (SHORTCUT_FIELDS.some(({ field }) => shortcutProblem(draft.values[field]))) return 'Choose valid shortcuts. F12 and Windows reserved combinations are unavailable.';
-    if ([models.AnswerModel, models.VisionModel].some((model) => !/^[a-z0-9_./:-]{1,160}$/i.test(model.trim()) || model.includes('://'))) return 'Enter valid answer and screen-reading model IDs, without spaces or URLs.';
-    if (Object.values(draft.keyUpdates).some((key) => key.length > 8192 || /[\u0000-\u001f\u007f]/.test(key))) return 'Enter a valid service API key without line breaks or control characters.';
-    if (!draft.keyUpdates[provider]?.trim() && !draft.keyPresence[provider]) return 'Enter an API key for the selected service on Models & API.';
-    if (pipeline === 'Direct' && provider !== 'DeepSeek') return 'Direct screenshot is available only for DeepSeek.';
+  function validation(): ValidationProblem | null {
+    if (!draft) return null;
+    const answer = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Answer & shortcuts' });
+    const model = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Models & API', advanced: true });
+    if (draft.values.ResponseMode === 'Custom' && !draft.values.CustomInstruction.trim()) return answer('Enter a custom instruction or choose another answer mode.', 'custom-instruction');
+    if (draft.values.CustomInstruction.length > 2000) return answer('Custom instructions must be 2,000 characters or fewer.', 'custom-instruction');
+    const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(draft.values[field]));
+    if (invalidShortcut) return answer('Choose valid shortcuts. F12 and Windows reserved combinations are unavailable.', `shortcut-${invalidShortcut.field}`);
+    if (duplicateShortcut(draft.values)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
+    const invalidModel = (value: string) => !/^[a-z0-9_./:-]{1,160}$/i.test(value.trim()) || value.includes('://');
+    if (invalidModel(models.AnswerModel)) return model('Enter a valid answer model ID, without spaces or URLs.', 'answer-model');
+    if (invalidModel(models.VisionModel)) return model('Enter a valid screen-reading model ID, without spaces or URLs.', pipeline === 'Direct' ? 'request-pipeline' : 'vision-model');
+    const invalidKey = PROVIDERS.find((service) => {
+      const key = draft.keyUpdates[service] ?? '';
+      return key.length > 8192 || /[\u0000-\u001f\u007f]/.test(key);
+    });
+    if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
+    if (!draft.keyUpdates[provider]?.trim() && !draft.keyPresence[provider]) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
+    if (pipeline === 'Direct' && provider !== 'DeepSeek') return model('Direct screenshot is available only for DeepSeek.', 'request-pipeline');
     if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
-      (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return 'DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.';
-    if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return 'Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.';
+      (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
+    if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
     return null;
   }
   async function save() {
     stopRecording();
     if (savingRef.current || choosingColor) return;
     const problem = validation();
-    if (problem || !draft) { setError(problem ?? 'Settings are unavailable.'); return; }
+    if (!draft) return;
+    if (problem) {
+      setPage(problem.page);
+      if (problem.provider && problem.provider !== provider) changeProvider(problem.provider);
+      if (problem.advanced) setAdvanced(true);
+      setError(problem.message); setInvalidField(problem.field); setFocusRequest({ field: problem.field }); return;
+    }
     savingRef.current = true; setSaving(true); setError('');
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
@@ -139,7 +204,8 @@ export function Settings({ state }: { state: AppState }) {
     }
     try {
       await window.sc.saveSettings(outgoing);
-      if (alive.current) setDraft((previous) => previous && { ...previous, keyUpdates: {} });
+      markDirty(false);
+      if (alive.current && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
       if (alive.current) setError('Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
@@ -153,8 +219,8 @@ export function Settings({ state }: { state: AppState }) {
     if (savingRef.current || choosingColor) return;
     stopRecording(); setError('');
     // Clear typed replacements before leaving, including when IPC fails.
-    setDraft((previous) => previous && { ...previous, keyUpdates: {} });
-    try { await window.sc.discardSettings(); }
+    if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
+    try { await window.sc.discardSettings(); markDirty(false); }
     catch { if (alive.current) setError('Could not return to the answer. Try Back again.'); }
   }
   async function chooseColor(field: typeof COLOR_FIELDS[number]['field']) {
@@ -162,21 +228,24 @@ export function Settings({ state }: { state: AppState }) {
     setChoosingColor(true); setError('');
     try {
       const color = await window.sc.chooseColor(draft.values.Appearance[field]);
-      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) setDraft((previous) => previous && {
+      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) modifyDraft((previous) => ({
         ...previous, values: { ...previous.values, Appearance: { ...previous.values.Appearance, [field]: color } }
-      });
+      }));
     } catch { if (alive.current) setError('The color picker could not be opened. Try again.'); }
     finally { if (alive.current) setChoosingColor(false); }
   }
   function appearance(patch: Partial<AppearanceSettings>) { if (draft) updateValues({ Appearance: { ...draft.values.Appearance, ...patch } }); }
+  const blocked = saving || choosingColor;
+  function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
+  function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
 
-  return <section className="settings fixed-theme" aria-label="SC settings" onKeyDown={(event) => {
+  return <section className="settings fixed-theme" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
     <header className="dialog-header"><h1>SC settings</h1><span>v{state.version}</span></header>
     <div className="tabs" role="tablist" aria-label="Settings pages">
-      {PAGES.map((name) => <button key={name} id={`tab-${name}`} type="button" role="tab" aria-selected={page === name}
-        aria-controls="settings-page" disabled={saving || choosingColor} onClick={() => { stopRecording(); setPage(name); }}
+      {PAGES.map((name) => <button key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}
+        tabIndex={page === name ? 0 : -1} aria-controls="settings-page" disabled={blocked} onClick={() => { stopRecording(); setPage(name); }}
         onKeyDown={(event) => {
           if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
             event.preventDefault(); stopRecording();
@@ -186,22 +255,28 @@ export function Settings({ state }: { state: AppState }) {
           }
         }}>{name}</button>)}
     </div>
-    <div className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${page}`}>
-      {!draft && <p role="status">{error ? 'Settings unavailable.' : 'Loading settings…'}</p>}
-      {draft && <fieldset className="settings-fields" disabled={saving || choosingColor}>
+    <div ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
+      <div className="page-intro"><h2 ref={heading} tabIndex={-1}>{page}</h2><p className="hint">{PAGE_HINTS[page]}</p></div>
+      {!draft && <div className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
+        {loadFailed && <button type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</button>}</div>}
+      {draft && <fieldset className="settings-fields" disabled={blocked}>
+        <legend className="sr-only">{page} settings</legend>
         {page === 'Answer & shortcuts' && <>
-          <Choice label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
+          <section className="form-section" aria-labelledby="answer-behavior-heading"><h3 id="answer-behavior-heading">Answer behavior</h3>
+          <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
             onChange={(value) => updateValues({ ResponseMode: value as SettingsDraft['values']['ResponseMode'] })} />
           <label htmlFor="custom-instruction">Custom instruction (used in Custom mode)</label>
-          <textarea id="custom-instruction" aria-label="Custom instruction" maxLength={2000} rows={4}
+          <textarea id="custom-instruction" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} maxLength={2000} rows={4}
             readOnly={draft.values.ResponseMode !== 'Custom'} value={draft.values.CustomInstruction}
             onChange={(event) => updateValues({ CustomInstruction: event.target.value.slice(0, 2000) })} />
-          <small>{draft.values.CustomInstruction.length}/2,000 characters</small>
-          <p className="hint">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
+          <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></section>
+          <section className="form-section" aria-labelledby="shortcut-heading"><h3 id="shortcut-heading">Keyboard shortcuts</h3>
+          <p className="hint" id="shortcut-help">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
           <div className="shortcut-fields">
             {SHORTCUT_FIELDS.map(({ field, label }) => <div className="shortcut-row" key={field}>
               <label htmlFor={`shortcut-${field}`}>{label}</label>
               <input id={`shortcut-${field}`} className={recording === field ? 'recording' : ''} aria-label={`${label} shortcut`}
+                {...fieldAria(`shortcut-${field}`, 'shortcut-help')}
                 readOnly autoComplete="off" value={recording === field ? recordNotice : formatShortcut(draft.values[field])}
                 onFocus={() => startRecording(field)} onClick={() => startRecording(field)} onBlur={stopRecording}
                 onKeyDown={(event) => {
@@ -221,9 +296,10 @@ export function Settings({ state }: { state: AppState }) {
             stopRecording(); const defaults = defaultSettings('');
             updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
           }}>Restore shortcuts</button><button type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</button></div>
-          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span>
+          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></section>
         </>}
         {page === 'Panel' && <>
+          <section className="form-section" aria-labelledby="readability-heading"><h3 id="readability-heading">Text and transparency</h3>
           <label htmlFor="transparency">Background transparency: {draft.values.Appearance.TransparencyPercent}% (100%: text only)</label>
           <input id="transparency" aria-label="Background transparency" type="range" min={0} max={100}
             value={draft.values.Appearance.TransparencyPercent} onChange={(event) => appearance({ TransparencyPercent: Number(event.target.value) })} />
@@ -232,52 +308,68 @@ export function Settings({ state }: { state: AppState }) {
             value={draft.values.Appearance.TextOpacityPercent} onChange={(event) => appearance({ TextOpacityPercent: Number(event.target.value) })} />
           <label className="number-row" htmlFor="font-size">Text size (points)<input id="font-size" aria-label="Answer text size" type="number" min={8} max={28}
             value={draft.values.Appearance.TextSizePoints} onChange={(event) => appearance({ TextSizePoints: Math.max(8, Math.min(28, Number(event.target.value) || 8)) })} /></label>
-          <Choice label="Panel color theme" value={paletteName(draft.values.Appearance)} options={[...Object.keys(PALETTES), 'Custom']}
+          </section><section className="form-section" aria-labelledby="panel-colors-heading"><h3 id="panel-colors-heading">Panel colors</h3>
+          <Choice {...choiceAria('panel-theme')} label="Panel color theme" value={paletteName(draft.values.Appearance)} options={[...Object.keys(PALETTES), 'Custom']}
             onChange={(value) => { if (value in PALETTES) appearance(PALETTES[value as keyof typeof PALETTES]); }} />
           <div className="color-fields">{COLOR_FIELDS.map(({ field, label }) => <div key={field}><span>{label}</span>
             <button type="button" aria-label={`${label} color`} style={{ background: draft.values.Appearance[field], color: contrastText(draft.values.Appearance[field]) }}
               onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</button></div>)}</div>
+          </section><section className="form-section" aria-labelledby="panel-preview-heading"><h3 id="panel-preview-heading">Answer preview</h3>
           <div className="preview-checker"><div className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
           </div></div>
-          <button type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</button>
+          <button type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</button></section>
         </>}
         {page === 'Models & API' && <>
-          <Choice label="API service" value={provider} options={PROVIDERS} display={(value) => value === 'Gemini' ? 'Google Gemini' : value}
+          <section className="form-section" aria-labelledby="service-heading"><h3 id="service-heading">Service connection</h3>
+          <Choice {...choiceAria('api-service')} label="API service" value={provider} options={PROVIDERS} display={(value) => value === 'Gemini' ? 'Google Gemini' : value}
             onChange={(value) => changeProvider(value as ApiProvider)} />
-          <Choice label="Request pipeline" value={pipeline} options={provider === 'DeepSeek' ? ['Thorough', 'Balanced', 'Direct'] : ['Thorough', 'Balanced']}
-            display={(value) => value === 'Direct' ? 'Direct screenshot (DeepSeek)' : value}
-            onChange={(value) => updateValues({ PipelineMode: value as PipelineMode })} />
-          <Choice label="Answer model" editable value={models.AnswerModel} options={PROVIDER_MODELS[provider]}
-            onChange={(value) => updateModels({ AnswerModel: value })} />
-          <div className="model-budget-row"><Choice label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
-            display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={provider !== 'DeepSeek'}
-            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
-              AnswerTokenLimit: value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? 16000 : models.AnswerTokenLimit })} />
-            <div><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit"
-              type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
-              value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></div></div>
-          <Choice label="Screen-reading model" editable value={models.VisionModel} disabled={pipeline === 'Direct'}
-            options={PROVIDER_MODELS[provider].filter((value) => provider !== 'DeepSeek' || value !== 'deepseek-v4-pro')}
-            onChange={(value) => updateModels({ VisionModel: value })} />
-          <label htmlFor="service-key">API key for this service</label>
-          <input id="service-key" aria-label="Service API key" data-testid="service-key" type={showKey ? 'text' : 'password'} autoComplete="off"
-            spellCheck={false} maxLength={8192} placeholder={draft.keyPresence[provider] ? 'Saved key — leave empty to keep it' : 'Enter API key'}
+          <label htmlFor="service-key">API key for {provider === 'Gemini' ? 'Google Gemini' : provider}</label>
+          <input id="service-key" aria-label="Service API key" {...fieldAria('service-key', 'service-key-status service-key-help')} data-testid="service-key"
+            type={showKey ? 'text' : 'password'} autoComplete="off" spellCheck={false} maxLength={8192}
+            placeholder={draft.keyPresence[provider] ? 'Leave empty to keep the saved key' : 'Enter API key'}
             value={draft.keyUpdates[provider] ?? ''} onChange={(event) => {
               const value = event.target.value;
-              setDraft((previous) => previous && { ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value } });
+              modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value } }));
             }} />
-          <small role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</small>
+          <small id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</small>
           <label className="checkbox-row"><input type="checkbox" checked={showKey} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
-          <p className="hint">{PIPELINE_NOTICE[pipeline]}{provider === 'DeepSeek' && ' Pro is text-only: use it for answering tasks without necessary images through Thorough or Balanced. Reasoning shares the output budget and may increase latency and API cost.'}</p>
-          <p className="hint">{DATA_NOTICE[provider]}</p>
+          <p className="hint" id="service-key-help">Keys are encrypted for your Windows account. Save applies this service to future questions without testing the key or making a model request.</p>
+          <p className="hint">{DATA_NOTICE[provider]}</p></section>
+          <details className="advanced-settings" open={advanced}>
+            <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAdvanced((value) => !value); }}>Advanced model settings</summary>
+            <div className="advanced-content" hidden={!advanced}>
+          <p className="hint">Defaults are ready to use. Change these only if your account supports the model IDs and features you select.</p>
+          <Choice {...choiceAria('request-pipeline', 'pipeline-help')} label="Request pipeline" value={pipeline} options={provider === 'DeepSeek' ? ['Thorough', 'Balanced', 'Direct'] : ['Thorough', 'Balanced']}
+            display={(value) => value === 'Direct' ? 'Direct screenshot (DeepSeek)' : value}
+            onChange={(value) => updateValues({ PipelineMode: value as PipelineMode })} />
+          <p className="hint" id="pipeline-help">{PIPELINE_NOTICE[pipeline]}</p>
+          <Choice {...choiceAria('answer-model', 'model-help')} label="Answer model" editable value={models.AnswerModel} options={PROVIDER_MODELS[provider]}
+            onChange={(value) => updateModels({ AnswerModel: value })} />
+          <Choice {...choiceAria('vision-model', 'model-help')} label="Screen-reading model" editable value={models.VisionModel} disabled={blocked || pipeline === 'Direct'}
+            options={PROVIDER_MODELS[provider].filter((value) => provider !== 'DeepSeek' || value !== 'deepseek-v4-pro')}
+            onChange={(value) => updateModels({ VisionModel: value })} />
+          <p className="hint" id="model-help">Choose a suggestion or enter an exact model ID. Screen reading requires image support; answering requires structured responses and support for any task images.</p>
+          <div className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
+            display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={blocked || provider !== 'DeepSeek'}
+            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
+              AnswerTokenLimit: value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? 16000 : models.AnswerTokenLimit })} />
+            <div><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
+              type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
+              value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></div></div>
+          <p className="hint" id="deepseek-help">{provider === 'DeepSeek' ? 'Pro is text-only: use it for answering tasks without necessary images through Thorough or Balanced. Reasoning shares the output budget and may increase latency and API cost. Leave the limit empty to use the configured limit.' : 'Reasoning and the output token limit are available for DeepSeek. Other services use their configured limits.'}</p>
+            </div>
+          </details>
+          <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`}</p>
         </>}
         {page === 'Commands' && <><pre className="commands-text">{commandsText(state.shortcuts)}</pre>
           <button type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</button></>}
+        {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}
     </div>
-    {error && <p className="dialog-error" role="alert">{error}</p>}
-    <footer className="dialog-footer"><button type="button" data-testid="settings-save" disabled={!draft || saving || choosingColor} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</button>
-      <button type="button" data-testid="settings-back" disabled={saving || choosingColor} onClick={() => { void back(); }}>Back</button></footer>
+    {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
+    <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</span>
+      <button className="primary-action" type="button" data-testid="settings-save" disabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</button>
+      <button type="button" data-testid="settings-back" disabled={blocked} onClick={() => { void back(); }}>Back</button></footer>
   </section>;
 }

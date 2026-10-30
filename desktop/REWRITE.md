@@ -1,9 +1,9 @@
 # SC desktop development and verification
 
-Development version: **0.5.0-beta.2**. Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.6** (unpublished; verification in progress). Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
-The TypeScript/Electron application is the primary source on `main`. The previous
+The TypeScript/Electron application is the primary development source. The previous
 C# application remains available in the [v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and existing release downloads. This source transition does not publish a beta
 release or close the unfinished compatibility and recorder gates below.
@@ -24,12 +24,13 @@ release or close the unfinished compatibility and recorder gates below.
 - [x] Six mocked provider adapters, saved model/reasoning preferences and network failures.
 - [x] Compatible SSK3 vaults, atomic migration/save and damaged-byte preservation, including real Windows/C# interoperability.
 - [x] Windows 11 affinity, owned picker visibility, dedicated wheel hook, shortcuts and standalone activation.
-- [ ] Mixed-DPI placement, every resize edge and competing-process shortcut rollback.
+- [x] Single-monitor resize edges and competing-process shortcut rollback on Windows 11.
+- [ ] Mixed-DPI placement and resize behavior.
 - [x] Panel/input/Settings previews, Save/Back and native shortcut/picker/mouse workflows.
 - [x] Portable and Electron workflow tests; real Windows native/DPAPI checks.
 - [x] Packaged Windows executable, ZIP integrity and standalone startup with development tools removed from PATH.
 - [ ] Fresh Windows account/machine startup without installed development tools.
-- [ ] Named recorder output checked independently of mocked/affinity assertions.
+- [x] Beta.4 Edge received/saved output and independent OBS saved-video inspection; see recorded scope and OBS automation failure below.
 
 Live model quality and paid campaigns remain separate from synthetic tests.
 Private credentials, lab identifiers, vaults and recordings must stay outside
@@ -57,8 +58,9 @@ headers. `npm run test:windows` verifies real JPEG capture/crop, synthetic DPAPI
 roundtrips, loopback networking, activation, and resource disposal. It fails
 explicitly on non-Windows hosts rather than reporting native coverage.
 
-`npm run package:win` produces the portable Windows EXE; `npm run package:zip`
-adds the matching two-file ZIP and prints hashes. A clean Windows account must
+`npm run package:win` produces the per-user NSIS installer, update metadata and
+portable Windows EXE; `npm run package:installer` builds only the installer.
+`npm run package:zip` adds the portable two-file ZIP and prints hashes. A clean Windows account must
 run the packaged application without Node/.NET/build tools before distribution.
 
 The native harness and separate vault interoperability fixture require actual
@@ -70,6 +72,69 @@ or packaged-runtime result is inferred from portable tests or a Vite build.
 Owned image/request/response/plaintext byte buffers are cleared on cleanup.
 JavaScript strings and runtime/network-internal copies are garbage collected;
 the application does not claim guaranteed erasure of those copies.
+
+## Local 0.5.0-beta.4 and release preparation (2026-10-26)
+
+The setup/Settings, update recovery and early-shutdown changes passed **1,065
+portable tests / 21 files** on Linux and Windows, types, lint and bundles, exit 0.
+Windows native compilation, **31 native checks**, **8 vault cases / 136 legacy
+fixture checks**, and **16 UI workflows**, none skipped, passed. The unchanged
+installer passed the actual historical beta.3 → beta.4 **22-check** update scenario.
+Five packaged duplicate launches, ten early-close relaunches and direct portable
+startup passed separately. Artifact hashes and build provenance are recorded in
+the [release notes](../docs/releases/v0.5.0-beta.4.md).
+
+The corrected fixture-readiness probe accepted **120/120 native frames** without
+provider calls. The separate live campaign exhausted its **120 attempts**, retaining
+the initial stale-fixture caveat and targeted answer/validation/fidelity failures.
+It does not establish a representative model-quality gate.
+
+Edge whole-monitor output passed 24 manual local/received/saved phases. OBS
+saved-video inspection covered 24 phases independently; its automated report
+retains exit 1 for a final receiver-preview failure. Both cover six SC surfaces
+in plain and simulated-proctoring layouts in one Windows 11 VM. The
+[verification record](../docs/VERIFICATION.md#beta4-final-packaged-and-recorder-checks-2026-10-26)
+owns exact methods, retained failures and compatibility limits.
+
+Release preparation adds MIT licensing, third-party notices and upstream sources
+alongside the already verified binaries. Its portable verification again passed
+1,065 tests, types, lint and bundling. The compiled UI and preload match the
+packaged bytes; the main bundle differs only in the license metadata declaration.
+The original binaries and packaged README retain their build snapshot. No new
+Windows runtime or paid-model result is inferred from this documentation work.
+
+## Local 0.5.0-beta.3 installer (2026-10-24)
+
+Built from the latest main source, commit `019ee98110f1994b60698a01bf237a33d307fb46`,
+with the installer/update implementation added locally. The per-user NSIS target
+creates Desktop/Start menu shortcuts, preserves the existing vault and uses the
+GitHub release feed through `electron-updater`. Automatic startup checks are
+separate from explicit downloads and restart; portable/previews have no updater.
+Stable builds exclude beta releases and downgrades are disabled.
+
+Linux and Windows verify passed **865 tests / 14 files**, types, lint and bundle,
+exit 0. Windows native compile, **31 native checks**, **8 vault cases / 136 C#
+fixture checks**, and **12 UI workflows**, none skipped, passed. Five packaged
+duplicate launches and direct portable system-only-PATH startup/version/normal
+exit passed. The local installed update scenario passed **17 checks**, including
+unavailable-feed recovery, real corrupted-download rejection, beta.2 test install
+to unchanged beta.3 payload, automatic restart, synthetic-vault byte retention
+and uninstall. Its older installer contains this updater implementation and is
+not the distributed historical portable beta.2. Windows shell restart uses the
+normal profile; isolated relaunch separately verified the synthetic saved key.
+Existing real vault bytes were checked independently.
+
+Settings → Updates was visible locally and absent from an inspected Edge
+156.0.4314.42 whole-monitor 1920×1080 VP8 recording on Windows 11. This is one
+surface/recorder path, with no claim for other surfaces or recording tools.
+The tray remains visible and capture exclusion remains best effort.
+
+Retained initial automation failures came from expecting `beta.yml` instead of
+this GitHub provider's generated `latest.yml`, an unsupported test-context import,
+and waiting for a shell restart in the wrong profile. The corrected checks did
+not require production code changes. The version is a local beta, with no GitHub
+release publication. Fresh-machine, Windows 10, mixed-DPI, other surfaces/recorders
+and live-model quality keep their documented limits.
 
 ## Local 0.5.0-beta.2 build (2026-10-24)
 

@@ -6,11 +6,11 @@ import { type ExtractedQuestions, type QuestionContent, imageContent } from './e
 import { answerInstruction, directInstruction, qaInstruction, standardInstruction } from './prompts';
 import { isAssessmentRefusal, hasRefusalLanguage } from './refusals';
 import type { ResponseOperation } from './response-modes';
-import { answerSchema } from './schemas';
+import { answerSchema, directAnswerSchema } from './schemas';
 import { PipelineTrace, PipelineValidationError } from './trace';
 
 export interface AnswerTarget { id: string; source: QuestionContent | null; displayId: string }
-export interface AnswerContract { targets: AnswerTarget[]; operation: ResponseOperation; typed: boolean }
+export interface AnswerContract { targets: AnswerTarget[]; operation: ResponseOperation; typed: boolean; direct: boolean }
 export interface QuestionAnswer {
   question_id: string; answer: string | null; answers: string[]; answer_text: string | null;
   explanation: string; confidence: number | null; status: 'answer' | 'transformation' | 'refusal' | 'missing_information';
@@ -20,7 +20,7 @@ export function createAnswerContract(extracted: ExtractedQuestions | null, opera
   const sources = !extracted || typed ? [null] : extracted.questions;
   const targets = sources.map((source, index) => ({ id: `task_${contractId}_${index + 1}`, source, displayId: source?.question_id ?? String(index + 1) }));
   if (!targets.length) throw new PipelineValidationError('IncompleteExtraction', 'No task was available to answer. Try again.');
-  return { targets, operation, typed };
+  return { targets, operation, typed, direct: extracted === null };
 }
 export const primaryAnswer = (answer: QuestionAnswer): string => answer.answers.length ? answer.answers.join(', ') : nonblank(answer.answer) ? answer.answer : answer.answer_text ?? '';
 const malformed = (): PipelineValidationError => new PipelineValidationError('MalformedResponse', 'The model returned an unreadable structured answer. Try again.');
@@ -60,6 +60,7 @@ export function validateAnswerContract(parsed: QuestionAnswer[], contract: Answe
   }
   return contract.targets.map(target => {
     let answer = { ...byId.get(target.id)! };
+    if (contract.direct && answer.answer_text !== null) throw invalidChoice();
     const primary = primaryAnswer(answer);
     if (!nonblank(primary) && !nonblank(answer.explanation)) throw incompleteAnswer();
     if (answer.status === 'missing_information' && !nonblank(primary)) throw incompleteAnswer();
@@ -134,7 +135,8 @@ export async function answerTask(transport: HttpTransport, extracted: ExtractedQ
       }
       const value = await trace.call('Answer', number, config.provider, () => sendModel(transport, { apiKey, provider: config.provider,
         model: config.answerModel, instruction: (config.assessmentMode === 'qa' ? qaInstruction : standardInstruction) + (direct ? directInstruction : answerInstruction),
-        content, schema: answerSchema(contract.targets.map(target => target.id)), maxOutputTokens: config.answerMaxOutputTokens, thinking: config.thinking }, signal));
+        content, schema: direct ? directAnswerSchema(contract.targets[0]!.id) : answerSchema(contract.targets.map(target => target.id)),
+        maxOutputTokens: config.answerMaxOutputTokens, thinking: config.thinking }, signal));
       if (value.status !== 'completed' && value.status !== '') throw new PipelineValidationError('IncompleteResponse', 'The model response was incomplete. Try again.');
       return value;
     });

@@ -4,11 +4,14 @@ import type { KeyboardEvent } from 'react';
 interface ChoiceProps {
   label: string; value: string; options: readonly string[]; onChange: (value: string) => void;
   editable?: boolean; disabled?: boolean; display?: (value: string) => string;
+  id?: string; describedBy?: string; invalid?: boolean; autoFocus?: boolean;
 }
 
 /** DOM-only popup: all options remain inside the protected Electron window. */
-export function Choice({ label, value, options, onChange, editable = false, disabled = false, display = (v) => v }: ChoiceProps) {
-  const id = useId();
+export function Choice({ label, value, options, onChange, editable = false, disabled = false, display = (v) => v,
+  id: suppliedId, describedBy, invalid = false, autoFocus = false }: ChoiceProps) {
+  const generatedId = useId();
+  const id = suppliedId ?? generatedId;
   const root = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -18,13 +21,16 @@ export function Choice({ label, value, options, onChange, editable = false, disa
   useEffect(() => {
     if (open) document.getElementById(`${id}-${active}`)?.scrollIntoView?.({ block: 'nearest' });
   }, [id, active, open]);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   function show() {
+    if (disabled) return;
     setAbove((root.current?.getBoundingClientRect().bottom ?? 0) + 210 > window.innerHeight);
     setActive(Math.max(0, choices.indexOf(value)));
     setOpen(true);
   }
-  function select(option: string) { onChange(option); setOpen(false); }
+  function select(option: string) { if (!disabled) onChange(option); setOpen(false); }
   function keyDown(event: KeyboardEvent) {
+    if (disabled) return;
     if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) && (!editable || open || event.key.startsWith('Arrow'))) {
       event.preventDefault();
       if (!open) show();
@@ -41,15 +47,16 @@ export function Choice({ label, value, options, onChange, editable = false, disa
       if (index >= 0) { event.preventDefault(); setActive(index); if (!open) onChange(choices[index]!); }
     }
   }
-  const aria = { 'aria-label': label, 'aria-expanded': open, 'aria-controls': `${id}-list`,
-    'aria-activedescendant': open ? `${id}-${active}` : undefined, 'aria-autocomplete': editable ? 'list' as const : 'none' as const };
+  const aria = { 'aria-label': label, 'aria-expanded': open && !disabled, 'aria-controls': open && !disabled ? `${id}-list` : undefined,
+    'aria-activedescendant': open && !disabled && choices[active] ? `${id}-${active}` : undefined,
+    'aria-autocomplete': editable ? 'list' as const : 'none' as const, 'aria-describedby': describedBy, 'aria-invalid': invalid };
   return <div className={`choice ${above ? 'choice-above' : ''}`} ref={root} onKeyDown={keyDown}
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}>
     <label id={`${id}-label`} htmlFor={id}>{label}</label>
     <div className="choice-control">
-      {editable ? <input id={id} role="combobox" {...aria} value={value} maxLength={160} disabled={disabled}
-        autoComplete="off" spellCheck={false} onChange={(event) => { onChange(event.target.value); setActive(0); show(); }} /> :
-        <button id={id} type="button" role="combobox" {...aria} disabled={disabled} onClick={() => open ? setOpen(false) : show()}>{display(value)}</button>}
+      {editable ? <input id={id} role="combobox" {...aria} value={value} maxLength={160} disabled={disabled} autoFocus={autoFocus}
+        autoComplete="off" spellCheck={false} onChange={(event) => { onChange(event.target.value); show(); setActive(0); }} /> :
+        <button id={id} type="button" role="combobox" {...aria} disabled={disabled} autoFocus={autoFocus} onClick={() => open ? setOpen(false) : show()}>{display(value)}</button>}
       {editable && <button type="button" className="choice-toggle" aria-label={`${label} suggestions`} disabled={disabled}
         tabIndex={-1} onMouseDown={(event) => event.preventDefault()} onClick={() => {
           root.current?.querySelector('input')?.focus();

@@ -8,7 +8,7 @@ import { ProviderError } from '../providers';
 export class AppError extends Error {
   constructor(public readonly code: string, message: string) { super(message); this.name = 'AppError'; }
 }
-const allowedStages = new Set(['Startup', 'Credentials', 'Shortcuts', 'Display', 'Capture', 'ApiRequest', 'Locate', 'Crop', 'Extract', 'Answer', 'ValidateAnswer']);
+const allowedStages = new Set(['Startup', 'Credentials', 'Shortcuts', 'Display', 'Capture', 'ApiRequest', 'Locate', 'Crop', 'Extract', 'Answer', 'ValidateAnswer', 'Updates']);
 const allowedCodes = new Set(['None', 'MalformedResponse', 'IncompleteResponse', 'IncompleteExtraction', 'IncompleteAnswer', 'TaskMismatch', 'InvalidChoice', 'HttpFailure', 'Network', 'Timeout', 'Unexpected', 'UnsupportedModel']);
 const allowedDetails = new Set(['None', 'ExtractionFormat', 'ExtractionStatus', 'QuestionRegion', 'EvidenceFormat', 'EvidenceStatus', 'EvidenceCount', 'EvidenceOrdinal', 'OptionCount', 'RequiredCode', 'RequiredVisual', 'Transcription', 'VisualCoverage']);
 const finite = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;

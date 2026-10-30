@@ -6,15 +6,20 @@ SC is a Windows app that answers questions from your screen or from text you typ
 
 ## TypeScript desktop application
 
-The `main` branch develops the Windows Electron/TypeScript application under
+SC's Windows Electron/TypeScript application lives under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current TypeScript build is **0.5.0-beta.2** and has not been published as a GitHub release.
-It protects settings during early relaunches, rejects malformed
-API status fields, preserves the latest panel size and shows your active shortcuts in help.
-Newer beta.6 source is available in its [development pull request](https://github.com/Ziyadin23/ScreenCompanion/pull/5);
-its verification is incomplete and it has not been published as a GitHub release.
+The current source version is **0.5.0-beta.6**, with verification in progress and
+no GitHub release. It clarifies extraction types for tasks with diagrams, tightens
+Direct answer formatting, cancels active panel drags when hidden, and adds Windows
+control and update checks. Recorder exclusion, duplicate-launch behavior and live
+answer quality still need verification. The latest published beta is
+[v0.5.0-beta.4](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
+see its [release notes](docs/releases/v0.5.0-beta.4.md).
+It includes service-aware key setup, clearer Settings and a per-user Windows
+installer with **Settings → Updates**. Downloads and restart require your action;
+keys and settings stay in the existing encrypted storage. A portable EXE remains available.
 
 With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
 Inside the Windows VM, run `npm run preview:ui` for a key-free interface preview that makes no
@@ -27,22 +32,20 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 
 **Latest stable: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
 
-Existing downloads and tags are retained. Source builds from `main` produce the
-older TypeScript beta. The beta keeps compatible
+Existing downloads and tags are retained. Source builds from this branch produce
+the TypeScript beta. The beta keeps compatible
 encrypted settings and the same three pipelines. Moving development to `main`
 does not establish stable-release parity; see [verification limits](docs/VERIFICATION.md).
 
 ## Quick start
 
-These steps describe the published beta.4. See its [user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.4/docs/USER_GUIDE.md) for details.
-
-1. Download the beta.4 installer above and run it once to install SC for your Windows account. The portable ZIP runs without installation. The beta has been checked on Windows 11; Windows 10 and fresh-machine checks remain open.
+1. Download the TypeScript beta above, or build from this branch. Run the matching versioned `SC-Setup` installer once to install SC for your Windows account, without administrator rights. Launch SC from its shortcut. The separate versioned portable EXE runs without installation; both include their runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
 2. Choose your API service in the first-launch dialog, enter its API key and click **Save**. Setup saves the key without making a model request.
-3. Open **Settings → Models & API** to adjust models, pipeline and keys later. You need an internet connection, model access and any required credits on your provider account.
+3. Open **Settings → Models & API** to adjust models, pipeline and keys later. For DeepSeek, Flash supports screenshots; Pro is a text-only answering option. Your provider account needs model access and any required credits.
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
-Close an older running release before installation. The installed beta offers **Settings → Updates**; the portable version requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.4/docs/USER_GUIDE.md#setup-and-migration).
+Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC. An installed beta.3-to-beta.4 update was checked against the public feed. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
 
 ## Models and request pipelines
 
@@ -73,7 +76,7 @@ The tray menu provides the same main controls. Shortcuts can be changed in Setti
 
 ## Panel and settings
 
-Select/copy answer text and scroll by hovering over it. Move the panel with **Alt + left drag**; resize from its edges or corners. SC remembers its size.
+Select/copy answer text and scroll by hovering over it. Move the panel with **Alt + left drag**; resize from its edges or corners. Hiding the panel ends the current drag. SC remembers its size.
 
 **Settings → Panel** controls colors, font size, background transparency, and text visibility. Response modes include Brief, Explain steps, Translate to English, Summarize and Custom. **Save** applies changes; **Back** discards them. See the [full user guide](docs/USER_GUIDE.md) for controls and settings.
 
@@ -85,17 +88,18 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 - SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
 - Recording exclusion is best effort, and the tray icon remains visible. Verify the received stream or saved recording for your capture app.
 
-The beta.2 source on `main` passed 846 portable tests, 31 Windows native checks, 8 legacy-vault
-interoperability tests and 11 Electron UI workflows. Mocked provider tests do not
-establish live model quality. Fresh-machine, Windows 10, mixed-DPI and actual
+Beta.4 passed 1,065 portable tests, 31 Windows native checks, 8 legacy-vault
+interoperability tests and 16 Electron UI workflows. Mocked provider tests do not
+establish live model quality. Fresh-machine, Windows 10, mixed-DPI and other
 recorder-output checks remain open. Historical C# model/recorder results retain
 their original scope. See [verification results and limitations](docs/VERIFICATION.md).
 
 ## License
 
-SC project code is available under the [MIT license](LICENSE). Include the
-copyright and license notice with copies. Third-party components retain their
-own licenses; notices for the published beta are included with its release.
+SC project code is available under the [MIT license](LICENSE), including commercial
+reuse and redistribution. Keep the copyright and license notice with copies.
+[Third-party components](THIRD_PARTY_NOTICES.txt) retain their own terms. Provider
+API access and usage charges are handled by your provider account.
 
 ## Build and further documentation
 
@@ -116,8 +120,8 @@ npm run package:win
 npm run package:zip
 ```
 
-Build output: `desktop/dist/SC-v0.5.0-beta.2.exe` and the matching ZIP containing
-that EXE and `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
+Build output: `desktop/dist/SC-Setup-v0.5.0-beta.6.exe`, the portable
+`SC-v0.5.0-beta.6.exe` and its matching two-file ZIP with `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
 The .NET 10 SDK is needed only for the legacy-vault interoperability tests.
 
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.

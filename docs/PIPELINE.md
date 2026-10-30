@@ -18,7 +18,7 @@ Choose **Request pipeline** under Settings → Models & API. Its encrypted saved
 | Thorough | Capture once → locate → local question crop → extract → answer → local answer validation | 3 |
 | Direct (DeepSeek only) | Capture once → send full captured monitor to answer model → local answer validation | 1 |
 
-Direct uses the answer model; the screen-reading model and crop/extraction settings are unused. It performs no extraction completeness check or independent verification, so it cannot produce an extraction-verification failure. It validates one screen-level canonical answer with a fresh application-owned task ID, rather than independently extracted question coverage or choices. Multiple visible answers are returned in that single answer text. Typed tasks take priority, response operations/preferences still apply, and incomplete or malformed answers remain readable errors. Direct never automatically retries, even in trusted QA, and never falls back to another mode. Its one request receives the whole captured monitor, including unrelated visible content; normal provider policies still apply.
+Direct uses the answer model; the screen-reading model and crop/extraction settings are unused. It performs no extraction completeness check or independent verification, so it cannot produce an extraction-verification failure. It validates one screen-level canonical answer with a fresh application-owned task ID, rather than independently extracted question coverage or choices. Multiple visible answers are returned in that single answer text. Typed tasks take priority, response operations/preferences still apply, and incomplete or malformed answers remain readable errors. Its wire schema requires exactly one result for that target, empty selections, null alternative text and confidence from zero to one or null. Local validation rejects a non-null alternative text field. Direct never automatically retries, even in trusted QA, and never falls back to another mode. Its one request receives the whole captured monitor, including unrelated visible content; normal provider policies still apply.
 
 Invalid or incomplete extraction stops before answering. Balanced does not automatically invoke Thorough, repair extraction, or retry network/authentication errors. An eligible refusal in trusted QA mode can add **one** answering call: at most three in Balanced or four in automatically located Thorough. Native refusals remain visible.
 
@@ -33,6 +33,12 @@ Every rectangle is normalized relative to that request's supplied image. For exa
 Each necessary visual must lie inside the question rectangle. Padding is measured as a fraction of the question rectangle's dimensions, clipped within that rectangle, then cropped directly from the supplied image. The code rejects out-of-question visual coordinates rather than silently clipping away evidence. This avoids a second JPEG crop/coordinate conversion. The original monitor image never enters Thorough/Balanced answering or its retry.
 
 The local consistency gate checks task count, required option counts, code/visual requirements, transcription/visual completeness indicators, unique option/image identifiers and required image references. It does not independently read the pixels. The final answer contract assigns fresh application-owned task IDs, requires exact coverage, restores source order and validates applicable choices and canonical option text. Printed source IDs remain display labels; typed requests keep one answering target.
+
+Both extraction prompts ask the model to retain choice types for option tasks,
+even when code or visuals are attached. For non-choice tasks they prioritize
+relevant code, then required visuals, then short answers; transformation source
+material remains content. Required options, code and visuals remain attached
+regardless of type. This guidance does not independently verify classification.
 
 ## Thorough extraction and fixed regions
 
@@ -58,7 +64,7 @@ Native assessment refusals, and explicit structured assessment refusals for an u
 
 ```powershell
 $env:PIPELINE_MODE = 'balanced'
-& .\desktop\dist\SC-v0.5.0-beta.2.exe
+& .\desktop\dist\SC-v0.5.0-beta.6.exe
 ```
 
 | Variable | Default | Purpose |
@@ -74,7 +80,7 @@ $env:PIPELINE_MODE = 'balanced'
 | `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location request. |
 | `ANSWER_MAX_OUTPUT_TOKENS` | `2500` | Answering output limit. |
 
-Saved service/model choices override `API_PROVIDER`, `ANSWER_MODEL`, and `VISION_MODEL`; saved pipeline choice overrides `PIPELINE_MODE`. DeepSeek model settings also retain answer-only reasoning effort (`none`, `low`, `high`, `max`) and an optional explicit answer output budget, which overrides `ANSWER_MAX_OUTPUT_TOKENS`. Old records without those fields keep non-thinking behavior and the process limit. Extraction/location retain their own existing budget and non-thinking mode. DeepSeek Pro accepts only text: image inputs fail locally with `UnsupportedModel`; Direct and screen reading require Flash. No automatic model fallback or image removal is allowed. Without a saved choice, the provider defaults to OpenAI and pipeline to Thorough; other providers use their own model defaults. Direct is accepted only with DeepSeek. See [model setup](USER_GUIDE.md#service-and-model-selection).
+Saved service/model choices override `API_PROVIDER`, `ANSWER_MODEL`, and `VISION_MODEL`; saved pipeline choice overrides `PIPELINE_MODE`. DeepSeek model settings also retain answer-only reasoning effort (`none`, `low`, `high`, `max`) and an optional explicit answer output budget, which overrides `ANSWER_MAX_OUTPUT_TOKENS`. Old records without those fields keep non-thinking behavior and the process limit. Extraction/location retain their own existing budget and non-thinking mode. DeepSeek Pro accepts only text: image inputs fail locally with `UnsupportedModel`; Direct and screen reading require Flash. No automatic model fallback or image removal is allowed. Without a saved choice, the provider defaults to OpenAI and pipeline to Thorough; other providers use their own model defaults. New first-launch setup retains a compatible process pipeline default; selecting a non-DeepSeek service under a Direct process default saves Thorough instead. Old vaults retain their existing precedence behavior. Direct is accepted only with DeepSeek. See [model setup](USER_GUIDE.md#service-and-model-selection).
 
 ## Technical diagnostics and cost measurement
 
@@ -85,8 +91,11 @@ Logs contain no screen content, task text, answers, preferences, raw provider bo
 The historical C# Windows comparison used identical synthetic captures for the
 two modes, alternating order, and reported fidelity, primary-answer correctness,
 latency and reported usage. Its [harness and procedure](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/tests/README.md)
-remain in the release tag; the TypeScript application has no equivalent paid
-comparison harness. Mocked transport cannot establish accuracy or dollar savings.
+remain in the release tag. The [TypeScript lab](../desktop/tests/lab/README.md)
+uses synthetic fixtures, native presentation checks, independent primary/display
+grading and bounded persistent campaign accounting. Its recorded targeted runs
+do not establish a representative quality gate. Mocked transport cannot establish
+accuracy or dollar savings.
 Dollar estimates require known usage and date-stamped pricing; the request
 reduction alone does not establish a corresponding monetary percentage.
 

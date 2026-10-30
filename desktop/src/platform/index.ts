@@ -16,8 +16,10 @@ interface NativeBridge {
   attachPanel(handle: Buffer): void;
   detachPanel(): void;
   setHoverInputHeight(height: number): void;
+  setPanelResizeEnabled(handle: Buffer, enabled: boolean): void;
   beginMove(handle: Buffer): void;
   beginResize(handle: Buffer, edge: ResizeEdge): void;
+  cancelPanelInteraction(handle: Buffer): void;
   chooseColor(handle: Buffer, initialColor: string): Promise<string | null>;
   setOwnedDialogsVisible(handle: Buffer, visible: boolean): void;
   closeOwnedDialogs(handle: Buffer): void;
@@ -104,7 +106,13 @@ export function createWindowsPlatform(options: { nativePath?: string } = {}): Wi
       if (!Number.isInteger(height) || height < 0 || height > 32768) throw new Error('The hover input height is invalid.');
       bridge().setHoverInputHeight(height);
     },
+    setPanelResizeEnabled(handle, enabled) {
+      handleValid(handle);
+      if (typeof enabled !== 'boolean') throw new Error('The panel resize state is invalid.');
+      bridge().setPanelResizeEnabled(handle, enabled);
+    },
     beginMove(handle) { handleValid(handle); bridge().beginMove(handle); },
+    cancelPanelInteraction(handle) { handleValid(handle); bridge().cancelPanelInteraction(handle); },
     beginResize(handle, edge) {
       handleValid(handle);
       if (!EDGES.includes(edge)) throw new Error('The resize edge is invalid.');

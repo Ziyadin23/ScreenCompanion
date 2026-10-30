@@ -1,6 +1,6 @@
 {
   "name": "sc-desktop",
-  "version": "0.5.0-beta.2",
+  "version": "0.5.0-beta.6",
   "private": true,
   "description": "SC Windows desktop companion",
   "license": "MIT",
@@ -19,11 +19,15 @@
     "test:ui": "node scripts/ui-tests.mjs",
     "test:windows": "node scripts/windows-tests.mjs",
     "native:build": "node scripts/build-native.mjs",
-    "package:win": "npm run typecheck && npm run native:build && npm run build && electron-builder --win portable --x64 --publish never",
+    "package:win": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis portable --x64 --publish never",
     "package:zip": "node scripts/package-zip.mjs",
-    "verify": "npm run typecheck && npm run lint && npm test && npm run build"
+    "verify": "npm run typecheck && npm run lint && npm test && npm run build",
+    "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never",
+    "test:lab": "node scripts/lab-tests.mjs",
+    "test:deepseek": "node scripts/deepseek-tests.mjs"
   },
   "dependencies": {
+    "electron-updater": "6.8.11",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "zod": "4.6.7"
@@ -42,10 +46,19 @@
       {
         "from": "native/build/Release/sc_windows.node",
         "to": "native/sc_windows.node"
+      },
+      {
+        "from": "../LICENSE",
+        "to": "LICENSE.txt"
+      },
+      {
+        "from": "../THIRD_PARTY_NOTICES.txt",
+        "to": "THIRD_PARTY_NOTICES.txt"
       }
     ],
     "win": {
       "target": [
+        "nsis",
         "portable"
       ],
       "artifactName": "SC-v${version}.${ext}",
@@ -53,6 +66,22 @@
     },
     "portable": {
       "requestExecutionLevel": "user"
+    },
+    "nsis": {
+      "artifactName": "SC-Setup-v${version}.${ext}",
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "packElevateHelper": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Ziyadin23",
+      "repo": "ScreenCompanion",
+      "releaseType": "draft"
     }
   },
   "devDependencies": {

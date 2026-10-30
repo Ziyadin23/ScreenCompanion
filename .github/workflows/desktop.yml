@@ -30,6 +30,35 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - name: Resolve the Windows temporary directory
+        shell: pwsh
+        run: |
+          $originalTemp = node -p "require('node:path').resolve(require('node:os').tmpdir())"
+          if ($LASTEXITCODE -ne 0 -or -not $originalTemp) { throw 'Unable to read the temporary directory' }
+          $canonicalTemp = node -p "require('node:fs').realpathSync.native(require('node:os').tmpdir())"
+          if ($LASTEXITCODE -ne 0 -or -not $canonicalTemp) { throw 'Unable to resolve the temporary directory' }
+          Write-Output "Temporary path already canonical: $($originalTemp -ieq $canonicalTemp)"
+          $env:TEMP = $canonicalTemp
+          $env:TMP = $canonicalTemp
+          @'
+          const { mkdtemp, realpath, rm } = require('node:fs/promises');
+          const { tmpdir } = require('node:os');
+          const { join, resolve } = require('node:path');
+          (async () => {
+            const directory = await mkdtemp(join(tmpdir(), 'sc-ci-path-'));
+            try {
+              if (resolve(directory).toLowerCase() !== (await realpath(directory)).toLowerCase()) {
+                throw new Error('Temporary fixture directory is not canonical');
+              }
+              console.log('Temporary fixture directory is canonical');
+            } finally {
+              await rm(directory, { recursive: true, force: true });
+            }
+          })().catch(error => { console.error(error.message); process.exitCode = 1; });
+          '@ | node
+          if ($LASTEXITCODE -ne 0) { throw 'Temporary directory validation failed' }
+          "TEMP=$canonicalTemp" >> $env:GITHUB_ENV
+          "TMP=$canonicalTemp" >> $env:GITHUB_ENV
       - run: npm ci
       - run: npm run verify
       - run: npm run native:build

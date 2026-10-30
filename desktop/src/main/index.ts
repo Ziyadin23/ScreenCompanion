@@ -1,13 +1,15 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, screen, Tray } from 'electron';
+import electronUpdater from 'electron-updater';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
 import { createWindowsPlatform } from '../platform';
 import { createSettingsStore, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
-import { ApplicationController } from './controller';
+import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
-import { commandSchema, colorSchema, settingsDraftSchema, setupKeySchema } from './validation';
+import { commandSchema, colorSchema, settingsDraftSchema, setupRequestSchema, updateActionSchema } from './validation';
+import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import packageManifest from '../../package.json';
 
@@ -16,9 +18,11 @@ const synthetic = process.argv.includes('--synthetic-ui');
 const captureTest = process.argv.includes('--capture-test-only');
 const preview = synthetic || (captureTest && process.platform !== 'win32');
 const version = packageManifest.version;
+if (process.platform === 'win32') app.setAppUserModelId(packageManifest.build.appId);
 const localData = process.env.LOCALAPPDATA;
 const diagnostics = createDiagnostics(preview ? null : localData ? join(localData, 'SC') : null, version);
 let controller: ApplicationController | null = null;
+let updates: ApplicationUpdates | null = null;
 let platform: WindowsPlatform | null = null;
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -34,7 +38,6 @@ let expectedBounds: Electron.Rectangle | null = null;
 let measurement = 0;
 let measuredContent = '';
 
-function isPanel(value: AppState['surface']): boolean { return value === 'answer' || value === 'input' || value === 'captureTest'; }
 function trayImage(working: boolean): Electron.NativeImage {
   const size = 24; const pixels = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
@@ -53,6 +56,11 @@ function setBounds(bounds: Electron.Rectangle): void {
   if (!window) return;
   expectedBounds = bounds; settingBounds = true;
   try { window.setBounds(bounds); } finally { settingBounds = false; }
+}
+function hidePanel(): void {
+  if (!window) return;
+  platform?.cancelPanelInteraction(window.getNativeWindowHandle());
+  window.hide();
 }
 function measurePanel(state: AppState): void {
   if (!window || !readyToShow || !isPanel(state.surface) || manualPanelSize || state.busy) return;
@@ -96,7 +104,7 @@ function publish(state: AppState, capturing: boolean): void {
     }
   }
   if (state.surface !== surface) {
-    window.hide();
+    hidePanel();
     if (isPanel(surface)) panelBounds = window.getBounds();
     const area = screen.getDisplayMatching(window.getBounds()).workArea;
     surface = state.surface;
@@ -104,7 +112,7 @@ function publish(state: AppState, capturing: boolean): void {
     if (isPanel(state.surface)) { window.setMinimumSize(180, 80); if (panelBounds) setBounds(clampBounds(panelBounds)); }
     else {
       const width = Math.min(state.surface === 'setup' ? 560 : 760, area.width);
-      const height = Math.min(state.surface === 'setup' ? 330 : 680, area.height);
+      const height = Math.min(state.surface === 'setup' ? 480 : 680, area.height);
       window.setMinimumSize(Math.min(420, area.width), Math.min(300, area.height));
       setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
     }
@@ -112,12 +120,13 @@ function publish(state: AppState, capturing: boolean): void {
   }
   if (readyToShow) window.webContents.send('sc:state', state);
   if (platform && state.ready) {
+    platform.setPanelResizeEnabled(window.getNativeWindowHandle(), readyToShow && canResizePanel(state, capturing));
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
     platform.setHoverInputHeight(state.surface === 'settings' || state.surface === 'setup'
       ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(56 * scale) : 0);
   }
   tray?.setImage(trayImage(state.busy));
-  if (capturing || !state.visible || !readyToShow) window.hide();
+  if (capturing || !state.visible || !readyToShow) hidePanel();
   else if (!window.isVisible()) {
     if (state.surface === 'input' || state.surface === 'settings' || state.surface === 'setup') window.show();
     else window.showInactive();
@@ -134,12 +143,13 @@ function trustedSender(event: Electron.IpcMainInvokeEvent): void {
 function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
-    setup: value => controller!.setup(setupKeySchema.parse(value)),
+    setup: value => controller!.setup(setupRequestSchema.parse(value)),
     command: value => controller!.command(commandSchema.parse(value)),
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
     discardSettings: () => controller!.discardSettings(),
-    chooseColor: value => controller!.chooseColor(colorSchema.parse(value))
+    chooseColor: value => controller!.chooseColor(colorSchema.parse(value)),
+    update: value => updates!.action(updateActionSchema.parse(value))
   };
   for (const [name, handler] of Object.entries(handlers)) ipcMain.handle(`sc:${name}`, async (event, value: unknown) => {
     trustedSender(event);
@@ -151,6 +161,7 @@ async function boot(): Promise<void> {
   if (process.platform !== 'win32') throw new AppError('WINDOWSREQUIRED', 'Run the SC interface and GUI tests inside the Windows VM. No application window was opened on this host.');
   platform = preview ? createPreviewPlatform() : createWindowsPlatform({ nativePath: app.isPackaged ? join(process.resourcesPath, 'native/sc_windows.node') : resolve(directory, '../../native/build/Release/sc_windows.node') });
   if (!await platform.acquireInstance(() => { if (controller) controller.restore(); else activationPending = true; })) { app.quit(); return; }
+  if (closing) return;
   platform.startCaptureProtection(); diagnostics.event('PROCESSSTARTED');
   const store: SettingsStore = preview || captureTest ? createPreviewStore() : createSettingsStore(platform, localData ?? (() => { throw new AppError('PROFILEMISSING', 'Windows did not report the local application settings directory.'); })());
   const area = screen.getPrimaryDisplay().workArea;
@@ -159,8 +170,10 @@ async function boot(): Promise<void> {
     alwaysOnTop: true, skipTaskbar: true, hasShadow: false, minWidth: 180, minHeight: 80,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false } });
   window.setMenu(null); window.setContentProtection(true);
+  window.on('hide', () => { if (!closing && window) platform?.cancelPanelInteraction(window.getNativeWindowHandle()); });
   lastCaptureProtection = preview ? 'Failed' : platform.protectWindow(window.getNativeWindowHandle());
   const savedSize = await store.loadWindowSize();
+  if (closing) return;
   if (savedSize) {
     manualPanelSize = true;
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
@@ -169,11 +182,16 @@ async function boot(): Promise<void> {
   panelBounds = window.getBounds();
   const config = loadPipelineConfiguration(preview || captureTest ? {} : undefined);
   controller = new ApplicationController({ platform, store, pipeline: createPipelineRunner({ transport: platform, cropper: platform }),
-    diagnostics, configuration: settings => withSavedSettings(config, settings), validateSettings, version,
+    diagnostics, configuration: settings => withSavedSettings(config, settings), defaultPipelineMode: config.mode, validateSettings, version,
     executableDirectory: dirname(process.execPath),
     mode: synthetic ? 'synthetic' : captureTest ? 'captureTest' : 'production',
     host: { publish, panelHandle: () => window!.getNativeWindowHandle(), scroll: delta => { window?.webContents.send('sc:scroll', delta); }, exit: () => app.quit(),
       activate: () => { if (window && readyToShow) { window.show(); window.focus(); } } } });
+  updates = new ApplicationUpdates({
+    client: app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && !preview && !captureTest ? electronUpdater.autoUpdater : null,
+    version, diagnostics, publish: state => controller?.setUpdateState(state), canInstall: () => controller?.canInstallUpdate() ?? false
+  });
+  controller.setUpdateState(updates.getState());
   controller.setCaptureProtection(lastCaptureProtection); bindIpc();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
@@ -202,12 +220,17 @@ async function boot(): Promise<void> {
   window.webContents.once('did-finish-load', () => { readyToShow = true; if (controller) publish(controller.getState(), false); });
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await window.loadURL(process.env.ELECTRON_RENDERER_URL);
   else await window.loadFile(join(directory, '../renderer/index.html'));
+  if (closing) return;
   await controller.initialize();
+  if (closing) return;
   if (activationPending) { activationPending = false; controller.restore(); }
+  void updates.action('check');
 }
 app.on('window-all-closed', () => {});
-app.on('before-quit', () => { closing = true; controller?.dispose(); platform?.dispose(); tray?.destroy(); tray = null; });
+app.on('before-quit', () => { closing = true; updates?.dispose(); controller?.dispose(); platform?.dispose(); tray?.destroy(); tray = null; });
 void app.whenReady().then(boot).catch(error => {
+  // Quitting can destroy the renderer while its startup load is still pending.
+  if (closing) return;
   const report = diagnostics.failure('Startup', error);
   // Protected native setup is unavailable if initialization itself failed. Keep output content-free.
   console.error(`${report.code} / ${report.reportId}: ${report.message}`);
