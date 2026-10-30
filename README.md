@@ -2,6 +2,8 @@
 
 SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
+[Visit the SC website](https://ziyadin23.github.io/screencompanion-website/).
+
 ## TypeScript desktop application
 
 The `main` branch develops the Windows Electron/TypeScript application under
@@ -11,6 +13,8 @@ and its existing releases. Only its frozen vault-compatibility test fixture rema
 The current TypeScript build is **0.5.0-beta.2** and has not been published as a GitHub release.
 It protects settings during early relaunches, rejects malformed
 API status fields, preserves the latest panel size and shows your active shortcuts in help.
+Newer beta.6 source is available in its [development pull request](https://github.com/Ziyadin23/ScreenCompanion/pull/5);
+its verification is incomplete and it has not been published as a GitHub release.
 
 With Node.js 22.12 or later, run `npm ci` then `npm run verify` from `desktop/`.
 Inside the Windows VM, run `npm run preview:ui` for a key-free interface preview that makes no
@@ -19,22 +23,26 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 
 ## Release status
 
-**Latest published release: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
+**Latest published beta: SC v0.5.0-beta.4 (Electron/TypeScript)** — [Download installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-Setup-v0.5.0-beta.4.exe) · [Download portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-v0.5.0-beta.4.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
 
-Existing downloads and tags are retained. They contain the C# application, while
-source builds from `main` produce the TypeScript beta. The beta keeps compatible
+**Latest stable: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
+
+Existing downloads and tags are retained. Source builds from `main` produce the
+older TypeScript beta. The beta keeps compatible
 encrypted settings and the same three pipelines. Moving development to `main`
 does not establish stable-release parity; see [verification limits](docs/VERIFICATION.md).
 
 ## Quick start
 
-1. Use the TypeScript beta built from this branch, or download the previous C# release above. Open the EXE on a Windows x64 PC; it includes its runtime. The beta has been checked on Windows 11. Windows 10 and fresh-machine checks remain open; see [platform limits](docs/VERIFICATION.md#platform-support).
-2. Enter your own provider's API key in the first-launch dialog. It is labelled **OpenAI**, but accepts your key without making a model request. An OpenAI key is not required to use another service.
-3. Press **Ctrl+I**, open **Models & API**, choose the service matching your key, enter its key and click **Save**. For DeepSeek, select `deepseek-flash` for both **Answer model** and **Screen-reading model**. You need an internet connection, model access and any required credits on your provider account.
+These steps describe the published beta.4. See its [user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.4/docs/USER_GUIDE.md) for details.
+
+1. Download the beta.4 installer above and run it once to install SC for your Windows account. The portable ZIP runs without installation. The beta has been checked on Windows 11; Windows 10 and fresh-machine checks remain open.
+2. Choose your API service in the first-launch dialog, enter its API key and click **Save**. Setup saves the key without making a model request.
+3. Open **Settings → Models & API** to adjust models, pipeline and keys later. You need an internet connection, model access and any required credits on your provider account.
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
-Close an older running release before upgrading. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
+Close an older running release before installation. The installed beta offers **Settings → Updates**; the portable version requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.4/docs/USER_GUIDE.md#setup-and-migration).
 
 ## Models and request pipelines
 
@@ -77,11 +85,17 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 - SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
 - Recording exclusion is best effort, and the tray icon remains visible. Verify the received stream or saved recording for your capture app.
 
-The beta passed 846 portable tests, 31 Windows native checks, 8 legacy-vault
+The beta.2 source on `main` passed 846 portable tests, 31 Windows native checks, 8 legacy-vault
 interoperability tests and 11 Electron UI workflows. Mocked provider tests do not
 establish live model quality. Fresh-machine, Windows 10, mixed-DPI and actual
 recorder-output checks remain open. Historical C# model/recorder results retain
 their original scope. See [verification results and limitations](docs/VERIFICATION.md).
+
+## License
+
+SC project code is available under the [MIT license](LICENSE). Include the
+copyright and license notice with copies. Third-party components retain their
+own licenses; notices for the published beta are included with its release.
 
 ## Build and further documentation
 
