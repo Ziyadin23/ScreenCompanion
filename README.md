@@ -10,13 +10,11 @@ SC's Windows Electron/TypeScript application lives under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current source version is **0.5.0-beta.6**, with verification in progress and
-no GitHub release. It clarifies extraction types for tasks with diagrams, tightens
+The current source version is **0.5.0-beta.6**, available as a GitHub prerelease
+with verification still in progress. It clarifies extraction types for tasks with diagrams, tightens
 Direct answer formatting, cancels active panel drags when hidden, and adds Windows
 control and update checks. Recorder exclusion, duplicate-launch behavior and live
-answer quality still need verification. The latest published beta is
-[v0.5.0-beta.4](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
-see its [release notes](docs/releases/v0.5.0-beta.4.md).
+answer quality still need verification. See the [beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
 It includes service-aware key setup, clearer Settings and a per-user Windows
 installer with **Settings → Updates**. Downloads and restart require your action;
 keys and settings stay in the existing encrypted storage. A portable EXE remains available.
@@ -28,7 +26,7 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 
 ## Release status
 
-**Latest published beta: SC v0.5.0-beta.4 (Electron/TypeScript)** — [Download installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-Setup-v0.5.0-beta.4.exe) · [Download portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.4/SC-v0.5.0-beta.4.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
+**Latest published beta: SC v0.5.0-beta.6 (Electron/TypeScript)** — [Download installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Download portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6)
 
 **Latest stable: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
 
@@ -45,7 +43,7 @@ does not establish stable-release parity; see [verification limits](docs/VERIFIC
 4. Press **Ctrl+Alt+Space** to ask about a visible question. To type a question, press **Ctrl+Enter**, then Enter or **Send**. Typed requests also capture the screen; your typed question takes priority over unrelated visible questions.
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
-Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC. An installed beta.3-to-beta.4 update was checked against the public feed. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
+Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC. A beta.5-to-beta.6 update was checked against a local feed; beta.6 delivery through GitHub remains untested. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
 
 ## Models and request pipelines
 
@@ -86,13 +84,13 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 
 - Questions and captured screen content leave your PC for processing by the selected API provider. Thorough/Balanced can send the full monitor for screen reading; their answering stage receives extracted content and relevant crops. DeepSeek Direct sends the full monitor straight to answering.
 - SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
-- Recording exclusion is best effort, and the tray icon remains visible. Verify the received stream or saved recording for your capture app.
+- Recording exclusion is best effort, and the tray icon remains visible. Beta.6's recorder checks did not establish exclusion; verify the received stream or saved recording for your capture app.
 
-Beta.4 passed 1,065 portable tests, 31 Windows native checks, 8 legacy-vault
-interoperability tests and 16 Electron UI workflows. Mocked provider tests do not
-establish live model quality. Fresh-machine, Windows 10, mixed-DPI and other
-recorder-output checks remain open. Historical C# model/recorder results retain
-their original scope. See [verification results and limitations](docs/VERIFICATION.md).
+Beta.6 passed 1,257 portable tests, 54 Windows native checks and 8 legacy-vault
+interoperability cases. All 37 distinct Windows UI cases passed across two runs;
+the full run timed out. Mocked provider tests do not establish live model quality.
+Fresh-machine, Windows 10, mixed-DPI, duplicate-launch and recorder-output checks
+remain open. See [verification results and limitations](docs/VERIFICATION.md).
 
 ## License
 

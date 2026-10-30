@@ -1,7 +1,7 @@
 # Verification and limitations
 
 This source tree contains the TypeScript/Electron application, **0.5.0-beta.6**
-(unpublished; verification in progress).
+([GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6); verification in progress).
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
@@ -66,6 +66,10 @@ and saved frames showed OBS windows covering the marker; its original OBS
 configuration was independently verified as restored. Both attempts remain
 failed and do not establish capture exclusion. Live qualification also remains
 pending. The beta.5 results below remain tied to the earlier candidate.
+
+Later separate Edge and OBS attempts also failed before the application was
+launched: Edge stopped at a received-marker preflight and OBS at recorder
+readiness. Neither attempt establishes capture exclusion for beta.6.
 
 ## Beta.5 implementation and verification
 

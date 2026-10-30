@@ -1,6 +1,6 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.6 (unpublished). The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
+Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.6 (a prerelease with verification in progress). The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
 
 ## Setup and migration
 

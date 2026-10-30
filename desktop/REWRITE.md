@@ -1,6 +1,6 @@
 # SC desktop development and verification
 
-Development version: **0.5.0-beta.6** (unpublished; verification in progress). Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.6** (published as a prerelease; verification in progress). Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
 The TypeScript/Electron application is the primary development source. The previous

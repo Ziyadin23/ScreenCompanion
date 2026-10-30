@@ -4,8 +4,9 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The source version is 0.5.0-beta.6; it has
-not been published. Version 0.5.0-beta.4 was published as a
+[README](../README.md#release-status). The source version is 0.5.0-beta.6, published as a
+[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
+Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
 on 2026-10-26. Existing C# releases, assets and tags stay
 unchanged; the full previous application can be built from the
@@ -122,7 +123,7 @@ The copyright attribution uses the maintainer's public handle, Ziyadin23.
 dependencies, native headers, Electron and installer components. Review them
 when dependencies or packaging change. Retain Electron's `LICENSE.electron.txt`
 and `LICENSES.chromium.html` inside both application payloads.
-Beta.5 also includes byte-identical copies of the root MIT license and current
+Beta.5 and beta.6 include byte-identical copies of the root MIT license and current
 third-party notices under `resources/LICENSE.txt` and
 `resources/THIRD_PARTY_NOTICES.txt` in both installer and portable payloads.
 
