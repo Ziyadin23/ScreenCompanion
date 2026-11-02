@@ -6,7 +6,7 @@ See [proposal.md](proposal.md) for motivation and scope.
 
 The source map under `desktop/src/` already separates lifecycle, IPC, UI, pipelines, providers, platform integration, and settings. Tests broadly follow those areas. The documentation problem is that current contributor guidance and historical verification narratives share several entry points.
 
-At exploration, `main` was at `fa3cf7c` (beta.6). The independent Linux worktree shared that committed base but contained uncommitted beta.7 application changes and BMAD planning. Its PRD was marked draft and all six implementation task groups were unchecked; that is an observed checkpoint, not a verdict on completed work. Reinspect that worktree before any later integration.
+At exploration, `main` was at `fa3cf7c` (beta.6). The independent Linux worktree shared that committed base but contained uncommitted beta.7 application changes and a local feature plan. Its PRD was marked draft and all six implementation task groups were unchecked; that is an observed checkpoint, not a verdict on completed work. Reinspect that worktree before any later integration. The Linux worktree now uses the local OpenSpec change `linux-platform-support`; the user requested deletion of all superseded workflow files and backups.
 
 This design is needed because document ownership, worktree context discovery, and a local Orca setting cross several existing instructions. The change has `skip_specs: true`: it changes contributor documentation and tooling, not an externally observable application contract.
 
@@ -23,20 +23,20 @@ This design is needed because document ownership, worktree context discovery, an
 
 - Application refactoring, directory moves under `desktop/src/` or `desktop/tests/`, new dependencies, or version changes.
 - A complete retrospective specification of SC, a new planning schema, or a shared external OpenSpec store.
-- Linux implementation, BMAD task reconciliation, changes to its installation, or merging its worktree.
+- Linux application implementation, feature-task execution, or merging its worktree.
 - Release publication, closing historical PRs, deleting local build outputs, private workspace edits, VM work, or paid model requests.
 
 ## Decisions
 
 ### 1. Use one planning owner for each change
 
-The user selected OpenSpec for shared SC development and BMAD for the existing Linux experiment. Keep OpenSpec configuration, changes, specs, archive, and the generated Codex integration in Git. A feature branch carries its own change artifacts alongside the work.
+The user selected OpenSpec for both shared SC development and the Linux worktree. The Linux cutover is captured separately in its local `linux-platform-support` change; OpenSpec is the sole planning owner. Keep OpenSpec configuration, changes, specs, archive, and the generated Codex integration in Git. A feature branch carries its own change artifacts alongside the work.
 
 Document the available Codex entry points: `$openspec-explore` for discovery, `$openspec-propose` for a plan, `$openspec-apply-change` for implementation, and `$openspec-archive-change` after verified completion. Explain the CLI/chat distinction and point to the installed skill instructions for detailed behavior.
 
 The active change's `tasks.md` owns its implementation status. An issue or PR may link to it without maintaining a second independent checklist. The verification reference owns evidence, not task completion. Capture a restart checkpoint in the existing task record with scope, decisions, changed paths, exact checks and outcomes, next action, and unresolved approvals.
 
-Alternatives considered: using BMAD everywhere would discard the chosen experiment boundary; keeping parallel OpenSpec and BMAD plans for the same shared change would create competing task status. Both are rejected for this change.
+Use one OpenSpec task owner per change to keep implementation status coherent.
 
 ### 2. Add one contributor entry point
 
@@ -89,7 +89,7 @@ The alternative of adding a root pnpm workspace exists only to accommodate an ou
 
 Track the existing `openspec/` scaffold and `.agents/skills/openspec-*/` integration, including its target marker. Keep the simple `spec-driven` schema. During implementation, add only the agreed workflow context and relevant artifact guidance to OpenSpec config; refer to existing rules instead of copying source facts or whole standards documents.
 
-Document BMAD's installed version and integrations in its experiment's own record when that experiment is next maintained. Its generated installation and planning outputs are separate categories; useful requirements and evidence can inform a later Linux integration without adopting its entire tool installation as SC's shared process. Do not blanket-ignore `.agents/`, which also contains OpenSpec integration.
+The accepted Linux requirements and bounded evidence live in its OpenSpec change. Superseded workflow installations, outputs and backups are deleted at the user's request. Keep OpenSpec integrations and useful public planning in Git; keep private execution history outside it. Do not blanket-ignore `.agents/`, which contains OpenSpec integration.
 
 Root `bin/`, `obj/`, and `publish/` are already ignored local outputs. Classify them in the contributor guide; deletion or relocation is separate work requiring inspection of their contents and ownership.
 

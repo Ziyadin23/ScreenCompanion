@@ -8,12 +8,12 @@ import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
 
 function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough') {
+function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough', platformName: 'windows' | 'linux' = 'windows') {
   const platform = createPreviewPlatform();
   const jpeg = Buffer.from('synthetic-monitor');
   platform.activeMonitor = vi.fn(() => ({ x: -1920, y: 0, width: 1920, height: 1080 }));
   platform.monitorForWindow = vi.fn(() => ({ x: 0, y: 0, width: 1920, height: 1080 }));
-  platform.captureMonitor = vi.fn(async bounds => ({ jpeg, bounds }));
+  platform.captureMonitor = vi.fn(async bounds => ({ jpeg, bounds: bounds ?? { x: 0, y: 0, width: 1920, height: 1080 } }));
   const applyShortcuts = vi.fn(async () => {});
   platform.applyShortcuts = applyShortcuts;
   platform.setOwnedDialogsVisible = vi.fn();
@@ -31,10 +31,36 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   const controller = new ApplicationController({ platform, store: { load, save,
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host: { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: state => states.push(state), scroll() {}, exit() {} },
-    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0 });
+    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName });
   return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
 }
 describe('production lifecycle with injected native boundaries', () => {
+  it('opens a usable Linux window at startup even without tray or shortcut access', async () => {
+    const f = fixture(undefined, 'Thorough', 'linux'); await f.controller.initialize();
+    expect(f.controller.getState()).toMatchObject({ platform: 'linux', visible: true, surface: 'input' });
+  });
+  it('lets the portal choose the monitor and keeps the last answer when capture is cancelled', async () => {
+    const f = fixture(); Object.assign(f.platform, { captureSelection: 'portal' });
+    await f.controller.initialize();
+    const first = f.controller.command({ type: 'capture' });
+    await vi.waitFor(() => expect(f.run).toHaveBeenCalledOnce());
+    f.outcome.resolve({ text: 'Retained synthetic answer', requestId: 'synthetic' }); await first;
+    expect(f.platform.activeMonitor).not.toHaveBeenCalled();
+    expect(f.platform.captureMonitor).toHaveBeenCalledWith(undefined);
+    f.platform.captureMonitor = vi.fn(async () => { throw new Error('cancelled'); });
+    await f.controller.command({ type: 'capture' });
+    expect(f.run).toHaveBeenCalledTimes(1);
+    expect(f.controller.getState().answer).toBe('Retained synthetic answer');
+    expect(f.controller.getState().busy).toBe(false);
+  });
+  it('returns to typed input without calling a provider when the portal capture fails', async () => {
+    const f = fixture(); Object.assign(f.platform, { captureSelection: 'portal' });
+    await f.controller.initialize(); await f.controller.command({ type: 'showInput' });
+    f.platform.captureMonitor = vi.fn(async () => { throw new Error('cancelled'); });
+    await expect(f.controller.command({ type: 'submit', question: 'synthetic typed question' })).rejects.toMatchObject({ code: 'CAPTUREFAILED' });
+    expect(f.controller.getState()).toMatchObject({ surface: 'input', busy: false, visible: true });
+    expect(f.run).not.toHaveBeenCalled();
+  });
   it('permits native edge resizing for the three visible panel surfaces, including while waiting for an answer', () => {
     const state = { ...fixture().controller.getState(), ready: true, visible: true, busy: true };
     for (const surface of ['answer', 'input', 'captureTest'] as const) expect(canResizePanel({ ...state, surface }, false)).toBe(true);

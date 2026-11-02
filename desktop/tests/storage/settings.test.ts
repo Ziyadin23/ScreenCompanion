@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { defaultSettings } from '../../src/contracts/defaults';
-import { createSettingsStore, SettingsError, validateSettings } from '../../src/storage';
+import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../../src/storage';
 vi.mock('node:fs/promises', { spy: true });
 
 // Synthetic encryption verifies the storage contract on every OS; it makes no DPAPI claim.
@@ -132,6 +132,30 @@ describe('SSK3 settings', () => {
 });
 
 describe('copy-only migration and panel size', () => {
+  it.each(['basic_text', 'unknown', ''])('does not write settings with the %s Linux storage backend', async backend => {
+    const crypt = createLinuxCryptor({ isEncryptionAvailable: () => true, getSelectedStorageBackend: () => backend,
+      encryptString: () => Buffer.from('weak'), decryptString: () => 'weak' });
+    const store = createSettingsStore(crypt, root, { platform: 'linux' });
+    await expect(store.save(defaultSettings('synthetic-secret'))).rejects.toThrow('keyring');
+    await expect(fs.access(join(root, 'SC', 'sc.linux.key'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('does not write Linux settings when the secure keyring is unavailable', async () => {
+    const crypt = createLinuxCryptor({ isEncryptionAvailable: () => false, getSelectedStorageBackend: () => 'gnome_libsecret',
+      encryptString: () => Buffer.from('weak'), decryptString: () => 'weak' });
+    await expect(createSettingsStore(crypt, root, { platform: 'linux' }).save(defaultSettings('synthetic-secret'))).rejects.toThrow('keyring');
+    await expect(fs.access(join(root, 'SC', 'sc.linux.key'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+  it('keeps Linux settings separate from Windows vaults and never migrates them', async () => {
+    const crypt = encryption();
+    const original = await rawVault(legacy(), defaultSettings('windows-synthetic'), crypt);
+    const store = createSettingsStore(crypt, root, { platform: 'linux' });
+    expect(await store.load()).toBeNull();
+    await store.save(defaultSettings('linux-synthetic'));
+    expect((await store.load())?.ApiKey).toBe('linux-synthetic');
+    expect(await fs.readFile(legacy())).toEqual(original);
+    expect(await fs.readFile(join(root, 'SC', 'sc.linux.key'))).not.toContain('linux-synthetic');
+    await expect(fs.access(current())).rejects.toMatchObject({ code: 'ENOENT' });
+  });
   it('atomically copies the legacy encrypted vault and retains original bytes', async () => {
     const crypt = encryption(); const original = await rawVault(legacy(), defaultSettings('legacy-synthetic'), crypt);
     expect((await createSettingsStore(crypt, root).load())?.ApiKey).toBe('legacy-synthetic');

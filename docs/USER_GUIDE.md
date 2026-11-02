@@ -1,8 +1,55 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application, currently 0.5.0-beta.6 (a prerelease with verification in progress). The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds, download status and a quick introduction.
+Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.7 is unpublished and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
+
+## Linux setup and controls
+
+The Linux port targets Fedora 44 x86-64, Hyprland on Wayland, PipeWire and
+`xdg-desktop-portal-hyprland`. A headless synthetic capture passed with an
+automated picker and shared-memory portal configuration; interactive consent and
+installed desktop checks remain open. Fedora container install, reinstall and
+removal passed with the Hyprland repository enabled. Fedora 44 base repositories
+do not provide the Hyprland portal package: install Hyprland and its matching
+portal from a trusted repository before installing SC. The test used the
+third-party sdegler/hyprland COPR already configured on the development machine.
+Other Linux desktops and package formats are not qualified. An
+unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
+storage. Unlock the keyring and restart SC if saved settings cannot be opened;
+if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
+`$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
+does not migrate Windows DPAPI files.
+
+If portal capture fails on a multi-GPU or headless setup, the Hyprland portal's
+`screencopy { force_shm = true }` option can avoid DMA-BUF compatibility issues;
+restart that portal after changing its configuration. The captured frame uses
+its selected monitor's pixel dimensions and frame-local coordinates; global
+monitor offsets are not exposed by this capture path.
+
+After setup, use **Capture screen** or **Question**, then choose one monitor in
+the desktop screen-sharing prompt. Cancellation or failure makes no provider
+request and retains the prior answer and any unsent question. SC hides its window while capturing, but
+SC windows can appear in recordings or screen shares; Linux does not provide a
+recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
+Reopening SC restores its window if the tray is unavailable.
+
+Hyprland users can configure their own bindings, for example:
+
+```ini
+bind = CTRL ALT, SPACE, exec, /opt/SC/io.github.ziyadin23.sc --action=capture
+bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input
+```
+
+Other actions are `settings`, `visibility`, `test` and `exit`. Desktop bindings
+are managed by Hyprland, rather than the Windows shortcut editor. Native window
+decorations handle moving and resizing. In an isolated Hyprland test, returning
+from Settings sometimes left the panel at the larger Settings size; drag a window
+edge or corner to resize it if that happens. Linux RPM updates require manually
+installing a newer RPM; the Windows update feed is not used.
 
 ## Setup and migration
+
+The following setup and shortcut details describe Windows. Linux uses the
+[controls above](#linux-setup-and-controls).
 
 1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The build also produces a portable `SC-v0.5.0-beta.6.exe` and matching ZIP containing that EXE and `README.txt`. It includes its runtime and needs no .NET installation. Earlier beta builds were checked on Windows 11; beta.6 verification is in progress, and Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
 2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
@@ -62,7 +109,7 @@ Settings groups related controls and reports unsaved changes. **Models & API** k
 
 Open **Settings → Models & API** to choose OpenAI, Groq, Google Gemini, Mistral, OpenRouter or DeepSeek. Choose an **Answer model** and a **Screen-reading model**, or type their exact model IDs. The screen-reading model must support images and structured JSON. The answer model must support structured JSON and any retained task images; DeepSeek Pro is a text-only answering option. Suggestions are editable; access, free quotas, and model availability depend on your own provider account. The app contains no shared API keys.
 
-Enter the selected service's API key and click **Save**. The service and model selection apply to subsequent capture and typed requests without restarting. Keys for each service are stored separately inside the existing Windows-user encrypted settings file. Switching services restores that service's key; **Back** discards edits. The active model selection persists across restarts. Model drafts for other services are retained only while the Settings window remains open. Existing settings without these fields keep the previous configuration until saved.
+Enter the selected service's API key and click **Save**. The service and model selection apply to subsequent capture and typed requests without restarting. Keys for each service are stored separately inside the encrypted settings file. Switching services restores that service's key; **Back** discards edits. The active model selection persists across restarts. Model drafts for other services are retained only while the Settings window remains open. Existing settings without these fields keep the previous configuration until saved.
 
 **DeepSeek:** select **DeepSeek**, keep `deepseek-flash` in both model fields, enter a key from your [DeepSeek API account](https://platform.deepseek.com/), and click **Save**. This uses DeepSeek directly rather than OpenRouter and requires DeepSeek API credits. `deepseek-flash` supports screenshot images; `deepseek-v4-pro` does not. DeepSeek requests use the Responses API with schema-based JSON; old settings retain non-thinking mode. DeepSeek documents stateless Responses with `store: false`; this does not guarantee zero retention under its API policies. See [vision support](https://api-docs.deepseek.com/guides/vision/), [Responses behavior](https://api-docs.deepseek.com/guides/responses_api/) and [pricing](https://api-docs.deepseek.com/quick_start/pricing/). The historical C# campaign completed seven initial scenarios with six correct primary answers and one failed automatic Thorough diagram answer. A separate fixed-region follow-up passed. Those results do not establish TypeScript answer quality; see [verification limits](VERIFICATION.md#live-providers-and-model-quality).
 
@@ -74,7 +121,7 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
-All six provider adapters have mocked transport coverage, and Windows encrypted-settings/UI checks passed. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
+All six provider adapters have mocked transport coverage; beta.6 passed the separately recorded Windows encrypted-settings/UI checks. Beta.7 Windows checks remain open. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
 
 ## Installed and portable updates
 
@@ -99,7 +146,7 @@ If an answer fails, the panel shows the error, a diagnostic code and a report ID
 
 Stages include `LOCATE`, `CROP`, `EXTRACT`, `ANSWER` and `VALIDATEANSWER`. Stage events share a request ID and record attempts, outcomes, elapsed time and numeric HTTP status. Thorough uses location, extraction and answering; Balanced combines extraction with local consistency checks. Neither structure/crop checks nor canonical-answer validation establish that a model's answer is correct. See the [pipeline reference](PIPELINE.md).
 
-Open `%LOCALAPPDATA%\SC\diagnostics.log` using Win+R or File Explorer. The app writes `PROCESSSTARTED` during startup, `READY` when initialized and bounded failure/stage/usage entries. Entries contain a UTC timestamp, app version and selected technical metadata such as stage, code, report ID and numeric HTTP status. The log is capped at roughly 64 KB and contains no API key, request or response body, question, screenshot, answer, or raw exception message. If the app cannot write the log, the error still displays a diagnostic code and says the log was not saved. If no log appears at all, the EXE may have been blocked before its code ran, or the app may not have been able to write to that folder.
+On Windows, open `%LOCALAPPDATA%\SC\diagnostics.log` using Win+R or File Explorer. On Linux, open `$XDG_CONFIG_HOME/SC/diagnostics.log` (normally `~/.config/SC/diagnostics.log`). The app writes `PROCESSSTARTED` during startup, `READY` when initialized and bounded failure/stage/usage entries. Entries contain a UTC timestamp, app version and selected technical metadata such as stage, code, report ID and numeric HTTP status. The log is capped at roughly 64 KB and contains no API key, request or response body, question, screenshot, answer, or raw exception message. If the app cannot write the log, the error still displays a diagnostic code and says the log was not saved.
 
 For support, send the diagnostic code and report ID, the matching log entry, the EXE version, and what you clicked. Do not send your API key. If no window appears, first check the tray icon: the answer panel normally starts hidden after setup.
 
@@ -117,7 +164,9 @@ curl.exe --connect-timeout 10 --max-time 20 --silent --show-error --output NUL -
 
 `HTTP 401` is expected without a key and indicates an HTTP authentication response was received; it does not verify model access, account credits, or the screenshot POST route. DNS/connection/certificate errors, a redirect, or a campus block response help IT identify where access fails. Curl can use a different proxy configuration from SC, so also provide SC's diagnostic code and matching log entry. Do not add your API key to the command.
 
-SC uses Windows WinHTTP automatic proxy settings and standard certificate validation.
+On Windows SC uses WinHTTP automatic proxy settings and standard certificate validation.
+On Linux it resolves the desktop proxy with Electron and uses curl with the
+system TLS trust store; authenticated proxy behavior needs target verification.
 Ask IT to check DNS/filtering, outbound HTTPS, proxy authentication, PC date/time,
 certificate trust and approved HTTPS-inspection requirements as appropriate to the
 failure. Keep certificate validation enabled.
@@ -126,4 +175,4 @@ The TypeScript beta uses a 15-second connection setup timeout within the 90-seco
 
 ## Privacy
 
-A typed request captures one fresh monitor image; a capture-shortcut request also captures once. A vision request detects a relevant question region, the app crops it locally, and a separate vision request extracts question text, choices, code, and any necessary image regions. The answering request receives structured questions and task-relevant visual crops. In Thorough/Balanced it receives no original monitor image; explicitly selected DeepSeek Direct sends the full captured monitor to answering without extraction. For the extraction pipelines, configuring a known question region avoids sending the full monitor image even to detection; Direct ignores question-region/cropping settings. Capture and typed requests start without an extra confirmation. The app keeps no screenshot or answer history and sends `store: false` with every OpenAI Responses request. DeepSeek uses stateless Responses; the remaining services use stateless Chat Completions. Provider retention policies still apply. Questions and screen content used for extraction leave the PC for API processing. The API key and saved settings are encrypted for the current Windows user.
+A typed request captures one fresh monitor image; a capture-shortcut request also captures once. A vision request detects a relevant question region, the app crops it locally, and a separate vision request extracts question text, choices, code, and any necessary image regions. The answering request receives structured questions and task-relevant visual crops. In Thorough/Balanced it receives no original monitor image; explicitly selected DeepSeek Direct sends the full captured monitor to answering without extraction. For the extraction pipelines, configuring a known question region avoids sending the full monitor image even to detection; Direct ignores question-region/cropping settings. Windows capture starts without an extra confirmation; Linux asks for monitor selection through the desktop portal. The app keeps no screenshot or answer history and sends `store: false` with every OpenAI Responses request. DeepSeek uses stateless Responses; the remaining services use stateless Chat Completions. Provider retention policies still apply. Questions and screen content used for extraction leave the PC for API processing. Windows settings are encrypted for the current Windows user; Linux settings require an unlocked secure keyring.

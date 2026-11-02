@@ -208,7 +208,7 @@ export function Settings({ state }: { state: AppState }) {
       if (alive.current && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
-      if (alive.current) setError('Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
+      if (alive.current) setError(state.platform === 'linux' ? 'Settings were not saved. Unlock your secure Linux keyring and check the selected service and model IDs, then try again.' : 'Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
     } finally {
       outgoing.keyUpdates = {};
       savingRef.current = false;
@@ -271,6 +271,7 @@ export function Settings({ state }: { state: AppState }) {
             onChange={(event) => updateValues({ CustomInstruction: event.target.value.slice(0, 2000) })} />
           <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></section>
           <section className="form-section" aria-labelledby="shortcut-heading"><h3 id="shortcut-heading">Keyboard shortcuts</h3>
+          {state.platform === 'linux' ? <p className="hint">Configure Hyprland bindings to run SC with --action=capture, input, settings, visibility, test or exit. If the tray is unavailable, reopening SC restores the window.</p> : <>
           <p className="hint" id="shortcut-help">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
           <div className="shortcut-fields">
             {SHORTCUT_FIELDS.map(({ field, label }) => <div className="shortcut-row" key={field}>
@@ -296,7 +297,7 @@ export function Settings({ state }: { state: AppState }) {
             stopRecording(); const defaults = defaultSettings('');
             updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
           }}>Restore shortcuts</button><button type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</button></div>
-          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></section>
+          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></>}</section>
         </>}
         {page === 'Panel' && <>
           <section className="form-section" aria-labelledby="readability-heading"><h3 id="readability-heading">Text and transparency</h3>
@@ -312,8 +313,10 @@ export function Settings({ state }: { state: AppState }) {
           <Choice {...choiceAria('panel-theme')} label="Panel color theme" value={paletteName(draft.values.Appearance)} options={[...Object.keys(PALETTES), 'Custom']}
             onChange={(value) => { if (value in PALETTES) appearance(PALETTES[value as keyof typeof PALETTES]); }} />
           <div className="color-fields">{COLOR_FIELDS.map(({ field, label }) => <div key={field}><span>{label}</span>
+            {state.platform === 'linux' ? <input type="color" aria-label={`${label} color`} value={draft.values.Appearance[field]}
+              onChange={event => appearance({ [field]: event.target.value })} /> :
             <button type="button" aria-label={`${label} color`} style={{ background: draft.values.Appearance[field], color: contrastText(draft.values.Appearance[field]) }}
-              onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</button></div>)}</div>
+              onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</button>}</div>)}</div>
           </section><section className="form-section" aria-labelledby="panel-preview-heading"><h3 id="panel-preview-heading">Answer preview</h3>
           <div className="preview-checker"><div className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
@@ -334,7 +337,7 @@ export function Settings({ state }: { state: AppState }) {
             }} />
           <small id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</small>
           <label className="checkbox-row"><input type="checkbox" checked={showKey} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
-          <p className="hint" id="service-key-help">Keys are encrypted for your Windows account. Save applies this service to future questions without testing the key or making a model request.</p>
+          <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies this service to future questions without testing the key or making a model request.</p>
           <p className="hint">{DATA_NOTICE[provider]}</p></section>
           <details className="advanced-settings" open={advanced}>
             <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAdvanced((value) => !value); }}>Advanced model settings</summary>
@@ -362,7 +365,7 @@ export function Settings({ state }: { state: AppState }) {
           </details>
           <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`}</p>
         </>}
-        {page === 'Commands' && <><pre className="commands-text">{commandsText(state.shortcuts)}</pre>
+        {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? 'Use the window controls. Hyprland bindings can launch SC with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(state.shortcuts)}</pre>
           <button type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}

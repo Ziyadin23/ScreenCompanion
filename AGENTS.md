@@ -1,6 +1,8 @@
 # Agent guidance
 
-Keep credentials, vaults, private bundles, recordings and lab identifiers outside commits and release assets. Private lab state belongs in the parent workspace's `PROJECT_CONTEXT.md`.
+Keep credentials, vaults, private bundles, recordings and lab identifiers outside commits and release assets. Private lab state belongs in the primary checkout's parent workspace `PROJECT_CONTEXT.md`. From a linked worktree, locate the primary checkout through `git rev-parse --path-format=absolute --git-common-dir`, then read that workspace's guidance and task-relevant private context.
+
+Use OpenSpec as the sole planning and continuation workflow. Before Linux work, read the [active proposal](openspec/changes/linux-platform-support/proposal.md), [design](openspec/changes/linux-platform-support/design.md), [tasks](openspec/changes/linux-platform-support/tasks.md) and [Linux evidence](docs/VERIFICATION.md#linux-port-status). The task file owns implementation progress. Resume application work with the OpenSpec apply workflow.
 
 Before code, test or build edits or regression runs, read [shared rules](CODING_STANDARDS.md#shared-rules) and [verification](CODING_STANDARDS.md#verification), then every affected area below, including effects of project changes:
 

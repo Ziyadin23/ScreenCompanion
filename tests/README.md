@@ -75,14 +75,16 @@ checks. Portable success and native compilation do not substitute for real DPAPI
 
 ## Electron workflows and preview
 
-Run GUI checks/previews only inside the Windows VM with its headless frontend:
+Run Windows GUI checks/previews only inside the Windows VM with its headless frontend:
 
 ```powershell
 npm run test:ui
 npm run preview:ui
 ```
 
-The runner rejects non-Windows hosts. Beta.5 passed **37 UI workflows** on
+The Windows runner rejects non-Windows hosts. Linux GUI checks run only in an
+isolated headless compositor with synthetic data and an isolated profile; target
+qualification requires Hyprland. Record those results separately. Beta.5 passed **37 UI workflows** on
 Windows 11, none skipped, exit 0, including every panel resize edge and actual
 shortcut contention. An earlier run had one visibility-restoration failure that
 was not reproduced in the subsequent run; see the [recorded evidence](../docs/VERIFICATION.md#beta5-implementation-and-verification).

@@ -11,7 +11,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     keyUpdates: {}, ...draftOverrides
   };
   let state: AppState = {
-    ready: true, surface: 'answer', visible: true, busy: false, settingsDirty: false, answer: 'Synthetic SC answer', error: null,
+    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsDirty: false, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
     captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false,

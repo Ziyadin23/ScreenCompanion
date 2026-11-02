@@ -1,6 +1,6 @@
 # SC desktop development and verification
 
-Development version: **0.5.0-beta.6** (published as a prerelease; verification in progress). Reference implementation: C# v0.4.14,
+Development version: **0.5.0-beta.7** (unpublished; Linux and Windows verification in progress). Reference implementation: C# v0.4.14,
 commit `f340de6cdb061554971d03d65b2c2c924f9cc871`.
 
 The TypeScript/Electron application is the primary development source. The previous
@@ -13,7 +13,7 @@ release or close the unfinished compatibility and recorder gates below.
 - `src/main`, `src/preload`, `src/contracts`: lifecycle, IPC and shared contracts.
 - `src/renderer`: React answer/input, Settings and setup interface.
 - `src/pipeline`, `src/providers`: request flow, validation and API adapters.
-- `src/platform`, `src/storage`, `native`: Windows integration and encrypted settings.
+- `src/platform`, `src/storage`, `native`: Windows and Linux integration and encrypted settings.
 - `tests`: portable, Windows-native, vault and Electron workflow fixtures. The
   [frozen legacy vault oracle](tests/windows/interop/README.md) is test-only.
 
@@ -47,8 +47,9 @@ npm run preview:ui
 ```
 
 The preview uses synthetic in-memory settings, blocks capture/network access,
-and does not load a real vault. Run GUI tests and previews inside the Windows VM;
+and does not load a real vault. Run Windows GUI tests and previews inside the Windows VM;
 `npm run test:ui` refuses to launch application windows on a non-Windows host.
+Linux desktop checks require an isolated headless Hyprland session and synthetic profile.
 Production Windows development uses
 `npm run native:build` followed by `npm run dev`.
 

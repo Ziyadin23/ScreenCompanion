@@ -2,7 +2,7 @@
 
 ## Why
 
-SC has a usable application and test layout, but contributor instructions, release history, verification status, and worktree setup are spread across overlapping documents. Adopt OpenSpec for shared SC development while preserving the separate Linux worktree as a BMAD experiment, so a new session can find the current plan and the evidence that supports it.
+SC has a usable application and test layout, but contributor instructions, release history, verification status, and worktree setup are spread across overlapping documents. Use OpenSpec for shared SC development and the separate Linux worktree, so a new session can find the current plan and the evidence that supports it.
 
 ## What Changes
 
@@ -11,7 +11,7 @@ SC has a usable application and test layout, but contributor instructions, relea
 - Separate current verification status and test commands from older run history. Preserve dated results, failed attempts, provenance, and compatibility limits when moving historical material.
 - Document worktree-safe discovery of existing private workspace guidance through the primary checkout, without publishing machine-specific paths or copying private context into a worktree.
 - Align Orca's local repository setup hook with the npm project under `desktop/`, and document the same reproducible command.
-- Define what belongs in Git: OpenSpec configuration, change artifacts, and its agent integration; distinguish BMAD experiment installations and ignored build outputs.
+- Define what belongs in Git: OpenSpec configuration, change artifacts, and its agent integration; preserve the existing ignored build-output rules.
 - Keep the Linux experiment's implementation and planning artifacts in its existing worktree. Bring its requirements and verification evidence into shared SC development through a later, explicit integration change.
 
 ## Capabilities

@@ -21,6 +21,32 @@ function choose(name: string, value: string) {
 function value(name: string) { return (screen.getByRole('textbox', { name }) as HTMLInputElement).value; }
 
 describe('answer and temporary input', () => {
+  it('offers Linux window controls even without a tray or global shortcuts', async () => {
+    const driver = fixture({ platform: 'linux' } as Partial<AppState>); render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Capture screen' }));
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'capture' });
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'settings' });
+  });
+  it('retains a typed question when Linux screen selection fails', async () => {
+    const driver = fixture({ platform: 'linux', surface: 'input' });
+    let reject!: (reason: Error) => void;
+    driver.api.command.mockImplementationOnce(async () => {
+      driver.emit({ surface: 'answer', busy: true });
+      await new Promise<void>((_resolve, fail) => { reject = fail; });
+    });
+    render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'synthetic question' } });
+    fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Question' })).toBeNull());
+    await act(async () => { driver.emit({ surface: 'input', busy: false }); reject(new Error('capture cancelled')); });
+    expect((await screen.findByRole('textbox', { name: 'Question' }) as HTMLInputElement).value).toBe('synthetic question');
+  });
+  it('discloses that Linux windows can appear in recordings', async () => {
+    fixture({ platform: 'linux', surface: 'captureTest', captureProtection: 'Failed' } as Partial<AppState>); render(<App />);
+    expect((await screen.findByTestId('answer-text')).textContent).toMatch(/appear in recordings/i);
+  });
   it('renders selectable plain text, including code and hostile markup, without permanent controls', async () => {
     fixture({ answer: '<img src=x onerror=alert(1)>\n<script>throw 1</script>\n  code & text' });
     const { container } = render(<App />);
