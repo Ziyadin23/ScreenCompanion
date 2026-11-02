@@ -12,6 +12,24 @@ run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
 
+## CI ledger deadline (2026-11-02)
+
+The [main-branch check for planning commit 7e36a55](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/41338916141)
+failed in the Windows portable suite: 1,256 tests passed and the cumulative
+119/120/121 campaign-counter case exceeded its 10-second test deadline.
+The [same commit's feature-branch check](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/41338384715)
+passed, with that case taking 4.539 seconds on Windows.
+
+A temporary local latency probe delayed each real durable append by 50 ms,
+reproducing the same 10-second timeout. With a 60-second deadline scoped to this
+case, all 240 durable appends and the existing assertions completed in 12.838
+seconds. The focused ledger suite passed all 25 tests, exit 0.
+`npm --prefix desktop run verify` then passed all 1,257 tests in 27 files,
+type checking, lint and production bundles, exit 0. The temporary probe was
+removed; the suite-wide 10-second default, disk flushes, campaign limits and
+application code are unchanged. These are synthetic transport checks and make
+no provider requests.
+
 ## Beta.6 extraction guidance
 
 Beta.6 clarifies extraction-type precedence for choices, code and necessary

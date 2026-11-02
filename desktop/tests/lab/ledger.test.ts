@@ -51,6 +51,7 @@ describe('fixed beta5 cumulative campaign counter (fake transports only)', () =>
     expect(await fs.readFile(join(directory, 'campaign.lock'), 'utf8')).toBe('{"schema":2}\n');
     await first.close(); expect((await open()).count).toBe(0);
   });
+  // Hundreds of real disk flushes need extra time on shared Windows CI runners.
   it('serializes119-to120 and rejects121 across all phases and resumes', async () => {
     for (const phase of Object.keys(PHASE_LIMITS) as CampaignPhase[]) {
       const ledger = await open(phase), seed = phaseRuns(phase)[0]!;
@@ -70,7 +71,7 @@ describe('fixed beta5 cumulative campaign counter (fake transports only)', () =>
     await ledger.close(); const resumed = await open('reserve');
     await expect(new ObservedTransport({ send }, resumed, run, 13).send(request())).rejects.toMatchObject({ code: 'cap' });
     expect(send).toHaveBeenCalledTimes(1); expect(resumed.count).toBe(120);
-  });
+  }, 60_000);
   it('does not transfer a phase allowance or send without flushed reservation', async () => {
     const ledger = await open('initial-preflight'); await ledger.reserve(run.id, 1, 'Preflight'); await ledger.finish(run.id, 1, 'failed');
     await ledger.reserve(run.id, 2, 'Preflight'); await ledger.finish(run.id, 2, 'failed');
