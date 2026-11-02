@@ -17,6 +17,10 @@ export function Updates({ state, dirty }: { state: AppState; dirty: boolean }) {
     finally { running.current = false; if (alive.current) setPending(false); }
   }
   const working = pending || ['checking', 'downloading', 'installing'].includes(update.status);
+  if (state.platform === 'linux') return <div aria-label="SC updates">
+    <p>Current version: <strong>{state.version}</strong></p>
+    <p className="hint">Install a newer RPM manually to update SC. Close SC before updating.</p>
+  </div>;
   return <div aria-label="SC updates">
     <p>Current version: <strong>{state.version}</strong></p>
     {update.status === 'disabled' ? <p className="hint">Portable and preview builds use manual updates. For the portable version, close SC before replacing its EXE. Install SC to use in-app updates.</p> :

@@ -59,7 +59,7 @@ export function createDiagnostics(directory: string | null, version: string): Di
       const network = knownCode === 'Network' || knownCode === 'Timeout';
       return { message: error instanceof AppError || error instanceof PipelineFailure || error instanceof PipelineValidationError || error instanceof ProviderError
         ? error.message : `SC could not complete the ${pipelineStage.toLowerCase()} stage. Try again.`,
-        code, reportId, logSaved, hint: network ? 'Check your connection, Windows proxy settings, and Wi-Fi sign-in. Ask network IT about access to the selected API host.' : 'Check Settings and try again. Use the diagnostic code and report ID when reporting this failure.' };
+        code, reportId, logSaved, hint: network ? 'Check your connection, system proxy settings, and Wi-Fi sign-in. Ask network IT about access to the selected API host.' : 'Check Settings and try again. Use the diagnostic code and report ID when reporting this failure.' };
     }
   };
 }

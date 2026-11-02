@@ -1,17 +1,20 @@
 # SC
 
-SC is a Windows app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
+SC is a desktop app that answers questions from your screen or from text you type. It takes one fresh monitor capture per request and displays the answer in a compact panel where you can select and copy text.
 
 [Visit the SC website](https://ziyadin23.github.io/screencompanion-website/).
 
 ## TypeScript desktop application
 
-SC's Windows Electron/TypeScript application lives under
+SC's Electron/TypeScript application lives under
 [`desktop/`](desktop/REWRITE.md), with a React interface and a C++ Windows bridge.
 The previous C# application is archived in the [v0.4.14 source tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14)
 and its existing releases. Only its frozen vault-compatibility test fixture remains here.
-The current source version is **0.5.0-beta.6**, available as a GitHub prerelease
-with verification still in progress. It clarifies extraction types for tasks with diagrams, tightens
+The current source version is **0.5.0-beta.7**, not yet published. It adds a
+Linux port targeting Fedora 44 x86-64 with Hyprland Wayland. An isolated
+headless check exercised one portal capture and a synthetic encrypted keyring;
+interactive consent, shortcuts and RPM installation still require verification.
+The published beta.6 clarifies extraction types for tasks with diagrams, tightens
 Direct answer formatting, cancels active panel drags when hidden, and adds Windows
 control and update checks. Recorder exclusion, duplicate-launch behavior and live
 answer quality still need verification. See the [beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
@@ -31,7 +34,7 @@ instructions are in the [rewrite reference](desktop/REWRITE.md).
 **Latest stable: SC v0.4.14 (previous C# application)** — [Download EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [Download ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14)
 
 Existing downloads and tags are retained. Source builds from this branch produce
-the TypeScript beta. The beta keeps compatible
+the unpublished TypeScript beta. No Linux RPM has been published. The beta keeps compatible
 encrypted settings and the same three pipelines. Moving development to `main`
 does not establish stable-release parity; see [verification limits](docs/VERIFICATION.md).
 
@@ -44,6 +47,14 @@ does not establish stable-release parity; see [verification limits](docs/VERIFIC
 5. Use **Ctrl+/** to hide/show the panel. Later launches load your saved settings and start hidden; opening another copy restores the running app.
 
 Close an older running release before the first installation. Afterwards, use **Settings → Updates** in installed SC. A beta.5-to-beta.6 update was checked against a local feed; beta.6 delivery through GitHub remains untested. The portable EXE requires manual replacement. Existing ScreenCompanion settings migrate while preserving the original encrypted file. [Setup and migration details](docs/USER_GUIDE.md#setup-and-migration).
+
+The Linux port requires Fedora 44 x86-64, Hyprland Wayland, PipeWire, the
+Hyprland desktop portal and an unlocked Secret Service keyring. Use the window
+controls to capture or type a question, and select a monitor in the system prompt.
+Reopen SC to restore a hidden window; compositor bindings can run commands such as
+`/opt/SC/io.github.ziyadin23.sc --action=capture`. Linux settings use a separate encrypted vault and updates
+are manual. SC windows may appear in recordings and screen shares. The port is
+not yet qualified on its target desktop; see the [Linux setup and limits](docs/USER_GUIDE.md#linux-setup-and-controls).
 
 ## Models and request pipelines
 
@@ -70,7 +81,9 @@ For DeepSeek, Flash handles screenshots in every pipeline. `deepseek-v4-pro` can
 | **Ctrl+Alt+T** | Open/close the capture-exclusion test panel. |
 | **Ctrl+Backspace** | Exit SC. |
 
-The tray menu provides the same main controls. Shortcuts can be changed in Settings.
+These are Windows defaults; the tray menu provides the same main controls and
+shortcuts can be changed in Settings. Linux uses window controls and optional
+Hyprland bindings.
 
 ## Panel and settings
 
@@ -83,8 +96,8 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 ## Privacy and limits
 
 - Questions and captured screen content leave your PC for processing by the selected API provider. Thorough/Balanced can send the full monitor for screen reading; their answering stage receives extracted content and relevant crops. DeepSeek Direct sends the full monitor straight to answering.
-- SC keeps no screenshot or answer history. Keys/settings are encrypted for your Windows account. OpenAI requests use `store: false`; provider retention policies still apply.
-- Recording exclusion is best effort, and the tray icon remains visible. Beta.6's recorder checks did not establish exclusion; verify the received stream or saved recording for your capture app.
+- SC keeps no screenshot or answer history. Windows keys/settings are encrypted for your Windows account; Linux settings require a secure keyring. OpenAI requests use `store: false`; provider retention policies still apply.
+- Windows recording exclusion is best effort, and the tray icon remains visible. Beta.6's recorder checks did not establish exclusion. Linux windows may appear in recordings and screen shares; no exclusion is claimed.
 
 Beta.6 passed 1,257 portable tests, 54 Windows native checks and 8 legacy-vault
 interoperability cases. All 37 distinct Windows UI cases passed across two runs;
@@ -118,8 +131,10 @@ npm run package:win
 npm run package:zip
 ```
 
-Build output: `desktop/dist/SC-Setup-v0.5.0-beta.6.exe`, the portable
-`SC-v0.5.0-beta.6.exe` and its matching two-file ZIP with `README.txt`. Follow [publishing](docs/PUBLISHING.md) before distribution.
+Build output: `desktop/dist/SC-Setup-v0.5.0-beta.7.exe`, the portable
+`SC-v0.5.0-beta.7.exe` and its matching two-file ZIP with `README.txt`. On Fedora,
+`npm run package:rpm` builds the Linux RPM without the Windows bridge. Follow
+[publishing](docs/PUBLISHING.md) before distribution.
 The .NET 10 SDK is needed only for the legacy-vault interoperability tests.
 
 - [User guide](docs/USER_GUIDE.md): setup, controls, model selection, privacy, troubleshooting.

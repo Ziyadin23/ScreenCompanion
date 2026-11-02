@@ -1,8 +1,11 @@
 {
   "name": "sc-desktop",
-  "version": "0.5.0-beta.6",
+  "version": "0.5.0-beta.7",
   "private": true,
-  "description": "SC Windows desktop companion",
+  "description": "SC desktop companion",
+  "homepage": "https://github.com/Ziyadin23/ScreenCompanion",
+  "author": "Ziyadin23",
+  "desktopName": "io.github.ziyadin23.sc.desktop",
   "license": "MIT",
   "type": "module",
   "main": "out/main/index.js",
@@ -23,6 +26,7 @@
     "package:zip": "node scripts/package-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",
     "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:rpm": "npm run typecheck && npm run build && electron-builder --linux rpm --x64 --publish never",
     "test:lab": "node scripts/lab-tests.mjs",
     "test:deepseek": "node scripts/deepseek-tests.mjs"
   },
@@ -44,10 +48,6 @@
     ],
     "extraResources": [
       {
-        "from": "native/build/Release/sc_windows.node",
-        "to": "native/sc_windows.node"
-      },
-      {
         "from": "../LICENSE",
         "to": "LICENSE.txt"
       },
@@ -57,12 +57,48 @@
       }
     ],
     "win": {
+      "extraResources": [
+        {
+          "from": "native/build/Release/sc_windows.node",
+          "to": "native/sc_windows.node"
+        }
+      ],
       "target": [
         "nsis",
         "portable"
       ],
       "artifactName": "SC-v${version}.${ext}",
       "requestedExecutionLevel": "asInvoker"
+    },
+    "linux": {
+      "target": [
+        "rpm"
+      ],
+      "category": "Utility",
+      "executableName": "io.github.ziyadin23.sc",
+      "syncDesktopName": true,
+      "artifactName": "SC-v${version}-${arch}.${ext}"
+    },
+    "rpm": {
+      "maintainer": "Ziyadin23",
+      "afterInstall": "scripts/rpm-after-install.sh",
+      "afterRemove": "scripts/rpm-after-remove.sh",
+      "depends": [
+        "gtk3",
+        "libnotify",
+        "nss",
+        "libXScrnSaver",
+        "libXtst",
+        "xdg-utils",
+        "at-spi2-core",
+        "libuuid",
+        "libsecret",
+        "gnome-keyring",
+        "curl",
+        "pipewire",
+        "xdg-desktop-portal",
+        "xdg-desktop-portal-hyprland"
+      ]
     },
     "portable": {
       "requestExecutionLevel": "user"

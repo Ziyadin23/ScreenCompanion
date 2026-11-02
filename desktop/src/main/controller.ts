@@ -17,6 +17,7 @@ export interface ControllerDependencies {
   diagnostics: Diagnostics; configuration(settings: VaultData): PipelineConfiguration;
   validateSettings(settings: VaultData): void; version: string;
   mode?: 'production' | 'captureTest' | 'synthetic'; captureDelayMs?: number;
+  platformName?: 'windows' | 'linux';
   executableDirectory?: string; defaultPipelineMode?: PipelineMode;
 }
 const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
@@ -39,7 +40,7 @@ export class ApplicationController {
   private settingsActions = 0;
   constructor(private readonly deps: ControllerDependencies) {
     const defaults = defaultSettings('');
-    this.state = { ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
+    this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
       version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsDirty: false };
   }
@@ -103,11 +104,13 @@ export class ApplicationController {
     if (!this.settings.CommandsShown) {
       const updated = { ...this.settings, CommandsShown: true };
       await this.deps.store.save(updated); this.settings = updated;
-      this.state.answer = commandsText(this.state.shortcuts); this.state.visible = true;
+      this.state.answer = this.state.platform === 'linux' ? 'Use the window controls to capture or type a question. Configure Hyprland shortcuts with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(this.state.shortcuts); this.state.visible = true;
     }
+    if (this.state.platform === 'linux' && !this.state.visible) { this.state.visible = true; this.state.surface = 'input'; }
     this.deps.diagnostics.event('READY');
     if (this.pendingActivation) this.restore();
     this.publish();
+    this.deps.platform.ready?.();
   }
   async setup(request: SetupRequest): Promise<void> {
     if (this.settings || this.exiting) return;
@@ -274,7 +277,8 @@ export class ApplicationController {
     let jpeg: Buffer | null = null;
     let stage = 'Capture';
     try {
-      const bounds = typedQuestion !== undefined ? this.deps.platform.monitorForWindow(this.deps.host.panelHandle()) : this.deps.platform.activeMonitor();
+      const bounds = this.deps.platform.captureSelection === 'portal' ? undefined :
+        typedQuestion !== undefined ? this.deps.platform.monitorForWindow(this.deps.host.panelHandle()) : this.deps.platform.activeMonitor();
       this.capturing = true;
       if (this.state.surface !== 'settings') this.state.surface = 'answer';
       this.deps.platform.setHoverInputHeight(0); this.publish();
@@ -289,7 +293,15 @@ export class ApplicationController {
       this.state.answer = result.text; this.state.error = null;
       if (this.state.surface !== 'settings') this.state.surface = 'answer';
       if (!this.hiddenByUser) this.state.visible = true;
-    } catch (error) { if (!this.exiting) { if (!this.hiddenByUser) this.state.visible = true; this.fail(stage, error); } }
+    } catch (error) {
+      if (!this.exiting) {
+        if (!this.hiddenByUser) this.state.visible = true;
+        const retryInput = stage === 'Capture' && typedQuestion !== undefined && this.deps.platform.captureSelection === 'portal';
+        if (retryInput) this.state.surface = 'input';
+        this.fail(stage, error);
+        if (retryInput) throw new AppError('CAPTUREFAILED', 'Screen capture was cancelled or unavailable. Try again.');
+      }
+    }
     finally {
       jpeg?.fill(0); this.finishCapture(); this.state.busy = false; this.cancellation = null;
       this.publish();

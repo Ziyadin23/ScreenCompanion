@@ -8,7 +8,7 @@ import { formatShortcut } from './shortcuts';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 
-function Setup({ legacyNotice, onCommand }: { legacyNotice: boolean; onCommand: (command: AppCommand) => void }) {
+function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; platform: AppState['platform']; onCommand: (command: AppCommand) => void }) {
   const [provider, setProvider] = useState<ApiProvider>('OpenAI');
   const [key, setKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -26,7 +26,7 @@ function Setup({ legacyNotice, onCommand }: { legacyNotice: boolean; onCommand: 
     }
     pending.current = true; setSaving(true); setError('');
     try { await window.sc.setup({ provider, apiKey: key.trim() }); if (alive.current) { setKey(''); setShowKey(false); } }
-    catch { if (alive.current) setError('The key could not be saved. Try again.'); }
+    catch { if (alive.current) setError(platform === 'linux' ? 'The key could not be saved. Unlock your secure Linux keyring and try again.' : 'The key could not be saved. Try again.'); }
     finally { pending.current = false; if (alive.current) setSaving(false); }
   }
   return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
@@ -42,7 +42,8 @@ function Setup({ legacyNotice, onCommand }: { legacyNotice: boolean; onCommand: 
         aria-invalid={!!error} aria-describedby={`setup-privacy${error ? ' setup-error' : ''}`}
         maxLength={8192} value={key} disabled={saving} onChange={(event) => { setKey(event.target.value); setError(''); }} />
       <label className="checkbox-row"><input type="checkbox" checked={showKey} disabled={saving} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
-      <p className="hint" id="setup-privacy">Your key is encrypted for your Windows account. Setup saves your service and key without contacting the service or checking access. You can change them in Settings → Models &amp; API.</p>
+      <p className="hint" id="setup-privacy">{platform === 'linux' ? 'Your key is encrypted using your unlocked Linux keyring.' : 'Your key is encrypted for your Windows account.'} Setup saves your service and key without contacting the service or checking access. You can change them in Settings → Models &amp; API.</p>
+      {platform === 'linux' && <p className="hint">Unlock your desktop keyring before saving. SC windows can appear in recordings and screen shares.</p>}
       {legacyNotice && <p className="hint" role="note">An older key file was found. Enter your API key once more. The old file will be left unchanged.</p>}
       {error && <p className="dialog-error" id="setup-error" role="alert">{error}</p>}
       <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving setup…' : ''}</span><button className="primary-action" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
@@ -52,6 +53,7 @@ function Setup({ legacyNotice, onCommand }: { legacyNotice: boolean; onCommand: 
 }
 
 function captureTestText(state: AppState): string {
+  if (state.platform === 'linux') return 'SC windows can appear in recordings and screen shares on Linux. Check the actual recording or received stream. Use the window controls to return or exit.';
   const status = state.captureProtection === 'Excluded' ? 'Windows capture exclusion requested. Verify each recording or stream.' :
     state.captureProtection === 'ContentHidden' ? 'This Windows version may show a blank panel in captures. Test each recording or stream.' :
       'Windows capture exclusion failed; this panel may appear in recordings or streams.';
@@ -78,7 +80,9 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     if (state.surface === 'input' && !state.busy) input.current?.focus();
     else panel.current?.focus({ preventScroll: true });
   }, [state.surface, state.visible]);
-  useEffect(() => { if (state.surface !== 'input') { setQuestion(''); setError(''); } }, [state.surface]);
+  useEffect(() => {
+    if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) { setQuestion(''); setError(''); }
+  }, [state.surface, state.platform, state.busy]);
   async function submit() {
     const value = question.trim();
     if (!value || pending.current || state.busy) return;
@@ -88,7 +92,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     if (alive.current) { setSubmitting(false); if (success) setQuestion(''); else setError('The question could not be submitted. Try again.'); }
   }
   const answer = state.surface === 'captureTest' ? captureTestText(state) : state.error ?
-    `${state.error.message}\n\n${state.error.hint}\nCode: ${state.error.code}\nReport ID: ${state.error.reportId}\n${state.error.logSaved ? 'Log: %LOCALAPPDATA%\\SC\\diagnostics.log' : 'Diagnostic log was not saved.'}` : state.answer;
+    `${state.error.message}\n\n${state.error.hint}\nCode: ${state.error.code}\nReport ID: ${state.error.reportId}\n${state.error.logSaved ? state.platform === 'linux' ? 'Log: ~/.config/SC/diagnostics.log (or $XDG_CONFIG_HOME/SC/diagnostics.log)' : 'Log: %LOCALAPPDATA%\\SC\\diagnostics.log' : 'Diagnostic log was not saved.'}${state.platform === 'linux' && state.answer ? `\n\nPrevious answer:\n${state.answer}` : ''}` : state.answer;
   return <main className="answer-panel" data-testid="answer-panel" aria-label="SC answer" aria-busy={state.busy}
     onKeyDown={(event) => {
       if (event.ctrlKey && !event.altKey && event.key.toLowerCase() === 'a' && event.target !== input.current && text.current) {
@@ -106,6 +110,13 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
       if (event.button === 0 && event.altKey) { event.preventDefault(); event.stopPropagation(); void onCommand({ type: 'beginMove' }); }
     }}>
+    {state.platform === 'linux' && <nav className="linux-controls" aria-label="SC controls">
+      <button type="button" disabled={state.busy} onClick={() => { void onCommand({ type: 'capture' }); }}>Capture screen</button>
+      <button type="button" disabled={state.busy} onClick={() => { void onCommand({ type: 'showInput' }); }}>Question</button>
+      <button type="button" onClick={() => { void onCommand({ type: 'settings' }); }}>Settings</button>
+      <button type="button" onClick={() => { void onCommand({ type: 'toggleVisibility' }); }}>Hide</button>
+      <button type="button" onClick={() => { void onCommand({ type: 'exit' }); }}>Exit</button>
+    </nav>}
     <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer}</div>
     {state.surface === 'input' && <form className="question-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <input ref={input} data-testid="question-input" aria-label="Question" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
@@ -152,7 +163,7 @@ export function App() {
     return () => document.removeEventListener('keydown', keyDown);
   }, [state?.surface]);
   if (!state) return error ? <div className="fixed-theme startup-error" role="alert">{error}</div> : null;
-  if (state.surface === 'setup') return <Setup legacyNotice={state.setupLegacyNotice} onCommand={(value) => { void command(value); }} />;
+  if (state.surface === 'setup') return <Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} />;
   if (state.surface === 'settings') return <Settings key={snapshot!.settingsSession} state={state} />;
   return <Answer state={state} onCommand={command} />;
 }

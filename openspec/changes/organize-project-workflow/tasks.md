@@ -17,7 +17,7 @@ Implementation follows [design.md](design.md). Specifications are deliberately s
 
 - [ ] 3.1 Document the CLI/chat distinction, exploration/proposal/apply/archive lifecycle, single task owner, and restart checkpoint; add only agreed workflow context and artifact guidance to `openspec/config.yaml`, then inspect `openspec instructions proposal --change organize-project-workflow --json` and strict validation to verify the context is usable.
 - [ ] 3.2 Replace arbitrary worktree-parent assumptions in `AGENTS.md`, the contributor guide, and relevant `docs/PUBLISHING.md` references with primary-checkout discovery; verify the read-only discovery from the primary checkout and an existing linked worktree, retaining the missing-private-context behavior without copying private records or changing the Linux worktree.
-- [ ] 3.3 Document the version-control policy for OpenSpec, BMAD experiment installations/outputs, and ignored build directories; verify OpenSpec integration stays tracked, existing ignored output rules remain effective, and no BMAD installation, private bundle, or build output enters the SC change.
+- [ ] 3.3 Document the version-control policy for OpenSpec and ignored build directories; verify OpenSpec integration stays tracked, existing ignored output rules remain effective, and no superseded workflow installation, private bundle, or build output enters the SC change.
 
 ## 4. Orca setup
 
@@ -32,12 +32,12 @@ Implementation follows [design.md](design.md). Specifications are deliberately s
 ## Workflow follow-up
 
 - Archive after the implementation tasks and applicable review are complete; keep the change active while they remain unchecked.
-- Reinspect the Linux experiment before a separate integration change, using its PRD, implementation, and actual verification evidence as source material.
+- Reinspect the Linux worktree before a separate integration change, using its `linux-platform-support` OpenSpec artifacts, implementation and actual verification evidence as source material.
 - Review the historical beta.4 draft PR separately; this change does not close or merge it.
 
 ## Capture checkpoint
 
-- Confirmed direction: OpenSpec for shared SC development; BMAD remains in the Linux experiment.
+- Confirmed direction: OpenSpec is the sole workflow for shared SC development and the Linux worktree; its active Linux owner is `linux-platform-support`.
 - Authorized deliverable for this capture: planning artifacts and a GitHub push. The schema skips behavioral specs; proposal, design, and implementation tasks are captured here.
 - Publication branch: `docs/organize-project-workflow`, based on `fa3cf7c`.
 - Changed paths in this capture: the existing `.agents/skills/` OpenSpec integration, `openspec/config.yaml`, the empty-directory markers, and this change directory. Application files, local Orca settings, and the Linux worktree have not been edited.
@@ -52,3 +52,9 @@ Implementation follows [design.md](design.md). Specifications are deliberately s
 - `git diff --cached --check`: exit 0.
 - A read-only inline Python audit checked 93 repository documentation links and their Markdown anchors, and all 14 staged public files for scope, local absolute paths, and credential patterns: exit 0, no findings.
 - Before the capture commit, the tree contained only 14 added OpenSpec/integration paths staged on the publication branch, with no other changes. No application regression, native build, GUI, release, or paid-model command was run for this planning capture.
+
+## Linux workflow decision update — 2026-11-02
+
+- The user explicitly selected OpenSpec as the sole workflow. The separate Linux worktree now owns its continuation in `openspec/changes/linux-platform-support/`, with requirements, design, imported progress and seven remaining qualification/integration groups.
+- The workflow cutover preserved application bytes; superseded workflow files and their backup were subsequently deleted at the user's request. It does not implement this organization change: all 12 tasks above remain unchecked.
+- Proposal, design and tasks were reconciled with the new decision; Linux code integration remains subsequent work.

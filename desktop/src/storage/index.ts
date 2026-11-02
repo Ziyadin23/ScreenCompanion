@@ -15,6 +15,22 @@ const integer = (value: unknown, min: number, max: number): value is number => N
 const validSize = (size: PanelSize): boolean => !!size && integer(size.Width, 1, 16384) && integer(size.Height, 1, 16384);
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
+/** Electron's basic_text backend is deliberately excluded: it is not a keyring. */
+export function createLinuxCryptor(storage: {
+  isEncryptionAvailable(): boolean; getSelectedStorageBackend(): string;
+  encryptString(value: string): Buffer; decryptString(value: Buffer): string;
+}): Pick<WindowsPlatform, 'protectData' | 'unprotectData'> {
+  function requireKeyring(): void {
+    if (!storage.isEncryptionAvailable() || !['gnome_libsecret', 'kwallet', 'kwallet5', 'kwallet6'].includes(storage.getSelectedStorageBackend())) {
+      throw new Error('Unlock or install a secure Linux keyring.');
+    }
+  }
+  return {
+    protectData(data) { requireKeyring(); return storage.encryptString(data.toString('utf8')); },
+    unprotectData(data) { requireKeyring(); return Buffer.from(storage.decryptString(data), 'utf8'); }
+  };
+}
+
 export class SettingsError extends Error {
   readonly code = 'settings_invalid';
   constructor(message = 'The saved settings are invalid, damaged, or unavailable for this Windows user.') { super(message); this.name = 'SettingsError'; }
@@ -113,8 +129,9 @@ async function atomicWrite(path: string, contents: Buffer): Promise<void> {
   } finally { await fs.unlink(temporary).catch(() => {}); }
 }
 
-export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData' | 'unprotectData'>, localAppData: string): SettingsStore {
-  const current = join(localAppData, 'SC', 'sc.user.key');
+export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData' | 'unprotectData'>, localAppData: string, options: { platform?: 'windows' | 'linux' } = {}): SettingsStore {
+  const linux = options.platform === 'linux';
+  const current = join(localAppData, 'SC', linux ? 'sc.linux.key' : 'sc.user.key');
   const legacy = join(localAppData, 'ScreenCompanion', 'screencompanion.user.key');
   const sizePath = join(localAppData, 'SC', 'window-size.json');
   const legacySize = join(localAppData, 'ScreenCompanion', 'window-size.json');
@@ -134,7 +151,7 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
       let contents: Buffer | undefined;
       let plaintext: Buffer | undefined;
       try {
-        await migrate();
+        if (!linux) await migrate();
         if (!await exists(current)) return null;
         contents = await boundedRead(current, MAX_VAULT);
         if (contents.length <= MAGIC.length || !contents.subarray(0, MAGIC.length).equals(MAGIC)) throw new SettingsError();
@@ -142,7 +159,7 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
         try { plaintext = platform.unprotectData(cipher); } finally { cipher.fill(0); }
         if (!plaintext.length || plaintext.length > MAX_VAULT) throw new SettingsError();
         return decode(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(plaintext)) as unknown);
-      } catch { throw new SettingsError(); }
+      } catch { throw new SettingsError(linux ? 'Linux settings could not be opened. Unlock your secure keyring and restart SC; existing settings were retained.' : undefined); }
       finally { contents?.fill(0); plaintext?.fill(0); }
     },
     async save(settings) {
@@ -157,13 +174,13 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
         contents = Buffer.concat([MAGIC, cipher]);
         if (contents.length > MAX_VAULT) throw new SettingsError();
         await atomicWrite(current, contents);
-      } catch { throw new SettingsError('The settings could not be encrypted and saved for this Windows user.'); }
+      } catch { throw new SettingsError(linux ? 'Settings could not be encrypted. Unlock your secure Linux keyring and try again.' : 'The settings could not be encrypted and saved for this Windows user.'); }
       finally { plaintext?.fill(0); cipher?.fill(0); contents?.fill(0); }
     },
     async loadWindowSize() {
       let bytes: Buffer | undefined;
       try {
-        bytes = await boundedRead(await exists(sizePath) ? sizePath : legacySize, 4096);
+        bytes = await boundedRead(linux || await exists(sizePath) ? sizePath : legacySize, 4096);
         const value: unknown = JSON.parse(bytes.toString('utf8'));
         return object(value) && validSize(value as unknown as PanelSize) ? { Width: value.Width as number, Height: value.Height as number } : null;
       } catch { return null; } finally { bytes?.fill(0); }
@@ -177,8 +194,8 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
     },
     async legacyPasswordVaultExists(executableDirectory) {
       try {
-        return !!(executableDirectory && await exists(join(executableDirectory, 'screencompanion.key'))) ||
-          await exists(join(localAppData, 'ScreenCompanion', 'screencompanion.key'));
+        return !linux && (!!(executableDirectory && await exists(join(executableDirectory, 'screencompanion.key'))) ||
+          await exists(join(localAppData, 'ScreenCompanion', 'screencompanion.key')));
       } catch { return false; }
     }
   };

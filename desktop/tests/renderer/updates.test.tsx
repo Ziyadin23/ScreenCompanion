@@ -11,6 +11,13 @@ async function openUpdates() {
   await screen.findByLabelText('SC updates');
 }
 describe('update controls in Settings', () => {
+  it('explains manual RPM updates on Linux without offering Windows installer actions', async () => {
+    fixture({ platform: 'linux', updates: { status: 'disabled', version: null, progress: null, message: 'disabled' } });
+    render(<App />); await screen.findByTestId('answer-text'); await openUpdates();
+    expect(screen.getByText(/install a newer RPM manually/i)).toBeTruthy();
+    expect(screen.queryByText(/replacing its EXE/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check for updates' })).toBeNull();
+  });
   it('checks and downloads explicitly, displays progress, then offers a restart', async () => {
     const f = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openUpdates();
     fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));

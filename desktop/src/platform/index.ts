@@ -2,6 +2,8 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import type { AppAction, CaptureProtectionResult, CapturedFrame, HttpRequest, HttpResponse, NormalizedRegion, PixelBounds, ResizeEdge, VaultData, WindowsPlatform } from '../contracts';
 import { SHORTCUT_FIELDS, validateShortcuts } from './shortcuts';
+export { createLinuxTransport } from './linux-transport';
+export { createLinuxPlatform } from './linux';
 
 type NativeEvent = { type: 'activation' | 'action' | 'wheel'; action?: AppAction; delta?: number };
 interface NativeBridge {
@@ -81,7 +83,7 @@ export function createWindowsPlatform(options: { nativePath?: string } = {}): Wi
     activeMonitor() { return bridge().activeMonitor(); },
     monitorForWindow(handle) { handleValid(handle); return bridge().monitorForWindow(handle); },
     async captureMonitor(bounds) {
-      if (!boundsValid(bounds)) throw new Error('Windows did not report a usable monitor size.');
+      if (!bounds || !boundsValid(bounds)) throw new Error('Windows did not report a usable monitor size.');
       return bridge().captureMonitor(bounds);
     },
     async crop(jpeg, region) {

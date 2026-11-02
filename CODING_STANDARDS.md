@@ -8,7 +8,7 @@
 - The primary TypeScript application lives under `desktop/`. For an unfamiliar code area, use the [source layout](desktop/REWRITE.md#source-layout), then inspect the relevant source files and matching `desktop/tests/` area. The C# application is archived in existing release tags; preserve those tags/assets and the frozen test-only vault fixture under `desktop/tests/windows/interop/legacy/`. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
 - Preserve the [privacy contract](docs/USER_GUIDE.md#privacy). Inputs remain screen capture and typed text. Thorough/Balanced keep original monitor images in detection/extraction; answering receives structured tasks and isolated visuals. Explicitly selected DeepSeek Direct sends the captured monitor to answering in one call. Dispose images and zero transient image bytes. Captures, questions, answers and history stay out of persistent app storage.
 - Provider requests remain stateless; OpenAI Responses use `store: false`. Document other providers' retention limits in the [user guide](docs/USER_GUIDE.md#service-and-model-selection).
-- Setup asks for the service and its API key; saving setup makes no model request. Encrypt keys, custom instructions, appearance, shortcuts and provider settings with Windows DPAPI CurrentUser; apply [storage compatibility](#storage-compatibility).
+- Setup asks for the service and its API key; saving setup makes no model request. Encrypt keys, custom instructions, appearance, shortcuts and provider settings with Windows DPAPI CurrentUser or a secure Linux keyring; apply [storage compatibility](#storage-compatibility).
 - Preserve [diagnostic behavior](docs/USER_GUIDE.md#diagnose-a-failure): bounded technical metadata, codes/report IDs, startup events and stage-specific failures, usable even when logging fails. Exclude credentials, captured content, response bodies, parser details and raw exception messages.
 - Capture exclusion is best effort. Retain the visible tray icon and recording-exclusion notices; [verification](#verification) bounds claims.
 - Behavior changes update the README summary and [owning reference](#documentation-and-status).
@@ -48,6 +48,7 @@ Transport changes preserve system proxy/certificate validation, the separate con
 
 ## Storage compatibility
 
+- Keep Linux keyring-encrypted settings separate from Windows DPAPI vaults. Reject unavailable or plaintext storage and never migrate Windows ciphertext on Linux.
 - Atomically copy the legacy encrypted `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` only when the SC vault is absent. Retain the original; an SC vault created during migration wins the race.
 - Existing SC settings take priority. Leave password-protected SSK1/SSK2 `screencompanion.key` files in place; preserve serialized names and format compatibility across source moves.
 - A damaged or foreign-account vault is an error: retain its bytes instead of replacing it at startup.
@@ -83,7 +84,7 @@ Before tests or regression runs, read [commands and fixtures](tests/README.md). 
 
 Use synthetic keys, temporary vaults and fixtures without real assessment material. Live runs use existing local credentials/model access and normal API usage, with captured content only in memory. Keep key, question, response and image content out of harness output/files.
 
-Run `npm run verify` under `desktop/`. Run GUI tests/previews only inside the Windows VM, with the VM using a headless frontend so its windows do not appear on Fedora. `npm run test:ui` rejects non-Windows hosts. Compile the native bridge on Windows with `npm run native:build` and run `npm run test:windows` separately. Linux tests and bundle generation do not establish Windows native/DPAPI, packaged EXE or recorder parity. The only .NET project is the test-only historical vault interoperability fixture; the application does not require .NET.
+Run `npm run verify` under `desktop/`. Run Windows GUI tests/previews only inside the Windows VM, with the VM using a headless frontend so its windows do not appear on Fedora. Run Linux GUI checks only in an isolated headless compositor with synthetic data and an isolated profile; target qualification requires Hyprland and does not replace Windows checks. `npm run test:ui` remains Windows-only. Compile the native bridge on Windows with `npm run native:build` and run `npm run test:windows` separately. Linux tests and bundle generation do not establish Windows native/DPAPI, packaged EXE or recorder parity. The only .NET project is the test-only historical vault interoperability fixture; the application does not require .NET.
 
 Grade the structured primary answer and displayed first line independently. Preserve failed attempts; reject substring-only oracles accepting an expected number in an unrelated explanation. Record suite counts and actual exit statuses.
 

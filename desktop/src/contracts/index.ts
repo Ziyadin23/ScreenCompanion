@@ -26,6 +26,7 @@ export type AppAction = 'capture' | 'test' | 'visibility' | 'settings' | 'exit' 
 export interface PixelBounds { x: number; y: number; width: number; height: number }
 export interface PanelSize { Width: number; Height: number }
 export interface NormalizedRegion { x: number; y: number; width: number; height: number }
+/** Linux portal bounds use frame-local coordinates; Windows bounds use desktop coordinates. */
 export interface CapturedFrame { jpeg: Buffer; bounds: PixelBounds }
 export type ResizeEdge = 'left' | 'right' | 'top' | 'bottom' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 export type CaptureProtectionResult = 'Excluded' | 'ContentHidden' | 'Failed';
@@ -36,13 +37,15 @@ export interface HttpRequest {
 export interface HttpResponse { status: number; headers: Record<string, string>; body: Buffer }
 export interface HttpTransport { send(request: HttpRequest, signal?: AbortSignal): Promise<HttpResponse> }
 export interface ImageCropper { crop(jpeg: Buffer, region: NormalizedRegion): Promise<Buffer> }
-export interface WindowsPlatform extends HttpTransport, ImageCropper {
+export interface DesktopPlatform extends HttpTransport, ImageCropper {
+  readonly captureSelection?: 'portal';
+  ready?(): void;
   acquireInstance(onActivate: () => void): Promise<boolean>;
   startCaptureProtection(): void;
   protectWindow(handle: Buffer): CaptureProtectionResult;
   activeMonitor(): PixelBounds;
   monitorForWindow(handle: Buffer): PixelBounds;
-  captureMonitor(bounds: PixelBounds): Promise<CapturedFrame>;
+  captureMonitor(bounds?: PixelBounds): Promise<CapturedFrame>;
   applyShortcuts(settings: VaultData, recording: boolean, onAction: (action: AppAction) => void): Promise<void>;
   attachPanel(handle: Buffer, onWheel: (delta: number) => void): () => void;
   setHoverInputHeight(heightPixels: number): void;
@@ -57,6 +60,7 @@ export interface WindowsPlatform extends HttpTransport, ImageCropper {
   unprotectData(ciphertext: Buffer): Buffer;
   dispose(): void;
 }
+export type WindowsPlatform = DesktopPlatform;
 export interface SettingsStore {
   load(): Promise<VaultData | null>;
   save(settings: VaultData): Promise<void>;
@@ -95,6 +99,7 @@ export interface UpdateState {
   version: string | null; progress: number | null; message: string;
 }
 export interface AppState {
+  platform: 'windows' | 'linux';
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;

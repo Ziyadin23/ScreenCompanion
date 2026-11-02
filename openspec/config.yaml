@@ -1,32 +1,13 @@
 schema: spec-driven
 
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
+context: |
+  The user selected OpenSpec for both shared SC work and the Linux worktree.
+  The Linux implementation predates this planning migration. Preserve existing
+  uncommitted application work and distinguish imported verification evidence
+  from checks performed during a new change. Use only OpenSpec for current work;
+  each active change's tasks.md is the single implementation-status owner.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  tasks:
+    - Give imported completed tasks an evidence reference and keep incomplete target checks open.
+    - Link existing GitHub issues rather than creating duplicate implementation checklists.

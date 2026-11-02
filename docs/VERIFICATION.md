@@ -1,7 +1,7 @@
 # Verification and limitations
 
-This source tree contains the TypeScript/Electron application, **0.5.0-beta.6**
-([GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6); verification in progress).
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.7**.
+The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
@@ -11,6 +11,20 @@ publication does not establish that every compatibility gate has passed.
 run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
+
+## Linux source-publication checks (2026-11-02)
+
+The Linux beta.7 branch was prepared for a draft PR on top of committed main
+`b83643c`. Fresh `npm ci` exited 0, and `npm run verify` passed all **1,301 tests
+in 32 files**, strict type checking, lint and the main/preload/renderer production
+bundles, exit 0. These are portable checks with synthetic data, not new desktop,
+Windows native, recorder, live-provider or package-upgrade qualification.
+
+Dependency installation reported **25 moderate advisories** for the existing
+pinned dependency set. No dependency upgrade or automatic audit fix was applied.
+The seven Linux qualification/integration groups remain open in the
+[OpenSpec task owner](../openspec/changes/linux-platform-support/tasks.md).
+Prior runtime and package results below retain their original candidate scope.
 
 ## CI ledger deadline (2026-11-02)
 
@@ -29,6 +43,73 @@ type checking, lint and production bundles, exit 0. The temporary probe was
 removed; the suite-wide 10-second default, disk flushes, campaign limits and
 application code are unchanged. These are synthetic transport checks and make
 no provider requests.
+
+## Linux port status
+
+The Fedora 44 x86-64 Hyprland Wayland port is under development. On 2026-11-01,
+the latest source passed `npm run verify`: **1,301 tests in 32 files**, type
+checking, lint and production bundles, exit 0. An earlier candidate passed `npm run verify`, including **1,278 portable tests in
+30 files**. After subsequent fixes, type checking, lint and **111 focused tests in
+six files** passed, including large request bodies, proxy fallback and deadlines,
+interception headers, failed capture, panel sizing and RPM scriptlets.
+On the same date,
+an isolated headless Hyprland session exercised an earlier candidate's packaged synthetic setup, a real
+Secret Service keyring and encrypted settings across restart. A separate real
+portal/PipeWire harness captured a synthetic 1920×1080 frame, checked one portal
+session and its expected composited pixel, and exited 0. Its chooser was automated;
+the headless portal required `force_shm` after DMA-BUF EGL failures. The outer
+headless compositor used a temporary test-only xdg-shell version adjustment.
+These checks do not establish interactive selection or physical-display behavior.
+On 2026-11-02, a later isolated headless check displayed the real Hyprland chooser and sent
+Escape; the current capture code returned cancellation in a synthetic Electron
+harness. This does not establish cancellation in the full packaged workflow.
+
+A packaged-app synthetic vault survived a session-bus-unavailable restart with
+`STARTUP-KEYRING` guidance, and reopened after its keyring was restored, with
+the vault bytes unchanged. The unavailable-phase dialog did not close before
+the test deadline and the process was terminated; normal dialog dismissal and
+a genuinely locked keyring remain unverified. A prior different-app-identity
+fixture failed recovery and is retained as a separate inconclusive attempt.
+
+An isolated Wayland appearance check showed the default transparent answer
+against a synthetic background and an opaque answer after changing the setting.
+Controls and input fit in the measured panel. Hyprland retained the larger
+Settings window size on return in that test despite programmatic resize requests;
+the panel can be resized using its window decorations. This is not a general
+claim about other compositor configurations.
+
+The final unpacked Linux app was launched twice in a separate headless Hyprland
+session with a fresh synthetic profile and no external network route. Both
+launches displayed the five controls, opened Question and Settings, and exited
+0. This synthetic preview did not exercise production setup, keyring or portal
+capture.
+
+The revised Linux RPM built locally with temporarily extracted Fedora build
+dependencies and a cached Electron archive, exit 0; its executable, desktop entry,
+dependency metadata and scriptlets were inspected. A disposable RPM root ran a
+small fixture package through install, version upgrade and erase using those
+scriptlets, preserving an unrelated `sc` command and retaining the new launcher
+across upgrade. The fixture was not a full installed-app test. The first attempt
+could not create the RPM database lock; running a temporary copy of `rpmdb`
+allowed the isolated transaction. Initial RPM builds failed for missing
+package metadata, missing `libcrypt.so.1`, and a later transient GitHub DNS error;
+those failures are retained. The final RPM installed, reinstalled and was removed
+in an isolated Fedora 44 container with the development host’s sdegler/hyprland
+Copr enabled, exit 0; its unique launcher was created and removed and an unrelated
+`sc` file remained unchanged. A prior clean-container attempt failed because
+Fedora base repositories did not provide `xdg-desktop-portal-hyprland`. The
+container had no running Hyprland desktop and does not establish interactive
+application behavior or a version-to-version upgrade. Interactive monitor selection and full-app cancellation, multi-monitor behavior,
+locked-keyring recovery, compositor shortcut activation, duplicate
+launch, installed desktop operation and manual version upgrade remain separate target checks.
+Linux windows may appear in recordings and screen shares. For the final beta.7
+source, Windows `npm run verify` passed 1,277 tests with 24 Linux-only tests
+skipped, and native compilation, 54 native checks, eight vault interoperability
+cases, five targeted UI cases and Windows packaging passed. An earlier beta.7
+integration snapshot passed all 37 Windows UI cases; that full run predates the
+final review fixes. The final unpacked Windows app passed a key-free packaged
+preview. Existing vault fingerprints were unchanged during both Windows runs.
+Prior beta.6 results below are historical and do not establish beta.7 compatibility.
 
 ## Beta.6 extraction guidance
 

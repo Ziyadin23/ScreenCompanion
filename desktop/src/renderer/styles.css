@@ -6,6 +6,8 @@ button { cursor: pointer; }
 button:disabled, input:disabled { cursor: default; opacity: .55; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid #96b8ee; outline-offset: 2px; }
 .answer-panel { height: 100%; width: 100%; display: flex; flex-direction: column; position: relative; font-family: "Segoe UI", sans-serif; outline: none; }
+.linux-controls { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; background: #1a202c; }
+.linux-controls button { padding: 5px 7px; border: 1px solid #8d9ab0; background: #354052; color: #fff; font-size: 12px; }
 .answer-text { flex: 1; min-height: 0; margin: 7px; padding: 12px; overflow-y: auto; overflow-x: hidden; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; line-height: 1.35; outline: none; scrollbar-width: none; }
 .answer-text::-webkit-scrollbar { display: none; }
 .question-form { display: flex; position: relative; margin: 0 12px 12px; gap: 8px; color: var(--input-text); font-size: 14px; flex-shrink: 0; }

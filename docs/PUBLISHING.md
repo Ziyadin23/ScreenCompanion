@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The source version is 0.5.0-beta.6, published as a
+[README](../README.md#release-status). The current source version is 0.5.0-beta.7 and is unpublished. Version 0.5.0-beta.6 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
 Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
@@ -68,6 +68,19 @@ private delivery evidence in the parent `PROJECT_CONTEXT.md`, outside this repos
 
 Test the packaged version with an isolated key-free profile. Local beta delivery
 does not publish a GitHub release or change the latest stable download.
+
+## Linux RPM
+
+On Fedora 44 x86-64, install the build tools `rpm-build` and `libxcrypt-compat`
+alongside Node.js, then `cd desktop && npm ci && npm run verify && npm run package:rpm`
+builds an RPM without the Windows native addon. The target requires Hyprland
+Wayland, PipeWire, its desktop portal and an unlocked Secret Service keyring.
+The RPM uses the `io.github.ziyadin23.sc` desktop identity and manual updates;
+it does not run the Windows updater. Before publication verify installation,
+desktop launch, portal monitor selection and full-resolution capture, keyring
+failure/recovery, compositor bindings, duplicate launch, package upgrade and
+recording visibility in isolated environments. Source and portable tests do not
+establish these results. No Linux RPM is published yet.
 
 ## Installer update feed
 
