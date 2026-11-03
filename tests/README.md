@@ -82,6 +82,27 @@ npm run test:ui
 npm run preview:ui
 ```
 
+Allow up to **two hours** for an outer job running the complete Windows UI
+matrix. The 37 cases run serially: 21 panel/store cases allow 240 seconds each,
+six native-preview cases allow 90 seconds each, and ten other cases use the
+30-second default. Their combined case budgets are **98 minutes**, before
+runner startup and cleanup. A 20-minute outer deadline previously interrupted
+an otherwise passing beta.6 run after 31 cases; see the
+[retained attempts](../docs/VERIFICATION.md#beta6-extraction-guidance).
+For a bounded full run with a machine-readable report:
+
+```powershell
+$env:PLAYWRIGHT_JSON_OUTPUT_FILE = Join-Path $env:TEMP ('sc-ui-' + [guid]::NewGuid() + '.json')
+npm run test:ui -- --workers=1 --retries=0 --global-timeout=6600000 --reporter=list,json
+```
+
+Keep the enclosing job's deadline longer than the 110-minute Playwright limit.
+Retain every attempt and inspect all discovered outcomes, exit status and cleanup;
+separate filtered passes do not establish one completed matrix.
+
+The [2026-11-03 beta.7 full matrix](../docs/VERIFICATION.md#windows-full-ui-matrix-2026-11-03)
+passed all 37 cases in one run, with no skips or retries, exit 0.
+
 The Windows runner rejects non-Windows hosts. Linux GUI checks run only in an
 isolated headless compositor with synthetic data and an isolated profile; target
 qualification requires Hyprland. Record those results separately. Beta.5 passed **37 UI workflows** on

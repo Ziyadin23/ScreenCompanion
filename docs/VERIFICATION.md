@@ -12,6 +12,39 @@ run history, failed automation attempts, package hashes and evidence boundaries
 are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
 recordings and local state belong outside this repository.
 
+## Windows full UI matrix (2026-11-03)
+
+For [issue #10](https://github.com/Ziyadin23/ScreenCompanion/issues/10), a fresh
+Windows 11 x64 headless-VM run verified beta.7 from merged source
+`d304f2e57725f1244f8de46120731b59b9ca2eca`. Application source, UI assertions and
+per-case timeouts were unchanged. A byte-verified source snapshot produced fresh
+bundles and the native addon; their recorded identities matched before and after
+the matrix.
+
+`npm ci --no-audit --no-fund`, `npm run verify`, `npm run native:build` and
+`npm run test:windows` each exited 0. Verification passed **1,277 portable tests**
+with **24 Linux-only tests skipped** across 32 files, type checking, lint and
+production bundles. The separate Windows suite passed **54 native checks** and
+**8 vault interoperability cases / 136 legacy fixture checks**.
+
+From `desktop/`, the full UI command was
+`npm run test:ui -- --workers=1 --retries=0 --global-timeout=6600000 --reporter=list,json --output=<isolated-results>`.
+`PLAYWRIGHT_JSON_OUTPUT_FILE` selected a separate private report. All **37/37 UI
+cases passed in one run**, with **zero failures, skips, flaky cases or retries**,
+exit **0**, in **22 minutes 7 seconds** (rounded). The enclosing job completed in
+about 25 minutes without timing out. An independent report audit matched all 37
+distinct case IDs to discovery and required exactly one passing result per case.
+
+Synthetic profiles and keys isolated the UI tests; no live provider request was
+made. Existing encrypted vault bytes matched before and after the run. A separate
+read-only postflight found no held input or SC/Electron/recorder processes and
+exited 0, again with unchanged vault bytes. The historical
+[beta.6 31-pass timeout and separate six-pass run](#beta6-extraction-guidance)
+remain two attempts for that earlier candidate. This completed beta.7 matrix
+does not establish packaged duplicate-launch behavior, mixed-DPI support,
+named-recorder exclusion or live answer quality. Other Linux qualification
+groups remain open in their existing OpenSpec change.
+
 ## Linux source-publication checks (2026-11-02)
 
 The Linux beta.7 branch was prepared for a draft PR on top of committed main
@@ -110,6 +143,8 @@ integration snapshot passed all 37 Windows UI cases; that full run predates the
 final review fixes. The final unpacked Windows app passed a key-free packaged
 preview. Existing vault fingerprints were unchanged during both Windows runs.
 Prior beta.6 results below are historical and do not establish beta.7 compatibility.
+The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
+records a separate current-candidate result.
 
 ## Beta.6 extraction guidance
 
@@ -134,6 +169,19 @@ before the timeout. A separate run passed those **six cases**, with no skips or
 retries and unchanged candidate, package and profile checks. All 37 distinct
 cases therefore have passing evidence across the two attempts; the timeout and
 potentially interrupted case remain recorded.
+
+Investigation on 2026-11-03 for [issue #10](https://github.com/Ziyadin23/ScreenCompanion/issues/10)
+identified the enclosing lab job's **1,200-second deadline** as the termination
+mechanism: it recorded `timedOut: true`, exit 1, after about 20 minutes. The 31
+successful case timings total approximately **1,185 seconds**; stdout contains
+no reported case failure and stderr is empty. The wrapper terminated its process
+tree when its own timer expired. This supports an insufficient whole-run budget,
+without establishing the outcome or exact progress of the next unreported case.
+The unchanged serial matrix permits **5,880 seconds (98 minutes)** across its
+per-case limits. The [test instructions](../tests/README.md#electron-workflows-and-preview)
+now allow a two-hour outer job with a 110-minute Playwright limit. The original
+31-pass timed-out attempt and separate six-pass attempt remain distinct; neither
+is reclassified as a completed beta.6 matrix or evidence for beta.7.
 
 An installed local beta.5 → beta.6 update run recorded **31 scenario checks**,
 including the target restart, Settings load and uninstall, but exited 1 during
