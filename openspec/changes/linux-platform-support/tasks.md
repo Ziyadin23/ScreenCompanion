@@ -2,6 +2,13 @@
 
 [Design](design.md) maps the accepted Linux requirements to the four specs and identifies the existing implementation. Checked tasks below import inspected implementation/evidence; they do not claim fresh runtime verification during this workflow migration. The [Linux verification record](../../../docs/VERIFICATION.md#linux-port-status) owns the recorded outcomes and limits.
 
+## Current continuation — 2026-11-03
+
+- Source merged through PR #23 at `d304f2e`; shared main `74c7ebd` includes PR #24's full beta.7 Windows matrix evidence. A new source merge is not the next task.
+- Six imported/workflow tasks below are complete; all seven Linux qualification groups remain open. Continue at task 2.1. Reuse evidence only for its matching source/candidate/environment; later application changes require affected checks again.
+- Beta.7 remains unpublished. Source publication, qualification, local beta delivery and release publication have separate completion criteria.
+- Earlier migration/source-preparation checkpoints below retain their original dates and tree state; use this section and actual Git status for continuation.
+
 ## 1. Workflow migration and existing implementation
 
 - [x] 1.1 Complete the OpenSpec cutover: install the three agent integrations, capture requirements/design/tasks, route `AGENTS.md`, remove superseded workflow files and backups and reconcile current project references; verify strict OpenSpec validation, links, active workflow discovery and unchanged pre-existing application files, then record exact results below.
@@ -19,7 +26,7 @@
 - [ ] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
 - [ ] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
-- [ ] 2.7 Complete [final integration readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final source and current shared-main baseline; run the applicable portable/Windows/native/vault/UI/package checks, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
+- [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
 ## Workflow follow-up
 

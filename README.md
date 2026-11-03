@@ -114,6 +114,9 @@ API access and usage charges are handled by your provider account.
 
 ## Build and further documentation
 
+- [Project status and unfinished work](docs/STATUS.md)
+- [Contributor setup, source map and workflow](docs/DEVELOPMENT.md)
+
 With Node.js 22.12 or later, verify and bundle the application:
 
 ```sh

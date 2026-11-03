@@ -81,7 +81,7 @@ Retain the established private-data and release/lab requirements while correctin
 
 Use `npm --prefix desktop ci` as Orca's repository-root setup command. It selects the existing package and lockfile and works without adding a root package or another package manager.
 
-During implementation, inspect the current SC repository setting, record its prior setup value, change only that hook through Orca's repository settings UI, and read it back. The inspected CLI's `repo set --help` exposes only worktree visibility, not a setup-hook setter; do not guess a flag or edit Orca's internal state files. A later CLI with a documented setter can replace the UI step. Validate the same setup command in an isolated checkout. If the current setting has changed since exploration, preserve unrelated settings and reconcile the intended command before mutation. Setup does not claim Windows-native or application-runtime coverage.
+During implementation, inspect the current SC repository setting, record its prior setup value, change that hook and select startup after successful setup through Orca's repository settings UI, and read it back. The inspected CLI's `repo set --help` exposes only worktree visibility, not a setup-hook setter; do not guess a flag or edit Orca's internal state files. A later CLI with a documented setter can replace the UI step. Validate the same setup command in an isolated checkout. If the current setting has changed since exploration, preserve unrelated settings and reconcile the intended command before mutation. Setup does not claim Windows-native or application-runtime coverage.
 
 The alternative of adding a root pnpm workspace exists only to accommodate an outdated hook and adds unnecessary package-management state.
 
@@ -97,7 +97,23 @@ Root `bin/`, `obj/`, and `publish/` are already ignored local outputs. Classify 
 
 Validate OpenSpec strictly; check document file links and affected anchors, whitespace, public-file privacy, and consistency of owners and current status. Check that a fresh checkout has the committed planning files and that the documented setup resolves the `desktop/` package.
 
-Application tests, Windows builds, new binaries, release gates, and paid calls are unnecessary for this documentation-only change. If implementation expands into application, test, or build changes, rescope the change and apply the existing affected-area checks before proceeding.
+Application source is unchanged. Check the new CI/tooling behavior with its selftest and workflow validation; retain Windows/native check commands for subsequent hosted execution. New runtime/GUI checks, binaries, release gates and paid calls are unnecessary for this workflow change. If implementation expands into application, test, or build changes, rescope the change and apply the existing affected-area checks before proceeding.
+
+### 8. Apply the workflow audit accepted on 2026-11-03
+
+Use one writing task per worktree, based on the repository default branch for independent work. Carry any required uncommitted planning input explicitly and preserve the original checkout. Read Git status before editing. Share a worktree only when ownership and touched paths are explicitly coordinated.
+
+At each completed task boundary and before a restart, record accepted scope/decisions, changed paths/tree state, exact verification commands/outcomes, the next task and unresolved approvals in the existing change task record. Update the existing record after merge or new evidence; dated history remains historical. Planning completion, source merge, target qualification and release publication are separate states.
+
+Use Orca card status to describe the work and a short comment to give the next action or blocker. An idle agent alone does not prove completion. Update SC cards only from inspected task/evidence records; leave other projects' unknown task state alone.
+
+The source baseline for this application is main `74c7ebd`, including Linux source merge PR #23 and Windows full UI evidence PR #24. Refresh the status inventory from Git/GitHub instead of preserving the old uncommitted/unmerged Linux wording. Keep the seven Linux qualification groups open.
+
+### 9. Route CI by the changed files
+
+Keep the workflow triggered for pushes and PRs and retain the `portable` and `windows-build` job names. A small Node.js checker classifies only known Markdown documentation, OpenSpec artifacts and agent Markdown as eligible for the lightweight route. Application, CI, executable tooling and unknown paths require the full existing application checks. Unknown/missing diff baselines also require the full route.
+
+The lightweight job runs a checker selftest, local Markdown links/anchors, strict pinned OpenSpec validation and whitespace checks. Node's standard library is enough; no root package or application dependency changes are needed. Test both broken-document rejection and source/unknown-path classification. This workflow change itself requires the full route when run on GitHub.
 
 ## Risks / Trade-offs
 

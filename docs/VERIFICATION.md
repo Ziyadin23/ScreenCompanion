@@ -9,8 +9,20 @@ publication does not establish that every compatibility gate has passed.
 
 [Commands and fixtures](../tests/README.md) describe the current suites. Detailed
 run history, failed automation attempts, package hashes and evidence boundaries
-are in the [development reference](../desktop/REWRITE.md). Private lab identifiers,
+are in [rewrite history](history/typescript-rewrite.md) and [test-run history](history/test-runs.md). Private lab identifiers,
 recordings and local state belong outside this repository.
+
+## Current candidate and open gates
+
+Current shared source is beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+
+| Area | Recorded result | Remaining boundary |
+| --- | --- | --- |
+| Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh-machine/Windows 10, mixed-DPI, recorder output and live answer quality have separate owners. |
+| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
+| Published Windows beta.6 | [Dated beta.6 evidence](#beta6-extraction-guidance) records passing, failed and unfinished attempts. | Preserve its failed UI/activation/recorder attempts; the later beta.7 matrix does not rewrite them. |
+
+The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
 ## Windows full UI matrix (2026-11-03)
 
