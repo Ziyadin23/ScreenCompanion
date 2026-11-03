@@ -4,7 +4,7 @@ Implementation follows [design.md](design.md). Specifications are deliberately s
 
 ## Implementation result
 
-Implemented and locally verified on 2026-11-03 in `Ziyadin23/workflow-reliability`, based on `74c7ebd`. The 16 task checkboxes below own progress. The user accepted the implementation and authorized commit, push and integration into main on 2026-11-03 UTC. Publication follows the checkpoint below; Git history and the linked PR own final commit, CI and merge receipts. The earlier implementation handoff records the pre-publication tree.
+Implemented and locally verified on 2026-11-03 in `Ziyadin23/workflow-reliability`, based on `74c7ebd`. The original 16 tasks and the three issue-intake follow-up tasks below own progress. The user accepted the implementation and authorized commit, push and integration into main on 2026-11-03 UTC. Publication follows the checkpoint below; Git history and the linked PR own final commit, CI and merge receipts. The earlier implementation handoff records the pre-publication tree.
 
 ## 1. Contributor navigation
 
@@ -39,6 +39,12 @@ Implemented and locally verified on 2026-11-03 in `Ziyadin23/workflow-reliabilit
 - [x] 6.2 Reconcile current Linux planning statements with source merge PR #23 and imported Windows matrix evidence PR #24, keeping all seven Linux qualification groups open and retaining dated history.
 - [x] 6.3 Implement conservative CI path classification and lightweight documentation/OpenSpec checks while preserving named application jobs and commands; verify the checker selftest, broken-link rejection, diff fallback and workflow syntax.
 - [x] 6.4 Refresh SC Orca card comments/statuses from their inspected task/evidence records, link this workspace to existing issue #21 and record saved setup/card read-back; do not infer other projects' completion from process inactivity.
+
+## 7. GitHub issue intake follow-up
+
+- [x] 7.1 Make issue-first intake discoverable from contributor/agent/OpenSpec routing: one independently deliverable task per issue, verified assignee, existing-issue reuse, owner/task mapping, honest plan provenance and no duplicate detailed checklist; verify the written flow covers both existing plans and issue-first planning.
+- [x] 7.2 Publish or reuse the agreed intake follow-up issue, assign it to the verified user, read back its exact scope/owner/assignee and attach it to this Orca worktree; verify the 15 previously open backlog issues are retained without duplicates and report issue visibility separately from GUI confirmation.
+- [x] 7.3 Run the documentation/link, strict OpenSpec, privacy/scope and whitespace checks for this follow-up, record publication/continuation state and verify only the documented workflow paths changed; application/regression/build and other worktree files remain untouched.
 
 ## Workflow follow-up
 
@@ -111,3 +117,28 @@ The final review identified that a failed documentation job must propagate to th
 - Shared base is `74c7ebd`, matching fetched `origin/main`. Only the 24 reviewed workflow/documentation/planning files belong to this publication; application, dependency, native, release and private lab bytes remain unchanged.
 - Publish the reviewed branch and use a PR to inspect hosted CI before merge. Its original application check steps and names are retained; the workflow change takes the full route. Preserve any failed attempt and correct a concrete failure before merging.
 - Git history and the linked PR provide final source/CI/merge status. After integration, refresh local main and SC card metadata while retaining the original dirty primary-checkout inputs. Archive and beta/release operations remain separate; no new runtime qualification is implied by this source publication.
+
+## GitHub intake accepted follow-up — 2026-11-03 UTC
+
+- User request: publish tasks as GitHub issues so they appear in Orca Tasks and worktrees can be started from the issue. Continue the existing organization change with three scoped follow-up tasks; the previously merged 16 tasks remain complete.
+- Decisions: issues own task discovery, assignment, acceptance outcome and PR/worktree navigation; OpenSpec remains the sole planning workflow and its tasks.md owns detailed progress. One independent outcome gets one issue; existing issues are reused.
+- Inspection: 17 existing inventory issues, 15 open / 2 closed, all assigned to verified account `Ziyadin23`. Linux issues #14–#20 already name OpenSpec tasks. The current CLI supports issue references/worktree creation but has no GitHub Tasks-list read endpoint; publication read-back alone is not a GUI visibility assertion.
+- Work is isolated in `Ziyadin23/github-issue-intake` from merged main `b401eb6`; the primary checkout's unrelated retrospective remains intact. This is a documentation-only continuation; no application, test, dependency, setup, lab or release changes are needed.
+- Next: implement issue-intake routing and publish/read back the task issue before reporting it available. Existing backlog outcomes and assignments stay intact.
+
+### GitHub intake publication and read-back
+
+- Created [issue #26](https://github.com/Ziyadin23/ScreenCompanion/issues/26), marker `sc-task:organize-project-workflow:github-issue-intake`, assigned only to verified `Ziyadin23` with the existing documentation label. The existing GitHub connector created the exact reviewed body; a separate fetch verified title, body, open state and assignee. It names local branch/provenance honestly until source publication.
+- Existing 15 open inventory issues remain the backlog; no per-checkbox duplicates or retrospective/application-fix issues were created. This follow-up has its own issue because #21's earlier implementation is already complete and closed.
+- `orca-ide reference add` and `reference list` attach/read back issue #26 on this isolated worktree. Current CLI discovery has no GitHub Tasks-list endpoint; actual GUI appearance was not asserted or used as evidence of publication.
+
+### GitHub intake verification and handoff
+
+- `node .github/scripts/workflow-checks.mjs docs`: exit 0, 34 Markdown files / 264 local links and anchors. `openspec validate --all --strict --no-interactive`: exit 0, all four changes passed. `git diff --check`: exit 0.
+- Six-path scope/privacy/whitespace review passed: only `AGENTS.md`, `docs/DEVELOPMENT.md`, `openspec/config.yaml` and this change's proposal/design/tasks changed. Routing reaches the issue-intake owner; the documented paths cover both preplanned work and an issue requiring planning, published/local provenance, deduplication, user assignment and partial/full completion.
+- A new read of all issues verified all 17 original issues' title/body/state/assignees/labels unchanged, including all 15 open backlog issues. Exactly one issue (#26) was added; its separate read-back matched the reviewed content and verified sole assignee `Ziyadin23`. Orca reference read-back matched the same URL.
+- Local branch `Ziyadin23/github-issue-intake` starts from merged main `b401eb6`. Documentation-only setup was explicitly skipped. No application regression/build, dependency/tooling change, private-context copy, GUI control or other-worktree edit was performed. The primary checkout retains its unrelated `docs/retro/` unchanged.
+- This is the accepted task-intake refinement of the existing workflow; source publication follows the user's existing commit/push/main direction after checks. GitHub issue #26 and its PR/Git history own source/integration receipts. Until published, the new plan/routing is local and the issue says so; update that provenance when the branch is public.
+- For users, start from an existing assigned issue in Orca Tasks; the refreshed backlog already has issues. A new issue request is handled after scope is clear, with one independently deliverable task per issue. Actual Tasks UI visibility was not inspected; publication and worktree reference checks are the observed evidence.
+
+- Final config read-back: the initial task-rule authoring check warned that an unquoted colon made the new rule a YAML mapping, so artifact rules were being ignored. Quoted the entire rule scalar and re-ran `openspec instructions tasks --change organize-project-workflow --json` plus a YAML type assertion; all four task rules now load as strings with no warning. This corrects the local draft before source publication.
