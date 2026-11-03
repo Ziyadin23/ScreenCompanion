@@ -1,12 +1,55 @@
 name: Desktop checks
 on: [push, pull_request]
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      application: ${{ steps.paths.outputs.application }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - id: paths
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: node .github/scripts/workflow-checks.mjs changes
+  documentation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node .github/scripts/workflow-checks.mjs selftest
+      - run: node .github/scripts/workflow-checks.mjs docs
+      - run: npx --yes @fission-ai/openspec@1.16.0 validate --all --strict --no-interactive
+        env:
+          OPENSPEC_TELEMETRY: '0'
+      - run: git show --format= --check HEAD
   portable:
+    needs: [changes, documentation]
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success')
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: desktop
     steps:
+      - name: Require documentation validation
+        shell: bash
+        working-directory: .
+        env:
+          DOCUMENTATION_RESULT: ${{ needs.documentation.result }}
+        run: test "$DOCUMENTATION_RESULT" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -16,11 +59,19 @@ jobs:
       - run: npm ci
       - run: npm run verify
   windows-build:
+    needs: [changes, documentation]
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success')
     runs-on: windows-latest
     defaults:
       run:
         working-directory: desktop
     steps:
+      - name: Require documentation validation
+        shell: bash
+        working-directory: .
+        env:
+          DOCUMENTATION_RESULT: ${{ needs.documentation.result }}
+        run: test "$DOCUMENTATION_RESULT" = success
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

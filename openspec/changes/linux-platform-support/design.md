@@ -6,6 +6,10 @@ See [proposal.md](proposal.md) for motivation. This is a continuation of the acc
 
 The migration changes planning and agent routing only. Existing application, test, package and behavior-document bytes are recorded before migration and must remain identical afterward. Runtime verification is imported from the [Linux status record](../../../docs/VERIFICATION.md#linux-port-status), not rerun during this workflow change.
 
+## Current continuation — 2026-11-03
+
+Source merged through PR #23 at `d304f2e`; shared main `74c7ebd` also includes PR #24's full 37-case Windows beta.7 UI evidence. The migration and original candidate observations below remain dated history. Continue from task 2.1; all seven Linux target/qualification groups remain open and beta.7 remains unpublished. Task 2.7 now reconciles final qualification against merged main rather than requesting a second source integration.
+
 ## Goals / Non-Goals
 
 **Goals:** Preserve accepted intent and implementation progress, give remaining work one task owner, and make continuation through OpenSpec reliable.

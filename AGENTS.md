@@ -1,5 +1,7 @@
 # Agent guidance
 
+Start with [contributor guidance](docs/DEVELOPMENT.md) and [current status](docs/STATUS.md). For writing tasks, follow [worktree ownership and checkpoints](docs/DEVELOPMENT.md#worktree-ownership); the active OpenSpec change's `tasks.md` owns implementation progress.
+
 Keep credentials, vaults, private bundles, recordings and lab identifiers outside commits and release assets. Private lab state belongs in the primary checkout's parent workspace `PROJECT_CONTEXT.md`. From a linked worktree, locate the primary checkout through `git rev-parse --path-format=absolute --git-common-dir`, then read that workspace's guidance and task-relevant private context.
 
 Use OpenSpec as the sole planning and continuation workflow. Before Linux work, read the [active proposal](openspec/changes/linux-platform-support/proposal.md), [design](openspec/changes/linux-platform-support/design.md), [tasks](openspec/changes/linux-platform-support/tasks.md) and [Linux evidence](docs/VERIFICATION.md#linux-port-status). The task file owns implementation progress. Resume application work with the OpenSpec apply workflow.
@@ -19,4 +21,4 @@ Documentation-only, naming, version or publication changes: read [documentation 
 
 For beta application changes, complete the [local beta handoff](docs/PUBLISHING.md#local-beta-handoff): leave the latest verified runnable build in the transfer folder configured by the parent workspace before reporting completion.
 
-When resuming unfinished agent work, read its handoff if present and run `git status` before edits; treat missing decisions or approvals as unknown. Before transferring unfinished work, record the accepted scope and decisions, changed paths and tree state, exact verification commands and outcomes, the next step, and unresolved questions or approvals in the task's existing issue/PR or handoff. Use the handoff message if no task record exists. Keep private lab state only in the parent `PROJECT_CONTEXT.md`.
+Before resuming or transferring unfinished work, follow [checkpoints and fresh sessions](docs/DEVELOPMENT.md#checkpoints-and-fresh-sessions). Read the existing handoff and run `git status` before edits; treat unrecorded decisions or approvals as unknown. Keep private lab state in the primary checkout's parent `PROJECT_CONTEXT.md`.

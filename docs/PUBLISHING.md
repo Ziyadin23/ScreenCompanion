@@ -22,9 +22,7 @@ use SC; historical URLs and asset names retain their actual identifiers.
 
 ## Distribution build
 
-1. Read the parent workspace's `AGENTS.md` and follow its private-operations route
-   to current artifacts, lab state and unfinished checks before release or local
-   delivery work.
+1. Resolve the primary checkout through `git rev-parse --path-format=absolute --git-common-dir`, then read its parent workspace's `AGENTS.md` and private-operations route to current artifacts, lab state and unfinished checks. See [private workspace discovery](DEVELOPMENT.md#private-workspace-discovery); a linked worktree's arbitrary parent is not that workspace.
 2. Use a new version for each changed application binary intended for distribution.
    Update `desktop/package.json` and both root package-version fields in
    `desktop/package-lock.json`, then reconcile README/status and private context.
@@ -60,7 +58,7 @@ use SC; historical URLs and asset names retain their actual identifiers.
 
 After beta application changes, build a new version and leave its verified EXE,
 matching portable two-file ZIP, installer and README in the local transfer folder configured in the
-parent workspace's private instructions. Retain earlier versioned artifacts and
+primary checkout's parent workspace private instructions, resolved through [private workspace discovery](DEVELOPMENT.md#private-workspace-discovery). Retain earlier versioned artifacts and
 update the local latest-build record with the version, filenames and SHA-256
 digests. Verify the copied bytes before reporting completion; source-only changes
 to application behavior are not a runnable handoff. Keep the folder path and

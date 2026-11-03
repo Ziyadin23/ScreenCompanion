@@ -1,11 +1,11 @@
 # Development standards
 
-[AGENTS.md](AGENTS.md) routes tasks here. Linked references own detailed behavior, commands and recorded evidence.
+[AGENTS.md](AGENTS.md) routes tasks here; [contributor guidance](docs/DEVELOPMENT.md) owns navigation, setup and workflow. Linked references own detailed behavior, commands and recorded evidence.
 
 ## Shared rules
 
 - Use TypeScript/JavaScript for new application logic, UI, tooling and tests. Retain native Windows code and the frozen C# interoperability fixture where removing them would weaken features or compatibility; do not add another application language without a concrete platform requirement.
-- The primary TypeScript application lives under `desktop/`. For an unfamiliar code area, use the [source layout](desktop/REWRITE.md#source-layout), then inspect the relevant source files and matching `desktop/tests/` area. The C# application is archived in existing release tags; preserve those tags/assets and the frozen test-only vault fixture under `desktop/tests/windows/interop/legacy/`. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
+- The primary TypeScript application lives under `desktop/`. For an unfamiliar code area, use the [source layout](docs/DEVELOPMENT.md#source-layout), then inspect the relevant source files and matching `desktop/tests/` area. The C# application is archived in existing release tags; preserve those tags/assets and the frozen test-only vault fixture under `desktop/tests/windows/interop/legacy/`. Source moves require updated source/document links and test inclusion lists, compile/link validation and relevant suites; file-location assertions add no coverage.
 - Preserve the [privacy contract](docs/USER_GUIDE.md#privacy). Inputs remain screen capture and typed text. Thorough/Balanced keep original monitor images in detection/extraction; answering receives structured tasks and isolated visuals. Explicitly selected DeepSeek Direct sends the captured monitor to answering in one call. Dispose images and zero transient image bytes. Captures, questions, answers and history stay out of persistent app storage.
 - Provider requests remain stateless; OpenAI Responses use `store: false`. Document other providers' retention limits in the [user guide](docs/USER_GUIDE.md#service-and-model-selection).
 - Setup asks for the service and its API key; saving setup makes no model request. Encrypt keys, custom instructions, appearance, shortcuts and provider settings with Windows DPAPI CurrentUser or a secure Linux keyring; apply [storage compatibility](#storage-compatibility).

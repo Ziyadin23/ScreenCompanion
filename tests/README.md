@@ -20,26 +20,7 @@ all six mocked provider adapters, network failures, injected platform/storage,
 lifecycle and React workflows. Fake transports reject unexpected requests.
 Injected crop fixtures do not establish real JPEG/monitor behavior.
 
-Beta.5 passed **1,167 tests in 25 files** on Linux and Windows, exit 0. After
-the initial lab-ledger recovery fix, Linux and Windows verification passed
-**1,181 tests in 25 files** and the standalone lab selftest passed **220 tests
-in ten files**, exit 0. After further continuity hardening, Linux and Windows
-verification passed **1,215 tests in 26 files** and the lab selftest passed
-**254 tests in 11 files**, exit 0. See
-[current recorded results](../docs/VERIFICATION.md#beta5-implementation-and-verification)
-for the separate native, UI, package and live boundaries.
-
-Beta.4 passed **1,065 tests in 21 files** on Linux, exit 0, including **143 lab tests in seven files**. Its dated evidence remains in the verification reference.
-
-Beta.3 passed **865 tests in 14 files**, exit 0, on Linux and Windows. Update
-coverage includes explicit download/install, blocked restarts, failed feeds and
-downloads, safe metadata/diagnostics, portable isolation and Settings draft retention.
-Beta.2 previously passed **846 tests in 12 files**. Coverage
-includes delayed/failed vault loads, early activation, overlapping setup writes,
-ordered panel-size saves, applied shortcut help and malformed completion status.
-The first beta.2 Linux CI attempt failed **845/846** because the input-focus
-assertion raced React's passive effect. Waiting for the same strict active-element
-condition fixed that test-only race without fixed sleeps or retries.
+Historical suite counts and failed attempts are preserved in [test-run history](../docs/history/test-runs.md#portable-suite-history). Current-candidate results and their limits are owned by [verification](../docs/VERIFICATION.md).
 
 ## Windows native and legacy vault checks
 
@@ -105,49 +86,22 @@ passed all 37 cases in one run, with no skips or retries, exit 0.
 
 The Windows runner rejects non-Windows hosts. Linux GUI checks run only in an
 isolated headless compositor with synthetic data and an isolated profile; target
-qualification requires Hyprland. Record those results separately. Beta.5 passed **37 UI workflows** on
-Windows 11, none skipped, exit 0, including every panel resize edge and actual
-shortcut contention. An earlier run had one visibility-restoration failure that
-was not reproduced in the subsequent run; see the [recorded evidence](../docs/VERIFICATION.md#beta5-implementation-and-verification).
-Beta.4 passed **16 UI workflows**, none skipped, exit 0, including real service/key
-setup and five early-close relaunches.
-
-All **12 UI workflows** passed for beta.3
-on Windows 11, none skipped, exit 0: six synthetic shell workflows and six using
-the production bridge. Native cases exercise shortcuts, Settings Save/Back,
-protected color-dialog hide/restore/cancel, Alt-drag, corner resizing, selectable
-output and hover scrolling while the main JavaScript thread is busy.
+qualification requires Hyprland. Record those results separately. Earlier Windows UI results are preserved in [test-run history](../docs/history/test-runs.md#earlier-electron-ui-runs). Native UI cases exercise shortcuts, Settings Save/Back, owned color-dialog visibility, Alt-drag, resizing, copyable output and hover scrolling while JavaScript is busy.
 Synthetic mode makes no model request and cannot load a real vault or capture.
 Close other SC instances before shortcut/native tests; clean up all test-owned
 windows, hooks, hotkeys and temporary vaults.
 
 Standalone packaged launches, different executable paths, early activation,
 mixed-DPI monitors, every resize edge and competing shortcut registration retain
-separate evidence. Beta.3 Settings → Updates also has a separately inspected Edge whole-monitor
-recording; it does not verify other surfaces or recorders. For actual exclusion
-claims, follow the [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
+separate evidence. Historical recorder results retain their candidate/surface limits in [verification](../docs/VERIFICATION.md). For actual exclusion claims, follow the [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
 
 ## Installed updates
 
-The beta.3 installer has a separately recorded **17-check** Windows scenario:
-per-user install and shortcuts, unavailable-feed recovery, real metadata lookup,
-corrupt-file rejection, explicit valid download, automatic update/restart,
-version, isolated DPAPI retention and uninstall. The older test installer used
-beta.2 version metadata with the same updater implementation; the historical
-portable beta.2 has no updater. The unchanged final beta.3 installer was the
-update payload. A loopback HTTP feed exercised the actual updater without
-publishing a GitHub release. The Windows shell restarts into the normal account
-profile; a separate isolated relaunch checked the synthetic vault. Check real
-vault hashes independently before/after. Keep private feed overrides and runner
-paths outside source and release assets.
+Verify installed delivery, automatic restart, expected version, retained settings and cleanup using the candidate-specific update procedure. Check the real vault hashes independently before and after, and use an isolated profile for synthetic retention checks. Keep private feed overrides and runner paths outside source and release assets. Historical local-feed scenarios do not establish public-feed delivery; see [recorded evidence](../docs/VERIFICATION.md) and [installed update history](../docs/history/test-runs.md#installed-update-history).
 
 ## Recorded evidence and live requests
 
-[Development evidence](../desktop/REWRITE.md) records beta.1/beta.2 Windows runs,
-EXE/ZIP hashes, retained failed automation attempts and their limits. The beta.2
-package passed five duplicate-process workflows, direct portable startup/version/
-normal exit, and archive CRC/entry/byte checks. Those dated results describe the beta.2 artifact; current beta.4 evidence is
-recorded separately in the verification reference.
+[Current verification](../docs/VERIFICATION.md), [rewrite history](../docs/history/typescript-rewrite.md) and [test-run history](../docs/history/test-runs.md) retain candidate identities, hashes, failed attempts and their limits.
 
 Mocked tests do not establish provider-account access or real model-answer
 quality. A paid campaign needs explicit scope and a cumulative request budget

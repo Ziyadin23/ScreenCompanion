@@ -32,4 +32,4 @@ None. Existing Windows and pipeline contracts remain owned by their current guid
 - Workflow migration changes `openspec/`, agent integrations and `AGENTS.md`; public project records receive references to the new owner. Private operational state remains outside Git.
 - The feature's existing source spans `desktop/src/contracts`, `main`, `platform`, `storage`, `renderer`, related tests and `desktop/package.json`/RPM scriptlets. Those application, test and build bytes are preserved during this migration.
 - Existing checks are imported with their candidate/attempt limits from `docs/VERIFICATION.md`; no new runtime, model-quality or release result is implied.
-- Main-branch integration, application fixes, new regression/lab runs, artifact delivery and publication remain subsequent work. The port stays unmerged and unpublished until those steps are actually completed.
+- Linux source was merged through PR #23 (`d304f2e`) on 2026-11-02. Application fixes, the seven remaining qualification groups, artifact delivery and publication remain separate work; source integration does not establish target readiness or publish beta.7.
