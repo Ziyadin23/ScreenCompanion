@@ -8,10 +8,12 @@ context: |
   not a second checklist. Verify current Git state before resuming; preserve
   unrelated uncommitted work. Imported evidence retains its candidate and limits.
   Source merge, target qualification and release publication are separate states.
+  GitHub Issues is the task entry point for Orca Tasks; follow the issue-intake
+  section of docs/DEVELOPMENT.md while keeping OpenSpec as the planning owner.
 
 rules:
   tasks:
     - Give imported completed tasks an evidence reference and keep incomplete target checks open.
-    - Link existing GitHub issues rather than creating duplicate implementation checklists.
+    - "Follow docs/DEVELOPMENT.md issue intake: publish/reuse agreed independent task issues, assign them to the verified user, and record issue links against task groups without duplicating their detailed checklists."
     - Record a checkpoint at completed task boundaries and after merge/evidence changes, following docs/DEVELOPMENT.md.
     - Select checks by affected paths and behavior; do not claim runtime evidence from documentation or synthetic checks.

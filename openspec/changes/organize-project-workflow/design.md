@@ -115,6 +115,18 @@ Keep the workflow triggered for pushes and PRs and retain the `portable` and `wi
 
 The lightweight job runs a checker selftest, local Markdown links/anchors, strict pinned OpenSpec validation and whitespace checks. Node's standard library is enough; no root package or application dependency changes are needed. Test both broken-document rejection and source/unknown-path classification. This workflow change itself requires the full route when run on GitHub.
 
+### 10. Start independent work from GitHub Issues
+
+The user requested GitHub Issues as the entry point because Orca Tasks can start an issue-linked worktree. The observed backlog already has 15 open issues assigned to `Ziyadin23`; reuse them. For new agreed work, publish one issue per independently deliverable outcome, with concise acceptance criteria and a link to the OpenSpec owner/task group. Individual implementation checkboxes remain in `tasks.md`.
+
+This request is standing authorization to publish and assign scoped task issues to the verified user after scope is settled. It does not expand implementation scope or authorize paid/lab/release operations. Discussion and unaccepted audit suggestions are not automatically executable tasks. When work starts from an issue without a plan, the first action is OpenSpec planning; when a plan exists, name its change and task IDs. Publish an honest source/branch link or mark a local-only plan as awaiting publication before an independent worktree can use it.
+
+Search open and closed issues by outcome and owner/task IDs before publication, retain a stable issue marker for read-back/deduplication, and record the resulting number/link in the task owner. Reuse an issue and existing worktree when they already cover the same work. If the publication response is ambiguous, inspect before retrying. Preserve unrelated issue fields and avoid automatic reopening or closing without evidence.
+
+Document the user's path: Orca Tasks → GitHub → assigned issues for this repository → select issue → create a worktree/start an agent. The exact UI labels depend on the installed Orca; verify availability and distinguish issue read-back from actual UI visibility. A CLI fallback can create a worktree with the issue URL attached before agent startup. One independent issue normally maps to one worktree, while a parent issue may group related outcomes.
+
+Use the existing GitHub connection and Orca task source. A new synchronization service, GitHub bot/token, workflow automation or per-checkbox issue generation is unnecessary for this request.
+
 ## Risks / Trade-offs
 
 - Moving history can break links or erase caveats -> retain compatibility headings, check inbound references, and compare moved evidence with the original text.

@@ -57,16 +57,40 @@ The documentation checker resolves local files and Markdown anchors; external UR
 
 The chat skills and shell CLI are different entry points. In chat, use `$openspec-explore`, `$openspec-propose`, `$openspec-apply-change <name>` and `$openspec-archive-change <name>`; other agents expose the corresponding slash commands. In a shell, use `openspec list --json`, `openspec status --change <name> --json` and `openspec instructions apply --change <name> --json`. Consult installed skill instructions for artifact creation and archive behavior.
 
-1. Explore the problem and accepted scope; propose the change before implementation.
+1. Explore the problem and accepted scope; publish/reuse its [GitHub task issue](#github-issues-and-orca-tasks), then propose the change before implementation. If an OpenSpec plan already exists, link it from the issue.
 2. Read its proposal, design, relevant specs and `tasks.md`, plus the affected-area rules.
 3. Apply pending tasks and update their checkboxes only after their specified checks pass.
 4. Review the actual diff and evidence. Archive/sync after the change's requirements and tasks are satisfied.
 
 `openspec status` reports planning artifacts; completed planning is not completed implementation. Read apply progress from the change's task owner. A source merge, target qualification and published release are separate states. Keep unfinished qualification open after a source merge.
 
+### GitHub Issues and Orca Tasks
+
+GitHub Issues is the default entry point for agreed independent work. The user selected this flow so an assigned issue can be opened in Orca Tasks and used to start its worktree. OpenSpec remains the planning owner: an issue describes the desired outcome and acceptance conditions; `tasks.md` owns detailed steps and completion checkboxes.
+
+After scope is settled, the agent publishes or reuses the issue and assigns it to the verified `Ziyadin23` account as part of the requested workflow. This standing instruction covers scoped task publication/assignment. The issue does not authorize additional implementation, paid model usage, lab changes or releases; those retain their existing scope and approvals. Exploration and unaccepted audit recommendations remain discussion/evidence until selected as work.
+
+**Choose the issue boundary:** one independently deliverable outcome normally gets one issue and one worktree. Keep internal coding/testing/documentation steps together in that issue's OpenSpec task group. An existing change can have several independent issues, as Linux tasks #14–#20 already do. Reuse an issue/worktree with matching scope; avoid publishing every checkbox as a separate issue.
+
+**Prepare a usable task:** give the issue a clear outcome title, short problem/scope, candidate or affected platform when relevant, concise acceptance conditions, dependencies and the OpenSpec change/task IDs. Link the plan and evidence from a published revision/branch. If the plan exists only locally, name that provenance and mark publication as the next step; do not present a nonexistent link as ready for a fresh checkout. If there is no plan yet, state that the first worktree action is OpenSpec planning.
+
+**Publish and verify:** search both open and closed issues by outcome and owner/task IDs first. Reuse the matching issue when possible; a closed issue needs evidence of distinct remaining work before a follow-up is created. Use a stable marker such as `<!-- sc-task:change-name:task-group -->` for new issues, read back the exact body/assignee/state and record the number/link in the OpenSpec owner. Inspect ambiguous create responses before retrying. Preserve unrelated assignees, labels and issue content. Use the connected GitHub tools, or `gh issue create --body-file <file> --assignee Ziyadin23` when the connector cannot perform the action. Keep private lab data and credentials out of issues.
+
+**Start from Orca:** open Tasks, select the GitHub source/repository and the assigned/open issues filter, refresh if necessary, then select the issue and create/start its worktree. Use the account that has repository access. An issue successfully read back on GitHub is publication proof; visible appearance in Tasks requires observing the installed UI. UI labels and active filters may differ. Reuse an already linked worktree before creating a second one.
+
+A CLI alternative is available when the UI is inconvenient. Replace the placeholders and use the executable selected by the `orca-cli` skill:
+
+```sh
+orca-ide worktree create --repo name:ScreenCompanion --name issue-N-short-name --no-parent --reference https://github.com/Ziyadin23/ScreenCompanion/issues/N --json
+```
+
+The issue reference is attached during workspace creation. Starting an agent is a separate action unless requested in that launch; the issue and current checkpoint tell it which OpenSpec change/task group to continue. Existing pending Linux work, for example [issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14), resumes the matching task in `linux-platform-support` instead of creating a second feature plan.
+
+When the issue's outcome is verified, link its PR and use `Closes #N` only when that PR satisfies the entire issue scope. A partial delivery uses a reference and keeps the issue open. Refresh the task owner and Orca card at handoff/integration; there is no second independently maintained issue implementation checklist or additional sync service.
+
 ### Worktree ownership
 
-Use one writing task per worktree. Base independent work on the repository default branch; use parent/stacked branches only when that dependency is intended. Keep the primary checkout available for coordination and read-only inspection. Before edits, run `git status` and read the existing handoff. If required planning is uncommitted elsewhere, carry those specific files explicitly and record their origin; preserve the original checkout. New worktrees contain committed source, not another checkout's dirty files.
+Start from the matching GitHub task issue and use one writing task per worktree. Base independent work on the repository default branch; use parent/stacked branches only when that dependency is intended. Keep the primary checkout available for coordination and read-only inspection. Before edits, run `git status` and read the existing handoff. If required planning is uncommitted elsewhere, carry those specific files explicitly and record their origin; preserve the original checkout. New worktrees contain committed source, not another checkout's dirty files.
 
 When work must share a checkout, agree on the owner and touched paths before writing. Preserve unrelated changes and include only task-owned paths in any authorized commit. Existing issues/PRs link to the OpenSpec owner rather than keeping independent implementation checklists. Parallel lab/VM work must first inspect the shared private context for resource ownership.
 

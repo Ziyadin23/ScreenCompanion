@@ -1,6 +1,6 @@
 # Agent guidance
 
-Start with [contributor guidance](docs/DEVELOPMENT.md) and [current status](docs/STATUS.md). For writing tasks, follow [worktree ownership and checkpoints](docs/DEVELOPMENT.md#worktree-ownership); the active OpenSpec change's `tasks.md` owns implementation progress.
+Start with [contributor guidance](docs/DEVELOPMENT.md) and [current status](docs/STATUS.md). For agreed independent work, follow [GitHub issue intake](docs/DEVELOPMENT.md#github-issues-and-orca-tasks) so it is assigned and discoverable in Orca Tasks. For writing tasks, follow [worktree ownership and checkpoints](docs/DEVELOPMENT.md#worktree-ownership); the active OpenSpec change's `tasks.md` owns implementation progress.
 
 Keep credentials, vaults, private bundles, recordings and lab identifiers outside commits and release assets. Private lab state belongs in the primary checkout's parent workspace `PROJECT_CONTEXT.md`. From a linked worktree, locate the primary checkout through `git rev-parse --path-format=absolute --git-common-dir`, then read that workspace's guidance and task-relevant private context.
 
