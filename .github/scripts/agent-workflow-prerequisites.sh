@@ -24,8 +24,8 @@ sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 test "$(sysctl -n kernel.apparmor_restrict_unprivileged_userns)" = 0
 test "$(sysctl -n kernel.unprivileged_userns_clone)" = 1
 test "$(sysctl -n user.max_user_namespaces)" -gt 0
-/usr/bin/bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / -- \
-  /usr/bin/bwrap --unshare-user --ro-bind / / -- /usr/bin/true
+/usr/bin/bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / --proc /proc -- \
+  /usr/bin/bwrap --unshare-user --unshare-pid --unshare-net --ro-bind / / --proc /proc -- /usr/bin/true
 
 npm install --global --no-audit --no-fund @fission-ai/openspec@1.16.0
 test "$(openspec --version)" = 1.16.0
