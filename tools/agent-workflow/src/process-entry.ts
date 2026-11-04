@@ -76,21 +76,29 @@ function beginStop(reason: 'cancelled' | 'timeout'): void {
   process.kill(-process.pid, 'SIGTERM');
 }
 const tick = setInterval(() => {
+  let phase = 'group-scan';
   try {
     const others = groupMembers();
     if (directClosed && others.length === 0) {
       clearInterval(tick);
+      phase = 'exit-receipt';
       receipt(stop ?? 'exited', directCode, directSignal, outputTruncated);
       process.exit(0);
     }
     if (!stop) {
+      phase = 'stop-check';
       if (existsSync(join(op, 'cancel.json'))) beginStop('cancelled');
       else if (Date.now() - startedAt >= request.timeoutMs) beginStop('timeout');
     } else if (Date.now() - stopAt >= 1000) {
+      phase = 'exit-receipt';
       receipt(stop, directCode, directSignal ?? 'SIGKILL', outputTruncated);
+      phase = 'stop-signal';
       process.kill(-process.pid, 'SIGKILL');
     }
-  } catch {
+  } catch (error) {
+    const rawCode = (error as NodeJS.ErrnoException).code;
+    const code = typeof rawCode === 'string' && /^[A-Z0-9_]{1,30}$/.test(rawCode) ? rawCode : 'unknown';
+    try { durableJson(join(op, 'failure.json'), { phase, code }); } catch { /* Termination remains mandatory. */ }
     // The live leader can safely stop its own group, but no terminal result is claimed.
     process.kill(-process.pid, 'SIGKILL');
   }

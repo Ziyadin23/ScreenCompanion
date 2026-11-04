@@ -33,6 +33,68 @@ test('executes with direct arguments, explicit environment and private durable r
   for (const name of readdirSync(op)) assert.equal(statSync(join(op, name)).mode & 0o077, 0);
 });
 
+test('wrapper records a bounded cause when its process-group scan fails without claiming exit', async t => {
+  const f = fixture(t); const op = join(f.root, 'op'); mkdirSync(op, { mode: 0o700 });
+  const preload = join(f.root, 'fail-proc.mjs');
+  writeFileSync(preload, `import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const original = fs.readdirSync;
+fs.readdirSync = path => {
+  if (path === '/proc') { const error = new Error('injected scan failure'); error.code = 'EACCES'; throw error; }
+  return original(path);
+};
+syncBuiltinESMExports();\n`);
+  writeFileSync(join(op, 'request.json'), JSON.stringify({ command: process.execPath,
+    args: ['-e', 'setInterval(()=>{},1000)'], cwd: f.cwd, env: {}, timeoutMs: 5000 }));
+  const entry = new URL('../src/process-entry.js', import.meta.url);
+  const wrapper = spawn(process.execPath, ['--import', preload, entry.pathname, op],
+    { detached: true, stdio: 'ignore', env: {} });
+  await new Promise<void>((resolve, reject) => { wrapper.once('error', reject); wrapper.once('close', () => resolve()); });
+  assert.deepEqual(JSON.parse(readFileSync(join(op, 'failure.json'), 'utf8')),
+    { phase: 'group-scan', code: 'EACCES' });
+  assert.equal(existsSync(join(op, 'start.json')), true);
+  assert.equal(existsSync(join(op, 'exit.json')), false);
+});
+
+test('coordinator records wrapper signal as diagnostic while ownership stays unverifiable', async t => {
+  const f = fixture(t); const marker = join(f.root, 'child-pid');
+  const request = { ...f, key: 'wrapper-killed', command: process.execPath,
+    args: ['-e', "require('fs').writeFileSync(process.argv[1],String(process.pid));setTimeout(()=>process.exit(0),1200)", marker],
+    env: {}, timeoutMs: 5000 };
+  const running = runOwnedProcess(request).catch((error: unknown) => error);
+  await until(() => inspectOwnedProcess(f.stateDirectory, request.key).state === 'running');
+  await until(() => existsSync(marker));
+  const childPid = Number(readFileSync(marker, 'utf8'));
+  const childStat = () => {
+    try {
+      const raw = readFileSync(`/proc/${childPid}/stat`, 'utf8');
+      const fields = raw.slice(raw.lastIndexOf(')') + 2).split(' ');
+      return { state: fields[0], start: fields[19] };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+      throw error;
+    }
+  };
+  const childStart = childStat()?.start;
+  assert.ok(childStart);
+  const op = join(f.stateDirectory, readdirSync(f.stateDirectory)[0]!);
+  const current = inspectOwnedProcess(f.stateDirectory, request.key);
+  assert.equal(current.state, 'running');
+  process.kill(current.pid!, 'SIGKILL');
+  const error = await running as { code?: string };
+  assert.equal(error.code, 'owner_unverifiable');
+  assert.deepEqual(JSON.parse(readFileSync(join(op, 'wrapper-exit.json'), 'utf8')),
+    { exitCode: null, signal: 'SIGKILL' });
+  assert.equal(inspectOwnedProcess(f.stateDirectory, request.key).state, 'unverifiable');
+  assert.equal(existsSync(join(op, 'exit.json')), false);
+  await until(() => {
+    const observed = childStat();
+    return !observed || observed.start !== childStart || observed.state === 'Z' || observed.state === 'X';
+  });
+  const observed = childStat();
+  assert.ok(!observed || observed.start !== childStart || observed.state === 'Z' || observed.state === 'X');
+});
+
 test('returns nonzero exit and caps combined output at two million bytes', async t => {
   const f = fixture(t);
   const result = await runOwnedProcess({ ...f, key: 'nonzero', command: process.execPath,

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, closeSync, constants as fsConstants, fstatSync, mkdirSync, mkdtempSync, openSync,
+  readFileSync, readSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { constants, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
+import { z } from 'zod';
 import { makeManifest } from '../src/manifest.js';
 import { digest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
@@ -41,6 +43,57 @@ function fixture(t: { after(fn: () => void): void }) {
 function edit(root: string) { writeFileSync(join(root, 'README.md'), '[user guide](docs/USER_GUIDE.md)\n'); }
 const passed: OwnedProcessResult = { status: 'exited', exitCode: 0, signal: null, stdout: 'ok', stderr: '',
   outputTruncated: false, elapsedMs: 1 };
+
+const failureDiagnostic = z.object({ phase: z.enum(['group-scan', 'exit-receipt', 'stop-check', 'stop-signal']),
+  code: z.string().regex(/^(?:[A-Z0-9_]{1,30}|unknown)$/) }).strict();
+const wrapperExitDiagnostic = z.object({ exitCode: z.number().int().min(0).max(255).nullable(),
+  signal: z.string().refine(value => value in constants.signals).nullable() }).strict();
+function boundedJson(path: string): unknown {
+  const fd = openSync(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    const info = fstatSync(fd);
+    if (!info.isFile() || info.size > 512) throw new Error('Invalid diagnostic file');
+    const bytes = Buffer.alloc(513);
+    const length = readSync(fd, bytes, 0, bytes.length, 0);
+    if (length > 512) throw new Error('Oversized diagnostic file');
+    return JSON.parse(bytes.subarray(0, length).toString('utf8'));
+  } finally { closeSync(fd); }
+}
+function diagnosticField<T>(path: string, schema: z.ZodType<T>): T | 'unavailable' | null {
+  try { return schema.parse(boundedJson(path)); }
+  catch (error) { return (error as NodeJS.ErrnoException).code === 'ENOENT' ? null : 'unavailable'; }
+}
+function processDiagnostic(stateDirectory: string, key: string) {
+  for (const name of readdirSync(stateDirectory)) {
+    const op = join(stateDirectory, name);
+    const intent = boundedJson(join(op, 'intent.json'));
+    if (!intent || typeof intent !== 'object' || !('key' in intent) || intent.key !== key) continue;
+    const files = readdirSync(op);
+    const failure = diagnosticField(join(op, 'failure.json'), failureDiagnostic);
+    const wrapperExit = diagnosticField(join(op, 'wrapper-exit.json'), wrapperExitDiagnostic);
+    return { key, start: files.includes('start.json'), exit: files.includes('exit.json'), failure, wrapperExit };
+  }
+  throw new Error('Diagnostic operation not found');
+}
+
+test('candidate diagnostic excludes extra and malformed private fields from hosted output', t => {
+  const f = fixture(t); const directory = join(f.directory, 'diagnostic'); mkdirSync(directory);
+  const op = join(directory, 'op'); mkdirSync(op);
+  writeFileSync(join(op, 'intent.json'), JSON.stringify({ key: 'synthetic' }));
+  writeFileSync(join(op, 'failure.json'), JSON.stringify({ phase: 'group-scan', code: 'EACCES', env: 'secret' }));
+  writeFileSync(join(op, 'wrapper-exit.json'), JSON.stringify({ exitCode: null, signal: 'SIGKILL', stdout: 'secret' }));
+  assert.deepEqual(processDiagnostic(directory, 'synthetic'),
+    { key: 'synthetic', start: false, exit: false, failure: 'unavailable', wrapperExit: 'unavailable' });
+  writeFileSync(join(op, 'failure.json'), '{malformed');
+  writeFileSync(join(op, 'wrapper-exit.json'), 'x'.repeat(1024));
+  assert.deepEqual(processDiagnostic(directory, 'synthetic'),
+    { key: 'synthetic', start: false, exit: false, failure: 'unavailable', wrapperExit: 'unavailable' });
+  writeFileSync(join(op, 'failure.json'), JSON.stringify({ phase: 'group-scan', code: 'EACCES' }));
+  writeFileSync(join(op, 'wrapper-exit.json'), JSON.stringify({ exitCode: null, signal: 'SIGKILL' }));
+  assert.deepEqual(processDiagnostic(directory, 'synthetic'),
+    { key: 'synthetic', start: false, exit: false,
+      failure: { phase: 'group-scan', code: 'EACCES' }, wrapperExit: { exitCode: null, signal: 'SIGKILL' } });
+});
 
 test('full candidate inspection rejects outside scope, ignored surprises, symlinks and binary', t => {
   const f = fixture(t); edit(f.root);
@@ -322,8 +375,16 @@ writeFileSync(cache + '/prior-check', process.argv[2]);
   const frozen = await freezeCandidate({ workspace: f.root, store: f.store, manifest, issue: 28, branch,
     key: 'app-freeze', timestamp: 1_700_000_001, message: 'Fix parser fixture' });
   const result = await verifyCandidate({ workspace: f.root, store: f.store, manifest, frozen,
-    key: 'app-real', trustedDependencies, runCheck: request =>
-      request.key.includes(':desktop-') ? runOwnedProcess(request) : Promise.resolve(passed) });
+    key: 'app-real', trustedDependencies, runCheck: async request => {
+      if (!request.key.includes(':desktop-')) return passed;
+      try { return await runOwnedProcess(request); }
+      catch (error) {
+        try {
+          console.error('owned process diagnostic', JSON.stringify(processDiagnostic(request.stateDirectory, request.key)));
+        } catch { console.error('owned process diagnostic unavailable'); }
+        throw error;
+      }
+    } });
   assert.equal(result.passed, true);
   assert.deepEqual(result.checks.slice(-4).map(check => check.passed), [true, true, true, true]);
   assert.equal(readFileSync(join(f.root, 'desktop/electron.vite.config.ts'), 'utf8'), 'exact frozen config\n');

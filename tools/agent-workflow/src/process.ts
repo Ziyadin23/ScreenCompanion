@@ -212,6 +212,9 @@ export async function runOwnedProcess(request: OwnedProcessRequest): Promise<Own
     try {
       const entry = fileURLToPath(new URL('./process-entry.js', import.meta.url));
       const wrapper = spawn(process.execPath, [entry, op], { detached: true, stdio: 'ignore', env: {} });
+      wrapper.once('exit', (exitCode, signal) => {
+        try { durableJson(join(op, 'wrapper-exit.json'), { exitCode, signal }); } catch { /* Observation only. */ }
+      });
       wrapper.unref();
       await new Promise<void>((resolve, reject) => { wrapper.once('spawn', resolve); wrapper.once('error', reject); });
     } catch { throw new WorkflowError('owner_unverifiable', 'Process launch is uncertain; inspect before replacement.'); }
