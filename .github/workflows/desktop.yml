@@ -38,7 +38,7 @@ jobs:
       - run: git show --format= --check HEAD
   agent-workflow:
     needs: [changes, documentation]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: always()
     timeout-minutes: 15
     permissions:
@@ -52,11 +52,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install Linux isolation prerequisite
+      - name: Provision fixed Linux workflow prerequisites
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes bubblewrap
+        run: bash .github/scripts/agent-workflow-prerequisites.sh
       - name: Verify local agent workflow and real Linux isolation
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
         run: |
