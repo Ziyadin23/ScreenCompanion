@@ -76,6 +76,7 @@ function checkDocuments(root, files) {
 function selftest() {
   assert.equal(documentationOnly(['README.md', 'docs/history/a.md', 'openspec/changes/a/tasks.md']), true);
   for (const file of ['desktop/src/main/index.ts', 'desktop/package-lock.json', '.github/workflows/desktop.yml',
+    'tools/agent-workflow/src/cli.ts', 'tools/agent-workflow/package-lock.json',
     'docs/retro/reproduce.cjs', 'desktop/tests/fixtures/input.json', 'desktop/tests/fixtures/input.md',
     'unknown', 'README.md\nsource.ts']) {
     assert.equal(documentationOnly(['docs/a.md', file]), false, file);

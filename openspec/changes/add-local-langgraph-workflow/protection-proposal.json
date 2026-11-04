@@ -1,0 +1,102 @@
+{
+  "status": "review-only",
+  "observedAt": "2026-11-04T10:49:07.770Z",
+  "repository": "Ziyadin23/ScreenCompanion",
+  "branch": "main",
+  "base": "b692d7ff8b2d8e5a9e4340df3b32a560a9a0a9d9",
+  "current": {
+    "protection": null,
+    "rulesets": [],
+    "allow_auto_merge": false,
+    "allow_squash_merge": true
+  },
+  "operation": {
+    "method": "PUT",
+    "endpoint": "/repos/Ziyadin23/ScreenCompanion/branches/main/protection",
+    "body": {
+      "required_status_checks": {
+        "strict": true,
+        "contexts": [
+          "changes",
+          "documentation",
+          "portable",
+          "windows-build",
+          "agent-workflow"
+        ]
+      },
+      "enforce_admins": true,
+      "required_pull_request_reviews": {
+        "dismiss_stale_reviews": false,
+        "require_code_owner_reviews": false,
+        "require_last_push_approval": false,
+        "required_approving_review_count": 0,
+        "bypass_pull_request_allowances": {
+          "users": [],
+          "teams": [],
+          "apps": []
+        }
+      },
+      "restrictions": null,
+      "required_linear_history": false,
+      "allow_force_pushes": false,
+      "allow_deletions": false,
+      "required_conversation_resolution": false,
+      "lock_branch": false,
+      "allow_fork_syncing": false
+    }
+  },
+  "diff": [
+    {
+      "field": "required_status_checks.strict",
+      "current": null,
+      "desired": true
+    },
+    {
+      "field": "required_status_checks.contexts",
+      "current": [],
+      "desired": [
+        "changes",
+        "documentation",
+        "portable",
+        "windows-build",
+        "agent-workflow"
+      ]
+    },
+    {
+      "field": "required_pull_request_reviews.required_approving_review_count",
+      "current": null,
+      "desired": 0
+    },
+    {
+      "field": "required_pull_request_reviews.bypass_pull_request_allowances",
+      "current": null,
+      "desired": {
+        "users": [],
+        "teams": [],
+        "apps": []
+      }
+    },
+    {
+      "field": "enforce_admins",
+      "current": null,
+      "desired": true
+    },
+    {
+      "field": "allow_force_pushes",
+      "current": null,
+      "desired": false
+    },
+    {
+      "field": "allow_deletions",
+      "current": null,
+      "desired": false
+    }
+  ],
+  "activationPrerequisites": [
+    "final source review and passing tool/application/hosted checks",
+    "explicit acceptance of this concrete settings change",
+    "fresh settings read-back and controlled failed/stale candidate rejection",
+    "genuine bounded documentation delivery pilot"
+  ],
+  "note": "Independent source-bound agent review is a runner requirement. Existing stricter server review requirements must be preserved if they appear before application. Parser automatic merge and real Windows beta capability remain unqualified."
+}
