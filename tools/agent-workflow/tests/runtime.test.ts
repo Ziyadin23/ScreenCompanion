@@ -11,7 +11,7 @@ import { digest, makeManifest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { type WorkerRequest, type WorkerResult } from '../src/worker.js';
 
-function fixture(t: { after(fn: () => void): void }, delivery = 'report') {
+function fixture(t: { after(fn: () => void): void }, delivery = 'report', selected = false) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-runtime-')); const root = join(directory, 'repo'); mkdirSync(root);
   const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root,
     '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
@@ -21,7 +21,8 @@ function fixture(t: { after(fn: () => void): void }, delivery = 'report') {
   writeFileSync(join(root, 'desktop/src/providers/json.ts'), 'export const parseJson = (text: string): unknown => JSON.parse(text);\n');
   git('add', '.'); git('commit', '-m', 'fixture');
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
-    base: git('rev-parse', 'HEAD'), scope: 'providers-json', modelProfile: 'fixture', delivery });
+    base: git('rev-parse', 'HEAD'), scope: 'providers-json', modelProfile: 'fixture', delivery,
+    ...(selected ? { mode: 'issue', issue: 7 } : {}) });
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
   return { store, manifest, root, git, directory };
@@ -127,6 +128,36 @@ test('material baseline review findings retain an unconfirmed private finding', 
   assert.equal(publications, 0); assert.equal((result.data.findings as { state: string }[])[0]?.state, 'unconfirmed');
 });
 
+test('unrelated selected issue stops before planning, writer allocation or source PR', async t => {
+  for (const delivery of ['issues', 'pr']) {
+  const { store, manifest } = fixture(t, delivery, true);
+  const roles: string[] = [], mutations: string[] = [];
+  const issue = { number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open',
+    title: 'Unrelated UI layout task', body: 'Scope: desktop/src/renderer/panel.tsx', assignees: [{ login: 'Ziyadin23' }] };
+  const actions = createActions({ githubTransport: async (method, endpoint) => {
+    if (method === 'GET' && endpoint.endsWith('/issues/7')) return issue;
+    mutations.push(`${method} ${endpoint}`); throw new Error('Unexpected external effect');
+  }, executeWorker: async request => {
+    roles.push(request.role);
+    if (request.role === 'investigator') return worker(request.role, { status: 'complete', summary: 'Candidate', notes: [],
+      findings: [{ path: 'desktop/src/providers/json.ts',
+      description: 'Duplicate fields are accepted.' }] });
+    if (request.role === 'reproducer') return worker(request.role, { status: 'complete', summary: 'Oracle', notes: [],
+      reproduced: true, evidence: [], oracle: { kind: 'portable-node',
+      contractPaths: ['docs/contract.md'], script:
+        `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` } });
+    return worker(request.role, { status: 'complete', summary: 'Contract confirmed', notes: [],
+      baseRevision: manifest.base, headRevision: manifest.base, findings: [] });
+  } });
+  const result = await executeRun(store, manifest.id, actions);
+  assert.equal(result.status, 'awaiting_input');
+  assert.equal(result.error, 'issue_scope_review');
+  assert.deepEqual(roles, ['investigator', 'reproducer', 'reviewer']);
+  assert.deepEqual(mutations, []);
+  assert.equal(store.usage(manifest.id).writingTasks, 0);
+  }
+});
+
 test('failed record postflight holds finalization and publishes a scoped incident without closure', async t => {
   const f = fixture(t, 'merge-eligible'); const runId = f.manifest.id;
   f.store.claim(runId);
@@ -179,7 +210,8 @@ test('failed record postflight holds finalization and publishes a scoped inciden
   assert.equal(f.store.repositoryIntegrationHold()?.reason, 'record_postflight_failed');
 });
 
-async function documentationFlow(t: { after(fn: () => void): void }, noChangeRepair = false) {
+async function documentationFlow(t: { after(fn: () => void): void }, noChangeRepair = false,
+  existingOwner = false) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-doc-flow-'));
   const root = join(directory, 'repo'); mkdirSync(root);
   const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root,
@@ -187,12 +219,25 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
   git('init', '-b', 'main'); git('remote', 'add', 'origin', 'https://github.com/example/sc.git');
   mkdirSync(join(root, 'docs')); writeFileSync(join(root, 'docs/USER_GUIDE.md'), '# User guide\n');
   writeFileSync(join(root, 'README.md'), '[User guide](docs/missing.md)\n');
+  const ownerPath = 'openspec/changes/fix-guide/tasks.md';
+  if (existingOwner) {
+    mkdirSync(join(root, 'openspec/changes/fix-guide'), { recursive: true });
+    writeFileSync(join(root, ownerPath), '# Existing guide correction\n\n' +
+      '- [ ] 2.1 Correct README.md for [guide task (#7)](https://github.com/example/sc/issues/7); verify the local guide destination.\n' +
+      '- [ ] 2.2 Preserve a separate future task.\n');
+  }
   git('add', '.'); git('commit', '-m', 'synthetic broken link');
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
-    base: git('rev-parse', 'HEAD'), scope: 'docs-links', modelProfile: 'fixture', delivery: 'pr' });
+    base: git('rev-parse', 'HEAD'), scope: 'docs-links', modelProfile: 'fixture', delivery: 'pr',
+    ...(existingOwner ? { mode: 'issue', issue: 7 } : {}) });
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
-  let remoteIssue: Record<string, unknown> | null = null, pull: Record<string, unknown> | null = null;
+  let remoteIssue: Record<string, unknown> | null = existingOwner ? {
+    number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open',
+    title: 'Correct the local guide destination',
+    body: `Planning owner: ${ownerPath}, task \`2.1\`. Scope: README.md. Acceptance: local guide destination resolves.`,
+    assignees: [{ login: 'Ziyadin23' }] } : null;
+  let pull: Record<string, unknown> | null = null;
   let row: Record<string, unknown> | null = null, pending = true, pushed = '', writes = 0, creates = 0, verifications = 0;
   const work = join(directory, 'work');
   const roles: string[] = [];
@@ -252,6 +297,13 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
       if (request.role === 'reproducer') return worker(request.role, { status: 'complete', summary: 'Synthetic oracle', notes: [],
         reproduced: true, evidence: [], oracle: { kind: 'portable-node', contractPaths: ['docs/USER_GUIDE.md'],
           script: `import assert from 'node:assert/strict';import * as fs from 'node:fs';assert.match(fs.readFileSync('/workspace/README.md','utf8'),/\\[User guide\\]\\(docs\\/USER_GUIDE\\.md\\)/);` } });
+      if (request.role === 'reviewer' && request.instructions.includes('Independently compare this existing issue')) {
+        assert.equal(request.reviewHead, manifest.base);
+        const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1)) as Record<string, unknown>;
+        return worker(request.role, { status: 'complete', summary: 'Issue outcome matches one task', notes: [],
+          baseRevision: manifest.base, headRevision: manifest.base, findings: [],
+          issueOutcome: { identity: detail.identity as never, matched: true, complete: true } });
+      }
       if (request.role === 'reviewer' && request.revision === manifest.base)
         return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [], findings: [],
           baseRevision: manifest.base, headRevision: manifest.base });
@@ -272,6 +324,12 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
     return;
   }
   assert.equal(waiting.status, 'awaiting_external', JSON.stringify({ stage: waiting.stage, error: waiting.error }));
+  if (existingOwner) {
+    const plan = waiting.data.plan as { provenance: { kind: string }; owner: { path: string; taskIds: string[] }; files: unknown[] };
+    assert.equal(plan.provenance.kind, 'baseline'); assert.equal(plan.owner.path, ownerPath);
+    assert.deepEqual(plan.owner.taskIds, ['2.1']); assert.equal(plan.files.length, 0);
+    assert.equal(git('ls-files', 'openspec/changes'), ownerPath);
+  }
   assert.equal(waiting.stage, 'checks'); assert.equal(writes, 1); assert.equal(creates, 1);
   assert.equal(waiting.data.waitingFor, 'github_checks');
   const head = (waiting.data.frozen as { head: string }).head;
@@ -280,17 +338,20 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
   const result = await executeRun(store, manifest.id, actions);
   assert.equal(result.status, 'completed', result.error ?? '');
   assert.equal(writes, 1); assert.equal(creates, 1);
-  assert.deepEqual(roles, ['investigator', 'reproducer', 'reviewer', 'planner', 'implementer', 'reviewer']);
+  assert.deepEqual(roles, existingOwner ? ['investigator', 'reproducer', 'reviewer', 'reviewer', 'planner', 'implementer', 'reviewer'] :
+    ['investigator', 'reproducer', 'reviewer', 'planner', 'implementer', 'reviewer']);
   assert.equal(store.usage(manifest.id).writingTasks, 1);
   assert.equal(git('status', '--porcelain'), '');
 }
 
 test('a synthetic documentation task reaches one source-bound PR, waits for CI and resumes without another writer', async t => documentationFlow(t));
 test('a repair with no source change cannot rerun acceptance under a new commit identity', async t => documentationFlow(t, true));
+test('supported baseline task keeps the same owner and enters a separate fresh apply worker', async t =>
+  documentationFlow(t, false, true));
 
 test('application setup is required before the first writer even when its only initial diff is planning', async t => {
   const f = fixture(t, 'pr');
-  const issue = { number: 7, url: 'https://github.com/example/sc/issues/7', state: 'open' as const, body: 'Synthetic task', reused: true };
+  const issue = { number: 7, url: 'https://github.com/example/sc/issues/7', state: 'open' as const, body: 'Synthetic task', reused: false };
   const evidence = { source: f.manifest.base, oracleHash: 'a'.repeat(64), contractHash: 'b'.repeat(64),
     outputHash: 'c'.repeat(64), environment: 'linux-portable-synthetic', outcome: 'failed' as const };
   const failure = { ...evidence, path: 'desktop/src/providers/json.ts', problem: 'Existing contract fails',

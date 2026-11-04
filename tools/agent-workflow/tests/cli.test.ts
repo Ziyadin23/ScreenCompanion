@@ -82,12 +82,16 @@ test('status and reports never start a missing run or disclose raw private state
   const manifest = makeManifest({ repository: 'github.com/example/sc', root,
     commonDir: join(root, '.git'), base: git('rev-parse', 'HEAD').trim(), scope: 'providers-json' });
   const store = new RunStore(state, manifest); store.admit(manifest);
-  store.update(manifest.id, { data: { rawWorkerOutput: 'SYNTHETIC_PRIVATE_CONTENT', privatePath: root } });
+  store.update(manifest.id, { status: 'awaiting_input', data: { rawWorkerOutput: 'SYNTHETIC_PRIVATE_CONTENT',
+    privatePath: root, roundHistory: [{ number: 0, reason: 'synthetic_failed_check' }] } });
   store.close();
   for (const command of ['status', 'report']) {
     const result = invoke(root, command, manifest.id, '--state-dir', state);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).status, 'ready');
+    assert.equal(JSON.parse(result.stdout).status, 'awaiting_input');
+    assert.equal(JSON.parse(result.stdout).retryCount, 1);
+    assert.equal(JSON.parse(result.stdout).interventionRequired, true);
+    assert.equal(JSON.parse(result.stdout).interventionCount, null);
     assert.equal(result.stdout.includes('SYNTHETIC_PRIVATE_CONTENT'), false);
     assert.equal(result.stdout.includes(root), false);
   }

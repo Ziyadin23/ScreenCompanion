@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -84,6 +84,39 @@ test('parses strict role results in separate fresh prompts and read-only request
   assert.equal(f.store.usage(f.manifest.id).workerInvocations, 5);
   assert.deepEqual(readdirSync(join(f.state, 'runs', f.manifest.id)).sort(), ['worker-inputs']);
   assert.deepEqual(readdirSync(join(f.state, 'runs', f.manifest.id, 'worker-inputs')), []);
+});
+
+test('issue outcome review passes the strict worker JSONL boundary with a source-bound reviewer', async t => {
+  const f = fixture(t, 'investigate', 1);
+  const identity = { issue: 2, title: 'Synthetic existing task', bodyHash: 'a'.repeat(64),
+    base: f.base, path: 'desktop/src/providers/json.ts', fingerprint: 'b'.repeat(64),
+    oracleHash: 'c'.repeat(64), contractHash: 'd'.repeat(64), ownerPath: null, taskId: null, taskHash: null };
+  const runner: WorkerProcessRunner = { run: async request => {
+    assert.ok(request.args.includes('--output-schema'));
+    assert.equal(request.args.includes('--bind'), false);
+    const inputs = join(f.state, 'runs', f.manifest.id, 'worker-inputs');
+    const file = readdirSync(inputs).find(name => name.endsWith('.json'))!;
+    const schema = JSON.parse(readFileSync(join(inputs, file), 'utf8')) as Record<string, unknown>;
+    const closed = (value: unknown): void => {
+      if (!value || typeof value !== 'object') return;
+      const row = value as Record<string, unknown>;
+      if (row.type === 'object') {
+        assert.equal(row.additionalProperties, false);
+        assert.deepEqual((row.required as string[]).slice().sort(),
+          Object.keys(row.properties as Record<string, unknown>).sort());
+      }
+      for (const child of Object.values(row)) closed(child);
+    };
+    closed(schema);
+    return output({ ...common, baseRevision: f.base, headRevision: f.base, findings: [],
+      issueOutcome: { identity, matched: true, complete: true } });
+  }, reconcile: async () => { throw new Error('Unexpected reconcile'); } };
+  const result = await runWorker({ store: f.store, runId: f.manifest.id, role: 'reviewer',
+    workspace: f.root, revision: f.base, reviewHead: f.base, issueOutcomeReview: true,
+    instructions: 'Compare the selected issue and frozen baseline task.' }, f.profile, runner);
+  assert.equal(result.status, 'complete');
+  assert.deepEqual((result.response as { issueOutcome?: unknown }).issueOutcome,
+    { identity, matched: true, complete: true });
 });
 
 test('rejects authority fields, malformed or truncated JSONL, failures and output excess as observed attempts', async t => {

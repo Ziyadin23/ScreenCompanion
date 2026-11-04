@@ -13,7 +13,8 @@ import type { IntegrationTransport } from '../src/integration.js';
 import type { WorkerRequest, WorkerResult } from '../src/worker.js';
 
 type Row = Record<string, unknown>;
-async function fixture(t: { after(fn: () => void): void }, failedRecord = false) {
+async function fixture(t: { after(fn: () => void): void }, failedRecord = false, reuseIssue = false,
+  remainingAcceptance = false, staleIssueBeforePublication = false) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-graph-e2e-')), root = join(directory, 'repo'); mkdirSync(root);
   const git = (workspace: string, ...args: string[]) => execFileSync('/usr/bin/git', ['-C', workspace,
     '-c', 'user.name=Synthetic fixture', '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
@@ -27,7 +28,8 @@ async function fixture(t: { after(fn: () => void): void }, failedRecord = false)
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
   const work = join(directory, 'work'), sourceMerge = 'a'.repeat(40), recordHead = 'b'.repeat(40), recordMerge = 'c'.repeat(40);
   let main = manifest.base, sourceHead = '', sourceReady = false, recordReady = false, sourceAckLost = true;
-  let sourcePuts = 0, recordPuts = 0, closed = 0, writes = 0, orca: Row | null = null, recordContent = '';
+  let sourcePuts = 0, recordPuts = 0, closed = 0, writes = 0, issueCreates = 0,
+    orca: Row | null = null, recordContent = '';
   const issues: Row[] = [], pulls: Row[] = [], refs = new Map<string, string>();
   const prefix = '/repos/example/sc';
   const checks = (head: string) => {
@@ -47,9 +49,23 @@ async function fixture(t: { after(fn: () => void): void }, failedRecord = false)
     if (endpoint.includes('/rulesets?')) return [];
     if (endpoint === `${prefix}/branches/main`) return { commit: { sha: main } };
     if (endpoint.startsWith(`${prefix}/branches/`)) return { commit: { sha: sourceHead } };
-    if (endpoint.includes('/issues?')) return issues;
+    if (endpoint.includes('/issues?')) {
+      if (reuseIssue && !issues.length) {
+        const finding = (store.get(manifest.id).data.findings as Row[])[0]!;
+        const evidence = finding.evidence as Row;
+        const problem = `Existing contract fails in README.md at baseline ${manifest.base.slice(0, 12)} ` +
+          `(oracle ${String(evidence.oracleHash).slice(0, 12)}, contract ${String(evidence.contractHash).slice(0, 12)})`;
+        issues.push({ number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open',
+          title: 'Existing narrow local guide correction',
+          body: `Problem: ${problem}\nScope: README.md\nAcceptance: The existing contract must pass frozen oracle ` +
+            `${evidence.oracleHash} and all affected checks.` +
+            (remainingAcceptance ? '\nAdditional acceptance: qualify a separate native display outcome.' : ''),
+          assignees: [{ login: 'Ziyadin23' }] });
+      }
+      return issues;
+    }
     if (method === 'POST' && endpoint === `${prefix}/issues`) {
-      const input = payload as Row, number = issues.length + 7;
+      issueCreates++; const input = payload as Row, number = issues.length + 7;
       const row = { ...input, number, html_url: `https://github.com/example/sc/issues/${number}`, state: 'open',
         assignees: [{ login: 'Ziyadin23' }] }; issues.push(row); return row;
     }
@@ -121,7 +137,17 @@ async function fixture(t: { after(fn: () => void): void }, failedRecord = false)
       if (request.role === 'reproducer') return response(request, { ...common, reproduced: true, evidence: [], oracle: {
         kind: 'portable-node', contractPaths: ['docs/USER_GUIDE.md'], script: `import assert from 'node:assert/strict';import * as fs from 'node:fs';assert.match(fs.readFileSync('/workspace/README.md','utf8'),/docs\\/USER_GUIDE\\.md/);` } });
       if (request.role === 'planner') return response(request, { ...common, steps: [] });
-      if (request.role === 'implementer') { writes++; writeFileSync(join(work, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n'); return response(request, { ...common, changedPaths: ['README.md'] }); }
+      if (request.role === 'reviewer' && request.instructions.includes('Independently compare this existing issue')) {
+        const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1)) as Row;
+        return response(request, { ...common, baseRevision: manifest.base, headRevision: manifest.base,
+          findings: remainingAcceptance ? ['Issue retains another acceptance outcome.'] : [],
+          issueOutcome: { identity: detail.identity, matched: true, complete: !remainingAcceptance } });
+      }
+      if (request.role === 'implementer') {
+        writes++; writeFileSync(join(work, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');
+        if (staleIssueBeforePublication) issues[0]!.body = `${issues[0]!.body}\nAdditional outcome added after review.`;
+        return response(request, { ...common, changedPaths: ['README.md'] });
+      }
       return response(request, { ...common, baseRevision: manifest.base, headRevision: request.reviewHead, findings: [] });
     },
     // Explicitly synthetic verifier receipts for the fake API. Default real command routes are qualified separately.
@@ -146,7 +172,8 @@ async function fixture(t: { after(fn: () => void): void }, failedRecord = false)
         remote: 'https://github.com/example/sc.git', ref: `refs/heads/${options.frozen.branch}` }; }
   });
   return { manifest, store, actions, issues, pulls, readySource: () => { sourceReady = true; }, readyRecord: () => { recordReady = true; },
-    counts: () => ({ sourcePuts, recordPuts, closed, writes }), sourceMerge, recordMerge };
+    counts: () => ({ sourcePuts, recordPuts, closed, writes }), issueCreates: () => issueCreates,
+    sourceMerge, recordMerge };
 }
 
 test('complete synthetic graph resumes CI and lost merge acknowledgement through one final record and issue closure', async t => {
@@ -165,6 +192,39 @@ test('complete synthetic graph resumes CI and lost merge acknowledgement through
   assert.equal(f.store.repositoryIntegrationHold(), null);
   assert.equal((await executeRun(f.store, f.manifest.id, f.actions)).status, 'completed');
   assert.deepEqual(f.counts(), { sourcePuts: 1, recordPuts: 1, closed: 1, writes: 1 });
+});
+
+test('complete fake graph reuses one narrow issue and closes it after source and record postflight', async t => {
+  const f = await fixture(t, false, true);
+  f.readySource(); f.readyRecord();
+  let run = await executeRun(f.store, f.manifest.id, f.actions);
+  assert.equal(run.data.waitingFor, 'merge_outcome_unknown', JSON.stringify({ stage: run.stage, error: run.error }));
+  run = await executeRun(f.store, f.manifest.id, f.actions);
+  assert.equal(run.status, 'completed', JSON.stringify({ stage: run.stage, error: run.error, wait: run.data.waitingFor }));
+  assert.equal(f.issueCreates(), 0);
+  assert.equal(f.issues[0]?.state, 'closed');
+  assert.deepEqual(f.counts(), { sourcePuts: 1, recordPuts: 1, closed: 1, writes: 1 });
+  assert.equal((run.data.issueReceipts as { reused: boolean }[])[0]?.reused, true);
+});
+
+test('broad reused issue with remaining acceptance stops before writer or source integration', async t => {
+  const f = await fixture(t, false, true, true);
+  const run = await executeRun(f.store, f.manifest.id, f.actions);
+  assert.equal(run.status, 'awaiting_input');
+  assert.equal(run.error, 'issue_scope_review');
+  assert.equal(f.issueCreates(), 0);
+  assert.equal(f.pulls.length, 0);
+  assert.deepEqual(f.counts(), { sourcePuts: 0, recordPuts: 0, closed: 0, writes: 0 });
+  assert.equal(f.store.usage(f.manifest.id).writingTasks, 0);
+});
+
+test('reused issue edited after review stops before source PR and merge', async t => {
+  const f = await fixture(t, false, true, false, true);
+  const run = await executeRun(f.store, f.manifest.id, f.actions);
+  assert.equal(run.status, 'awaiting_input');
+  assert.equal(run.error, 'issue_scope_changed');
+  assert.equal(f.pulls.length, 0);
+  assert.deepEqual(f.counts(), { sourcePuts: 0, recordPuts: 0, closed: 0, writes: 1 });
 });
 
 test('failed synthetic record postflight publishes one incident, keeps the original issue open and blocks later integrations', async t => {

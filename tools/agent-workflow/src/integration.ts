@@ -5,6 +5,7 @@ import { assertFrozenSource, selectVerificationCommands,
   type CandidateOptions, type FrozenCandidate, type VerificationReceipt } from './candidate.js';
 import { decideMerge } from './policy.js';
 import { GithubClient, type PullRequestReceipt, type IssueReceipt, type ChecksReceipt } from './github.js';
+import { baselineFile } from './intake.js';
 import type { PlanBundle } from './ownership.js';
 import type { RunStore } from './store.js';
 
@@ -76,12 +77,29 @@ function requireSavedEvidence(request: IntegrationRequest): void {
   if (manifest.delivery !== 'merge-eligible' || run.cancelRequested) throw new WorkflowError('delivery_denied', 'Run cannot integrate automatically.', 2);
   if (!store.ownsCoordinator(runId)) throw new WorkflowError('coordinator_unowned', 'Current coordinator ownership is required.', 2);
   const issues = run.data.issueReceipts;
+  const plan = run.data.plan as PlanBundle | undefined;
   if (!Array.isArray(issues) || !issues.some(row => digest(row) === digest(issue)) ||
       (manifest.issue !== undefined && issue.number !== manifest.issue) || issue.state !== 'open' ||
       issue.url !== `https://${manifest.repository}/issues/${issue.number}` ||
       pr.head !== frozen.head || pr.base !== manifest.branch || pr.state !== 'open' ||
       pr.url !== `https://${manifest.repository}/pull/${pr.number}`)
     throw new WorkflowError('stale_evidence', 'Issue or pull request identity changed.', 2);
+  if (!plan || (plan.provenance.kind === 'local' && plan.owner.taskIds !== undefined &&
+      digest(plan.owner.taskIds) !== digest(['1.1', '1.2', '1.3'])) ||
+      (plan.provenance.kind === 'baseline' && digest(plan.owner.taskIds) !==
+        digest(object(run.data.existingOwner ?? {}).taskIds)))
+    throw new WorkflowError('stale_evidence', 'Selected task scope changed before source integration.', 2);
+  if (issue.reused) {
+    const scope = object(run.data.issueOutcome ?? {});
+    const baseline = Array.isArray(run.data.findings) ? run.data.findings.find(raw =>
+      raw && typeof raw === 'object' && (raw as Json).state === 'confirmed') as Json | undefined : undefined;
+    if (!baseline || scope.issue !== issue.number || scope.bodyHash !== digest(issue.body) ||
+        scope.base !== manifest.base || scope.path !== baseline.path || scope.fingerprint !== baseline.fingerprint ||
+        scope.oracleHash !== object(baseline.evidence).oracleHash ||
+        scope.contractHash !== object(baseline.evidence).contractHash ||
+        scope.matched !== true || scope.complete !== true)
+      throw new WorkflowError('issue_scope_review', 'Reused issue scope is not verified for this source merge.', 2);
+  }
   if (digest(run.data.verification) !== digest(verification) || digest(run.data.reviewReceipt) !== digest(review) ||
       digest(run.data.frozen) !== digest(frozen) || digest(run.data.pull) !== digest(pr))
     throw new WorkflowError('stale_evidence', 'Evidence must match the saved coordinator record.', 2);
@@ -171,6 +189,12 @@ export async function integrateCandidate(request: IntegrationRequest): Promise<I
   const { store, runId, frozen } = request, manifest = store.get(runId).manifest;
   const api = request.transport ?? integrationApi, base = prefix(manifest);
   const client = new GithubClient(store, runId, (method, endpoint, body) => api(method, endpoint, body));
+  if (request.issue.reused) {
+    const currentIssue = await client.selectedIssue(request.issue.number);
+    const scope = object(store.get(runId).data.issueOutcome ?? {});
+    if (currentIssue.body !== request.issue.body || currentIssue.title !== scope.title)
+      return wait('issue_scope_changed');
+  }
   const key = `merge:${request.pr.number}:${frozen.head}:${manifest.base}`;
   const observed = store.observedEffect(runId, key);
   if (observed) {
@@ -298,17 +322,22 @@ export async function observePostflight(request: { store: RunStore; runId: strin
 export interface FinalizationPreparation { path: string; beforeHash: string; content: string; hash: string;
   branch: string; marker: string; sourceHead: string; mergeHead: string }
 export function prepareFinalization(request: { manifest: Manifest; taskPath: string; template: string;
-  frozenTask: string; merge: MergeReceipt; postflight: Postflight }): FinalizationPreparation {
+  frozenTask: string; merge: MergeReceipt; postflight: Postflight; taskIds?: string[] }): FinalizationPreparation {
   const { manifest, taskPath, template, frozenTask, merge, postflight } = request;
   if (!/^openspec\/changes\/[a-z0-9][a-z0-9-]*\/tasks\.md$/.test(taskPath) || template !== frozenTask ||
       merge.repository !== manifest.repository || merge.base !== manifest.base || !sha.test(merge.head) ||
       postflight.state !== 'ready' || postflight.head !== merge.mergeHead || !hash.test(postflight.checksHash))
     throw new WorkflowError('finalization_wait', 'Final record requires the exact saved task template and passing postflight.', 2);
   const lines = template.split('\n');
-  const pending = lines.filter(line => /^- \[ \] 1\.[123] /.test(line));
-  if (pending.length !== 3 || lines.some(line => /^- \[[ x]\] /.test(line) && !/^- \[ \] 1\.[123] /.test(line)))
-    throw new WorkflowError('finalization_template_changed', 'Task template exceeds the known generated record.', 2);
-  const content = lines.map(line => /^- \[ \] 1\.[123] /.test(line) ? line.replace('[ ]', '[x]') : line).join('\n') +
+  const taskIds = request.taskIds ?? ['1.1', '1.2', '1.3'];
+  if (!taskIds.length || new Set(taskIds).size !== taskIds.length ||
+      taskIds.some(id => !/^\d+(?:\.\d+)*$/.test(id)) ||
+      taskIds.some(id => lines.filter(line => line.startsWith(`- [ ] ${id} `)).length !== 1) ||
+      (!request.taskIds && lines.some(line => /^- \[[ x]\] /.test(line) &&
+        !taskIds.some(id => line.startsWith(`- [ ] ${id} `)))))
+    throw new WorkflowError('finalization_template_changed', 'Selected task does not match the saved owner record.', 2);
+  const content = lines.map(line => taskIds.some(id => line.startsWith(`- [ ] ${id} `)) ?
+    line.replace('[ ]', '[x]') : line).join('\n') +
     `\n## Integration checkpoint\n\nSource head: ${merge.head}\nSquash head: ${merge.mergeHead}\n` +
     `Postflight checks: ${postflight.checksHash}\nSource PR: ${merge.prUrl}\n`;
   const marker = digest({ repository: manifest.repository, taskPath, head: merge.head, squash: merge.mergeHead, kind: 'finalization' });
@@ -337,7 +366,7 @@ export function prepareObservedFinalization(request: { store: RunStore; runId: s
     hold.reason === 'record_postflight_pending' && hold.head === record?.recordMerge &&
       record?.sourceMerge === merge.mergeHead && publication.marker === record.marker);
   if (digest(run.data.integration) !== digest(merge) || digest(run.data.postflight) !== digest(postflight) ||
-      digest(run.data.plan) !== digest(plan) || plan.provenance.kind !== 'local' ||
+      digest(run.data.plan) !== digest(plan) || !['local', 'baseline'].includes(plan.provenance.kind) ||
       plan.provenance.source !== manifest.base ||
       (manifest.issue !== undefined && plan.provenance.issue !== manifest.issue) ||
       !Array.isArray(run.data.issueReceipts) ||
@@ -348,14 +377,19 @@ export function prepareObservedFinalization(request: { store: RunStore; runId: s
       }) || !run.data.taskAuthority || object(run.data.taskAuthority).issue !== plan.provenance.issue ||
       object(run.data.taskAuthority).fingerprint !== plan.provenance.fingerprint ||
       plan.owner.path !== `openspec/changes/${plan.owner.change}/tasks.md` ||
+      (plan.provenance.kind === 'local' && plan.owner.taskIds !== undefined &&
+        digest(plan.owner.taskIds) !== digest(['1.1', '1.2', '1.3'])) ||
+      (plan.provenance.kind === 'baseline' && digest(plan.owner.taskIds) !==
+        digest(object(run.data.existingOwner ?? {}).taskIds)) ||
       (hold && !ownRecordHold))
     throw new WorkflowError('finalization_wait', 'Saved plan, merge and postflight do not authorize finalization.', 2);
-  const template = plan.files.find(file => file.path === plan.owner.path);
-  if (!template || template.hash !== digest(template.content) || template.hash !== plan.owner.hash)
+  const template = plan.provenance.kind === 'baseline' ? baselineFile(manifest, plan.owner.path) :
+    plan.files.find(file => file.path === plan.owner.path)?.content;
+  if (!template || digest(template) !== plan.owner.hash)
     throw new WorkflowError('finalization_template_changed', 'Saved task template is invalid.', 2);
   const frozenTask = readFrozenTask(manifest, merge, plan.owner.path);
-  const prepared = prepareFinalization({ manifest, taskPath: plan.owner.path, template: template.content,
-    frozenTask, merge, postflight });
+  const prepared = prepareFinalization({ manifest, taskPath: plan.owner.path, template,
+    frozenTask, merge, postflight, taskIds: plan.owner.taskIds });
   if (hold && (digest(run.data.finalization) !== digest(prepared) || publication?.marker !== prepared.marker))
     throw new WorkflowError('finalization_wait', 'Pending record does not match the observed source.', 2);
   return prepared;

@@ -19,8 +19,10 @@ const targets: Record<string, Record<string, string>> = {
 };
 for (const map of Object.values(targets)) Object.freeze(map);
 Object.freeze(targets);
-export const POLICY_CONFIG = Object.freeze({version: 1, targets, productFiles: 8, productBytes: 64_000,
+export const POLICY_CONFIG = Object.freeze({version: 2, targets, productFiles: 8, productBytes: 64_000,
   administrativeFiles: 8, administrativeBytes: 64_000,
   parser: 'pr-only-until-proven-purity-policy', parserAutoMerge: false,
   verification: 'read-only-components-v2',
-  records: 'exact-coordinator-digests'});
+  records: 'exact-coordinator-digests',
+  issueQualification: 'title-body-baseline-finding-task-bound-review-v2',
+  finalization: 'selected-task-and-reused-issue-proof-v2'});

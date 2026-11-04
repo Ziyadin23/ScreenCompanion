@@ -3,6 +3,7 @@ import { GithubClient, type ChecksReceipt, type IssueReceipt } from './github.js
 import { integrationApi, prepareFinalization, type FinalizationPreparation, type IntegrationTransport,
   type MergeReceipt, type Postflight } from './integration.js';
 import type { PlanBundle } from './ownership.js';
+import { baselineFile } from './intake.js';
 import type { RunStore } from './store.js';
 
 type Json = Record<string, unknown>;
@@ -58,18 +59,23 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   if (!merge || !postflight || !plan || !issue || digest(data.finalization) !== digest(preparation) ||
       merge.repository !== manifest.repository || merge.base !== manifest.base ||
       postflight.state !== 'ready' || postflight.head !== merge.mergeHead ||
-      plan.provenance.kind !== 'local' || plan.provenance.source !== manifest.base ||
+      !['local', 'baseline'].includes(plan.provenance.kind) || plan.provenance.source !== manifest.base ||
       plan.owner.path !== preparation.path || plan.owner.path !== `openspec/changes/${plan.owner.change}/tasks.md` ||
+      (plan.provenance.kind === 'local' && plan.owner.taskIds !== undefined &&
+        digest(plan.owner.taskIds) !== digest(['1.1', '1.2', '1.3'])) ||
+      (plan.provenance.kind === 'baseline' && digest(plan.owner.taskIds) !==
+        digest(object(data.existingOwner ?? {}).taskIds)) ||
       data.taskAuthority === undefined || object(data.taskAuthority).issue !== plan.provenance.issue ||
       object(data.taskAuthority).fingerprint !== plan.provenance.fingerprint ||
       issue.number !== plan.provenance.issue || issue.state !== 'open' ||
       issue.url !== `https://${manifest.repository}/issues/${issue.number}` ||
       (manifest.issue !== undefined && manifest.issue !== issue.number))
     throw new WorkflowError('finalization_stale', 'Saved finalization scope or source evidence changed.', 2);
-  const template = plan.files.find(file => file.path === preparation.path);
-  if (!template || template.hash !== digest(template.content) || template.hash !== plan.owner.hash ||
-      digest(prepareFinalization({ manifest, taskPath: preparation.path, template: template.content,
-        frozenTask: template.content, merge, postflight })) !== digest(preparation))
+  const template = plan.provenance.kind === 'baseline' ? baselineFile(manifest, preparation.path) :
+    plan.files.find(file => file.path === preparation.path)?.content;
+  if (!template || digest(template) !== plan.owner.hash ||
+      digest(prepareFinalization({ manifest, taskPath: preparation.path, template,
+        frozenTask: template, merge, postflight, taskIds: plan.owner.taskIds })) !== digest(preparation))
     throw new WorkflowError('finalization_stale', 'Saved record differs from the prepared owner update.', 2);
   const trustedFailure = object(object(data.trustedPlan ?? {}).failure ?? {});
   const failurePath = typeof trustedFailure.path === 'string' ? trustedFailure.path : '';
@@ -77,18 +83,25 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   const issueMarker = `<!-- sc-agent-finding:${plan.provenance.fingerprint} -->`;
   const observedIssue = store.observedEffect(runId, `issue:${digest(issueMarker)}:${manifest.base}`);
   const publishedIssue = observedIssue?.receipt as IssueReceipt | undefined;
+  const reusedScope = object(data.issueOutcome ?? {});
+  const newIssueProof = issue.reused !== true && observedIssue?.kind === 'github_issue' &&
+    observedIssue.requestHash === digest({ title: `${problem?.slice(0, 90)} (${failurePath})`,
+      body: issue.body, regressionEvidence: null }) &&
+    publishedIssue?.body === issue.body && publishedIssue?.number === issue.number &&
+    publishedIssue?.url === issue.url;
+  const reusedIssueProof = issue.reused === true && reusedScope.issue === issue.number &&
+    reusedScope.bodyHash === digest(issue.body) && reusedScope.base === manifest.base &&
+    reusedScope.path === failurePath && reusedScope.fingerprint === plan.provenance.fingerprint &&
+    reusedScope.oracleHash === trustedFailure.oracleHash &&
+    reusedScope.contractHash === trustedFailure.contractHash &&
+    reusedScope.ownerPath === (plan.provenance.kind === 'baseline' ? plan.owner.path : null) &&
+    reusedScope.taskId === (plan.provenance.kind === 'baseline' ? plan.owner.taskIds?.[0] : null) &&
+    reusedScope.taskHash === (plan.provenance.kind === 'baseline' ? plan.owner.hash : null) &&
+    reusedScope.matched === true && reusedScope.complete === true;
   if (trustedFailure.fingerprint !== plan.provenance.fingerprint ||
       !manifest.paths.some(path => path.endsWith('/') ? failurePath.startsWith(path) : failurePath === path) ||
-      typeof issue.body !== 'string' ||
-      !issue.body.startsWith(`${issueMarker}\n`) ||
-      !issue.body.includes(`\nScope: ${failurePath}\n`) ||
-      !issue.body.includes(`\nBaseline: ${manifest.base} (`) ||
-      !issue.body.includes(`\nPlanning owner: ${preparation.path} (`) ||
-      !problem || observedIssue?.kind !== 'github_issue' ||
-      observedIssue.requestHash !== digest({ title: `${problem.slice(0, 90)} (${failurePath})`,
-        body: issue.body, regressionEvidence: null }) ||
-      publishedIssue?.body !== issue.body || publishedIssue?.number !== issue.number ||
-      publishedIssue?.url !== issue.url)
+      typeof issue.body !== 'string' || !issue.body.includes(failurePath) ||
+      (!newIssueProof && !reusedIssueProof))
     return wait('issue_scope_review');
   const hold = store.repositoryIntegrationHold();
   if (hold && hold.runId !== runId) return wait('repository_integration_hold');
@@ -105,10 +118,11 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
     (method, endpoint, body) => api(method, endpoint, body));
   const issueRemote = await client.selectedIssue(number(issue.number), 'any');
   if (!['open', 'closed'].includes(String(issueRemote.state)) || issueRemote.body !== issue.body ||
+      (issue.reused && issueRemote.title !== reusedScope.title) ||
       !Array.isArray(issueRemote.assignees) ||
       !issueRemote.assignees.some(raw => object(raw).login === 'Ziyadin23')) return wait('issue_scope_review');
   const source = object(await api('GET', `${root}/contents/${preparation.path}?ref=${merge.head}`));
-  if (decoded(source) !== template.content || digest(decoded(source)) !== preparation.beforeHash)
+  if (decoded(source) !== template || digest(decoded(source)) !== preparation.beforeHash)
     return wait('source_record_changed');
   const main = identity(object(object(await api('GET', `${root}/branches/${manifest.branch}`)).commit).sha);
   const existing = data.recordPublication as Json | undefined;
@@ -118,7 +132,7 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   const rootCommit = object(await api('GET', `${root}/git/commits/${merge.mergeHead}`));
   const baseTree = identity(object(rootCommit.tree).sha);
   const atBase = object(await api('GET', `${root}/contents/${preparation.path}?ref=${merge.mergeHead}`));
-  if (decoded(atBase) !== template.content) return wait('record_base_changed');
+  if (decoded(atBase) !== template) return wait('record_base_changed');
   const stamp = typeof existing?.stamp === 'string' ? existing.stamp : new Date().toISOString();
   if (!existing) store.update(runId, { data: { ...data,
     recordPublication: { marker: preparation.marker, base: merge.mergeHead, stamp },
@@ -285,8 +299,9 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   const canonical = object(await api('GET', `${root}/issues/${issue.number}`));
   if (!['open', 'closed'].includes(String(canonical.state)) || canonical.body !== issue.body ||
       !Array.isArray(canonical.assignees) || !canonical.assignees.some(raw => object(raw).login === 'Ziyadin23') ||
-      typeof issue.body !== 'string' || !issue.body.includes(plan.provenance.fingerprint) ||
-      !issue.body.includes(preparation.path)) return wait('issue_scope_review', prNumber);
+      (issue.reused ? canonical.title !== reusedScope.title || !reusedIssueProof :
+        typeof issue.body !== 'string' || !issue.body.includes(plan.provenance.fingerprint) ||
+        !issue.body.includes(preparation.path))) return wait('issue_scope_review', prNumber);
   const closeKey = `record-issue-close:${preparation.marker}:${issue.number}`;
   try {
     await store.effect(runId, closeKey, 'github_record_issue_close', { issue: issue.number, body: issue.body,

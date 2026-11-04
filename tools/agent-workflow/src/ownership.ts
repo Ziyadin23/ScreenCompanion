@@ -13,7 +13,7 @@ const exec = promisify(execFile);
 type Json = Record<string, unknown>;
 export interface PlanFile { path: string; content: string; hash: string }
 export interface PlanBundle {
-  owner: { change: string; path: string; provenance: string; hash: string };
+  owner: { change: string; path: string; provenance: string; hash: string; taskIds?: string[] };
   provenance: { kind: 'local' | 'baseline'; source: string; fingerprint: string; issue: number };
   files: PlanFile[];
 }
@@ -57,25 +57,34 @@ export function resolveExistingOwner(request: { manifest: Manifest; issue: Issue
   const owner = planningOwner(manifest, path);
   if (!owner || owner.path !== path)
     fail('owner_unavailable', 'Existing owner is not present at the frozen baseline.');
-  const task = owner.pending.includes(taskId) && baselineFile(manifest, path).split('\n')
+  const content = baselineFile(manifest, path);
+  const task = owner.pending.includes(taskId) && content.split('\n')
     .find(value => value.startsWith(`- [ ] ${taskId} `));
   const taskMention = new RegExp(`\\btask\\s+${taskId.replaceAll('.', '\\.')}\\b(?!\\.\\d)`, 'i');
-  if (!task || !task.includes(issue.url) || typeof issue.body !== 'string' ||
-      !issue.body.includes(path) || !issue.body.includes(owner.change) ||
-      !taskMention.test(issue.body.replaceAll('`', '')))
+  const generated = /^fix-confirmed-[a-f0-9]{12}$/.test(owner.change) && taskId === '1.1';
+  const generatedIds = ['1.1', '1.2', '1.3'];
+  const generatedRows = generatedIds.map(id => content.split('\n').find(value => value.startsWith(`- [ ] ${id} `)));
+  const generatedMarker = /<!-- sc-agent-finding:([a-f0-9]{64}) -->/.exec(issue.body)?.[1];
+  const generatedMatch = generated && generatedRows.every(Boolean) && generatedMarker?.startsWith(owner.change.slice(-12)) &&
+    content.includes(`Issue: ${issue.url}; finding ${generatedMarker}.`) &&
+    issue.body.includes(`Planning owner: ${path}`);
+  if (!task || typeof issue.body !== 'string' || !issue.body.includes(path) ||
+      !(generatedMatch || task.includes(issue.url) && issue.body.includes(owner.change) &&
+        taskMention.test(issue.body.replaceAll('`', ''))))
     fail('owner_mismatch', 'Issue does not link the pending OpenSpec task group.');
   return { change: owner.change, path: owner.path, provenance: owner.provenance, hash: owner.hash,
-    taskId, taskText: task.trim(), execution: 'read-only' as const };
+    taskId, taskIds: generatedMatch ? generatedIds : [taskId],
+    taskText: generatedMatch ? generatedRows.join('\n') : task.trim(), execution: 'read-only' as const };
 }
 export function preparePlan(request: PlanRequest): PlanBundle {
   const { manifest, issue, failure } = request;
   issueIdentity(manifest, issue); validateFailure(manifest, failure);
   if (request.existingOwner) {
     const owner = resolveExistingOwner({ manifest, issue, existingOwner: request.existingOwner });
-    if (!owner.taskText.includes(failure.path) || !issue.body.includes(failure.path) ||
-        !issue.body.includes(failure.fingerprint))
+    if (!owner.taskText.includes(failure.path) || !issue.body.includes(failure.path))
       fail('owner_mismatch', 'Confirmed bug does not match the linked OpenSpec task.');
-    return { owner: { change: owner.change, path: owner.path, provenance: owner.provenance, hash: owner.hash },
+    return { owner: { change: owner.change, path: owner.path, provenance: owner.provenance, hash: owner.hash,
+      taskIds: owner.taskIds },
       provenance: { kind: 'baseline', source: manifest.base, fingerprint: failure.fingerprint, issue: issue.number },
       files: [] };
   }
@@ -95,12 +104,12 @@ export function preparePlan(request: PlanRequest): PlanBundle {
   const files = [
     ['proposal.md', `# Confirmed bug correction\n\n${details}\n\n## Why\n\n${problem}.\n\n## What changes\n\nCorrect ${failure.path} to satisfy the existing contract.\n\n## Scope\n\nOnly ${manifest.paths.join(', ')}. Existing behavior is the authority; this plan adds no requirement.\n`],
     ['design.md', `# Design\n\nUse the baseline contract and frozen reproducer. ${reproduction}.\n\nKeep the correction inside ${failure.path}; preserve all unrelated behavior. Re-run the independent oracle and affected checks.\n`],
-    ['tasks.md', `# Tasks\n\n## 1. Correct the confirmed existing-contract bug\n\n- [ ] 1.1 Reproduce the confirmed failure on baseline ${manifest.base} using oracle ${failure.oracleHash}; record the failing result.\n- [ ] 1.2 Correct ${failure.path} for the existing contract: ${acceptance}; verify the frozen reproducer passes.\n- [ ] 1.3 Run affected checks and independent review; record source and environment limits.\n\nPlanner suggestions (non-authoritative):\n${steps.map(step => `- ${line(step.text, 160)}`).join('\n') || '- None'}\n`],
+    ['tasks.md', `# Tasks\n\nIssue: ${issue.url}; finding ${failure.fingerprint}.\n\n## 1. Correct the confirmed existing-contract bug\n\n- [ ] 1.1 Reproduce the confirmed failure on baseline ${manifest.base} using oracle ${failure.oracleHash}; record the failing result.\n- [ ] 1.2 Correct ${failure.path} for the existing contract: ${acceptance}; verify the frozen reproducer passes.\n- [ ] 1.3 Run affected checks and independent review; record source and environment limits.\n\nPlanner suggestions (non-authoritative):\n${steps.map(step => `- ${line(step.text, 160)}`).join('\n') || '- None'}\n`],
     ['.openspec.yaml', 'schema: spec-driven\nskip_specs: true\n']
   ] as const;
   const planFiles = files.map(([suffix, content]) => ({ path: `${prefix}/${suffix}`, content, hash: digest(content) }));
   return { owner: { change, path: `${prefix}/tasks.md`, provenance: manifest.base,
-    hash: planFiles.find(file => file.path.endsWith('/tasks.md'))!.hash },
+    hash: planFiles.find(file => file.path.endsWith('/tasks.md'))!.hash, taskIds: ['1.1', '1.2', '1.3'] },
     provenance: { kind: 'local', source: manifest.base, fingerprint: failure.fingerprint, issue: issue.number },
     files: planFiles };
 }
@@ -122,7 +131,7 @@ function cleanWorkspace(manifest: Manifest, workspace: string, revision: string,
     fail('dirty_workspace', 'Workspace has changes outside this operation.');
 }
 export function materializePlan(request: { plan: PlanBundle; manifest: Manifest; allocation: WorkspaceReceipt;
-  revision: string; trusted: Pick<PlanRequest, 'issue' | 'failure' | 'steps'> }):
+  revision: string; trusted: Pick<PlanRequest, 'issue' | 'failure' | 'steps' | 'existingOwner'> }):
   { files: { path: string; hash: string }[]; provenance: PlanBundle['provenance'] } {
   const { plan, manifest, allocation, revision } = request;
   const workspace = allocation.path;
@@ -133,6 +142,12 @@ export function materializePlan(request: { plan: PlanBundle; manifest: Manifest;
       allocation.branch !== `sc-agent/issue-${allocation.issue}-${manifest.id.slice(0, 8)}` ||
       allocation.marker !== `sc-agent:${manifest.id}:issue-${allocation.issue}`)
     fail('workspace_conflict', 'Plan transfer requires this run’s allocated worktree.');
+  if (plan.provenance.kind === 'baseline') {
+    cleanWorkspace(manifest, workspace, revision, allocation.branch);
+    if (plan.owner.hash !== digest(baselineFile(manifest, plan.owner.path)) || plan.files.length !== 0)
+      fail('owner_mismatch', 'Baseline owner changed before apply.');
+    return { files: [], provenance: plan.provenance };
+  }
   if (plan.provenance.source !== manifest.base || revision !== manifest.base ||
       plan.provenance.kind !== 'local' || !plan.owner.change.startsWith('fix-confirmed-') ||
       plan.files.length !== 4) fail('plan_scope_denied', 'Only a local fixed-template plan may be transferred.');

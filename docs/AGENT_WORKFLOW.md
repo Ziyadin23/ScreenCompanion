@@ -82,6 +82,11 @@ through the coordinator's existing GitHub access. It searches open and closed
 work, reconciles uncertain creates and retains local/pending planning provenance.
 Issue creation does not start an implementer. Existing native Linux qualification
 owners remain open and require their separately scoped target capability.
+For a reused issue, a fresh read-back and independent source-bound review must
+match its full title/body, confirmed finding and frozen oracle/contract. The
+review also checks that this correction satisfies the issue's entire acceptance
+scope. An unrelated or broader issue waits before writing; issue prose cannot
+grant a wider path or delivery permission.
 
 ## Delegated correction and delivery
 
@@ -91,6 +96,11 @@ allocates an issue-linked Orca worktree with host setup/auto-launch skipped, and
 explicitly transfers that plan to a fresh apply session. Planning does not approve
 new requirements or expand paths. An existing platform task with unavailable
 target evidence remains a wait under its original owner.
+For a supported existing portable or documentation task, the coordinator verifies
+the pending baseline task and issue link, keeps that change, and dispatches a
+separate fresh apply worker for the selected task. It does not create a second
+change or copy a local template over the tracked owner. Generated narrow plans
+record their issue link and task IDs so a later matching run can reuse them.
 
 Application setup runs the documented `npm --prefix desktop ci` inside a
 credential-free sandbox. Its successful receipt and a dependency fingerprint are
@@ -122,6 +132,10 @@ currently pinned to PR-only pending a proven purity policy. Source merge S,
 main postflight and publication of the same owner's final task record are separate
 states; unfinished finalization keeps the issue open. No new implementation task
 is created to record that finalization.
+Finalization checks only the selected task rows proved by this run and preserves
+other task text and acceptance. A reused issue uses its verified existing-issue
+receipt for closure; a newly published issue retains its separate publication
+receipt requirement. Both paths recheck the exact remote issue before closure.
 
 ## Codex execution boundary
 

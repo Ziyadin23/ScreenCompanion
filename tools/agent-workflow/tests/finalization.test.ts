@@ -31,7 +31,7 @@ async function fixture(t: { after(fn: () => void): void }, reviewCount = 0) {
   const plan = { owner: { change: 'fix-confirmed-eeeeeeeeeeee', path, provenance: manifest.base,
     hash: digest(template) }, provenance: { kind: 'local' as const, source: manifest.base,
     fingerprint, issue: 30 }, files: [{ path, content: template, hash: digest(template) }] };
-  const issue = { number: 30, html_url: 'https://github.com/example/sc/issues/30',
+  const issue = { number: 30, html_url: 'https://github.com/example/sc/issues/30', title: 'Confirmed bug (README.md)',
     state: 'open', body: issueBody, assignees: [{ login: 'Ziyadin23' }] };
   const issueReceipt = { number: 30, url: issue.html_url, state: 'open' as const, body: issueBody, reused: false };
   const issueMarker = `<!-- sc-agent-finding:${fingerprint} -->`;
@@ -39,7 +39,8 @@ async function fixture(t: { after(fn: () => void): void }, reviewCount = 0) {
     { title: 'Confirmed bug (README.md)', body: issueBody, regressionEvidence: null },
     { execute: async () => issueReceipt, reconcile: async () => null });
   store.update(manifest.id, { data: { integration: merge, postflight, plan, finalization: preparation,
-    taskAuthority: { issue: 30, fingerprint }, trustedPlan: { failure: { fingerprint, path: 'README.md' } },
+    taskAuthority: { issue: 30, fingerprint }, trustedPlan: { failure: { fingerprint, path: 'README.md',
+      oracleHash: '4'.repeat(64), contractHash: '5'.repeat(64) } },
     issueReceipts: [issueReceipt] } });
   let main = squash, pr: Record<string, unknown> | null = null, ref: string | null = null;
   let gate: 'success' | 'pending' = 'success', postflightGate: 'success' | 'pending' | 'failure' = 'success',
@@ -145,6 +146,53 @@ test('publishes one exact owner record with server approval count zero and no co
     preparation: f.preparation, transport: f.transport });
   assert.equal(replay.state, 'done');
   assert.deepEqual(f.counts(), { refPosts: 1, prPosts: 1, merges: 1, closes: 1 });
+});
+
+test('reused narrow issue finalizes from its verified scope receipt without a new issue effect', async t => {
+  const f = await fixture(t);
+  const body = 'Existing correction for README.md; acceptance: preserve the one local guide destination.';
+  f.issue.body = body;
+  f.issue.title = 'Correct local guide destination';
+  const data = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...data,
+    issueReceipts: [{ number: 30, url: f.issue.html_url, state: 'open', body, reused: true }],
+    issueOutcome: { issue: 30, title: f.issue.title, bodyHash: digest(body), base: f.manifest.base,
+      path: 'README.md', fingerprint: 'e'.repeat(64), oracleHash: '4'.repeat(64),
+      contractHash: '5'.repeat(64), ownerPath: null, taskId: null,
+      taskHash: null, matched: true, complete: true } } });
+  const result = await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport });
+  assert.equal(result.state, 'done');
+  assert.deepEqual(f.counts(), { refPosts: 1, prPosts: 1, merges: 1, closes: 1 });
+});
+
+test('reused issue with remaining acceptance waits before record publication', async t => {
+  const f = await fixture(t);
+  const data = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...data,
+    issueReceipts: [{ number: 30, url: f.issue.html_url, state: 'open', body: f.issue.body, reused: true }],
+    issueOutcome: { issue: 30, title: 'Broad outcome', bodyHash: digest(f.issue.body), base: f.manifest.base,
+      path: 'README.md', fingerprint: 'e'.repeat(64), oracleHash: '4'.repeat(64),
+      contractHash: '5'.repeat(64), ownerPath: null, taskId: null,
+      taskHash: null, matched: true, complete: false } } });
+  assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport }), { state: 'wait', reason: 'issue_scope_review' });
+  assert.deepEqual(f.counts(), { refPosts: 0, prPosts: 0, merges: 0, closes: 0 });
+});
+
+test('baseline finalization checks only the selected task and preserves other acceptance text', async t => {
+  const f = await fixture(t);
+  const owner = '# Tasks\n\n- [ ] 2.1 Correct README.md for issue #30.\n- [ ] 2.2 Qualify another outcome.\n\nAcceptance: retain other work.\n';
+  const result = prepareFinalization({ manifest: f.manifest, taskPath: path, template: owner,
+    frozenTask: owner, merge: f.store.get(f.manifest.id).data.integration as MergeReceipt,
+    postflight: f.store.get(f.manifest.id).data.postflight as Postflight, taskIds: ['2.1'] });
+  assert.match(result.content, /- \[x\] 2\.1/);
+  assert.match(result.content, /- \[ \] 2\.2 Qualify another outcome/);
+  assert.match(result.content, /Acceptance: retain other work/);
+  assert.throws(() => prepareFinalization({ manifest: f.manifest, taskPath: path, template: owner,
+    frozenTask: owner, merge: f.store.get(f.manifest.id).data.integration as MergeReceipt,
+    postflight: f.store.get(f.manifest.id).data.postflight as Postflight, taskIds: ['2.3'] }),
+  { code: 'finalization_template_changed' });
 });
 
 test('preserves a stricter server approval count of one', async t => {

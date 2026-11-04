@@ -128,7 +128,9 @@ function report(run: RunRecord, store: RunStore) {
       findings: Array.isArray(review.findings) ? review.findings.length : 0, verification: 'not_executed' } : null,
     postflight: ['ready', 'pending', 'failed'].includes(postflight?.state ?? '') ? postflight!.state : null,
     integrationHold: hold?.active === true ? { active: true, reason: safeCode(hold.reason) } : null,
+    retryCount: Array.isArray(run.data.roundHistory) ? run.data.roundHistory.length : 0,
     interventionCount: null,
+    interventionRequired: run.status === 'awaiting_input',
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
@@ -227,7 +229,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         `Issues: ${value.issues.map(issue => `#${issue.number}${issue.reused ? ' (reused)' : ''}`).join(', ') || 'none'}\n` +
         `PR: ${value.pull?.url ?? 'none'}\nSource merge: ${value.sourceMerge ?? 'none'}\nPostflight: ${value.postflight ?? 'not observed'}\n` +
         (value.review ? `Source inspection: ${value.review.findings} concerns; independent commands not executed\n` : '') +
-        `Next gate: ${value.waitingFor ?? 'none'}\nWorkers: ${value.usage.workerInvocations}; active ms: ${value.usage.activeMs}\n` +
+        `Next gate: ${value.waitingFor ?? 'none'}\nRepairs: ${value.retryCount}; intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
+        `Workers: ${value.usage.workerInvocations}; active ms: ${value.usage.activeMs}\n` +
         `Observed tokens: ${value.tokens.observedInput} input, ${value.tokens.observedOutput} output; complete: ${value.tokens.complete}\nCost: unknown\n` : JSON.stringify(value));
       return 0;
     }

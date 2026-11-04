@@ -78,12 +78,45 @@ test('existing baseline owner remains unchanged and plan does not launch impleme
     existingOwner: { path: 'openspec/changes/linux-platform-support/tasks.md', taskId: '2.1' } });
   assert.equal(plan.files.length, 0);
   assert.equal(plan.owner.path, 'openspec/changes/linux-platform-support/tasks.md');
+  assert.deepEqual(plan.owner.taskIds, ['2.1']);
   assert.equal(readFileSync(join(f.root, 'openspec/changes/linux-platform-support/tasks.md'), 'utf8'), before);
+  const work = join(f.directory, 'existing-work');
+  const allocation = f.allocation(work);
+  f.git('worktree', 'add', '-b', allocation.branch, work, f.manifest.base);
+  assert.deepEqual(materializePlan({ manifest: f.manifest, allocation, plan, revision: f.manifest.base,
+    trusted: { issue, failure: f.failure, existingOwner: { path: plan.owner.path, taskId: '2.1' } } }),
+  { files: [], provenance: plan.provenance });
+  assert.equal(readFileSync(join(work, plan.owner.path), 'utf8'), before);
   assert.equal(f.store.get(f.manifest.id).data.ownedProcesses, undefined);
   assert.throws(() => preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure,
     existingOwner: { path: plan.owner.path, taskId: '2.1' } }), { code: 'owner_mismatch' });
   assert.throws(() => preparePlan({ manifest: f.manifest, issue: { ...issue, body: issue.body.replace('2.1', '9.9') },
     failure: f.failure, existingOwner: { path: plan.owner.path, taskId: '2.1' } }), { code: 'owner_mismatch' });
+});
+
+test('published coordinator plan links its issue and reuses all three narrow tasks at a later baseline', t => {
+  const f = fixture(t);
+  const generated = preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure });
+  for (const file of generated.files) {
+    mkdirSync(dirname(join(f.root, file.path)), { recursive: true });
+    writeFileSync(join(f.root, file.path), file.content);
+  }
+  f.git('add', '.'); f.git('commit', '-m', 'Publish generated owner');
+  const manifest = makeManifest({ repository: f.manifest.repository, root: f.root,
+    commonDir: join(f.root, '.git'), base: f.git('rev-parse', 'HEAD'), scope: 'providers-json' });
+  const issue = { ...f.issue, reused: true,
+    body: `<!-- sc-agent-finding:${f.failure.fingerprint} -->\nScope: ${f.failure.path}\n` +
+      `Planning owner: ${generated.owner.path} (local)` };
+  const failure = { ...f.failure, source: manifest.base };
+  const owner = resolveExistingOwner({ manifest, issue,
+    existingOwner: { path: generated.owner.path, taskId: '1.1' } });
+  assert.deepEqual(owner.taskIds, ['1.1', '1.2', '1.3']);
+  assert.match(owner.taskText, /1\.2 Correct desktop\/src\/providers\/json\.ts/);
+  const reused = preparePlan({ manifest, issue, failure,
+    existingOwner: { path: generated.owner.path, taskId: '1.1' } });
+  assert.equal(reused.provenance.kind, 'baseline');
+  assert.equal(reused.files.length, 0);
+  assert.deepEqual(reused.owner.taskIds, ['1.1', '1.2', '1.3']);
 });
 
 test('actual Linux issue prose resolves pending owner read only but cannot authorize a provider writer', t => {

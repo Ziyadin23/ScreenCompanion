@@ -54,7 +54,7 @@ async function syntheticApi(t: { after(fn: () => void): void }, issueLimit = 3) 
         outputs: null, revision: frozen.head }, programs: {}, dependencies: null },
     checks, passed: true, missingCapabilities: [] };
   const review = { base, head: frozen.head, diffHash: frozen.diffHash, policyHash: frozen.policyHash, clean: true };
-  const issue = { number: 28, url: 'https://github.com/example/sc/issues/28', body: '', state: 'open' as const, reused: true };
+  const issue = { number: 28, url: 'https://github.com/example/sc/issues/28', body: '', state: 'open' as const, reused: false };
   const pr = { number: 29, url: 'https://github.com/example/sc/pull/29', head: frozen.head,
     base: 'main', body: '', state: 'open' as const, reused: false };
   const oracleHash = '1'.repeat(64), contractHash = '2'.repeat(64);
@@ -70,7 +70,11 @@ async function syntheticApi(t: { after(fn: () => void): void }, issueLimit = 3) 
       outputHash: digest([result.stdout, result.stderr]) };
   };
   const failedOracle = await oracle(base, 42), candidateOracle = await oracle(frozen.head, 0);
-  store.update(manifest.id, { data: { frozen, verification, reviewReceipt: review, pull: pr, issueReceipts: [issue], round: { number: 0 },
+  const plan = { owner: { change: 'fix-confirmed-aaaaaaaaaaaa', path: taskPath, provenance: base,
+    hash: digest(taskTemplate), taskIds: ['1.1', '1.2', '1.3'] },
+    provenance: { kind: 'local', source: base, fingerprint: 'a'.repeat(64), issue: 28 },
+    files: [{ path: taskPath, content: taskTemplate, hash: digest(taskTemplate) }] };
+  store.update(manifest.id, { data: { frozen, verification, reviewReceipt: review, pull: pr, issueReceipts: [issue], plan, round: { number: 0 },
     findings: [{ state: 'confirmed', evidence: failedOracle }], candidateOracle } });
   let main = base, merged = false, puts = 0, protection = true, reviewCount = 1,
     sourceHead = frozen.head, skipMainJobs = false,
