@@ -204,6 +204,12 @@ checkpoints stay outside commits and application release assets. Preserve them
 and the task worktree when a run reports an unknown effect or incompatible state.
 Do not delete state and retry a publication whose acknowledgement was lost.
 
+For an uncertain owned process, private operation files may include
+`failure.json` (wrapper phase and errno code) and `wrapper-exit.json` (observed
+exit code and signal). These are diagnostics only. A missing file is ambiguous;
+neither file proves a terminal effect or authorizes replacement, finalization or
+issue closure. Preserve the original state and execution evidence for recovery.
+
 ## Recovery and retention
 
 Resume reconciles an existing operation before it can dispatch a replacement.
