@@ -36,6 +36,35 @@ jobs:
         env:
           OPENSPEC_TELEMETRY: '0'
       - run: git show --format= --check HEAD
+  agent-workflow:
+    needs: [changes, documentation]
+    runs-on: ubuntu-latest
+    if: always()
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Require documentation validation
+        env:
+          DOCUMENTATION_RESULT: ${{ needs.documentation.result }}
+        run: test "$DOCUMENTATION_RESULT" = success
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Linux isolation prerequisite
+        if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+      - name: Verify local agent workflow and real Linux isolation
+        if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
+        run: |
+          npm --prefix tools/agent-workflow ci
+          npm --prefix tools/agent-workflow run verify
+      - name: Observe deliberate documentation route
+        if: needs.changes.result == 'success' && needs.changes.outputs.application == 'false'
+        run: echo 'Documentation and routing gates passed; executable workflow checks are unchanged.'
   portable:
     needs: [changes, documentation]
     if: always() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success')

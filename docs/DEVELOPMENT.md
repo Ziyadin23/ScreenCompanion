@@ -36,6 +36,14 @@ npm --prefix desktop run verify
 
 Configure the SC repository setup script as `npm --prefix desktop ci` and select agent startup after successful setup. Inspect the saved repository settings and the setup terminal before starting implementation. A running agent does not establish successful dependency installation. A nonzero setup exit blocks implementation: record the failure in the task owner/card and repair setup before continuing. An explicit setup skip is appropriate only when the task does not need dependencies or the same checkout has a recorded successful installation.
 
+The local LangGraph coordinator has a delegated setup path: it creates the
+issue-linked worktree with host setup and automatic agent launch explicitly
+skipped, then runs the same documented installation command in a credential-free
+sandbox. It records success and dependency integrity before starting a fresh
+OpenSpec apply worker. Documentation-only work can record an explicit dependency
+skip. This contract is described in [the workflow guide](AGENT_WORKFLOW.md);
+a generated planning session does not approve new behavior or wider permissions.
+
 The setup script is a local Orca setting; a fresh Orca registration must configure it using these instructions. Use a documented CLI setter when available, otherwise the repository settings UI. Keep other repository and account settings unchanged.
 
 ### Continuous integration
@@ -54,6 +62,10 @@ git diff --check
 The documentation checker resolves local files and Markdown anchors; external URLs and factual freshness require review against their owning sources. Hosted CI pins the OpenSpec CLI version. This workflow/tooling change itself takes the full application route.
 
 ## OpenSpec lifecycle
+
+The [local agent workflow](AGENT_WORKFLOW.md) documents the on-demand LangGraph
+development tool and its current capabilities. Its active OpenSpec owner tracks
+implementation; GitHub/Orca/OpenSpec keep their existing responsibilities below.
 
 The chat skills and shell CLI are different entry points. In chat, use `$openspec-explore`, `$openspec-propose`, `$openspec-apply-change <name>` and `$openspec-archive-change <name>`; other agents expose the corresponding slash commands. In a shell, use `openspec list --json`, `openspec status --change <name> --json` and `openspec instructions apply --change <name> --json`. Consult installed skill instructions for artifact creation and archive behavior.
 
