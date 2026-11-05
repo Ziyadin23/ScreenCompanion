@@ -43,3 +43,10 @@ Owner for [W8 / issue #13](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 - Reviewed evidence committed/pushed as `3ef1419ab3c00ad271883b58fd354bdf67398ea2`; [PR #35](https://github.com/Ziyadin23/ScreenCompanion/pull/35) is open and ready for review against `main`, with `Closes #13` for the completed reconciliation scope. This checkpoint is a subsequent documentation-only commit; Git history owns its final identity.
 - Orca links issue #13 and PR #35 with status `in-review`. Issue #13 remains open until integration. Initial push/PR hosted checks were running at publication; use the PR's current-head checks for final results, not a superseded head's run.
 - Next: inspect current-head hosted checks, then human review/integration. All three OpenSpec tasks and local/independent checks passed. Uncovered native/account/environment cases remain open in the gate map. No new qualification, beta delivery, merge, archive or public release occurred.
+
+## Integration authorization — 2026-11-05
+
+- User explicitly requested merging PR #35. Fresh readback confirmed reviewed head `e51f2495efdc1bdeca56f1877961e64ab28ba072` is mergeable against unchanged base `45deb7e`, with all five [hosted PR jobs](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/42085417362) successful. Initial worktree clean.
+- Move the completed reconciliation from unfinished W8 to recent completions in `docs/STATUS.md` and retain all uncovered qualification gates. This integration checkpoint and status update change documentation only; the independently reviewed gate map and application bytes are unchanged.
+- Verify/review this final metadata diff, push it, then merge the exact final head after its checks pass. GitHub PR/issue state and the primary private workspace will retain the actual merge receipt; update Orca to completed after readback. Worktree/branch removal, OpenSpec archive and release publication are outside this request.
+- Independent integration-diff review found no material standards or acceptance findings. Workflow selftest, documentation audit (51 files / 317 links), all eight strict OpenSpec changes and whitespace checks passed, exit 0.
