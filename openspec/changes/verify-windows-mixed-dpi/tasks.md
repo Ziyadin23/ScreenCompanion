@@ -27,6 +27,11 @@ Owner for [W7 / issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 - Independent review checked repository standards and all three issue criteria, reran the documentation/OpenSpec checks successfully, and requested these exact checkpoint receipts. Review confirmed that correction and accepted the final partial delivery with no remaining material findings. The procedure distinguishes published installer/portable hashes from the running installed executable's hash. Readiness task 1.1 is complete; physical qualification and task 3.1 remain open.
 - Next: publish the reviewed preparation as a draft PR referencing #12 without a closing keyword. Resume physical task 2.1 only when a physical Windows extended desktop with differing scales becomes available; recover current private guidance and actual candidate/environment identity first.
 
+## Publication checkpoint — 2026-11-05
+
+- Preparation source `19b34c09ebacc8cf48cb46c867410548b77d55b3` is committed and pushed on the existing issue branch in [draft PR #34](https://github.com/Ziyadin23/ScreenCompanion/pull/34), against `main` at the recorded worktree base. Only the six declared documentation/OpenSpec paths changed. The draft references #12 without closing it; the issue remains open and physical acceptance remains unverified.
+- This follow-up records publication in the same owner. Final source identity is available from Git history/PR head; no application build or new platform evidence is introduced. Keep the Orca card in review for the partial preparation, with the hardware blocker visible. Next execution is task 2.1 after hardware becomes available; no merge, archive or release is performed.
+
 ## Workflow follow-up
 
 - Keep issue #12 open while physical acceptance is unavailable. A preparation PR is partial delivery; its review does not complete task 3.1.
