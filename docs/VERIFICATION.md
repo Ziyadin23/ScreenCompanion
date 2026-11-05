@@ -24,6 +24,64 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
+## Windows recorder preflight (2026-11-05)
+
+[Issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7) remains open.
+One fresh attempt used the unchanged **0.5.0-beta.6** packaged Windows payload,
+Windows 11 **10.0.26200**, and **Microsoft Edge 156.0.4314.58** whole-monitor
+`getDisplayMedia` / `MediaRecorder` VP8 WebM, with audio off. The track reported
+`displaySurface: monitor`, **1920×1080**, 30 fps; this is the requested track
+rate, not a measured encoded frame rate. The documentation branch started at
+`8518fe5`; its beta.7 source was not rebuilt or substituted for beta.6.
+
+The tested unpacked payload was matched on both hosts before execution:
+
+| Component | SHA-256 |
+| --- | --- |
+| Executable | `9d942b07015304242b27d13df253228054cb6710404c03d4f4948060052416b5` |
+| Application ASAR | `64a2ea5e632a886bf4e09a65c8fd0cc8236fadc7850d6ca73d0f6b2b75c10555` |
+| Native module | `640b7b805d1558f094ac058373b5a91a8965ed2ef863da5afb30925df698badb` |
+
+The unchanged private recorder fixture passed Windows parsing, **172/172**
+synthetic checks with zero failures/skips, static helper preparation and its
+24-phase plan. A separate key-free packaged identity probe passed: actual beta.6
+version, unchanged payload, normal exit 0, independent exit observation and
+removed isolated profile. These are readiness results, not exclusion evidence.
+
+The actual recorder attempt exited **1**, without outer timeout, at
+`explicit-known-marker-preflight` with
+`received-known-marker-frame-unavailable`. It completed **0/24 surface phases**
+and no manual acknowledgment. No SC surface was launched during the recorder
+attempt. Answer/input, Settings, owned picker and capture-test exclusion remain
+**unverified**; neither supported nor unsupported SC exclusion follows from this
+fixture failure. No new OBS attempt was made.
+
+The finalized clip is **57,286 bytes**, SHA-256
+`fa7b8f76a1e912a98c2dd31839612451fb24c5427bc00a8c22a5b18147ecd5eb`.
+Independent `ffprobe`/`ffmpeg` inspection found seven 1920×1080 VP8 frames at
+media times 0–2.867 seconds. The first, third and final frames were opened for
+visual inspection: the final frame shows the synthetic backdrop and visible
+phase marker. This establishes saved backdrop content only. The failed run
+did not persist its expected preflight packet or a received sample, so no
+phase-bound marker comparison or exclusion verdict can be reconstructed.
+The receiver failure's cause remains unproven.
+
+The recorder reported all seven cleanup flags true. A separate postflight exited
+0 with no relevant app/recorder processes or held input and unchanged encrypted
+vaults. Six retained historical recorder reports/phase records remained
+byte-identical. Earlier beta.6 Edge/OBS failures and beta.4 evidence retain their
+original outcomes and limits. No provider call, application change, package,
+release or transfer-build update was made. Private recordings and operational
+receipts remain outside Git.
+
+Continuation is owned by
+[the W2 OpenSpec checkpoint](../openspec/changes/verify-windows-recorder-exclusion/tasks.md).
+Before another qualification attempt, diagnose the receiver preflight with a
+separately reviewed fixture that retains expected-marker and receiver-state
+evidence; then run the actual locally visible surface matrix and inspect its
+received/saved output under the [named-recorder procedure](#capture-exclusion-checks).
+Other recorder/device paths require their own evidence.
+
 ## Windows full UI matrix (2026-11-03)
 
 For [issue #10](https://github.com/Ziyadin23/ScreenCompanion/issues/10), a fresh
