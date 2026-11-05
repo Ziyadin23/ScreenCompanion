@@ -25,7 +25,7 @@ Priorities below retain the inventory's proposed sequencing. A platform gate app
 
 ### Windows and support evidence
 
-W1 was refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
+W1 and W7 were refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
 
 | Item / proposed priority | State and candidate | Next action / completion condition | Owner / evidence |
 | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ W1 was refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
 | W3 / P1 — Live answers and diagrams | Needs verification; chosen provider/pipeline/candidate | Separately authorize a representative budgeted campaign; grade structured answers, first lines and extraction fidelity with retained failures. | [#8](https://github.com/Ziyadin23/ScreenCompanion/issues/8), [quality limits](VERIFICATION.md#live-providers-and-model-quality) |
 | W4 / P1 — Public update delivery | Review pending; local beta.4 → beta.6 qualification, issue open | Review/integrate the local 32-check public-feed result and independent restoration evidence. Keep its initial failed attempt and candidate limits. | [#9](https://github.com/Ziyadin23/ScreenCompanion/issues/9); local `verify-windows-public-update` commit `650b9be`, outside this snapshot |
 | W6 / P2 — Windows 10 / fresh machine | Needs verification; claimed Windows environment | Verify install/startup and settings without developer tools in the claimed environment, or explicitly narrow support. | [#11](https://github.com/Ziyadin23/ScreenCompanion/issues/11), [platform support](VERIFICATION.md#platform-support) |
-| W7 / P2 — Mixed DPI | Needs verification; physical multi-monitor Windows | Verify placement/resizing at different DPI scales and document the supported result. | [#12](https://github.com/Ziyadin23/ScreenCompanion/issues/12), [platform support](VERIFICATION.md#platform-support) |
+| W7 / P2 — Mixed DPI | Needs verification; published Windows beta.6. Blocked: user confirms no physical Windows setup available. | Obtain physical monitors at differing scales, then run the placement/movement/resize/transition procedure; all issue criteria remain open. | [#12](https://github.com/Ziyadin23/ScreenCompanion/issues/12), [OpenSpec owner](../openspec/changes/verify-windows-mixed-dpi/tasks.md), [procedure and evidence gap](VERIFICATION.md#physical-windows-mixed-dpi-qualification) |
 | W8 / P2 — Native evidence reconciliation | Needs investigation; candidate-specific native results | Reconcile old gate text with the 54-check harness and dated evidence, retaining genuine fresh-machine/mixed-DPI gaps. | [#13](https://github.com/Ziyadin23/ScreenCompanion/issues/13), [native commands](../tests/README.md#windows-native-and-legacy-vault-checks) |
 
 W5 is completed for its named beta.7 scope and appears in recent completions. The beta.6 interrupted matrix remains historical evidence.
