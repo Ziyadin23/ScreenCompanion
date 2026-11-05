@@ -20,7 +20,7 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 | --- | --- | --- |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh-machine/Windows 10, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
-| Published Windows beta.6 | [Dated beta.6 evidence](#beta6-extraction-guidance) records passing, failed and unfinished attempts. | Preserve its failed UI/activation/recorder attempts; the later beta.7 matrix does not rewrite them. |
+| Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh-machine/Windows 10, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
@@ -284,6 +284,87 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+## Packaged beta.6 activation investigation (2026-11-05)
+
+For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
+audit rechecked eight retained report/job files against their previously recorded
+SHA-256 values and all 30 payloads against the original runner manifest. The
+failed attempt first opened the unpacked beta.6 application under Playwright,
+confirmed its packaged version and preview text, then launched the portable
+EXE as a duplicate with the same isolated profile. The first duplicate did not
+report an exit within the runner's **30-second** deadline. Its report contains
+`B6_DUPLICATE_DEADLINE` at `visible preview`, zero completed duplicate scenarios
+and `processesSettled: false`. Separately, the enclosing job reached its
+**1,200-second** deadline, recorded `timedOut: true` and exit 1, and attempted its
+configured process-tree termination; termination errors were suppressed.
+Vault fingerprints matched before/after;
+that does not prove clean process shutdown or profile cleanup.
+
+The portable launcher template extracts the payload, waits for the extracted
+application with `ExecWait`, then removes its extraction directory. The beta.6
+native singleton has an eight-second acquisition/activation loop, reached after
+application startup enters that code. Its deadline does not bound extraction,
+earlier startup or later shutdown. The original duplicate's stdout/stderr were
+ignored and it recorded no extracted-child or native-activation milestones.
+Consequently the observed failure is bounded to the duplicate launcher's missing
+exit within 30 seconds; extraction/startup, activation and teardown remain
+possible contributors, with no individual cause established. Increasing the
+deadline alone would not diagnose that missing evidence.
+
+The later first-instance portable diagnostic reached READY at **19.365 seconds**
+and reported main/launcher exit 0 after an explicit normal-exit request. It used
+a different environment, retained its synthetic profile/lock and explicitly
+reported the original cause and duplicate gate unproven. It remains a separate
+startup observation. The new qualification below establishes separate beta.6
+outcomes without reclassifying either historical attempt. The current beta.7
+source and its UI matrix do not establish beta.6 packaged behavior.
+
+## Packaged beta.6 activation qualification (2026-11-05)
+
+[Issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6) was qualified
+on the existing Windows 11 x64 headless VM after the recorder task released it.
+The unchanged published candidate is **0.5.0-beta.6**, release tag `v0.5.0-beta.6`
+at `fa3cf7c`. The tested portable SHA-256 is
+`9f2e1b70deeb23fb6465248c6af692685d9fc77d4e6ff84590e9ef7eafe7b3ef`;
+its bytes and the installer matched the published GitHub asset digests. The
+portable ZIP's executable matched too. No rebuild, source correction, new
+application version or release was needed.
+
+Private scenario commands were `powershell.exe -NoProfile -NonInteractive
+-ExecutionPolicy Bypass -File <runner>/Portable-Direct.ps1`,
+`node <runner>/Packaged-Smoke.mjs` and `node <runner>/Root-EarlyQuit.mjs`.
+The private run directory and exact commands/receipts remain in the primary
+workspace. Each scenario exited **0** without an outer timeout, with unchanged
+original vault fingerprints and zero provider requests. Synthetic profiles
+isolated application data; the application PATH contained only Windows/system
+directories. Candidate fingerprints and the full unpacked payload tree matched
+before and after each scenario; the portable's extracted tree matched that
+unpacked candidate, permitting only the existing `elevate.exe` presence difference.
+
+| Check | Actual result |
+| --- | --- |
+| Direct portable | Five checks passed: visible protected preview, x64 extracted payload identity, beta.6 READY, main/launcher normal exit 0, and byte-preserved synthetic sentinel with no panel-size file. Window affinity is separate from recorder-output exclusion. |
+| Different-path duplicates | Six states passed: visible/hidden preview, visible/hidden Settings and visible/hidden typed input. Alternate-path bytes matched the portable. All launchers exited 0 in **16.844–26.422 seconds**, within the unchanged 30-second limit; both output pipes completed with zero bytes. |
+| Restoration and retention | Each duplicate retained its selected surface and restored native window visibility. Settings kept its unsaved draft; input kept its typed text. The owner and Playwright wrapper then exited normally. |
+| Rapid first-window close | Ten of ten launches closed normally in **0.611–0.785 seconds** after the close request, with no startup failure codes. No READY entry was observed before each close; this is a diagnostic observation, not proof of the exact internal startup point. |
+| Independent postflight | Separate process/input checks after direct, duplicates and the final run passed. Relevant app/recorder names and sampled held keys were absent. The final protected-profile check matched all five original objects, retained cache and eleven historical journals. |
+
+Windows PowerShell/Node parsing and staged hashes passed before application
+execution. Six host helper tests and independent runner review covered candidate
+comparison, environment isolation and launcher-exit versus inherited-pipe
+completion. These helper checks are separate from the actual packaged outcomes.
+The bridge stopped normally with unchanged vaults, and normal guest shutdown
+restored the initial powered-off VM state. Synthetic scenario profiles were
+deliberately retained as private evidence; no historical diagnostic root/lock
+was removed. The original failed attempt and later standalone observation were
+rechecked byte-identical.
+
+This completes the named beta.6 qualification scope and bounded explanation in
+the [activation task owner](../openspec/changes/verify-windows-packaged-activation/tasks.md).
+It does not prove the historical timeout's cause or general reliability beyond
+this run, qualify beta.7 packages, or settle recorder/live-quality, fresh-machine,
+Windows 10, mixed-DPI or Linux gates.
+
 ## Beta.6 extraction guidance
 
 Beta.6 clarifies extraction-type precedence for choices, code and necessary
@@ -343,7 +424,8 @@ A separate duplicate-launch test reached its deadline waiting for the first
 portable launcher and reported an unsettled process. A later isolated standalone
 portable launch reached ready and its launcher and main process exited normally.
 It used a different test environment and does not resolve the earlier failure;
-the remaining duplicate-launch and direct portable checks remain open. An Edge
+the [2026-11-05 qualification](#packaged-beta6-activation-qualification-2026-11-05)
+records the subsequent duplicate-launch and direct portable results separately. An Edge
 recorder attempt passed the manually inspected preflight and one hidden-answer
 phase, then stopped because it could not obtain the current received marker for
 the visible-answer phase. A separate OBS attempt stopped at preflight after local
@@ -628,10 +710,20 @@ recorded separately; successful follow-ups do not erase those failures.
 
 The application targets Windows x64 and has runtime evidence on Windows 11.
 Windows 10, fresh-account/machine startup without installed development tools,
-mixed-DPI placement, every resize edge, competing-process shortcut rollback and
-foreign-account vault rejection still need dedicated checks. Removing tools from
-PATH in a development VM is not a fresh-machine check. Linux supports portable
-verification and bundle generation; it cannot run the production interface.
+mixed-DPI placement, foreign-account vault rejection, abandoned-mutex contention
+with a retained competing handle and duplicate launches before native
+initialization still need dedicated checks. Removing tools from PATH in a
+development VM is not a fresh-machine check.
+
+The [2026-11-05 native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
+reconciles the former blanket resize/contention gates: all eight edges on answer
+and input, saved dimensions and actual OS/Settings shortcut rollback have
+single-monitor Windows 11 evidence. The [beta.7 full matrix](#windows-full-ui-matrix-2026-11-03)
+passed on 2026-11-03; [beta.6's split UI attempts](#beta6-extraction-guidance)
+and the [earlier visibility failure](#beta5-implementation-and-verification)
+retain their original limits. Native harness counts alone do not establish UI
+geometry or uncovered account/startup races. See [Linux port status](#linux-port-status)
+for its separate runtime evidence and qualification gaps.
 
 ## Capture-exclusion checks
 

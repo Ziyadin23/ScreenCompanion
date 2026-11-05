@@ -25,17 +25,17 @@ Priorities below retain the inventory's proposed sequencing. A platform gate app
 
 ### Windows and support evidence
 
+W1, W2 and W8 were refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
+
 | Item / proposed priority | State and candidate | Next action / completion condition | Owner / evidence |
 | --- | --- | --- | --- |
-| W1 / P1 — Packaged duplicate activation | Needs investigation; beta.6 packaged Windows | Diagnose the retained portable activation timeout; obtain candidate-specific different-path duplicate/early-close results and cleanup. | [#6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), [beta.6 evidence](VERIFICATION.md#beta6-extraction-guidance) |
 | W2 / P1 — Recorder exclusion | Needs investigation/verification; beta.6, Edge 156.0.4314.58, 2026-11-05 | Controlled plain-layout local/received/saved observations cover the five required surfaces, but each latest run stopped at 11/24 phases on setup backdrop height; received-frame timestamp revalidation also failed. Resolve both fixture blockers and finish the matrix. Explicit raised/opaque windows only; prior failures remain failed. | [#7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), [new evidence](VERIFICATION.md#windows-recorder-preflight-2026-11-05), [OpenSpec owner](../openspec/changes/verify-windows-recorder-exclusion/tasks.md) |
 | W3 / P1 — Live answers and diagrams | Needs verification; chosen provider/pipeline/candidate | Separately authorize a representative budgeted campaign; grade structured answers, first lines and extraction fidelity with retained failures. | [#8](https://github.com/Ziyadin23/ScreenCompanion/issues/8), [quality limits](VERIFICATION.md#live-providers-and-model-quality) |
 | W4 / P1 — Public update delivery | Review pending; local beta.4 → beta.6 qualification, issue open | Review/integrate the local 32-check public-feed result and independent restoration evidence. Keep its initial failed attempt and candidate limits. | [#9](https://github.com/Ziyadin23/ScreenCompanion/issues/9); local `verify-windows-public-update` commit `650b9be`, outside this snapshot |
 | W6 / P2 — Windows 10 / fresh machine | Needs verification; claimed Windows environment | Verify install/startup and settings without developer tools in the claimed environment, or explicitly narrow support. | [#11](https://github.com/Ziyadin23/ScreenCompanion/issues/11), [platform support](VERIFICATION.md#platform-support) |
 | W7 / P2 — Mixed DPI | Needs verification; physical multi-monitor Windows | Verify placement/resizing at different DPI scales and document the supported result. | [#12](https://github.com/Ziyadin23/ScreenCompanion/issues/12), [platform support](VERIFICATION.md#platform-support) |
-| W8 / P2 — Native evidence reconciliation | Needs investigation; candidate-specific native results | Reconcile old gate text with the 54-check harness and dated evidence, retaining genuine fresh-machine/mixed-DPI gaps. | [#13](https://github.com/Ziyadin23/ScreenCompanion/issues/13), [native commands](../tests/README.md#windows-native-and-legacy-vault-checks) |
 
-W5 is completed for its named beta.7 scope and appears in recent completions. The beta.6 interrupted matrix remains historical evidence.
+W5 and W8 are completed for their named scopes and appear in recent completions. The beta.6 interrupted matrix remains historical evidence.
 
 ### Linux qualification
 
@@ -60,6 +60,10 @@ All rows refer to merged beta.7 source. Existing portable/headless/container che
 The original inventory contained 17 items. W5 was closed and the other 16 GitHub issues were open at the read-only snapshot. M1 implementation has since completed and the user authorized publication/integration; final publication receipts belong to Git history and its linked PR. Issue state, local evidence and merged-source state are recorded separately.
 
 ## Recent completions
+
+- **2026-11-05 — W8 / issue #13:** all three evidence-reconciliation tasks passed independent standards/acceptance review and documentation/OpenSpec checks. [PR #35](https://github.com/Ziyadin23/ScreenCompanion/pull/35) delivers the [candidate-scoped gate map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05) and [completed owner](../openspec/changes/reconcile-windows-native-evidence/tasks.md); GitHub owns its integration/issue-closure receipt. Single-monitor resize/contention evidence is established. Foreign-account rejection, abandoned-mutex/pre-initialization races, fresh-machine/Windows 10, mixed-DPI and recorder qualification remain open; no new runtime pass is claimed.
+
+- **2026-11-05 — W1 / issue #6:** unchanged published Windows beta.6 passed six different-path duplicate states, direct portable startup and ten rapid first-window closes, with independent process/input/profile postflight. The historical timeout retains its bounded explanation and unknown stalled stage. [PR #32](https://github.com/Ziyadin23/ScreenCompanion/pull/32) delivers the [qualification evidence](VERIFICATION.md#packaged-beta6-activation-qualification-2026-11-05) and completed [OpenSpec owner](../openspec/changes/verify-windows-packaged-activation/tasks.md); beta.7 packaged and other platform gates remain separate.
 
 - **2026-11-03 — M1 / contributor workflow:** all 16 [organization tasks](../openspec/changes/organize-project-workflow/tasks.md) and six [overview tasks](../openspec/changes/add-project-status-overview/tasks.md) are implemented and locally verified. The user accepted commit/push/main integration; [issue #21](https://github.com/Ziyadin23/ScreenCompanion/issues/21), Git history and the workflow PR provide source-publication receipts. Application/release and Linux qualification scopes retain their separate status.
 
