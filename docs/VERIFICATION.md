@@ -584,10 +584,20 @@ recorded separately; successful follow-ups do not erase those failures.
 
 The application targets Windows x64 and has runtime evidence on Windows 11.
 Windows 10, fresh-account/machine startup without installed development tools,
-mixed-DPI placement, every resize edge, competing-process shortcut rollback and
-foreign-account vault rejection still need dedicated checks. Removing tools from
-PATH in a development VM is not a fresh-machine check. Linux supports portable
-verification and bundle generation; it cannot run the production interface.
+mixed-DPI placement, foreign-account vault rejection, abandoned-mutex contention
+with a retained competing handle and duplicate launches before native
+initialization still need dedicated checks. Removing tools from PATH in a
+development VM is not a fresh-machine check.
+
+The [2026-11-05 native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
+reconciles the former blanket resize/contention gates: all eight edges on answer
+and input, saved dimensions and actual OS/Settings shortcut rollback have
+single-monitor Windows 11 evidence. The [beta.7 full matrix](#windows-full-ui-matrix-2026-11-03)
+passed on 2026-11-03; [beta.6's split UI attempts](#beta6-extraction-guidance)
+and the [earlier visibility failure](#beta5-implementation-and-verification)
+retain their original limits. Native harness counts alone do not establish UI
+geometry or uncovered account/startup races. See [Linux port status](#linux-port-status)
+for its separate runtime evidence and qualification gaps.
 
 ## Capture-exclusion checks
 
