@@ -41,6 +41,13 @@ atomic migration, existing-vault priority and damaged-byte preservation, using
 isolated temporary profiles. The C# fixture reports **136 checks**. Both commands
 previously passed on Windows 11, exit 0. Nonfatal compiler warnings remain.
 
+The [dated native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
+separates native assertions from UI geometry and packaged-launch results. The
+54-check harness does not exercise a foreign-account vault, an abandoned mutex
+retained by a competing process, or a duplicate launch before native
+initialization. Same-account damaged bytes and normal disposal/reacquisition
+do not close those gates.
+
 The [vault oracle](../desktop/tests/windows/interop/README.md) links fourteen frozen,
 byte-identical source files from v0.4.14 under its own `legacy/` directory. Its
 source manifest records the original release commit and SHA-256 digests. It does
@@ -91,9 +98,14 @@ Synthetic mode makes no model request and cannot load a real vault or capture.
 Close other SC instances before shortcut/native tests; clean up all test-owned
 windows, hooks, hotkeys and temporary vaults.
 
-Standalone packaged launches, different executable paths, early activation,
-mixed-DPI monitors, every resize edge and competing shortcut registration retain
-separate evidence. Historical recorder results retain their candidate/surface limits in [verification](../docs/VERIFICATION.md). For actual exclusion claims, follow the [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
+Every resize edge on answer/input and the Settings competing-shortcut workflow
+have single-monitor Windows 11 evidence in the dated map above; they belong to
+the UI suite, separately from native harness contention assertions. Standalone
+packaged launches and different executable paths retain candidate-specific
+evidence. Pre-initialization duplicate races and mixed-DPI qualification remain
+open. Historical recorder results retain their candidate/surface limits in
+[verification](../docs/VERIFICATION.md). For actual exclusion claims, follow the
+[named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
 
 ## Installed updates
 
