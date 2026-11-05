@@ -24,6 +24,132 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
+## Windows recorder preflight (2026-11-05)
+
+[Issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7) remains open.
+The initial fresh attempt used the unchanged **0.5.0-beta.6** packaged Windows payload,
+Windows 11 **10.0.26200**, and **Microsoft Edge 156.0.4314.58** whole-monitor
+`getDisplayMedia` / `MediaRecorder` VP8 WebM, with audio off. The track reported
+`displaySurface: monitor`, **1920×1080**, 30 fps; this is the requested track
+rate, not a measured encoded frame rate. The documentation branch started at
+`8518fe5`; its beta.7 source was not rebuilt or substituted for beta.6.
+
+The tested unpacked payload was matched on both hosts before execution:
+
+| Component | SHA-256 |
+| --- | --- |
+| Executable | `9d942b07015304242b27d13df253228054cb6710404c03d4f4948060052416b5` |
+| Application ASAR | `64a2ea5e632a886bf4e09a65c8fd0cc8236fadc7850d6ca73d0f6b2b75c10555` |
+| Native module | `640b7b805d1558f094ac058373b5a91a8965ed2ef863da5afb30925df698badb` |
+
+The unchanged private recorder fixture passed Windows parsing, **172/172**
+synthetic checks with zero failures/skips, static helper preparation and its
+24-phase plan. A separate key-free packaged identity probe passed: actual beta.6
+version, unchanged payload, normal exit 0, independent exit observation and
+removed isolated profile. These are readiness results, not exclusion evidence.
+
+The actual recorder attempt exited **1**, without outer timeout, at
+`explicit-known-marker-preflight` with
+`received-known-marker-frame-unavailable`. It completed **0/24 surface phases**
+and no manual acknowledgment. No SC surface was launched during the recorder
+attempt. Answer/input, Settings, owned picker and capture-test exclusion remain
+**unverified**; neither supported nor unsupported SC exclusion follows from this
+fixture failure. No new OBS attempt was made.
+
+The finalized clip is **57,286 bytes**, SHA-256
+`fa7b8f76a1e912a98c2dd31839612451fb24c5427bc00a8c22a5b18147ecd5eb`.
+Independent `ffprobe`/`ffmpeg` inspection found seven 1920×1080 VP8 frames at
+media times 0–2.867 seconds. The first, third and final frames were opened for
+visual inspection: the final frame shows the synthetic backdrop and visible
+phase marker. This establishes saved backdrop content only. The failed run
+did not persist its expected preflight packet or a received sample, so no
+phase-bound marker comparison or exclusion verdict can be reconstructed.
+The receiver failure's cause remains unproven.
+
+The recorder reported all seven cleanup flags true. A separate postflight exited
+0 with no relevant app/recorder processes or held input and unchanged encrypted
+vaults. Six retained historical recorder reports/phase records remained
+byte-identical. Earlier beta.6 Edge/OBS failures and beta.4 evidence retain their
+original outcomes and limits. No provider call, application change, package,
+release or transfer-build update was made. Private recordings and operational
+receipts remain outside Git.
+
+Continuation is owned by
+[the W2 OpenSpec checkpoint](../openspec/changes/verify-windows-recorder-exclusion/tasks.md).
+Resume by resolving the continuation's exact-size and received-frame timestamp
+blockers below, preserving its strict checks and earlier failures. Other
+recorder/device paths require their own evidence.
+
+### Recorder continuation: partial evidence, qualification incomplete
+
+The same beta.6 payload, Windows/Edge versions and whole-monitor method were
+used in the continuation. A separately reviewed private receiver now decodes
+ended snapshots of the bytes actually received over loopback. It retains
+expected packets, bounded decoder state and the original strict marker, paused
+seek, nonblack, dimensions, manual-review and cleanup checks. Windows readiness
+passed **172/172** synthetic checks, a packaged identity probe and **6/6** real
+Edge receiver controls. The short-prefix regression was observed failing before
+the receiver correction. These are fixture results, not recorder qualification.
+
+Two later attempts each completed **11/24 surface phases**, separately: the ten
+hidden/visible plain-layout phases for answer, input, Settings, owned color
+picker and capture-test, plus hidden setup. Each completed phase had personally
+inspected local and actual received images with a fresh matching marker. Every
+claimed visible surface was present locally and omitted from its received
+sample; hidden phases retained the nonblack backdrop. No visible setup or
+synthetic-proctoring phase completed.
+
+These observations use a controlled fixture: opaque panel appearance
+(**0% transparency, 100% text visibility**) and an explicit
+`setAlwaysOnTop(true, 'pop-up-menu')` before focus and each fresh marker. The
+answer window contained the key-free preview's retained capture-test text;
+input used unsubmitted synthetic text. This is evidence for those actually
+visible, explicitly raised surfaces. It does not qualify default topmost
+behavior or real provider-generated answer content. The receiver was another
+page in the same VM, not an independent physical device.
+
+The first 11-phase clip is **1,079,395 bytes**, SHA-256
+`8690b4841f81bb26e156567da826bec286ed9f115576e6bb37d0732e26a41158`.
+All **11 saved phase frames** were independently decoded and personally
+inspected: exact markers, nonblack 1920×1080 output and no SC surfaces. A further
+host recheck decoded **23/23** samples (12 received including preflight, plus
+11 saved) with matching markers; all 11 saved RGB hashes matched. However,
+**all 12 received sample times differed from the saved frame timestamps by
+0.25 seconds**, exceeding the existing finalizer's **0.1-second** limit. That
+recheck exited **1**. Visual partial evidence is retained; final media
+qualification did not pass and no successful root verdict was produced.
+
+Both 11-phase attempts stopped before the visible-setup marker at
+`backdrop-not-primary-physical-size`: Edge's actual backdrop became
+**1920×1079** after restoring fullscreen and raising setup. The second attempt
+retained a bounded three-attempt restore/raise/focus control; all three still
+measured 1079 and stopped before creating an eligible marker. Its separate
+finalized clip is **1,080,860 bytes**, SHA-256
+`c6a34990a206a07d786c05e28eadd3532474f2138e97098019a962870501f03d`.
+The seven phase-order/stabilization and four preservation checks passed on the
+host and Windows. No tolerance or image check was relaxed.
+
+Other retained continuation failures include the initial snapshot run's
+invalidated local receipt (the inspection helper overwrote an acknowledged
+preflight frame), strict 1079-height failures, intended visible input obscured
+locally (one explicit abort and one manual timeout), a low-battery modal dimming
+the marker, an incomplete first received prefix, and a default-level topmost
+control failure. Replacement inspection helpers refuse acknowledged or wrong
+phases and use unique image names. Idle-desktop no-op/default-setter/above-taskbar
+controls passed identity and cleanup but did not reproduce the fullscreen
+failure; its OS cause remains unproven. Proposed focus-after-marker code was
+rejected in review and never executed. No missing evidence was reconstructed.
+
+All actual recorder attempts reported seven cleanup flags true. Independent
+final process/input postflight and protected-state checks passed, with unchanged
+vaults, five restored objects, six retained cache entries, eleven historical
+journals and all six historical report/phase pins. The bridge stopped normally
+and the VM was restored to its original powered-off state. No application,
+provider, package, version, release or transfer-build change occurred. Issue #7
+and task 2.1 remain open: received-frame timestamp binding and the complete
+surface/layout procedure still need qualification. OBS and other recorder,
+device and environment paths remain unverified.
+
 ## Windows full UI matrix (2026-11-03)
 
 For [issue #10](https://github.com/Ziyadin23/ScreenCompanion/issues/10), a fresh

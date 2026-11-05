@@ -25,11 +25,11 @@ Priorities below retain the inventory's proposed sequencing. A platform gate app
 
 ### Windows and support evidence
 
-W1 and W8 were refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
+W1, W2 and W8 were refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
 
 | Item / proposed priority | State and candidate | Next action / completion condition | Owner / evidence |
 | --- | --- | --- | --- |
-| W2 / P1 — Recorder exclusion | Needs verification; named Windows candidate, recorder and surfaces | Inspect locally visible SC surfaces and actual received/saved whole-monitor output. Preserve beta.6 Edge/OBS failures; earlier recordings do not establish current exclusion. | [#7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), [procedure](VERIFICATION.md#capture-exclusion-checks) |
+| W2 / P1 — Recorder exclusion | Needs investigation/verification; beta.6, Edge 156.0.4314.58, 2026-11-05 | Controlled plain-layout local/received/saved observations cover the five required surfaces, but each latest run stopped at 11/24 phases on setup backdrop height; received-frame timestamp revalidation also failed. Resolve both fixture blockers and finish the matrix. Explicit raised/opaque windows only; prior failures remain failed. | [#7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), [new evidence](VERIFICATION.md#windows-recorder-preflight-2026-11-05), [OpenSpec owner](../openspec/changes/verify-windows-recorder-exclusion/tasks.md) |
 | W3 / P1 — Live answers and diagrams | Needs verification; chosen provider/pipeline/candidate | Separately authorize a representative budgeted campaign; grade structured answers, first lines and extraction fidelity with retained failures. | [#8](https://github.com/Ziyadin23/ScreenCompanion/issues/8), [quality limits](VERIFICATION.md#live-providers-and-model-quality) |
 | W4 / P1 — Public update delivery | Review pending; local beta.4 → beta.6 qualification, issue open | Review/integrate the local 32-check public-feed result and independent restoration evidence. Keep its initial failed attempt and candidate limits. | [#9](https://github.com/Ziyadin23/ScreenCompanion/issues/9); local `verify-windows-public-update` commit `650b9be`, outside this snapshot |
 | W6 / P2 — Windows 10 / fresh machine | Needs verification; claimed Windows environment | Verify install/startup and settings without developer tools in the claimed environment, or explicitly narrow support. | [#11](https://github.com/Ziyadin23/ScreenCompanion/issues/11), [platform support](VERIFICATION.md#platform-support) |
