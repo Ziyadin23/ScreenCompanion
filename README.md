@@ -16,8 +16,9 @@ headless check exercised one portal capture and a synthetic encrypted keyring;
 interactive consent, shortcuts and RPM installation still require verification.
 The published beta.6 clarifies extraction types for tasks with diagrams, tightens
 Direct answer formatting, cancels active panel drags when hidden, and adds Windows
-control and update checks. Recorder exclusion, duplicate-launch behavior and live
-answer quality still need verification. See the [beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
+control and update checks. Packaged activation passed a separate
+[beta.6 qualification](docs/VERIFICATION.md#packaged-beta6-activation-qualification-2026-11-05);
+recorder exclusion and live answer quality still need verification. See the [beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
 It includes service-aware key setup, clearer Settings and a per-user Windows
 installer with **Settings → Updates**. Downloads and restart require your action;
 keys and settings stay in the existing encrypted storage. A portable EXE remains available.
@@ -102,8 +103,10 @@ If a request fails, use the panel's diagnostic code and report ID with the [trou
 Beta.6 passed 1,257 portable tests, 54 Windows native checks and 8 legacy-vault
 interoperability cases. All 37 distinct Windows UI cases passed across two runs;
 the full run timed out. Mocked provider tests do not establish live model quality.
-Fresh-machine, Windows 10, mixed-DPI, duplicate-launch and recorder-output checks
-remain open. See [verification results and limitations](docs/VERIFICATION.md).
+Beta.6 later passed six packaged duplicate states, direct portable startup and ten
+rapid first-window closes; the original activation timeout remains unexplained.
+Fresh-machine, Windows 10, mixed-DPI and recorder-output checks remain open.
+See [verification results and limitations](docs/VERIFICATION.md).
 
 ## License
 

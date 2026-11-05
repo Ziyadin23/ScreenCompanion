@@ -16,4 +16,4 @@ No behavior or requirements change. This verification/documentation change decla
 
 ## Impact
 
-This change, `docs/VERIFICATION.md` and the W1 row in `docs/STATUS.md`. Private lab tooling, receipts and machine state remain outside Git. No release publication or paid provider calls are included.
+This change, `docs/VERIFICATION.md`, the W1 row in `docs/STATUS.md` and the README's current qualification summary. Private lab tooling, receipts and machine state remain outside Git. No release publication or paid provider calls are included.
