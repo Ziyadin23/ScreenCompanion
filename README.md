@@ -47,9 +47,13 @@ Existing ScreenCompanion settings migrate without removing the original encrypte
 file. See [setup and migration](docs/USER_GUIDE.md#setup-and-migration) and
 [updates](docs/USER_GUIDE.md#application-updates).
 
-Recorded Windows checks use Windows 11. Windows 10, fresh-machine setup and
-packaged duplicate launches still have open checks. Local-feed checks do not
-establish beta.6 public GitHub update delivery; see [verification results](docs/VERIFICATION.md#current-candidate-and-open-gates).
+Recorded Windows checks use Windows 11. Published beta.6 passed six packaged
+duplicate states, direct portable startup and ten rapid first-window closes;
+the historical activation timeout remains unexplained. See the
+[packaged qualification](docs/VERIFICATION.md#packaged-beta6-activation-qualification-2026-11-05).
+Windows 10 and fresh-machine setup still have open checks. Local-feed checks do
+not establish beta.6 public GitHub update delivery; see
+[verification results](docs/VERIFICATION.md#current-candidate-and-open-gates).
 
 ### Linux (unpublished port)
 
