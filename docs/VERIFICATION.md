@@ -589,6 +589,64 @@ foreign-account vault rejection still need dedicated checks. Removing tools from
 PATH in a development VM is not a fresh-machine check. Linux supports portable
 verification and bundle generation; it cannot run the production interface.
 
+### Physical Windows mixed-DPI qualification
+
+**2026-11-05 readiness:** [issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/12)
+targets unchanged published Windows beta.6. The user confirmed that no physical
+Windows setup is available. No physical layout/scales, placement, movement,
+resize or monitor-transition result was collected. All three issue criteria
+remain open in the [OpenSpec owner](../openspec/changes/verify-windows-mixed-dpi/tasks.md).
+Earlier single-monitor resize checks and the beta.7 Windows UI matrix retain
+their original scope; neither establishes mixed-DPI support or a mixed-DPI defect.
+
+When hardware is available, use this procedure:
+
+1. Match the downloaded beta.6 portable or installer SHA-256 to the published
+   release artifact. Record the running application's version and executable
+   SHA-256 separately; an installed executable has different bytes from its
+   installer. Record installation provenance, Windows version/build and whether
+   the run is installed or portable. Do not substitute a beta.7 build or rebuild
+   beta.6 silently. Close other SC instances with the owner's agreement and use
+   an isolated synthetic profile; preserve existing vault bytes before/after.
+2. At the physical console, confirm at least two connected monitors in extended
+   mode with different Windows scale settings. Assign public labels A/B and
+   record each resolution, scale percentage, orientation, desktop bounds, work
+   area, primary display and relative arrangement. Record geometry units
+   explicitly: native physical pixels and application DIPs are different at
+   non-100% scale. Keep machine/monitor identifiers and raw receipts private.
+   A remote session or virtual display must not replace the physical topology.
+3. Use `--capture-test-only` for the key-free panel. Use isolated synthetic
+   settings/content for answer/input and Settings checks; setup/Save makes no
+   model request. Submit no question and invoke no screenshot/provider workflow.
+   Record initial placement, hide/restore and Settings open/Back on each monitor:
+   surfaces and controls must remain visible, reachable and usable within the
+   observed work area. Record the actual startup monitor without assuming saved
+   position is a supported feature.
+4. On each monitor, Alt-drag the answer and input panels within its work area.
+   Grow and shrink each of left, right, top, bottom, top-left, top-right,
+   bottom-left and bottom-right. Check pointer hit targets, intended edge motion,
+   stationary opposite edges, minimum size, text/control fit and release of
+   held drag/resize input. Record unexpected motion, clipping or inaccessible
+   controls, with before/after geometry and scale.
+5. Move each panel across every connected boundary in both directions, including
+   pausing while it straddles the boundary and releasing on the destination.
+   Check for jumps, off-screen placement, incorrect pointer offset, clipping or
+   stuck drag state. Repeat all eight resize handles after each transition and
+   exercise resizing while the panel crosses the boundary. Open Settings and
+   return on the destination, then hide/restore and verify the panel can still
+   move/resize. Account for DPI scaling when interpreting physical dimensions.
+6. Record one result per surface, monitor, edge/corner and transition direction;
+   include steps, expected/observed behavior and technical geometry for failures.
+   Mark unperformed cases explicitly. Exit normally, verify owned processes and
+   held input are cleared, compare original vault bytes, and restore any changed
+   display configuration. Keep raw synthetic evidence in the private workspace.
+
+Publish the exact candidate, topology, scales, completed cases, failures and
+supported limits. A pass covers only that observed setup. Retain partial and
+failed attempts; unavailable hardware remains an evidence gap. If a source defect
+is demonstrated, update the plan before changing application bytes and follow
+versioning, regression and local beta-handoff requirements.
+
 ## Capture-exclusion checks
 
 The beta requests Windows capture protection for its windows and owned popups,
