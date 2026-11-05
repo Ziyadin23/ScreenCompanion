@@ -25,9 +25,11 @@ Priorities below retain the inventory's proposed sequencing. A platform gate app
 
 ### Windows and support evidence
 
+W1 was refreshed on **2026-11-05 UTC**; other rows retain the snapshot above.
+
 | Item / proposed priority | State and candidate | Next action / completion condition | Owner / evidence |
 | --- | --- | --- | --- |
-| W1 / P1 — Packaged duplicate activation | Needs investigation; beta.6 packaged Windows | Diagnose the retained portable activation timeout; obtain candidate-specific different-path duplicate/early-close results and cleanup. | [#6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), [beta.6 evidence](VERIFICATION.md#beta6-extraction-guidance) |
+| W1 / P1 — Packaged duplicate activation | In progress; unchanged published Windows beta.6 | Historical audit confirms a 30-second duplicate-exit deadline and separate 1,200-second outer timeout; stalled stage remains unknown. Wait for #7's shared VM work to finish, then verify different-path restoration, direct portable startup, early close and cleanup. | [#6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), [activation tasks](../openspec/changes/verify-windows-packaged-activation/tasks.md), [bounded explanation](VERIFICATION.md#packaged-beta6-activation-investigation-2026-11-05) |
 | W2 / P1 — Recorder exclusion | Needs verification; named Windows candidate, recorder and surfaces | Inspect locally visible SC surfaces and actual received/saved whole-monitor output. Preserve beta.6 Edge/OBS failures; earlier recordings do not establish current exclusion. | [#7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), [procedure](VERIFICATION.md#capture-exclusion-checks) |
 | W3 / P1 — Live answers and diagrams | Needs verification; chosen provider/pipeline/candidate | Separately authorize a representative budgeted campaign; grade structured answers, first lines and extraction fidelity with retained failures. | [#8](https://github.com/Ziyadin23/ScreenCompanion/issues/8), [quality limits](VERIFICATION.md#live-providers-and-model-quality) |
 | W4 / P1 — Public update delivery | Review pending; local beta.4 → beta.6 qualification, issue open | Review/integrate the local 32-check public-feed result and independent restoration evidence. Keep its initial failed attempt and candidate limits. | [#9](https://github.com/Ziyadin23/ScreenCompanion/issues/9); local `verify-windows-public-update` commit `650b9be`, outside this snapshot |

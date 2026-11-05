@@ -158,6 +158,45 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+## Packaged beta.6 activation investigation (2026-11-05)
+
+For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
+audit rechecked eight retained report/job files against their previously recorded
+SHA-256 values and all 30 payloads against the original runner manifest. The
+failed attempt first opened the unpacked beta.6 application under Playwright,
+confirmed its packaged version and preview text, then launched the portable
+EXE as a duplicate with the same isolated profile. The first duplicate did not
+report an exit within the runner's **30-second** deadline. Its report contains
+`B6_DUPLICATE_DEADLINE` at `visible preview`, zero completed duplicate scenarios
+and `processesSettled: false`. Separately, the enclosing job reached its
+**1,200-second** deadline, recorded `timedOut: true` and exit 1, and attempted its
+configured process-tree termination; termination errors were suppressed.
+Vault fingerprints matched before/after;
+that does not prove clean process shutdown or profile cleanup.
+
+The portable launcher template extracts the payload, waits for the extracted
+application with `ExecWait`, then removes its extraction directory. The beta.6
+native singleton has an eight-second acquisition/activation loop, reached after
+application startup enters that code. Its deadline does not bound extraction,
+earlier startup or later shutdown. The original duplicate's stdout/stderr were
+ignored and it recorded no extracted-child or native-activation milestones.
+Consequently the observed failure is bounded to the duplicate launcher's missing
+exit within 30 seconds; extraction/startup, activation and teardown remain
+possible contributors, with no individual cause established. Increasing the
+deadline alone would not diagnose that missing evidence.
+
+The later first-instance portable diagnostic reached READY at **19.365 seconds**
+and reported main/launcher exit 0 after an explicit normal-exit request. It used
+a different environment, retained its synthetic profile/lock and explicitly
+reported the original cause and duplicate gate unproven. It remains a separate
+startup observation. Different-path duplicate restoration with retained drafts
+and input, direct-portable qualification and early-close/cleanup results remain
+open for the unchanged published beta.6 candidate. The current beta.7 source
+and its UI matrix do not establish those beta.6 outcomes. Continue through the
+[activation task owner](../openspec/changes/verify-windows-packaged-activation/tasks.md);
+new Windows runs wait for the shared recorder task's completion and fresh lab
+postflight.
+
 ## Beta.6 extraction guidance
 
 Beta.6 clarifies extraction-type precedence for choices, code and necessary
