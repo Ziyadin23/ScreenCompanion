@@ -12,7 +12,7 @@ Owner: [issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), assign
 
 ## 3. Review and delivery
 
-- [ ] 3.1 Reconcile W2 status with actual evidence or blocker, pass strict OpenSpec/Markdown/diff checks, obtain independent final-diff review, and publish a reviewable PR/checkpoint referencing #7 without closing unfinished acceptance.
+- [x] 3.1 Reconcile W2 status with actual evidence or blocker, pass strict OpenSpec/Markdown/diff checks, obtain independent final-diff review, and publish a reviewable PR/checkpoint referencing #7 without closing unfinished acceptance.
 
 ## Checkpoint — 2026-11-05
 
@@ -41,3 +41,9 @@ Owner: [issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7), assign
 - `openspec validate verify-windows-recorder-exclusion --strict` and `git diff --check` exited 0. Independent final-diff review, Markdown/privacy checks and PR publication are next.
 - `node .github/scripts/workflow-checks.mjs selftest` and `node .github/scripts/workflow-checks.mjs docs` exited 0 (45 Markdown files, 287 local links/anchors). `git diff --exit-code 8518fe5 -- desktop README.md tests .github` exited 0: application, tests, builds and CI are unchanged. Full application regression is unnecessary for this documentation-only result.
 - Resume task 2.1 by diagnosing the preflight in a separately reviewed fixture that retains the expected marker and bounded receiver/seek state, then qualify actual locally visible surfaces against received/saved whole-monitor output. The existing failure does not establish an SC source defect or recorder support. Preserve all earlier Edge/OBS failures and do not repeat the unchanged attempt blindly.
+
+### Review and publication
+
+- Evidence commit `95f01f1` was independently reviewed against base `8518fe5` on both standards and issue acceptance; both reviews returned no material findings. The acceptance review independently matched the clip hash/frame timestamps and confirmed task 2.1 is unfinished.
+- Branch pushed with upstream tracking; [PR #33](https://github.com/Ziyadin23/ScreenCompanion/pull/33) publishes this partial evidence checkpoint against `main`, references #7 and has no closing keyword. The issue remains open; merge, archive and release were not performed.
+- Progress is 2/3 tasks complete. The remaining task is actual recorder qualification, blocked at the preflight described above. Review/publication of this checkpoint does not complete that task.
