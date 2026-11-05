@@ -37,3 +37,9 @@ Owner for [W8 / issue #13](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 - Reviewer independently passed workflow selftest/docs (51 files / 317 links), strict OpenSpec (8/8) and whitespace checks. The eight task-owned files passed a local private-path/credential-pattern audit. All three tasks are complete; no new Windows qualification is claimed.
 - Deliver the reviewed documentation as a PR with `Closes #13`: the issue requires reconciliation and preservation of uncovered gates, not their execution. Keep the issue open and Orca card in review pending integration. Application/native implementation, tests, version and release assets are unchanged; no new beta handoff is required.
 - Publication next: commit/push the eight task-owned files and create the PR, then inspect hosted checks. The native documentation path takes the existing conservative full application route. No merge, archive, release or shared-VM action is authorized by this completion.
+
+## Publication checkpoint — 2026-11-05
+
+- Reviewed evidence committed/pushed as `3ef1419ab3c00ad271883b58fd354bdf67398ea2`; [PR #35](https://github.com/Ziyadin23/ScreenCompanion/pull/35) is open and ready for review against `main`, with `Closes #13` for the completed reconciliation scope. This checkpoint is a subsequent documentation-only commit; Git history owns its final identity.
+- Orca links issue #13 and PR #35 with status `in-review`. Issue #13 remains open until integration. Initial push/PR hosted checks were running at publication; use the PR's current-head checks for final results, not a superseded head's run.
+- Next: inspect current-head hosted checks, then human review/integration. All three OpenSpec tasks and local/independent checks passed. Uncovered native/account/environment cases remain open in the gate map. No new qualification, beta delivery, merge, archive or public release occurred.
