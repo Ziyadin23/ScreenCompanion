@@ -111,6 +111,18 @@ open. Historical recorder results retain their candidate/surface limits in
 
 Verify installed delivery, automatic restart, expected version, retained settings and cleanup using the candidate-specific update procedure. Check the real vault hashes independently before and after, and use an isolated profile for synthetic retention checks. Keep private feed overrides and runner paths outside source and release assets. Historical local-feed scenarios do not establish public-feed delivery; see [recorded evidence](../docs/VERIFICATION.md) and [installed update history](../docs/history/test-runs.md#installed-update-history).
 
+The published beta.4 → beta.6 **public GitHub** scenario passed **32 ordered
+checks**, exit 0, on 2026-11-03, with independent profile/cache restoration
+postflight. Its first failed attempt and separate recovery remain preserved;
+see [the measured result and limits](../docs/VERIFICATION.md#public-github-installed-update-2026-11-03).
+For this qualification, retain the packaged GitHub configuration and application
+payload, bind downloaded bytes to genuine anonymous public assets, and exercise
+explicit download and restart. Use nondefault synthetic settings and compare
+their values structurally, since serialized property order can differ. Protect
+and independently verify original vaults, size files and updater cache; keep
+failed attempts, recovery plans and machine-specific runners outside public
+source and release assets.
+
 ## Recorded evidence and live requests
 
 [Current verification](../docs/VERIFICATION.md), [rewrite history](../docs/history/typescript-rewrite.md) and [test-run history](../docs/history/test-runs.md) retain candidate identities, hashes, failed attempts and their limits.

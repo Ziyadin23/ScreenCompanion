@@ -20,7 +20,7 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 | --- | --- | --- |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh-machine/Windows 10, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
-| Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh-machine/Windows 10, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
+| Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh-machine/Windows 10, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
@@ -182,6 +182,48 @@ remain two attempts for that earlier candidate. This completed beta.7 matrix
 does not establish packaged duplicate-launch behavior, mixed-DPI support,
 named-recorder exclusion or live answer quality. Other Linux qualification
 groups remain open in their existing OpenSpec change.
+
+## Public GitHub installed update (2026-11-03)
+
+The published Windows beta.4 → beta.6 installed update passed **32 ordered
+checks** (28 distinct labels), exit 0, through the unchanged packaged GitHub
+provider. Anonymous release metadata, both genuine installers, their update
+metadata and the beta.6 blockmap were independently verified against published
+sizes and SHA-256 digests. Both application downloads matched the published
+beta.6 installer, SHA-256
+`4c473e9dbaf41d736655841923b550b88c9cdc00da2ca365691b9950a708d23a`.
+The packaged update configuration and application payload were unchanged before
+installation; no feed override was used.
+
+Downloading and installation required explicit actions in Settings. An ordinary
+quit after downloading left beta.4 installed; **Restart and install** then
+restarted the exact test installation to beta.6 READY. A subsequent launch
+verified its version, stable per-user installer identity, install location and
+Desktop/Start-menu shortcut targets. Nondefault response, pipeline and appearance
+settings matched structurally after restart, the synthetic key remained present,
+and the synthetic encrypted vault bytes were unchanged. No provider request ran.
+
+Separate read-only postflight passed, exit 0: both original encrypted vaults,
+both panel-size files and the original updater-cache directory matched their
+preflight filesystem identities and bytes/tree. The transaction journal was
+closed, its six-entry task cache retained, and all eleven prior journals were
+unchanged. No test installation, active shortcut, relevant process, owner lock or
+pending recovery remained. The VM was returned to its original powered-off state.
+
+The first new public attempt remains failed after 25 reported checks: its
+settings comparison depended on JSON property order. Its uninstall also left a
+task-owned Start-menu shortcut, blocking restoration. That exact shortcut was
+retained as evidence; a separately inspected six-move recovery restored all five
+original objects and passed independent postflight. The fresh passing attempt
+used strict structural settings equality, completed normal uninstall without
+extra shortcut retention, and preserved the earlier failure and recovery records.
+The revised private fixture suite passed **114 synthetic tests**; Windows
+preflight separately passed five synthetic filesystem-boundary checks.
+
+This qualifies the published beta.6 installer hop in one Windows 11 VM. Earlier
+failed local updates and other runtime, recorder, Windows-version and live-quality
+limits retain their separate scope. See the
+[OpenSpec task record](../openspec/changes/verify-windows-public-update/tasks.md).
 
 ## Linux source-publication checks (2026-11-02)
 
