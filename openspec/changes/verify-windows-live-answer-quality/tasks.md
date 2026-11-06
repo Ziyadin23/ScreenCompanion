@@ -28,3 +28,10 @@ Owner: [issue #8](https://github.com/Ziyadin23/ScreenCompanion/issues/8), W3. Sc
 - Local checks all exited 0: `node .github/scripts/workflow-checks.mjs selftest`; `node .github/scripts/workflow-checks.mjs docs` (final pass: 57 Markdown files/326 local links and anchors); `openspec validate --all --strict --no-interactive` (10 changes passed); `git diff --check`; `git diff --cached --check`. No application regression or Windows qualification is claimed from these documentation checks.
 - Independent Standards and Acceptance reviewers inspected the actual five-file planning diff: no material findings. Acceptance review independently confirmed the 49/96 matrix, both diagram retests and 13 + 96 = 109/120 arithmetic. Review covers planning only; task 3.1 remains open for the final campaign deliverable.
 - Next: publish the reviewed partial planning PR and request explicit task 1.2 acceptance. Do not check live tasks or close the issue from this checkpoint. The commit containing this checkpoint and its PR own publication identity; GitHub owns hosted-check state.
+
+## Merge preparation — 2026-11-06
+
+- User authorized merging PR #37. This integrates the planning checkpoint; campaign acceptance task 1.2 and all qualification tasks remain open. No paid or VM operation is part of the merge.
+- Main advanced to `5c87a54940a56d4ca843e2b8c072eb5214566b7e` through PR #36. Merged that source into the issue branch and resolved only overlapping status text, retaining both W3 planning and main's W4 evidence/links. No application paths changed.
+- Combined diff passed independent Standards and Acceptance re-review without material findings. Workflow selftest, documentation (60 Markdown files/339 links), strict validation (11 changes) and working/staged whitespace checks all exited 0.
+- Next: revalidate and review the combined documentation diff, push the resolved branch, wait for its exact-head checks, squash-merge PR #37, then record the integration receipt and retain issue #8 open. GitHub owns the merge identity/check results; private context and the Orca card record the final receipt.
