@@ -47,6 +47,12 @@ Publish only content-free results and the exact tested matrix. These observation
 
 Host inventory on 2026-11-07 found only a Windows 11 development VM among registered Windows VMs. Its retained snapshot is described as a lab after recorder checks, not a clean baseline. No clean machine was provided or booted in this session. The next runtime step requires an identified clean Windows 11 environment and its private access/ownership record. Preserve this blocker; no environment or account is to be provisioned as an unrecorded workaround. The Windows 11 support documentation can proceed independently during apply.
 
+### Authorized provisioning during follow-up #39
+
+On 2026-11-07 the user confirmed no clean environment was available and explicitly authorized creating one with Oracle VirtualBox. This supersedes the initial no-provisioning boundary for a separate task-owned VM and its fresh accounts only. Before starting the new guest, record private ownership, new disk/configuration paths, installation-media hash/version, host capacity and the independently reviewed provisioning/qualification procedure. Preserve the existing development VM, snapshots, shares and protected evidence.
+
+Use a new disk rather than a clone or development snapshot. Run headlessly with networking disconnected during qualification, no host clipboard/drag-and-drop, and only task-owned synthetic files exposed. A provisioning administrator may install VirtualBox Guest Additions for OS-level observation and file transfer; record their version and any runtime redistributables. Qualify SC under fresh standard-user accounts, independently verifying group membership and an unelevated token. Do not install Node/npm, .NET SDK/runtime, build tools, Windows SDK or a compiler-based test runner. Built-in Windows PowerShell/OS observation must not provide missing application dependencies. Keep credentials in private restricted storage and retain failures. A baseline snapshot before SC installation supports reproducibility; leave the new VM powered off and retained after independent postflight. This is qualification infrastructure, not an application/release change.
+
 ## Risks / Trade-offs
 
 - Bundled runtime mistaken for proved dependency independence → separate package inspection/PATH checks from actual tool-free machine results.
