@@ -2,6 +2,8 @@
 
 Owner for [W6 / issue #11](https://github.com/Ziyadin23/ScreenCompanion/issues/11). The user selected **Windows 11 only** on 2026-11-07; Windows 10 qualification is removed from scope. Candidate: unchanged published Windows beta.6. Fresh-account/machine evidence remains required and cannot be inferred from the existing Windows 11 development VM.
 
+The user requested a separate follow-up issue for the remaining work: [#39](https://github.com/Ziyadin23/ScreenCompanion/issues/39) tracks tasks 1.2, 2.1, 2.2 and 3.1. This file remains their sole detailed progress owner; #11 retains the original inventory context.
+
 ## 1. Establish and publish the Windows 11 boundary
 
 - [x] 1.1 Record the accepted Windows 11-only scope, exact candidate identity, environment requirements and qualification procedure; independently review the planning diff against standards and issue acceptance, and pass documentation checks and strict OpenSpec validation.
@@ -36,3 +38,10 @@ Owner for [W6 / issue #11](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 
 - Planning publication references #11 without `Closes`; source integration and qualification are separate facts. Merge and public release require their separate authorization.
 - Resume through `$openspec-apply-change verify-windows-clean-environment` after the planning handoff. Preserve this owner and private context at each task boundary; archive only after all required qualification and review tasks pass.
+
+## Integration authorization and follow-up — 2026-11-07
+
+- The user explicitly requested creating an issue for the four remaining tasks and merging [PR #38](https://github.com/Ziyadin23/ScreenCompanion/pull/38) to main. This authorizes planning integration and task publication; task 1.2 support wording and tasks 2.1–2.2 qualification are deferred to the follow-up, not completed by the merge.
+- Searched open and closed issues by W6/fresh-environment outcome and this change's owner before publication. Existing #11 was the original inventory issue; no separate continuation existed. Created the explicitly requested follow-up #39, assigned to verified `Ziyadin23`, and read back its exact scope, body and OPEN state. It links the published `12380b0` plan and names all four remaining task IDs without adding an independent implementation checklist.
+- Updated only this task owner and the W6 overview row for the follow-up and accepted Windows 11 scope. Other public support wording, application source/version, released artifacts and runtime evidence remain unchanged. Progress stays 1/5; keep #11 and #39 open while their acceptance is unfinished.
+- Next: independently review this integration-record delta, run documentation/OpenSpec/whitespace checks, push and verify final-head hosted checks, then merge only that exact reviewed head. Record actual merge/main-tree/issue/card readback in the primary private workspace. Retain the worktree/branch and all private evidence; no release, archive or lab operation is part of this request.
