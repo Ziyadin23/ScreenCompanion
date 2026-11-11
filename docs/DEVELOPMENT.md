@@ -1,6 +1,26 @@
 # Developing SC
 
-Start with [project status](STATUS.md) for current work and [engineering rules](../CODING_STANDARDS.md) for the affected area. The application manifest owns executable commands and versions; the active OpenSpec change owns implementation progress.
+Start with the workflow below. The [document ownership table](#document-ownership) identifies where each policy or reference lives; the application manifest owns executable commands and versions, and the active OpenSpec change owns implementation progress.
+
+## Contributor workflow
+
+1. **Orient.** Read [project status](STATUS.md) and the existing [handoff/checkpoint](#checkpoints-and-fresh-sessions); run `git status` before edits. Locate the [primary workspace guidance](#private-workspace-discovery) and read its task-relevant context.
+2. **Agree and plan.** Settle the outcome and acceptance conditions, then [publish or reuse the task issue](#github-issues-and-orca-tasks). Create or resume its [OpenSpec change](#openspec-lifecycle) and read the proposal, design, relevant specs and `tasks.md` before implementation.
+3. **Prepare.** Follow [worktree ownership](#worktree-ownership), complete [setup](#setup-and-checks) or record an allowed dependency skip, and read [the rules for your task](../CODING_STANDARDS.md#choose-the-rules-for-your-task). Use the [source layout](#source-layout) to find the affected code and nearby checks.
+4. **Implement and verify.** Apply pending OpenSpec tasks and run their specified [checks](#setup-and-checks), including the affected platform or behavior. Update each task's checkbox only after its checks pass; preserve evidence limits between synthetic, native, GUI, recorder and live-model results.
+5. **Review and hand off.** Review the actual final diff and evidence, update the [checkpoint](#checkpoints-and-fresh-sessions), reconcile [project status](STATUS.md#refresh-and-provenance) and refresh the [Orca card](#orca-cards). Use the completion checklist below before reporting the result.
+
+### Completion checklist
+
+Before reporting a task complete:
+
+- Its agreed acceptance conditions are met and the actual final diff has been reviewed.
+- Required [checks](#setup-and-checks) passed for the claimed scope; recorded results identify the candidate/environment and limits.
+- Affected behavior and development documentation are current in their [owning references](#document-ownership).
+- The OpenSpec task owner has a current [checkpoint](#checkpoints-and-fresh-sessions), including verification results, remaining work and next action; the status overview and card reflect that scope.
+- Beta application changes have completed the [local beta handoff](PUBLISHING.md#local-beta-handoff). Distribution and publication follow [publishing](PUBLISHING.md).
+
+For a partial handoff, name unfinished work and keep its tasks open. A source merge, target qualification and published release are separate states. Keep unfinished qualification open after a source merge.
 
 ## Source layout
 
@@ -59,7 +79,7 @@ openspec validate --all --strict --no-interactive
 git diff --check
 ```
 
-The documentation checker resolves local files and Markdown anchors; external URLs and factual freshness require review against their owning sources. Hosted CI pins the OpenSpec CLI version. This workflow/tooling change itself takes the full application route.
+The documentation checker resolves local files and Markdown anchors; external URLs and factual freshness require review against their owning sources. Hosted CI pins the OpenSpec CLI version.
 
 ## OpenSpec lifecycle
 
@@ -69,12 +89,9 @@ implementation; GitHub/Orca/OpenSpec keep their existing responsibilities below.
 
 The chat skills and shell CLI are different entry points. In chat, use `$openspec-explore`, `$openspec-propose`, `$openspec-apply-change <name>` and `$openspec-archive-change <name>`; other agents expose the corresponding slash commands. In a shell, use `openspec list --json`, `openspec status --change <name> --json` and `openspec instructions apply --change <name> --json`. Consult installed skill instructions for artifact creation and archive behavior.
 
-1. Explore the problem and accepted scope; publish/reuse its [GitHub task issue](#github-issues-and-orca-tasks), then propose the change before implementation. If an OpenSpec plan already exists, link it from the issue.
-2. Read its proposal, design, relevant specs and `tasks.md`, plus the affected-area rules.
-3. Apply pending tasks and update their checkboxes only after their specified checks pass.
-4. Review the actual diff and evidence. Archive/sync after the change's requirements and tasks are satisfied.
+Follow the [contributor workflow](#contributor-workflow) for intake, planning, implementation and handoff. Archive/sync after the change's requirements and tasks are satisfied.
 
-`openspec status` reports planning artifacts; completed planning is not completed implementation. Read apply progress from the change's task owner. A source merge, target qualification and published release are separate states. Keep unfinished qualification open after a source merge.
+`openspec status` reports planning artifacts; completed planning is not completed implementation. Read apply progress from the change's task owner. The [completion checklist](#completion-checklist) distinguishes task completion, handoff and publication.
 
 ### GitHub Issues and Orca Tasks
 
