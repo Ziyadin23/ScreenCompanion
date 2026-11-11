@@ -55,6 +55,9 @@ jobs:
       - name: Verify Linux prerequisite installer
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
         run: node --test .github/scripts/install-bubblewrap.test.mjs
+      - name: Diagnose runner network before package provisioning
+        if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
+        run: node .github/scripts/ci-network-diagnostics.mjs
       - name: Provision fixed Linux workflow prerequisites
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
         run: bash .github/scripts/agent-workflow-prerequisites.sh
