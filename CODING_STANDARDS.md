@@ -2,6 +2,25 @@
 
 [AGENTS.md](AGENTS.md) routes tasks here; [contributor guidance](docs/DEVELOPMENT.md) owns navigation, setup and workflow. Linked references own detailed behavior, commands and recorded evidence.
 
+## Choose the rules for your task
+
+Before code, test or build edits or regression runs, read [shared rules](#shared-rules) and [verification](#verification), then every affected area below, including effects of project changes:
+
+| Area | Rules |
+| --- | --- |
+| Startup, activation, requests, response preferences, diagnostics | [Lifecycle](#application-lifecycle) |
+| Extraction, crops, prompts, parsing, QA/retry configuration | [Pipeline](#pipeline-contracts) |
+| Service/model selection, HTTP adapters | [Providers](#provider-integration) |
+| Encrypted settings, migration, panel size | [Storage](#storage-compatibility) |
+| Capture, native APIs, hotkeys, hooks | [Windows](#windows-integration) |
+| Answer/input, Settings/setup, tray, appearance | [UI](#ui-behavior) |
+
+For documentation-only, naming, version or publication changes, read [documentation and status](#documentation-and-status). The [contributor workflow](docs/DEVELOPMENT.md) links setup, task ownership and completion requirements.
+
+### Linux work
+
+Before Linux work, read the [active proposal](openspec/changes/linux-platform-support/proposal.md), [design](openspec/changes/linux-platform-support/design.md), [tasks](openspec/changes/linux-platform-support/tasks.md) and [Linux evidence](docs/VERIFICATION.md#linux-port-status).
+
 ## Shared rules
 
 - Use TypeScript/JavaScript for new application logic, UI, tooling and tests. Retain native Windows code and the frozen C# interoperability fixture where removing them would weaken features or compatibility; do not add another application language without a concrete platform requirement.
