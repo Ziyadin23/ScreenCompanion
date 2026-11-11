@@ -58,7 +58,7 @@ Use the OpenSpec apply workflow after the plan is accepted. Each group includes 
 ## 8. Policy-bound protected automatic merge
 
 - [ ] 8.1 Implement the trusted category/path policy, explicit task-owner administrative allowance and source/evidence-bound decision for the local-link/parser profiles; test complete product-plus-record diff inspection, unchanged visible/external text, canonical targets, parser invariants, version/handoff exceptions and protected/unknown path denial.
-- [ ] 8.2 Prepare the concrete main-protection/required-check settings diff and preserve the inspected previous state; apply/read back the accepted enforced PR/check/up-to-date/no-bypass/no-force rules, then prove failed/stale candidates are rejected in a controlled integration test. Keep deferred GitHub automerge settings unchanged for the immediate-merge design.
+- [x] 8.2 Prepare the concrete main-protection/required-check settings diff and preserve the inspected previous state; apply/read back the accepted enforced PR/check/up-to-date/no-bypass/no-force rules, then prove failed/stale candidates are rejected in a controlled integration test. Keep deferred GitHub automerge settings unchanged for the immediate-merge design.
 - [x] 8.3 Implement serialized final identity refresh and immediate squash merge with expected-head matching, remote read-back and unknown-outcome reconciliation; test changed head/base, bypass refusal, protection loss, concurrent integration and lost merge acknowledgement.
 - [ ] 8.4 Implement postflight, persistent integration hold, scoped regression/revert-PR preparation and scoped owner/issue/card closure; verify a failed or unavailable main postflight/handoff cannot report full completion or permit later automatic merges.
 - [ ] 8.5 Run the bounded mechanical-documentation automerge pilot, then enable the parser pilot only after its complete source/check/version/beta capability is qualified; verify a real accepted delivery and postflight, and retain ineligible/unfinished stages as pending.
@@ -238,3 +238,165 @@ Tool source corpus SHA-256 at the verified checkpoint: `175a6b0eab82060ad0f9a829
 - Actual [main postflight](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/41862768422) remained queued in both GitHub connector and CLI read-backs. A fresh local `npm run verify` on the merged executable source exited 0: types, lint, build and 224/224 tests with zero failures/skips/cancellations; complete log/receipt are retained privately. This is local post-merge evidence, not a hosted-main pass or a causal fix for the older process uncertainty. Counts remain 31/39 and all eight unfinished tasks stay open; issue #28 is not closed and the change is not archived.
 - Primary local main was fast-forwarded to `918d820`, preserving the pre-existing untracked `docs/retro/`. Original feature commits/branch and private diagnostic evidence remain available. This merge authorization concerns source integration; the protection proposal remains unapplied, with main observed unprotected. No release, application version, private beta transfer or target-platform qualification changed.
 - Required merge/status reconciliation is isolated in branch `Ziyadin23/langgraph-merge-record-918d820`, based on merged main. Only this task owner and `docs/STATUS.md` change; executable source and CI remain identical to the merged checkpoint. Local workflow-checker selftest, documentation (42 files / 283 links), strict OpenSpec (5/5) and whitespace checks all exited 0. The validated record is published as a non-forced fast-forward of main after the user-authorized source merge; its own hosted checks remain externally observable without recursively editing this record. Resume the remaining accepted work from the main source and this active owner.
+
+
+### Protection continuation — 2026-11-11
+
+- Accepted scope: the user requested agents to work on repository protection and
+  documentation while guidelines are handled in another worktree. This branch
+  owns task 8.2 preparation/verification only; its concrete settings acceptance
+  and remote execution have not occurred. Other workflow tasks keep their scope.
+- Branch `Ziyadin23/issue-28-repo-protection`, based on main `e1f84be`; tracked
+  files were clean at entry. Documentation-only dependency setup was explicitly
+  skipped. The primary checkout and the guidelines worktree remain untouched.
+- Fresh read-only GitHub observation at 12:42:47 UTC confirmed main
+  `e1f84be311ec7750bd45a8c9648237a9e4971e98` is unprotected, rulesets are empty,
+  squash merging is enabled and deferred automerge remains disabled. The five
+  existing check names are supplied by `github-actions` app ID `15368`; current
+  main uses the documented route with deliberate application-job skips. This
+  is settings/check identity evidence, not fresh application qualification.
+- Refreshed [the settings proposal](protection-proposal.json), preserving its
+  2026-11-04 observation, unchanged operation body and seven-field policy diff.
+  [The bounded verification procedure](protection-verification.md) uses two
+  real-CI PRs and three owned temporary branches to prove failed/stale rejection
+  on an isolated copy of the rules before main activation, with identity-checked
+  cleanup and rollback. No probe attempts to merge broken content into main.
+- Changed paths: this task owner, `protection-proposal.json` and
+  `protection-verification.md` under this change. All remain uncommitted.
+  No settings, refs, issues, PRs, application/tool source, CI, lab or release
+  changed in this preparation. Task 8.2 remains unchecked and progress is 31/39.
+- Local verification: `node .github/scripts/workflow-checks.mjs selftest`,
+  `node .github/scripts/workflow-checks.mjs docs` (64 Markdown files / 347 local
+  links and anchors), `openspec validate --all --strict --no-interactive`
+  (12/12 changes) and `git diff --check` each exited 0. An inline Python
+  self-check also exited 0, confirming unchanged settings payload/diff, retained
+  prior observation, canonical payload hash, five provider bindings, pending
+  acceptance/execution, unchanged 31/39 progress and three-file ownership with
+  final newlines/whitespace. These checks do not establish activation or real
+  rejection evidence. Application regression and platform/live checks were not run.
+- Next: independent review of the concrete payload/experiment, then the recorded
+  settings acceptance. Only afterwards execute the owned isolated experiment,
+  clean it up, activate/read back main and record actual outcomes. Qualification
+  and automatic-delivery tasks, including 8.1/8.4/8.5 and 9.2/9.3, stay open.
+
+### Protection settings acceptance — 2026-11-11T12:48:37Z
+
+- The user explicitly selected **Apply and verify protection** for the reviewed
+  payload `b47cc92c24ed5f3bd038a0bc60cf31f947ef545101ebae503c81d8df25d43055`,
+  two temporary probe PRs/three refs, owned cleanup, and then main activation
+  with independent read-back. The coordinator relayed this explicit acceptance
+  before any remote effect. Main rollback is not automatic and requires its own
+  accepted/manual scope; deferred native automerge and unrelated settings stay
+  unchanged. The isolated experiment and activation are next, not yet evidence.
+
+### Protection API compatibility correction — 2026-11-11T12:53:25Z
+
+- Concurrent guidelines integration advanced main to `14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804`;
+  current main/check providers and unchanged settings were freshly reconciled
+  before effects. The isolated base ref was created from that source.
+- The exact original PUT was rejected with HTTP 422: `Only organization
+  repositories can have users and team restrictions`. It created no protection
+  rule or PR. The sole owned temporary base ref was deleted and absence checked;
+  main remains unchanged and unprotected. The failed attempt is retained.
+- The coordinator authorized the narrow personal-repository API correction:
+  omit only the unsupported empty `bypass_pull_request_allowances` object.
+  All seven approved policy changes are retained, with no bypass actors on
+  read-back. This is not a new user acceptance of a changed literal hash.
+- Original accepted policy payload: `b47cc92c24ed5f3bd038a0bc60cf31f947ef545101ebae503c81d8df25d43055`.
+  Corrected API payload: `f36c41238043c4efa52ea205e19ce27ef21737e884481797b64ae71dd995e7b7`. Independent encoding
+  review is pending before continuing the same bounded experiment. No additional
+  PR allowance, policy relaxation or automatic main rollback is introduced.
+
+### Interrupted experiment resumption — 2026-11-11 15:28 UTC
+
+- The user requested continuation; prior explicit protection-policy/test approval
+  and the reviewed personal-repository API correction remain in force. Fresh
+  process inspection found no surviving owned executor. The old temporary
+  receipt directory was no longer present after the interruption. No missing
+  raw response is claimed retained.
+- Retained agent tool output/handoff records the earlier exact-head PR #44
+  merge rejection: HTTP 405, `4 of 5 required status checks are failing.`,
+  failed head `72d55ff6f6360b7f088471c448ee83d78e997ecb`, unchanged temporary
+  base `14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804` and independently observed
+  REST `merged=false`. Public CI run `43024682133` records the synthetic
+  missing-target cause. This is recovered handoff evidence; the original raw
+  private receipt is unavailable, and no failed-check probe is silently replayed.
+- Fresh remote reads found main still at `14cfae18` and unprotected, the exact
+  temporary protection intact, PR #44 open/clean at repaired `b65ee114`, and
+  PR #45 open/clean at `1f585761`. The existing PR #45 push/PR checks passed;
+  no CI rerun or new PR/ref is needed. Rulesets remain empty.
+- The worktree was fast-forwarded from `e1f84be` to current main `14cfae18`,
+  preserving the three dirty protection-owned files and the user's committed
+  guidelines. Fresh durable recovery receipts are outside Git. Await the
+  coordinator's recovered-evidence disposition before the positive-control
+  merge, then continue the existing stale probe, owned cleanup and main
+  activation/read-back. Task 8.2 remains incomplete until the entire scope passes.
+
+- Recovery disposition: the coordinator authorized focused fresh expected
+  failure/repair on existing PR #44 to replace missing durable raw proof. Use
+  ordinary commits/fast-forward ref updates, preserve the earlier reported
+  outcome as history, and retain new raw evidence outside Git. No new PRs/refs
+  or workflow reruns are authorized by this correction; the existing thirty-
+  minute cumulative active CI-observation limit remains.
+
+### Protection completion — 2026-11-11 15:43 UTC
+
+- Task 8.2 is complete; workflow progress is 32/39. Other seven unfinished tasks
+  remain open, including delivery/purity/recovery/pilot and process qualification.
+  Issue #28 remains open. Protection alone does not enable automatic delivery.
+- Fresh retained failure evidence: existing PR #44 head
+  `bece31a974aac40f7f0e3c32091e335362144b8d` failed the intentional missing-link
+  gate in run `43049444182`; one exact-head merge returned HTTP 405,
+  `4 of 5 required status checks are failing.` The actual temporary base and
+  head were unchanged and REST reported `merged=false`. Normal repair head
+  `f3472d9f6b7f7fd5f1b190f34c2858a96db78180` then passed the documented route
+  and was clean/mergeable, without a workflow rerun.
+- Existing PR #45 head `1f585761240c5f0d7c4826b45a78cb858b851424` had five
+  successful gates. Its exact-head squash merge returned HTTP 200 and advanced
+  only the isolated base to `1e8a68f5c4c684856e260886f11ed17fd5fe245d`.
+- The unchanged green PR #44 repair head then became BEHIND/mergeable with
+  target/head divergence 1/4. One exact-head merge returned HTTP 405,
+  `5 of 5 required status checks are expected.` The actual target/head stayed
+  unchanged and REST reported `merged=false`. Strict-base invalidation is a
+  controlled inference from those states and unchanged policy/app bindings;
+  the literal server message does not mention base. REST pull `base.sha` retained
+  its older snapshot, so actual target identity used branch/git-ref read-backs.
+  Independent reviewer/coordinator accepted the combined proof with no repeat
+  merge request or CI rerun.
+- Owned cleanup completed at 15:42:33 UTC: PR #44 closed unmerged, PR #45 kept
+  its isolated-base merge, the temporary rule/all three owned refs were absent,
+  and all owned CI runs were terminal. No unrelated ref/PR/run was touched.
+- The accepted corrected payload was applied to main once at 15:43:15 UTC,
+  HTTP 200. Independent read-back completed at 15:43:18 UTC: main protected,
+  source unchanged at `14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804`, PRs required,
+  all five strict checks bound to Actions app ID `15368`, zero GitHub approvals,
+  administrator enforcement and no bypass actors/force pushes/deletion. Native
+  `allow_auto_merge=false`, squash support, unrelated repository options and
+  empty rulesets were unchanged. No main rollback was invoked.
+- The raw original temporary files remain unavailable; earlier handoff proof is
+  historical reported evidence only. Fresh exact requests/responses, CI source
+  observations and cleanup/activation proofs are retained persistently outside
+  Git. The bounded recovery used the existing two PRs/three refs. Earlier active
+  CI-watch raw accounting was lost, so the fresh observer conservatively reserved
+  ten minutes of the existing thirty-minute limit for prior activity; inactive
+  interruption time was excluded.
+- [The verification receipt](protection-verification.md) and
+  [applied settings record](protection-proposal.json) contain public sources and
+  candidate limits. Root independently confirmed live policy and cleanup.
+  Changed files remain exactly these two records and this task owner, on
+  `Ziyadin23/issue-28-repo-protection` based on current main `14cfae18`.
+  No application, CI, guidelines, release, live model or lab scope changed.
+- Final local verification: `node .github/scripts/workflow-checks.mjs selftest`,
+  `node .github/scripts/workflow-checks.mjs docs` (67 Markdown files / 379 local
+  links and anchors), `openspec validate --all --strict --no-interactive`
+  (13/13 changes) and `git diff --check` each exited 0. The refreshed apply
+  instructions report 32 complete / 7 remaining and task 8.2 done. An inline
+  assertion verified the exact one-object API encoding correction, unchanged
+  seven-field policy, current applied state and only one task-checkbox change,
+  three-file scope, privacy boundaries and whitespace, exit 0.
+- Final publication authorization: after independent final review is clean,
+  publish only these three records by a normal task-branch push and draft PR
+  referencing #28. No main source merge, force push, rebase, issue closure or
+  further settings mutation is authorized by that publication. Local checks
+  validate this documentation scope; the positive control retains its real
+  hosted gates. No target GUI, lab, live-provider or release run was performed.
