@@ -1,3 +1,3 @@
 # Protection probe
 
-[Existing project guide](USER_GUIDE.md)
+[Intentional missing target](sc-protection-probe-8-2-absent.md)
