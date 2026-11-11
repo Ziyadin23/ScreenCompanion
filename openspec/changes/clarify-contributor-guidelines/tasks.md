@@ -4,7 +4,7 @@ Implementation follows [design.md](design.md). Behavioral specs are skipped beca
 
 ## Current handoff — 2026-11-11
 
-All five implementation/verification tasks are complete. The user explicitly authorized committing, publishing a PR and merging it into `main` on 2026-11-11. Work is on `Ziyadin23/guideLines-2`, based on `e1f84be311ec7750bd45a8c9648237a9e4971e98`; issue #42 owns the outcome and the linked PR/Git history will own source-publication receipts. Next: publish the reviewed eight-file change and merge after final-head CI passes. No unresolved implementation decision remains. Earlier checkpoints below retain the state observed at each task boundary.
+All five implementation/verification tasks are complete and the source change is published in [PR #43](https://github.com/Ziyadin23/ScreenCompanion/pull/43), closing issue #42 on integration. The user explicitly authorized commit, push, PR and merge into `main` on 2026-11-11. Branch `Ziyadin23/guideLines-2` starts from `e1f84be311ec7750bd45a8c9648237a9e4971e98`; the linked PR and Git history own final source/check/merge receipts. Implementation continuation: none; inspect those receipts before further publication work. Archive remains separate. Earlier checkpoints below retain the state observed at each task boundary.
 
 ## 1. Task ownership and rule routing
 
@@ -88,3 +88,10 @@ All work remains local/uncommitted on the recorded base. Next: task 3.2, final d
 - The user requested “make pull req and merge,” authorizing the commit, push, PR and source merge for this verified documentation change. Archive, application/release work and repository-setting changes remain outside this request.
 - Fetched `origin/main` and read back GitHub's default branch: both remain at `e1f84be311ec7750bd45a8c9648237a9e4971e98`. There is no existing PR or remote branch for `Ziyadin23/guideLines-2`; no rebase or unrelated source change is needed.
 - Review scope remains the four guideline/status files and four OpenSpec artifacts. Local documentation checks precede the commit; hosted checks will be inspected at the final PR head before squash merge. GitHub and the linked PR own final commit/check/merge receipts.
+
+## Source publication checkpoint — 2026-11-11
+
+- Repeated local checker selftest, documentation links/anchors (66 files / 373 local links), strict validation of all 13 OpenSpec changes, whitespace and eight-file scope/privacy/policy-preservation checks: all exited 0 before staging. The reviewed change was committed as `c670b9c74cd3d685efa7fb8fc91686c1117fcd41` and pushed to the existing task branch; the worktree was clean afterwards.
+- [PR #43](https://github.com/Ziyadin23/ScreenCompanion/pull/43) targets `main`, names the accepted documentation outcome and closes #42. Read-back confirmed the exact body, eight expected files, correct head/base and mergeability. No application, dependency, CI or release file is included.
+- The [initial PR workflow](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43022976909) passed its documentation route: changes/documentation/agent-workflow succeeded and the two application jobs were deliberately skipped. The [initial push workflow](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43022914573) took the conservative first-push application route and was still running at this checkpoint. These observations belong to `c670b9c`; final-head checks are inspected separately before merge.
+- This checkpoint refresh only links the public publication/evidence owners. The linked PR and Git history retain final head, CI and squash-merge receipts; source integration does not publish application binaries or close unrelated platform gates.
