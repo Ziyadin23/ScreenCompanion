@@ -24,6 +24,50 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
+## Recorder continuation (2026-11-08)
+
+[Issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7) and
+[task 2.1](../openspec/changes/verify-windows-recorder-exclusion/tasks.md)
+remain open. This continuation uses documentation baseline `d249cb5` and retains
+the unchanged published Windows beta.6 candidate; no new application build or
+recorder qualification is claimed.
+
+A host replay reproduced the receiver timestamp problem using the retained
+seven-frame synthetic clip: it reported requested seek time **2.617s**, which
+is **0.25s** from the nearest encoded frame PTS. A separately copied private
+fixture now waits for both a settled seek and presented-frame metadata. The
+corrected replay reports actual frame PTS **1.836s**; an independent saved-frame
+decode at that timestamp passed all **51 marker cells** and the nonblack check.
+All **185** host synthetic tests passed with zero failures/skips, including
+**30** focused receiver tests; **6/6** real headless Chromium controls passed. An intermediate replay failed its bounded sample assertion
+while the VM was starting; its cause remains unproven and the failure is
+retained. These results establish a host fixture correction only. The
+finalizer's **0.1s** timestamp tolerance, exact dimensions, marker checks and
+personal local/received/saved review gates remain unchanged. Earlier recordings
+and acknowledgments were not rewritten or upgraded to passes.
+
+Windows execution stopped at interactive access. Stored-credential Guest
+Control authentication succeeded, but paced login attempts did not establish
+an interactive desktop. A read-only session probe found no interactive desktop. The cause remains
+unknown. No bridge, SC application, recorder or provider call started, so this
+continuation completed **0/24 new surface phases** and supplies no new Windows
+receiver, setup/fullscreen or exclusion verdict.
+
+A separate Guest Control **session 0** postflight exited **0**, found no relevant
+application/recorder processes, and matched the sizes and SHA-256 hashes of
+five protected files against the retained baseline, including both encrypted
+vaults. This is not an interactive input-state or full profile/journal
+postflight. Normal guest shutdown exited **0**; a later independent VM-state
+readback confirmed **powered off**, after an earlier poll still reported
+running. No force poweroff, account/policy change or application modification
+was performed. Private login, fixture and restoration receipts remain outside
+Git.
+
+Resume with normal interactive access and fresh lab readiness, verify the
+receiver correction on Windows, isolate the **1920×1079** setup/fullscreen
+transition, and complete the strict matrix. The prior partial surface evidence
+and all failed attempts below retain their original scope.
+
 ## Windows recorder preflight (2026-11-05)
 
 [Issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7) remains open.
