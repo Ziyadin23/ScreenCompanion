@@ -55,9 +55,11 @@ Recorded Windows checks use Windows 11. Published beta.6 passed six packaged
 duplicate states, direct portable startup and ten rapid first-window closes;
 the historical activation timeout remains unexplained. See the
 [packaged qualification](docs/VERIFICATION.md#packaged-beta6-activation-qualification-2026-11-05).
-Windows 10 is outside the current support target. Fresh-machine setup still has
-open checks; see
-[verification results](docs/VERIFICATION.md#current-candidate-and-open-gates).
+The published beta.4 → beta.6 public GitHub update passed its
+[32-check scenario and restoration postflight](docs/VERIFICATION.md#public-github-installed-update-2026-11-03).
+Windows 10 is outside the current support target. Fresh Windows 11 setup,
+recorder output, mixed-DPI and live answer quality retain separate
+[verification limits](docs/VERIFICATION.md#current-candidate-and-open-gates).
 
 ### Linux (unpublished port)
 

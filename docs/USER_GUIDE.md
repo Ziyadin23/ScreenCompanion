@@ -124,7 +124,7 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
-All six provider adapters have mocked transport coverage; beta.6 passed the separately recorded Windows encrypted-settings/UI checks. Beta.7 Windows checks remain open. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
+All six provider adapters have mocked transport coverage. Beta.7 source passed the [full Windows 11 native/vault/UI matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03); beta.6 retains its [separately recorded checks](VERIFICATION.md#beta6-extraction-guidance). These results do not establish live account/model access, representative answer accuracy, recorder exclusion or fresh-machine readiness.
 
 ## Installed and portable updates
 

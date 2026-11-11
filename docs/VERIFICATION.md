@@ -803,18 +803,21 @@ promise current support. Source and published binaries are unchanged.
 | --- | --- | --- |
 | Published beta.6 / existing Windows 11 development VM | [Packaged startup and activation](#packaged-beta6-activation-qualification-2026-11-05), [public installed update](#public-github-installed-update-2026-11-03), and [split native/vault/UI checks](#beta6-extraction-guidance). | Existing account and developer tools; no fresh-account or clean-machine pass. Earlier failed attempts remain recorded. |
 | Unpublished beta.7 / existing Windows 11 development VM | [Full native/vault/UI matrix](#windows-full-ui-matrix-2026-11-03). | Does not qualify beta.6 packages or a fresh environment. |
-| Published beta.6 / fresh ordinary Windows 11 account | **Not run.** | Installed and portable first setup, Settings Save/Back, encrypted-settings retention and independent postflight remain pending. A synthetic app profile is not a fresh Windows account. |
-| Published beta.6 / clean Windows 11 machine without separately installed developer tools | **Not run; separate VM provisioning authorized.** | The user authorized creating a clean VirtualBox environment after confirming none was available. Clean OS/account/tool and candidate-hash evidence must precede qualification. A fresh account on the used development VM or a system-only PATH cannot satisfy this condition. |
+| Published beta.6 / fresh ordinary Windows 11 account | **Full qualification remains open.** | The installed and portable setup/settings matrix and independent postflight need completed, reconciled evidence. A synthetic app profile is not a fresh Windows account. |
+| Published beta.6 / clean Windows 11 machine without separately installed developer tools | **Full qualification remains open; separate VM provisioning was authorized.** | Retain the existing clean-environment continuation and its OS/account/tool and candidate-hash baselines. A fresh account on the used development VM or a system-only PATH cannot satisfy this condition. |
 
 [Follow-up #39](https://github.com/Ziyadin23/ScreenCompanion/issues/39) and the
 [OpenSpec owner](../openspec/changes/verify-windows-clean-environment/tasks.md)
 track this remaining qualification; [the design](../openspec/changes/verify-windows-clean-environment/design.md)
 pins the unchanged beta.6 installer/portable hashes and required OS/account/tool
-inventory and matrix. The support-wording change alone supplies no runtime
-evidence. An identified clean environment and
-private access/ownership record are required before the reviewed procedure can
-run. During follow-up #39 the user authorized provisioning a separate clean
-VirtualBox VM and fresh accounts; this does not establish a runtime pass.
+inventory and matrix. [Draft PR #40](https://github.com/Ziyadin23/ScreenCompanion/pull/40)
+published the reviewed support-wording/provisioning checkpoint at `29722e0`.
+A later retained private continuation records environment preparation and partial
+installed-copy checks, beyond that published checkpoint. This documentation
+refresh does not reverify those receipts or establish a complete installed and
+portable qualification. Resume that existing continuation and reconcile its
+evidence before changing the open acceptance claims. No new guest, account,
+package or provider operation was performed for this refresh.
 
 Mixed-DPI placement, foreign-account vault rejection, abandoned-mutex contention
 with a retained competing handle and duplicate launches before native
