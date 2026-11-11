@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if test "${SC_CI47_DIAGNOSTICS:-}" = 1; then
+  node "$(dirname "$0")/ci-network-diagnostics.mjs" before || test "$?" = 1
+fi
+
 # The sandbox mounts /usr read-only; setup-node's /opt toolcache is unavailable inside it.
 node_source=$(readlink -f "$(command -v node)")
 npm_source=$(readlink -f "$(command -v npm)")
@@ -17,7 +21,7 @@ test "$(node --version)" = "$(/usr/bin/node --version)"
 test "$(npm --version)" = "$(/usr/bin/npm --version)"
 
 if test "${SC_CI47_DIAGNOSTICS:-}" = 1; then
-  node "$(dirname "$0")/ci-network-diagnostics.mjs"
+  node "$(dirname "$0")/ci-network-diagnostics.mjs" after
   exit 1
 fi
 node "$(dirname "$0")/install-bubblewrap.mjs"
