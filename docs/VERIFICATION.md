@@ -18,9 +18,9 @@ Current shared source is beta.7, with Linux source merged in PR #23 and full Win
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
-| Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh-machine/Windows 10, mixed-DPI, recorder output and live answer quality have separate owners. |
+| Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
-| Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh-machine/Windows 10, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
+| Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
 
@@ -794,12 +794,34 @@ recorded separately; successful follow-ups do not erase those failures.
 
 ## Platform support
 
-The application targets Windows x64 and has runtime evidence on Windows 11.
-Windows 10, fresh-account/machine startup without installed development tools,
-mixed-DPI placement, foreign-account vault rejection, abandoned-mutex contention
+As of **2026-11-07**, the Windows support target is **Windows 11 x64**, following
+the user's Windows 11-only decision. Windows 10 is outside the current support
+target; earlier Windows 10 references retain their historical scope and do not
+promise current support. Source and published binaries are unchanged.
+
+| Candidate / environment | Established evidence | Qualification boundary |
+| --- | --- | --- |
+| Published beta.6 / existing Windows 11 development VM | [Packaged startup and activation](#packaged-beta6-activation-qualification-2026-11-05), [public installed update](#public-github-installed-update-2026-11-03), and [split native/vault/UI checks](#beta6-extraction-guidance). | Existing account and developer tools; no fresh-account or clean-machine pass. Earlier failed attempts remain recorded. |
+| Unpublished beta.7 / existing Windows 11 development VM | [Full native/vault/UI matrix](#windows-full-ui-matrix-2026-11-03). | Does not qualify beta.6 packages or a fresh environment. |
+| Published beta.6 / fresh ordinary Windows 11 account | **Full qualification remains open.** | The installed and portable setup/settings matrix and independent postflight need completed, reconciled evidence. A synthetic app profile is not a fresh Windows account. |
+| Published beta.6 / clean Windows 11 machine without separately installed developer tools | **Full qualification remains open; separate VM provisioning was authorized.** | Retain the existing clean-environment continuation and its OS/account/tool and candidate-hash baselines. A fresh account on the used development VM or a system-only PATH cannot satisfy this condition. |
+
+[Follow-up #39](https://github.com/Ziyadin23/ScreenCompanion/issues/39) and the
+[OpenSpec owner](../openspec/changes/verify-windows-clean-environment/tasks.md)
+track this remaining qualification; [the design](../openspec/changes/verify-windows-clean-environment/design.md)
+pins the unchanged beta.6 installer/portable hashes and required OS/account/tool
+inventory and matrix. [Draft PR #40](https://github.com/Ziyadin23/ScreenCompanion/pull/40)
+published the reviewed support-wording/provisioning checkpoint at `29722e0`.
+A later retained private continuation records environment preparation and partial
+installed-copy checks, beyond that published checkpoint. This documentation
+refresh does not reverify those receipts or establish a complete installed and
+portable qualification. Resume that existing continuation and reconcile its
+evidence before changing the open acceptance claims. No new guest, account,
+package or provider operation was performed for this refresh.
+
+Mixed-DPI placement, foreign-account vault rejection, abandoned-mutex contention
 with a retained competing handle and duplicate launches before native
-initialization still need dedicated checks. Removing tools from PATH in a
-development VM is not a fresh-machine check.
+initialization still need dedicated checks.
 
 The [2026-11-05 native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
 reconciles the former blanket resize/contention gates: all eight edges on answer
@@ -818,10 +840,13 @@ and reports `Excluded`, `ContentHidden` or `Failed`. Affinity assertions and
 native compilation do not establish actual exclusion from a saved recording or
 received stream. The visible tray icon remains part of the Windows taskbar.
 
-On Windows 10 version 2004 and later, SC requests omission from supported capture
-paths. Earlier Windows 10 builds request blanked window content, so the window
-itself may remain visible. If omission fails, the bridge also attempts content
-hiding and reports the resulting status. Actual output still depends on the recorder.
+On Windows 11, SC requests omission from supported capture paths. If omission
+fails, the bridge also attempts content hiding and reports the resulting status.
+Actual output still depends on the recorder. The retained implementation also
+requests omission on Windows 10 version 2004 and later, and blanked window content
+on earlier Windows 10 builds (where the window itself may remain visible). Those
+fallback details are implementation history, not current deployment guidance or
+a Windows 10 support claim.
 
 Run the production EXE with `--capture-test-only` for a key-free test panel. Keep
 it visible locally, record/share the entire monitor using a named recorder or

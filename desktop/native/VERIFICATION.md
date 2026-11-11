@@ -116,8 +116,18 @@ candidate's evidence explains or erases that intermittent visibility failure.
 
 ## Remaining gates and unsupported environments
 
+As of **2026-11-07**, the Windows support target is **Windows 11 x64**. Windows 10
+is outside that target; its row in the dated 2026-11-05 map above retains the
+original inventory, not a current qualification requirement. Fresh Windows 11
+account/machine qualification remains **open** under
+[follow-up #39](https://github.com/Ziyadin23/ScreenCompanion/issues/39) and the
+[existing OpenSpec owner](../../openspec/changes/verify-windows-clean-environment/tasks.md).
+The user authorized a separate clean VirtualBox VM; its qualification is pending. See the
+[current support matrix](../../docs/VERIFICATION.md#platform-support); no new
+native or packaged runtime result is claimed by this support update.
+
 Foreign-account rejection, abandoned-mutex contention, pre-initialization
-duplicates, mixed-DPI and fresh-machine/Windows 10 qualification remain open as
+duplicates, mixed-DPI and fresh Windows 11 account/machine qualification remain open as
 scoped above. Recorder output requires separate named-recorder/receiver evidence.
 
 Windows UI verification also exposed and fixed Alt-drag cancellation after a
@@ -128,7 +138,7 @@ suite covers these behaviors, owned picker visibility and wheel delivery while
 the main JavaScript thread is busy. See [the current suite results](../REWRITE.md).
 
 Production native behavior is unavailable on non-Windows systems; there is no
-mock fallback. The distribution build targets Windows x64. Affinity is best
+mock fallback. The Windows distribution target is Windows 11 x64. Affinity is best
 effort and may return `ContentHidden` or `Failed`. Legacy migration's atomic
 non-overwriting publication requires filesystem hard-link support in the local
 profile directory; unsupported filesystems fail without replacing existing bytes.
