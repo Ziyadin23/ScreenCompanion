@@ -16,8 +16,7 @@ diff -qr "$node_prefix/lib/node_modules/npm" /usr/local/lib/sc-ci-node/lib/node_
 test "$(node --version)" = "$(/usr/bin/node --version)"
 test "$(npm --version)" = "$(/usr/bin/npm --version)"
 
-sudo apt-get update
-sudo apt-get install --yes bubblewrap
+node "$(dirname "$0")/install-bubblewrap.mjs"
 # Ubuntu 24.04 AppArmor otherwise strips capabilities needed for bwrap's namespace setup.
 # This setting lives only for this fresh GitHub-hosted runner job.
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
