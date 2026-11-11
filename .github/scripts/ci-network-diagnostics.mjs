@@ -32,11 +32,9 @@ async function probe(context, command, args) {
   }
 }
 
-process.exitCode = 1;
-console.log(`${prefix} Temporary read-only network probes; this step intentionally exits 1.`);
-try {
-  const results = await Promise.all(contexts.flatMap(([context, invocation]) => hosts.flatMap(([host, path]) =>
-    [4, 6].flatMap((family) => [
+async function networkProbes(selectedContexts = contexts, families = [4, 6]) {
+  return Promise.all(selectedContexts.flatMap(([context, invocation]) => hosts.flatMap(([host, path]) =>
+    families.flatMap((family) => [
       (async () => {
         const result = await probe(invocation, 'getent', [`ahostsv${family}`, host]);
         const addresses = [...new Set(result.stdout.split('\n').map((line) => line.trim().split(/\s+/)[0])
@@ -55,8 +53,74 @@ try {
         return { context, host, family, probe: 'https', exit: result.exit, killed: result.killed ?? false, ...summary };
       })(),
     ]))));
+}
+
+function logResults(results) {
   for (const result of results) console.log(`${prefix} ${JSON.stringify(result)}`);
+}
+
+async function defaultDns() {
+  return Promise.all(contexts.slice(1).flatMap(([context, invocation]) => hosts.map(async ([host]) => {
+    const result = await probe(invocation, 'getent', ['ahosts', host]);
+    const addresses = [...new Set(result.stdout.split('\n').map((line) => line.trim().split(/\s+/)[0])
+      .filter((address) => isIP(address)))].slice(0, 4);
+    return { context, host, family: 'default', probe: 'dns', exit: result.exit,
+      killed: result.killed ?? false, addresses };
+  })));
+}
+
+async function aptUpdate(mode) {
+  const args = [
+    '-n', '--', 'timeout', '--signal=KILL', '210s', 'apt-get',
+    '-o', 'Acquire::Retries=1', '-o', 'Acquire::http::Timeout=15',
+    '-o', 'Acquire::https::Timeout=15', '-o', 'APT::Update::Error-Mode=any',
+    ...(mode === 'forceIPv4' ? ['-o', 'Acquire::ForceIPv4=true'] : []), 'update',
+  ];
+  const started = performance.now();
+  let exit = 0;
+  let output = '';
+  try {
+    const result = await execute('sudo', args, {
+      encoding: 'utf8', timeout: 220_000, killSignal: 'SIGKILL', maxBuffer: 1024 * 1024,
+    });
+    output = `${result.stdout}\n${result.stderr}`;
+  } catch (error) {
+    exit = typeof error.code === 'number' ? error.code : -1;
+    output = `${typeof error.stdout === 'string' ? error.stdout : ''}\n${typeof error.stderr === 'string' ? error.stderr : ''}`;
+  }
+  const lines = output.split('\n');
+  const counts = hosts.map(([host]) => ({
+    host,
+    resolvingFailures: output.split(`Temporary failure resolving '${host}'`).length - 1,
+    successfulIndexes: lines.filter((line) => /^(Get|Hit):\d+\s/.test(line)
+      && (line.includes(`://${host}/`) || line.includes(`://${host} `))).length,
+  }));
+  console.log(`${prefix} ${JSON.stringify({ probe: 'apt-update', mode,
+    exit, durationMs: Math.round(performance.now() - started), counts })}`);
+  return exit;
+}
+
+process.exitCode = 1;
+console.log(`${prefix} Temporary network/APT differential; this step intentionally exits 1.`);
+try {
+  const results = await networkProbes();
+  logResults(results);
+  const ipv4Https = results.filter((result) => result.family === 4 && result.probe === 'https');
+  if (ipv4Https.length === hosts.length * contexts.length
+    && ipv4Https.every((result) => result.exit === 0 && result.http === 200)) {
+    const defaultExit = await aptUpdate('default');
+    if (defaultExit !== 0) {
+      const [ipv4Results, defaultDnsResults] = await Promise.all([
+        networkProbes(contexts.slice(1), [4]), defaultDns(),
+      ]);
+      logResults([...ipv4Results, ...defaultDnsResults]);
+      const forcedExit = await aptUpdate('forceIPv4');
+      if (forcedExit === 0) await aptUpdate('default-again');
+    }
+  } else {
+    console.log(`${prefix} APT comparison skipped: IPv4 HTTPS control did not pass in every context.`);
+  }
 } catch {
   console.log(`${prefix} Probe orchestration unavailable; diagnostic step remains failed.`);
 }
-console.log(`${prefix} Diagnostic only: package provisioning and workflow verification have not run.`);
+console.log(`${prefix} Diagnostic only: package installation and workflow verification have not run.`);

@@ -57,7 +57,7 @@ jobs:
         run: node --test .github/scripts/install-bubblewrap.test.mjs
       - name: Diagnose runner network before package provisioning
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
-        run: node .github/scripts/ci-network-diagnostics.mjs
+        run: SC_CI47_DIAGNOSTICS=1 bash .github/scripts/agent-workflow-prerequisites.sh
       - name: Provision fixed Linux workflow prerequisites
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
         run: bash .github/scripts/agent-workflow-prerequisites.sh
