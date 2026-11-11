@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if test "${SC_CI47_DIAGNOSTICS:-}" = 1; then
-  node "$(dirname "$0")/ci-network-diagnostics.mjs" before || test "$?" = 1
-fi
-
 # The sandbox mounts /usr read-only; setup-node's /opt toolcache is unavailable inside it.
 node_source=$(readlink -f "$(command -v node)")
 npm_source=$(readlink -f "$(command -v npm)")
@@ -20,10 +16,6 @@ diff -qr "$node_prefix/lib/node_modules/npm" /usr/local/lib/sc-ci-node/lib/node_
 test "$(node --version)" = "$(/usr/bin/node --version)"
 test "$(npm --version)" = "$(/usr/bin/npm --version)"
 
-if test "${SC_CI47_DIAGNOSTICS:-}" = 1; then
-  node "$(dirname "$0")/ci-network-diagnostics.mjs" after
-  exit 1
-fi
 node "$(dirname "$0")/install-bubblewrap.mjs"
 # Ubuntu 24.04 AppArmor otherwise strips capabilities needed for bwrap's namespace setup.
 # This setting lives only for this fresh GitHub-hosted runner job.
