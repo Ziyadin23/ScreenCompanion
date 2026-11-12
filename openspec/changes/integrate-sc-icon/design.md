@@ -2,7 +2,7 @@
 
 ## Context
 
-See [proposal](proposal.md). Approved assets are in `assets/brand/`. The app is Electron/Vite with a Windows NSIS/portable build and Linux RPM. PR #53 owns the accepted beta.8 UI; this branch now intentionally includes its published `4d73eb0` source. The website is Astro with English/Russian pages and a configured GitHub Pages base path, maintained in a separate worktree.
+See [proposal](proposal.md). Approved assets are in `assets/brand/`. The app is Electron/Vite with a Windows NSIS/portable build and Linux RPM. PR #53's accepted beta.8 UI merged at `0627df2`; this branch is now based on that main revision. The website is Astro with English/Russian pages and a configured GitHub Pages base path, maintained in a separate worktree.
 
 ## Goals / Non-Goals
 
@@ -23,5 +23,5 @@ See [proposal](proposal.md). Approved assets are in `assets/brand/`. The app is 
 
 - Cached OS shortcut/browser icons can linger → new build/version and new website asset URLs; avoid changing stable app identity or resetting user caches.
 - Busy badges can obscure a small mark → retain the main silhouette and inspect actual idle/busy bitmaps at tray sizes.
-- A source dependency on pending PR #53 must remain explicit → record the dependency; this work does not merge that PR.
+- Source history could reintroduce obsolete UI → use the merged beta.8 main baseline and verify candidate source bytes after rebasing. All 160 staged files matched after the rebase.
 - Lab updates can make Windows temporarily unavailable → inspect current private ownership/state before guest operations and preserve update processing.
