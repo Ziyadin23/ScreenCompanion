@@ -1,3 +1,5 @@
+<img src="assets/brand/sc-icon-180.png" width="64" height="64" alt="">
+
 # SC
 
 SC answers questions from your screen or from text you type, then displays a
@@ -17,7 +19,7 @@ choose the AI service and supply your own API key; provider usage charges apply.
 | --- | --- | --- |
 | Latest Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.8** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source, unpublished | **0.5.0-beta.9** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Linux is available as source only**, targeting Fedora 44 x86-64 with Hyprland
 Wayland. No Linux RPM has been published, and target desktop checks remain open.

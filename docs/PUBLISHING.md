@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current source version is 0.5.0-beta.8 and is unpublished. Version 0.5.0-beta.6 was published as a
+[README](../README.md#release-status). The current source version is 0.5.0-beta.9 and is unpublished. Version 0.5.0-beta.6 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
 Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
@@ -19,6 +19,11 @@ verification snapshot associated with every already distributed build.
 
 The public repository retains its `ScreenCompanion` URL. Product/executable names
 use SC; historical URLs and asset names retain their actual identifiers.
+
+The approved icon master is `assets/brand/sc-icon.png`. Windows/NSIS uses its
+multiresolution `sc-icon.ico`; Linux packaging and runtime/UI imports use
+`sc-icon-512.png`. Keep these exports together when changing the master.
+Window/tray resources are emitted into the application bundle by Vite.
 
 ## Distribution build
 

@@ -8,6 +8,7 @@ import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
+import appIcon from '../../../assets/brand/sc-icon-512.png';
 
 type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
 const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates'];
@@ -253,7 +254,7 @@ export function Settings({ state }: { state: AppState }) {
   return <section className="settings fixed-theme" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
-    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>SC settings</h1></div><span>v{state.version}</span></header>
+    <header className="dialog-header"><div className="dialog-title"><img className="app-mark" src={appIcon} width={28} height={28} alt="" /><h1>SC settings</h1></div><span>v{state.version}</span></header>
     <div className="settings-layout">
     <div className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
       {PAGES.map((name) => <button key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}

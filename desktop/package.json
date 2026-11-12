@@ -1,6 +1,6 @@
 {
   "name": "sc-desktop",
-  "version": "0.5.0-beta.8",
+  "version": "0.5.0-beta.9",
   "private": true,
   "description": "SC desktop companion",
   "homepage": "https://github.com/Ziyadin23/ScreenCompanion",
@@ -57,6 +57,7 @@
       }
     ],
     "win": {
+      "icon": "../assets/brand/sc-icon.ico",
       "extraResources": [
         {
           "from": "native/build/Release/sc_windows.node",
@@ -71,6 +72,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
+      "icon": "../assets/brand/sc-icon-512.png",
       "target": [
         "rpm"
       ],
@@ -104,6 +106,8 @@
       "requestExecutionLevel": "user"
     },
     "nsis": {
+      "installerIcon": "../assets/brand/sc-icon.ico",
+      "uninstallerIcon": "../assets/brand/sc-icon.ico",
       "artifactName": "SC-Setup-v${version}.${ext}",
       "oneClick": true,
       "perMachine": false,

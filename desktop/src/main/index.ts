@@ -13,6 +13,8 @@ import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import { createPortalCapture } from './linux-capture';
 import { autoPanelHeight } from './panel-size';
+import { createTrayImages } from './tray-icon';
+import appIconPath from '../../../assets/brand/sc-icon-512.png?asset';
 import packageManifest from '../../package.json';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -35,6 +37,7 @@ let updates: ApplicationUpdates | null = null;
 let platform: WindowsPlatform | null = null;
 let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
+let trayIcons: ReturnType<typeof createTrayImages> | undefined;
 let closing = false;
 let readyToShow = false;
 let panelBounds: Electron.Rectangle | null = null;
@@ -49,12 +52,8 @@ let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
 
 function trayImage(working: boolean): Electron.NativeImage {
-  const size = 24; const pixels = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const at = (y * size + x) * 4;
-    if ((x - 12) ** 2 + (y - 12) ** 2 < 100) { pixels[at] = working ? 40 : 210; pixels[at + 1] = working ? 180 : 180; pixels[at + 2] = working ? 250 : 90; pixels[at + 3] = 255; }
-  }
-  return nativeImage.createFromBuffer(pixels, { width: size, height: size });
+  trayIcons ??= createTrayImages(nativeImage.createFromPath(appIconPath));
+  return working ? trayIcons.working : trayIcons.idle;
 }
 function clampBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   const area = screen.getDisplayMatching(bounds).workArea;
@@ -144,6 +143,7 @@ function publish(state: AppState, capturing: boolean): void {
       ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(52 * scale) : 0);
   }
   tray?.setImage(trayImage(state.busy));
+  tray?.setToolTip(state.busy ? 'SC — Working…' : 'SC');
   if (capturing || !state.visible || !readyToShow) hidePanel();
   else if (!window.isVisible()) {
     if (linux || state.surface === 'input' || state.surface === 'settings' || state.surface === 'setup') window.show();
@@ -191,7 +191,7 @@ async function boot(): Promise<void> {
   platform.startCaptureProtection(); diagnostics.event('PROCESSSTARTED');
   const store: SettingsStore = preview || captureTest ? createPreviewStore() : createSettingsStore(platform, localData ?? (() => { throw new AppError('PROFILEMISSING', 'The local application settings directory is unavailable.'); })(), { platform: linux ? 'linux' : 'windows' });
   const area = screen.getPrimaryDisplay().workArea;
-  window = new BrowserWindow({ title: 'SC', width: 420, height: 180, x: area.x + Math.max(12, area.width - 500), y: area.y + Math.max(12, area.height - 240),
+  window = new BrowserWindow({ title: 'SC', icon: appIconPath, width: 420, height: 180, x: area.x + Math.max(12, area.width - 500), y: area.y + Math.max(12, area.height - 240),
     show: false, frame: linux, transparent: true, resizable: true, maximizable: false, fullscreenable: false,
     alwaysOnTop: true, skipTaskbar: !linux, hasShadow: linux, minWidth: linux ? 340 : 180, minHeight: linux ? 140 : 80,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false } });
