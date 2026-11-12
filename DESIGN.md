@@ -236,7 +236,7 @@ Depth comes from charcoal tonal layers and fine borders. Panel and settings sect
 
 ## Shapes
 
-The main panel has softly rounded corners using the panel radius. Most controls, fields, choice popups and the appearance preview share the control radius. Toolbar buttons and compact error surfaces use the compact radius; choice options use the smaller option radius. Borders are thin (1px). The SC mark is a small typographic identifier inside a rounded square, rather than an illustration or new logo system.
+The main panel has softly rounded corners using the panel radius. Most controls, fields, choice popups and the appearance preview share the control radius. Toolbar buttons and compact error surfaces use the compact radius; choice options use the smaller option radius. Borders are thin (1px). The approved SC mark is a pale-blue screen/chat outline with two off-white answer strokes on a charcoal tile, sourced from `assets/brand/`. Setup and Settings use it as a decorative 28px image beside the title. Application, tray and distribution icons derive from the same master; the tray adds a small badge while working.
 
 Icons are inline outline SVGs: current text color, rounded caps and joins, a consistent stroke (1.7) and a standard size (18px). Sidebar icons reduce to 16px. Icon-only actions retain accessible names and tooltips.
 

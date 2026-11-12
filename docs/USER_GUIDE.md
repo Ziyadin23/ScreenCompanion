@@ -1,6 +1,6 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.8 is unpublished and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
+Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.9 is unpublished and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
 
 ## Linux setup and controls
 
@@ -82,6 +82,11 @@ The compact answer view reveals Capture screen, Question, Settings, Hide and Exi
 Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or expand **Advanced appearance** for independent text visibility and custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the neutral dark background at 90% opacity (10% transparency), 100% text visibility, and 11-point text. New setups use these same defaults. Settings and key setup stay opaque. Existing saved appearance is preserved. Missing fields in older files keep their historical defaults, and loading never rewrites the vault. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
 
 ## Application updates
+
+The current source uses the approved SC screen/chat icon in setup, Settings,
+the application window and tray, and in Windows/Linux package icons. A small
+badge and the tray tooltip indicate a working request. Existing window and
+taskbar visibility behavior is unchanged.
 
 Installed SC checks GitHub Releases at startup. Open **Settings → Updates** to
 check again, choose **Download update**, then **Restart and install**. Download

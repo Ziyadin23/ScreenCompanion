@@ -6,6 +6,7 @@ import { Settings } from './Settings';
 import { Icon, type IconName } from './Icon';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
+import appIcon from '../../../assets/brand/sc-icon-512.png';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
@@ -38,7 +39,7 @@ function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; p
     finally { pending.current = false; if (alive.current) setSaving(false); }
   }
   return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
-    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>Set up SC</h1></div></header>
+    <header className="dialog-header"><div className="dialog-title"><img className="app-mark" src={appIcon} width={28} height={28} alt="" /><h1>Set up SC</h1></div></header>
     <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <p className="setup-intro">Choose your service and enter its API key to get started.</p>
       <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus

@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.8**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.9**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,16 +14,101 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-This interface branch carries beta.8; its pre-redesign shared-main baseline was beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+This icon-integration branch carries beta.9, based on the beta.8 interface merged through PR #53. The earlier shared-main baseline was beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
-| Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
+| SC icon beta.9 | [Final checks and retained attempts](#sc-icon-integration-2026-11-12): host 1,320; Windows native 54/vault 8/136/UI 37/37; packaged icons, portable/Linux previews, bounded Edge recording and verified local handoff. Website icon is published. | Application source in [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56); application release and broader qualification remain separate. |
+| Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Application release unpublished; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
+
+## SC icon integration (2026-11-12)
+
+[Issue #52](https://github.com/Ziyadin23/ScreenCompanion/issues/52) and the
+[integration owner](../openspec/changes/archive/2026-11-13-integrate-sc-icon/tasks.md) track the
+approved artwork across the app and website. Beta.9 retains the beta.8 interface
+merged at `0627df2`; application integration is `592307f` and the final UI
+fixture correction is `4d784fb`. The final 160-file source manifest has SHA-256
+`211a49b3ff248d8556977e434059107db76ca98c02234120e6c4c27c0198df4d`.
+
+Host types, lint and production bundles passed. Portable verification passed
+**1,320 tests / 32 files** with two workers. Its first default run retained one
+empty-draft keyboard failure; both focused cases passed twice before that full
+pass. No keyboard application change or root-cause fix is claimed for that attempt.
+Windows production build/package checks passed, along with **1,296 portable tests**
+(**24 Linux-only skips**), **54 native checks** and **8 vault cases / 136 oracle
+checks**. The application bundles, native addon, EXEs and ASAR were frozen
+byte-identical through final qualification. Final Windows R3 typecheck/lint and
+**37/37 UI cases** passed, exit 0, in **1122.0 seconds**, with one worker and
+zero retries, skips or flaky cases; ZIP packaging then exited 0.
+
+Retained earlier Windows full runs each passed **35/37**, exit 1. R1 failed an
+answer corner-resize hidden-state assertion and an Alt-drag fresh press; both
+passed in a focused unchanged-source run. R2 instead retained a fixture process
+error with incomplete CLIXML diagnostics and a synthetic-vault baseline mismatch.
+All 16 non-panel workflows passed in both attempts. An unchanged beta.8 comparison
+passed the two R2 cases three times each (6/6), so it did not establish a
+pre-existing application defect. A controlled temporary-profile probe delayed
+only the final first-run vault rename by 500ms: sampling `ready` captured the
+previous cipher, while waiting for visible first-run Commands captured the final
+cipher, stable after normal exit. The fixture now waits for that visible completion
+before its baseline; process failures also retain bounded code/killed/signal data.
+Geometry/vault assertions, input timing and deadlines are unchanged. No application
+or native interaction code was changed for these test corrections. Separate startup
+and private instrumentation failures remain retained with their limits.
+
+Actual idle/working Electron tray images were checked as distinct nonempty 24px
+bitmaps with the master and upper mark preserved. Windows application, installer
+and portable embedded icons were extracted and visually reviewed. Native Shell
+extraction verified a temporary shortcut's inherited executable icon and unchanged
+target; this does not requalify an installer upgrade. All three Windows ASAR image
+resources match their source exports, and x64 payload/update-metadata hashes passed.
+The direct portable wrapper started beta.9 with an isolated key-free profile,
+passed Question-to-Settings keyboard activation, loaded the approved Settings mark,
+exited normally with code 0 and removed its profile. Actual Windows setup and
+Settings renders were visually reviewed.
+
+The Linux RPM retained its desktop identity and byte-identical installed icon.
+Isolated Hyprland packaged confirmation passed three image checks and normal exit 0;
+both Settings widths and the setup renderer fixture were reviewed. The fixture
+establishes branding rather than production setup geometry. The earlier RPM-config
+and fixture-lookup failures are retained; installed-app/portal/keyring qualification
+remains separately owned.
+
+A bounded **Microsoft Edge 157.0.4341.46** whole-monitor VP8 recording on Windows 11
+**10.0.26200** reported **1920×1080**, with 5 fps requested. Eight phases covered a
+backdrop control, capture test, answer, question, Settings, in-window service listbox,
+owned native color picker and first-run setup. Decoding yielded **101 frames at
+2 fps**; every phase had 10–17 matching marker frames. All eight local/saved pairs
+were visually reviewed: the SC surfaces and picker were visible locally while the
+saved output retained the underlying backdrop. The fixture explicitly raised SC
+at the pop-up-menu topmost level. This supplies plain-layout saved-monitor evidence
+only; receiver, OBS, proctoring and general default-topmost qualification remain open.
+Private path-separator, decoder color-conversion and exit-reporting corrections did
+not change the frozen application or recording. Independent final postflight exited
+0 with no SC/Electron/Edge/OBS processes or held input; protected vault and size-file
+hashes remained unchanged.
+
+The website is published through [PR #1](https://github.com/Ziyadin23/screencompanion-website/pull/1),
+merge `ea501f7`, with successful deployment `43293040949`. Root/project-base
+verification each passed **15 tests** with zero Astro diagnostics. All **20**
+header/footer captures across English/Russian and five widths were reviewed with
+no overflow or page errors. Both public pages exposed the new icon metadata; all four live icon assets were
+byte-identical to the approved exports. Orca screenshot capture failed; headless Chrome supplied the
+completed visual evidence.
+
+The configured local transfer folder now contains the byte-verified beta.9 EXE,
+installer, README, Linux RPM and ZIP with exactly the matching EXE plus `README.txt`;
+CRC checks and archived-byte comparisons passed. Earlier builds are retained and
+the local latest-build record advances to beta.9. Independent Standards and Spec
+reviews reported **0 findings each**, including the test correction. Application
+source is in [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56);
+no application main merge, tag or public release is claimed. Existing Windows/Linux
+qualification owners retain their limits.
 
 ## Interface beta.8 verification (2026-11-12)
 
