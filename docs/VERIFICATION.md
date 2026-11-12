@@ -14,7 +14,7 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-This interface branch carries beta.8; its shared-main baseline remains beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+This interface branch carries beta.8; its pre-redesign shared-main baseline was beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |

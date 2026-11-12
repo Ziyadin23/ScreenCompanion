@@ -70,3 +70,9 @@ Tracked by [issue #49](https://github.com/Ziyadin23/ScreenCompanion/issues/49). 
 - Archived at `openspec/changes/archive/2026-11-12-redesign-desktop-interface/` under the contributor closure policy. Incoming links repaired. Source publication and exact-head hosted CI/merge are the next authorized workflow steps; public application release and unrelated qualification remain separate.
 
 - Final closure checks: workflow selftest, documentation (79 files/417 links), strict OpenSpec (five active changes + two main specs) and whitespace all exit 0.
+
+## Published source — 2026-11-12 UTC
+
+- [PR #53](https://github.com/Ziyadin23/ScreenCompanion/pull/53) publishes the source and closure records, targeting main `0803ff4`, with `Closes #49`. User acceptance and explicit merge authorization are recorded above. Initial published head `feff9bb` contains unchanged candidate application bytes.
+- Final closure review found one stale sidecar narrative link; repaired it to this archived owner. Both reviewers otherwise confirmed complete main-spec content and coherent closure/evidence boundaries. Final follow-up changes are documentation/link fixes only; hosted CI is required on the final head before source merge.
+- Source integration outcome is tracked by PR #53 and the private receipt/Orca card. Application release publication remains outside this request, and unrelated qualification issues remain open.
