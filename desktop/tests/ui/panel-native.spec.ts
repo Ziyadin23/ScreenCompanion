@@ -44,6 +44,8 @@ const test = base.extend<{ session: Session }>({
       await session.page.getByTestId('setup-key').fill('synthetic-native-panel-store-key');
       await session.page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect.poll(() => state(session).then(value => value.ready)).toBe(true);
+      // The ready flag precedes the final first-run CommandsShown vault save.
+      await expect(session.page.getByTestId('answer-text')).toContainText('Ctrl+Alt+Space');
       await use(session);
       const log = await readFile(join(local, 'SC', 'diagnostics.log'), 'utf8');
       expect(log).not.toMatch(/pipeline_(?:stage|usage)/u);
