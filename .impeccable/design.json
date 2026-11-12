@@ -1,0 +1,501 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-12T18:23:35Z",
+  "title": "Design System: SC",
+  "extensions": {
+    "colorMeta": {
+      "ui-bg": {
+        "role": "neutral",
+        "displayName": "Charcoal canvas",
+        "tonalRamp": [
+          "oklch(15% 0.00595 271.15)",
+          "oklch(26% 0.00595 271.15)",
+          "oklch(38% 0.00595 271.15)",
+          "oklch(49% 0.00595 271.15)",
+          "oklch(61% 0.00595 271.15)",
+          "oklch(72% 0.00595 271.15)",
+          "oklch(84% 0.00595 271.15)",
+          "oklch(95% 0.00595 271.15)"
+        ]
+      },
+      "ui-rail": {
+        "role": "neutral",
+        "displayName": "Deep rail",
+        "tonalRamp": [
+          "oklch(15% 0.00608 271.12)",
+          "oklch(26% 0.00608 271.12)",
+          "oklch(38% 0.00608 271.12)",
+          "oklch(49% 0.00608 271.12)",
+          "oklch(61% 0.00608 271.12)",
+          "oklch(72% 0.00608 271.12)",
+          "oklch(84% 0.00608 271.12)",
+          "oklch(95% 0.00608 271.12)"
+        ]
+      },
+      "ui-input": {
+        "role": "neutral",
+        "displayName": "Raised control charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.00934 276.76)",
+          "oklch(26% 0.00934 276.76)",
+          "oklch(38% 0.00934 276.76)",
+          "oklch(49% 0.00934 276.76)",
+          "oklch(61% 0.00934 276.76)",
+          "oklch(72% 0.00934 276.76)",
+          "oklch(84% 0.00934 276.76)",
+          "oklch(95% 0.00934 276.76)"
+        ]
+      },
+      "ui-hover": {
+        "role": "neutral",
+        "displayName": "Hover charcoal",
+        "tonalRamp": [
+          "oklch(15% 0.01275 272.99)",
+          "oklch(26% 0.01275 272.99)",
+          "oklch(38% 0.01275 272.99)",
+          "oklch(49% 0.01275 272.99)",
+          "oklch(61% 0.01275 272.99)",
+          "oklch(72% 0.01275 272.99)",
+          "oklch(84% 0.01275 272.99)",
+          "oklch(95% 0.01275 272.99)"
+        ]
+      },
+      "ui-text": {
+        "role": "neutral",
+        "displayName": "Off-white",
+        "tonalRamp": [
+          "oklch(15% 0.00288 264.54)",
+          "oklch(26% 0.00288 264.54)",
+          "oklch(38% 0.00288 264.54)",
+          "oklch(49% 0.00288 264.54)",
+          "oklch(61% 0.00288 264.54)",
+          "oklch(72% 0.00288 264.54)",
+          "oklch(84% 0.00288 264.54)",
+          "oklch(95% 0.00288 264.54)"
+        ]
+      },
+      "ui-muted": {
+        "role": "neutral",
+        "displayName": "Muted gray",
+        "tonalRamp": [
+          "oklch(15% 0.01330 271.24)",
+          "oklch(26% 0.01330 271.24)",
+          "oklch(38% 0.01330 271.24)",
+          "oklch(49% 0.01330 271.24)",
+          "oklch(61% 0.01330 271.24)",
+          "oklch(72% 0.01330 271.24)",
+          "oklch(84% 0.01330 271.24)",
+          "oklch(95% 0.01330 271.24)"
+        ]
+      },
+      "ui-border": {
+        "role": "neutral",
+        "displayName": "Fine border",
+        "tonalRamp": [
+          "oklch(15% 0.01251 273.03)",
+          "oklch(26% 0.01251 273.03)",
+          "oklch(38% 0.01251 273.03)",
+          "oklch(49% 0.01251 273.03)",
+          "oklch(61% 0.01251 273.03)",
+          "oklch(72% 0.01251 273.03)",
+          "oklch(84% 0.01251 273.03)",
+          "oklch(95% 0.01251 273.03)"
+        ]
+      },
+      "ui-accent": {
+        "role": "primary",
+        "displayName": "Pale focus blue",
+        "tonalRamp": [
+          "oklch(15% 0.08205 260.62)",
+          "oklch(26% 0.08205 260.62)",
+          "oklch(38% 0.08205 260.62)",
+          "oklch(49% 0.08205 260.62)",
+          "oklch(61% 0.08205 260.62)",
+          "oklch(72% 0.08205 260.62)",
+          "oklch(84% 0.08205 260.62)",
+          "oklch(95% 0.08205 260.62)"
+        ]
+      },
+      "ui-primary": {
+        "role": "primary",
+        "displayName": "Muted action blue",
+        "tonalRamp": [
+          "oklch(15% 0.08423 258.08)",
+          "oklch(26% 0.08423 258.08)",
+          "oklch(38% 0.08423 258.08)",
+          "oklch(49% 0.08423 258.08)",
+          "oklch(61% 0.08423 258.08)",
+          "oklch(72% 0.08423 258.08)",
+          "oklch(84% 0.08423 258.08)",
+          "oklch(95% 0.08423 258.08)"
+        ]
+      },
+      "ui-primary-hover": {
+        "role": "primary",
+        "displayName": "Action blue hover",
+        "tonalRamp": [
+          "oklch(15% 0.09344 257.05)",
+          "oklch(26% 0.09344 257.05)",
+          "oklch(38% 0.09344 257.05)",
+          "oklch(49% 0.09344 257.05)",
+          "oklch(61% 0.09344 257.05)",
+          "oklch(72% 0.09344 257.05)",
+          "oklch(84% 0.09344 257.05)",
+          "oklch(95% 0.09344 257.05)"
+        ]
+      },
+      "ui-interactive-border": {
+        "role": "neutral",
+        "displayName": "Interactive border",
+        "tonalRamp": [
+          "oklch(15% 0.01835 273.52)",
+          "oklch(26% 0.01835 273.52)",
+          "oklch(38% 0.01835 273.52)",
+          "oklch(49% 0.01835 273.52)",
+          "oklch(61% 0.01835 273.52)",
+          "oklch(72% 0.01835 273.52)",
+          "oklch(84% 0.01835 273.52)",
+          "oklch(95% 0.01835 273.52)"
+        ]
+      },
+      "ui-primary-border": {
+        "role": "primary",
+        "displayName": "Action border",
+        "tonalRamp": [
+          "oklch(15% 0.08228 256.62)",
+          "oklch(26% 0.08228 256.62)",
+          "oklch(38% 0.08228 256.62)",
+          "oklch(49% 0.08228 256.62)",
+          "oklch(61% 0.08228 256.62)",
+          "oklch(72% 0.08228 256.62)",
+          "oklch(84% 0.08228 256.62)",
+          "oklch(95% 0.08228 256.62)"
+        ]
+      },
+      "ui-primary-border-hover": {
+        "role": "primary",
+        "displayName": "Action border hover",
+        "tonalRamp": [
+          "oklch(15% 0.07443 257.15)",
+          "oklch(26% 0.07443 257.15)",
+          "oklch(38% 0.07443 257.15)",
+          "oklch(49% 0.07443 257.15)",
+          "oklch(61% 0.07443 257.15)",
+          "oklch(72% 0.07443 257.15)",
+          "oklch(84% 0.07443 257.15)",
+          "oklch(95% 0.07443 257.15)"
+        ]
+      },
+      "ui-selected-bg": {
+        "role": "primary",
+        "displayName": "Selection blue surface",
+        "tonalRamp": [
+          "oklch(15% 0.02103 265.90)",
+          "oklch(26% 0.02103 265.90)",
+          "oklch(38% 0.02103 265.90)",
+          "oklch(49% 0.02103 265.90)",
+          "oklch(61% 0.02103 265.90)",
+          "oklch(72% 0.02103 265.90)",
+          "oklch(84% 0.02103 265.90)",
+          "oklch(95% 0.02103 265.90)"
+        ]
+      },
+      "ui-selected-text": {
+        "role": "primary",
+        "displayName": "Selection blue text",
+        "tonalRamp": [
+          "oklch(15% 0.03187 260.03)",
+          "oklch(26% 0.03187 260.03)",
+          "oklch(38% 0.03187 260.03)",
+          "oklch(49% 0.03187 260.03)",
+          "oklch(61% 0.03187 260.03)",
+          "oklch(72% 0.03187 260.03)",
+          "oklch(84% 0.03187 260.03)",
+          "oklch(95% 0.03187 260.03)"
+        ]
+      },
+      "ui-white": {
+        "role": "neutral",
+        "displayName": "Action white",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(26% 0.00000 0.00)",
+          "oklch(38% 0.00000 0.00)",
+          "oklch(49% 0.00000 0.00)",
+          "oklch(61% 0.00000 0.00)",
+          "oklch(72% 0.00000 0.00)",
+          "oklch(84% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "ui-error-text": {
+        "role": "neutral",
+        "displayName": "Warm error text",
+        "tonalRamp": [
+          "oklch(15% 0.06386 34.13)",
+          "oklch(26% 0.06386 34.13)",
+          "oklch(38% 0.06386 34.13)",
+          "oklch(49% 0.06386 34.13)",
+          "oklch(61% 0.06386 34.13)",
+          "oklch(72% 0.06386 34.13)",
+          "oklch(84% 0.06386 34.13)",
+          "oklch(95% 0.06386 34.13)"
+        ]
+      },
+      "ui-error-bg": {
+        "role": "neutral",
+        "displayName": "Warm error surface",
+        "tonalRamp": [
+          "oklch(15% 0.02156 27.81)",
+          "oklch(26% 0.02156 27.81)",
+          "oklch(38% 0.02156 27.81)",
+          "oklch(49% 0.02156 27.81)",
+          "oklch(61% 0.02156 27.81)",
+          "oklch(72% 0.02156 27.81)",
+          "oklch(84% 0.02156 27.81)",
+          "oklch(95% 0.02156 27.81)"
+        ]
+      },
+      "ui-invalid-border": {
+        "role": "neutral",
+        "displayName": "Invalid field border",
+        "tonalRamp": [
+          "oklch(15% 0.07077 33.95)",
+          "oklch(26% 0.07077 33.95)",
+          "oklch(38% 0.07077 33.95)",
+          "oklch(49% 0.07077 33.95)",
+          "oklch(61% 0.07077 33.95)",
+          "oklch(72% 0.07077 33.95)",
+          "oklch(84% 0.07077 33.95)",
+          "oklch(95% 0.07077 33.95)"
+        ]
+      },
+      "selection": {
+        "role": "primary",
+        "displayName": "Text selection blue",
+        "tonalRamp": [
+          "oklch(15% 0.10378 261.14 / 0.4000)",
+          "oklch(26% 0.10378 261.14 / 0.4000)",
+          "oklch(38% 0.10378 261.14 / 0.4000)",
+          "oklch(49% 0.10378 261.14 / 0.4000)",
+          "oklch(61% 0.10378 261.14 / 0.4000)",
+          "oklch(72% 0.10378 261.14 / 0.4000)",
+          "oklch(84% 0.10378 261.14 / 0.4000)",
+          "oklch(95% 0.10378 261.14 / 0.4000)"
+        ]
+      },
+      "panel-default-bg": {
+        "role": "neutral",
+        "displayName": "Fresh panel surface",
+        "tonalRamp": [
+          "oklch(15% 0.00595 271.15 / 0.9020)",
+          "oklch(26% 0.00595 271.15 / 0.9020)",
+          "oklch(38% 0.00595 271.15 / 0.9020)",
+          "oklch(49% 0.00595 271.15 / 0.9020)",
+          "oklch(61% 0.00595 271.15 / 0.9020)",
+          "oklch(72% 0.00595 271.15 / 0.9020)",
+          "oklch(84% 0.00595 271.15 / 0.9020)",
+          "oklch(95% 0.00595 271.15 / 0.9020)"
+        ]
+      },
+      "panel-default-input": {
+        "role": "neutral",
+        "displayName": "Fresh panel control",
+        "tonalRamp": [
+          "oklch(15% 0.00573 271.20)",
+          "oklch(26% 0.00573 271.20)",
+          "oklch(38% 0.00573 271.20)",
+          "oklch(49% 0.00573 271.20)",
+          "oklch(61% 0.00573 271.20)",
+          "oklch(72% 0.00573 271.20)",
+          "oklch(84% 0.00573 271.20)",
+          "oklch(95% 0.00573 271.20)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Selected settings page heading."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Application and settings header."
+      },
+      "section": {
+        "displayName": "Section",
+        "purpose": "Headings within a settings category."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Form content and ordinary actions."
+      },
+      "hint": {
+        "displayName": "Hint",
+        "purpose": "Supporting guidance with more line spacing."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Compact navigation and status labels."
+      },
+      "button-primary": {
+        "displayName": "Button Primary",
+        "purpose": "Primary settings action."
+      },
+      "panel-answer": {
+        "displayName": "Panel Answer",
+        "purpose": "Fresh default answer size; independently user-adjustable."
+      },
+      "panel-composer": {
+        "displayName": "Panel Composer",
+        "purpose": "Question entry independent of answer size."
+      },
+      "disclosure": {
+        "displayName": "Disclosure",
+        "purpose": "Summary for progressively disclosed expert options."
+      }
+    },
+    "shadows": [
+      {
+        "name": "choice-popup",
+        "value": "0 8px 24px #0005",
+        "purpose": "Local choice overlay; ordinary surfaces use tonal layers and borders."
+      }
+    ],
+    "motion": [
+      {
+        "name": "toolbar-reveal",
+        "value": "opacity 150ms ease-out",
+        "purpose": "Reveal without moving reserved chrome."
+      },
+      {
+        "name": "settings-control-state",
+        "value": "background-color 120ms ease-out, border-color 120ms ease-out",
+        "purpose": "Settings button surface and border changes."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition: none !important; animation: none !important",
+        "purpose": "All elements and pseudo-elements when prefers-reduced-motion is reduce."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "settings-horizontal-max-width",
+        "value": "599px"
+      },
+      {
+        "name": "settings-short-max-height",
+        "value": "420px"
+      },
+      {
+        "name": "composer-compact-max-height",
+        "value": "120px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Save uses muted blue, a lighter border and stronger text.",
+      "html": "<div class=\"ds-fixed-theme\"><button class=\"ds-primary-action\" type=\"button\">Save</button></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-fixed-theme button { display: inline-flex; align-items: center; justify-content: center; gap: 8px;\n  background: var(--dialog-button); color: var(--dialog-text); border: 1px solid var(--dialog-border);\n  border-radius: var(--radius-control, 8px); padding: 7px 12px; min-height: 36px;\n  transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-fixed-theme button:hover:not(:disabled) { background: var(--ui-hover, #303239); border-color: #51545f; } .ds-fixed-theme button.ds-primary-action { background: var(--ui-primary, #385785); border-color: #5d7fae; color: #fff; font-weight: 600; } .ds-fixed-theme button.ds-primary-action:hover:not(:disabled) { background: var(--ui-primary-hover, #42679b); border-color: #7897c3; } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } } .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea, .ds-primary-action { box-sizing: border-box; }"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Quiet settings actions use a raised charcoal surface.",
+      "html": "<div class=\"ds-fixed-theme\"><button type=\"button\">Back</button></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-fixed-theme button { display: inline-flex; align-items: center; justify-content: center; gap: 8px;\n  background: var(--dialog-button); color: var(--dialog-text); border: 1px solid var(--dialog-border);\n  border-radius: var(--radius-control, 8px); padding: 7px 12px; min-height: 36px;\n  transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-fixed-theme button:hover:not(:disabled) { background: var(--ui-hover, #303239); border-color: #51545f; } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } } .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { box-sizing: border-box; }"
+    },
+    {
+      "name": "Labeled field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Visible labels, muted placeholders and pale keyboard focus.",
+      "html": "<div class=\"ds-fixed-theme\"><label for=\"ds-service-key\">API key</label><input id=\"ds-service-key\" type=\"password\" placeholder=\"Enter API key\" autocomplete=\"off\" /><small>Your key is temporary until Save.</small></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-fixed-theme input:not([type=\"range\"]):not([type=\"checkbox\"]), .ds-fixed-theme textarea { background: var(--dialog-header); color: var(--dialog-text); border: 1px solid var(--dialog-border);\n  border-radius: var(--radius-control, 8px); width: 100%; padding: 8px 10px; min-height: 36px; } .ds-fixed-theme input::placeholder, .ds-fixed-theme textarea::placeholder { color: var(--dialog-muted); opacity: 1; } .ds-fixed-theme label { display: block; margin-bottom: 6px; } .ds-fixed-theme small, .ds-fixed-theme .ds-hint { color: var(--dialog-muted); } .ds-fixed-theme small { display: block; margin: 6px 0 14px; font-size: 12px; } .ds-fixed-theme [aria-invalid=\"true\"] { border-color: #efb5a7 !important; } .ds-fixed-theme input, .ds-fixed-theme textarea { caret-color: var(--ui-accent, #9ab9ed); } .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea, .ds-hint { box-sizing: border-box; }"
+    },
+    {
+      "name": "Settings navigation",
+      "kind": "nav",
+      "refersTo": "navigation-tab",
+      "description": "A 176px rail becomes wrapping horizontal navigation below 600px. Runtime keyboard navigation belongs to the renderer component.",
+      "html": "<div class=\"ds-fixed-theme\"><nav class=\"ds-tabs\" role=\"tablist\" aria-label=\"Settings pages\"><button type=\"button\" role=\"tab\" aria-selected=\"true\" tabindex=\"0\"><svg class=\"ds-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 5h14M5 10h14M5 15h9M5 20h6\" /></svg>Answer &amp; shortcuts</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><svg class=\"ds-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4 4h16v16H4Zm0 5h16M9 9v11\" /></svg>Panel</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><svg class=\"ds-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5m-18 5 9 5 9-5\" /></svg>Models &amp; API</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><svg class=\"ds-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 5h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm2 4h.01M12 9h.01M17 9h.01M7 13h.01M12 13h.01M17 13h.01M8 16h8\" /></svg>Commands</button><button type=\"button\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\"><svg class=\"ds-icon\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M20 8a8 8 0 1 0 0 8m0-13v5h-5m-3 0v4l3 2\" /></svg>Updates</button></nav></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-fixed-theme button { display: inline-flex; align-items: center; justify-content: center; gap: 8px;\n  background: var(--dialog-button); color: var(--dialog-text); border: 1px solid var(--dialog-border);\n  border-radius: var(--radius-control, 8px); padding: 7px 12px; min-height: 36px;\n  transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-fixed-theme button:hover:not(:disabled) { background: var(--ui-hover, #303239); border-color: #51545f; } .ds-tabs { display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 16px 8px; background: var(--ui-rail, #18191c); } .ds-tabs button { justify-content: flex-start; padding: 8px 10px; min-width: 0; white-space: normal; text-align: left; background: transparent; border-color: transparent; color: var(--dialog-muted); font-size: 12px; } .ds-tabs button:hover:not(:disabled) { border-color: transparent; color: var(--ui-text, #f2f3f5); } .ds-tabs button[aria-selected=\"true\"] { background: #2b303b; color: #d9e6fb; border-color: transparent; } .ds-tabs .ds-icon { width: 16px; height: 16px; } .ds-tabs { width: 176px; } @media (max-width: 599px) { .ds-tabs { width: auto; } .ds-tabs { flex-direction: row; flex-wrap: wrap; gap: 4px; padding: 8px 12px; flex-shrink: 0; background: var(--dialog-bg); border-bottom: 1px solid var(--dialog-border); } .ds-tabs button { flex: 1 1 auto; justify-content: center; padding: 6px 8px; min-height: 32px; white-space: nowrap; } .ds-tabs .ds-icon { display: none; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } } .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea, .ds-icon, .ds-tabs { box-sizing: border-box; }"
+    },
+    {
+      "name": "Open choice",
+      "kind": "input",
+      "refersTo": "choice",
+      "description": "A local DOM popup with active and selected option states; shown open for inspection.",
+      "html": "<div class=\"ds-fixed-theme\"><div class=\"ds-choice\"><label id=\"ds-answer-label\" for=\"ds-answer-choice\">Answer mode</label><div class=\"ds-choice-control\"><button id=\"ds-answer-choice\" type=\"button\" role=\"combobox\" aria-labelledby=\"ds-answer-label\" aria-expanded=\"true\" aria-controls=\"ds-answer-options\">Default</button><span class=\"ds-choice-arrow\" aria-hidden=\"true\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"m8 10 4 4 4-4\" /></svg></span></div><div class=\"ds-choice-list\" id=\"ds-answer-options\" role=\"listbox\" aria-label=\"Answer mode\"><div class=\"ds-active\" role=\"option\" aria-selected=\"true\">Default</div><div role=\"option\" aria-selected=\"false\">Custom</div></div></div></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-fixed-theme button { display: inline-flex; align-items: center; justify-content: center; gap: 8px;\n  background: var(--dialog-button); color: var(--dialog-text); border: 1px solid var(--dialog-border);\n  border-radius: var(--radius-control, 8px); padding: 7px 12px; min-height: 36px;\n  transition: background-color 120ms ease-out, border-color 120ms ease-out; } .ds-fixed-theme button:hover:not(:disabled) { background: var(--ui-hover, #303239); border-color: #51545f; } .ds-choice { position: relative; min-width: 0; } .ds-choice-control { position: relative; } .ds-choice-control > button[role=\"combobox\"] { width: 100%; justify-content: flex-start; text-align: left; padding-right: 34px; background: var(--dialog-header); } .ds-choice-arrow { position: absolute; right: 10px; top: 9px; pointer-events: none; color: var(--dialog-muted); } .ds-choice-list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; max-height: 200px; overflow-y: auto; background: var(--dialog-header); border: 1px solid #51545f; border-radius: var(--radius-control, 8px); padding: 4px; box-shadow: 0 8px 24px #0005; scrollbar-color: #51545f transparent; } .ds-choice-list [role=\"option\"] { padding: 7px 9px; border-radius: 4px; cursor: pointer; overflow-wrap: anywhere; } .ds-choice-list [role=\"option\"].ds-active { background: var(--ui-hover, #303239); } .ds-choice-list [aria-selected=\"true\"] { color: #d9e6fb; font-weight: 600; } .ds-choice-list [role=\"option\"]:hover { background: var(--ui-hover, #303239); } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } } .ds-active, .ds-choice, .ds-choice-arrow, .ds-choice-control, .ds-choice-list, .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea, .ds-icon { box-sizing: border-box; }"
+    },
+    {
+      "name": "Answer panel and reveal toolbar",
+      "kind": "custom",
+      "refersTo": "answer-panel-default",
+      "description": "Fresh default appearance with reserved 36px chrome; pointer hover or visible keyboard focus reveals tools.",
+      "html": "<main class=\"ds-answer-panel\" aria-label=\"SC answer\" tabindex=\"-1\"><div class=\"ds-panel-chrome\"><span class=\"ds-panel-status\" role=\"status\"></span><nav class=\"ds-panel-toolbar\" aria-label=\"SC controls\"><button type=\"button\" aria-label=\"Capture screen\" title=\"Capture screen\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M8 3H4a1 1 0 0 0-1 1v4m13-5h4a1 1 0 0 1 1 1v4M3 16v4a1 1 0 0 0 1 1h4m8 0h4a1 1 0 0 0 1-1v-4M7 7h10v10H7Z\" /></svg></button><button type=\"button\" aria-label=\"Question\" title=\"Question\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm3 5h8m-8 4h5\" /></svg></button><button type=\"button\" aria-label=\"Settings\" title=\"Settings\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4 6h3m4 0h9M4 12h9m4 0h3M4 18h3m4 0h9M7 4v4m6 2v4m-6 2v4\" /></svg></button><button type=\"button\" aria-label=\"Hide\" title=\"Hide\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M4 12h16\" /></svg></button><button type=\"button\" aria-label=\"Exit\" title=\"Exit\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M10 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h5m5-13 5 5-5 5m-6-5h11\" /></svg></button></nav></div><div class=\"ds-answer-text\" tabindex=\"0\" role=\"region\" aria-label=\"Answer\">Your answer appears here.\nUse the mouse wheel to read a long answer.</div></main>",
+      "css": ".ds-answer-panel { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; font-size: 11pt; background: rgba(28, 29, 32, 0.9019607843137255); color: var(--ui-text, #f2f3f5); --input-background: rgb(37, 38, 41); --input-text: #F2F3F5; --button-background: #385785; --button-text: #FFFFFF; } .ds-answer-panel { height: 100%; width: 100%; display: flex; flex-direction: column; position: relative;\n  border-radius: var(--radius-panel, 12px); outline: none; } .ds-panel-chrome { display: flex; align-items: center; height: 36px; flex-shrink: 0; padding: 4px 8px; gap: 4px; } .ds-panel-status { min-width: 0; flex: 1; font-size: 11px; color: var(--input-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; } .ds-panel-toolbar { display: flex; flex-shrink: 0; gap: 2px; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out; } .ds-answer-panel:hover .ds-panel-toolbar, .ds-answer-panel:has(:focus-visible) .ds-panel-toolbar,\n.ds-answer-panel:focus-visible .ds-panel-toolbar, .ds-panel-toolbar:focus-within { opacity: 1; pointer-events: auto; } .ds-panel-toolbar button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;\n  padding: 0; border: 0; border-radius: 6px; background: var(--input-background); color: var(--input-text); } .ds-panel-toolbar button:hover:not(:disabled) { background: var(--button-background); color: var(--button-text); } .ds-panel-toolbar button:active:not(:disabled) { transform: translateY(1px); } .ds-answer-text { flex: 1; min-height: 0; margin: 0 8px 8px; padding: 4px 8px 8px; overflow-y: auto; overflow-x: hidden;\n  white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; line-height: 1.5;\n  outline: none; scrollbar-width: none; } .ds-answer-text::-webkit-scrollbar { display: none; } .ds-answer-panel:focus-visible, .ds-answer-panel button:focus-visible, .ds-answer-panel [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-panel-toolbar button { cursor: pointer; } .ds-panel-toolbar button:disabled { opacity: .5; cursor: default; } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } } .ds-answer-panel, .ds-answer-text, .ds-icon, .ds-panel-chrome, .ds-panel-status, .ds-panel-toolbar { box-sizing: border-box; }"
+    },
+    {
+      "name": "Temporary question composer",
+      "kind": "input",
+      "refersTo": "composer-field-default",
+      "description": "Normal 52px bottom allocation becomes 44px at heights of 120px or less.",
+      "html": "<form class=\"ds-question-form\"><input aria-label=\"Question\" placeholder=\"Ask about your screen…\" autocomplete=\"off\" /><button type=\"button\" aria-label=\"Send\" title=\"Send\"><svg class=\"ds-icon\" width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\" focusable=\"false\"><path d=\"m6 12 6-6 6 6m-6-6v14\" /></svg></button></form>",
+      "css": ".ds-question-form { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; --input-background: rgb(37, 38, 41); --input-text: #F2F3F5; --button-background: #385785; --button-text: #FFFFFF; } .ds-question-form input, .ds-question-form button { font: inherit; } .ds-question-form input { caret-color: var(--ui-accent, #9ab9ed); } .ds-question-form button { cursor: pointer; } .ds-question-form button:disabled, .ds-question-form input:disabled { opacity: .5; cursor: default; } .ds-question-form { display: flex; position: relative; margin: 0 12px 12px; gap: 8px; color: var(--input-text); font-size: 14px; flex-shrink: 0; } .ds-question-form input { flex: 1; width: 0; min-width: 0; height: 40px; padding: 8px 12px; color: var(--input-text); background: var(--input-background); border: 0; border-radius: var(--radius-control, 8px); } .ds-question-form input::placeholder { color: var(--input-text); opacity: .75; } .ds-question-form button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; padding: 0; border: 0; border-radius: var(--radius-control, 8px); background: var(--button-background); color: var(--button-text); } .ds-question-form button:focus-visible, .ds-question-form input:focus-visible, .ds-question-form textarea:focus-visible, .ds-question-form summary:focus-visible, .ds-question-form [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } @media (max-height: 120px) { .ds-question-form { margin: auto 8px 8px; } .ds-question-form input, .ds-question-form button { height: 36px; } } .ds-icon, .ds-question-form { box-sizing: border-box; }"
+    },
+    {
+      "name": "Advanced disclosure",
+      "kind": "custom",
+      "refersTo": "advanced-disclosure",
+      "description": "Expert options start collapsed and open within the current form.",
+      "html": "<div class=\"ds-fixed-theme\"><details class=\"ds-advanced-settings\"><summary>Advanced model settings</summary><div class=\"ds-advanced-content\"><p class=\"ds-hint\">Defaults are ready to use. Change these only if your account supports the model IDs and features you select.</p></div></details></div>",
+      "css": ".ds-fixed-theme { font-family: \"Segoe UI\", \"Noto Sans\", sans-serif; } .ds-fixed-theme { --dialog-bg: var(--ui-bg, #1c1d20); --dialog-header: var(--ui-input, #25262b); --dialog-text: var(--ui-text, #f2f3f5);\n  --dialog-muted: var(--ui-muted, #a9acb5); --dialog-button: var(--ui-input, #25262b); --dialog-border: var(--ui-border, #36383f);\n  background: var(--dialog-bg); color: var(--dialog-text); font-size: 13px; line-height: 1.5; color-scheme: dark; } .ds-fixed-theme button:focus-visible, .ds-fixed-theme input:focus-visible, .ds-fixed-theme textarea:focus-visible, .ds-fixed-theme summary:focus-visible, .ds-fixed-theme [tabindex]:focus-visible { outline: 2px solid var(--ui-accent, #9ab9ed); outline-offset: 2px; } .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea { font: inherit; } .ds-fixed-theme button { cursor: pointer; } .ds-fixed-theme button:disabled, .ds-fixed-theme input:disabled { cursor: default; opacity: .5; } .ds-advanced-settings { border-top: 1px solid var(--dialog-border); margin: 20px 0 0; } .ds-advanced-settings summary { padding: 14px 2px; cursor: pointer; font-weight: 550; } .ds-advanced-settings summary::marker { color: var(--dialog-muted); } .ds-advanced-settings summary[aria-disabled=\"true\"] { cursor: default; opacity: .6; } .ds-advanced-content { padding: 4px 2px 0; } .ds-hint { margin: 14px 0; font-size: 12px; line-height: 1.6; } .ds-fixed-theme small, .ds-fixed-theme .ds-hint { color: var(--dialog-muted); } .ds-advanced-content, .ds-advanced-settings, .ds-fixed-theme, .ds-fixed-theme button, .ds-fixed-theme input, .ds-fixed-theme textarea, .ds-hint { box-sizing: border-box; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Raycast compact panel + Linear settings",
+    "overview": "SC uses the user-approved compact panel and restrained settings direction: neutral charcoal layers, readable off-white system text, subtle rounded corners, fine borders and quiet blue interaction states. Density supports reading an answer alongside another application. Controls reveal on approach, while settings present one category at a time.\n\nThe shared renderer uses authored CSS and a consistent outline SVG vocabulary. The fixed, opaque setup and settings palette stays readable while users change panel colors, background transparency and text visibility independently. This document records the implemented system in [styles](desktop/src/renderer/styles.css), [panel appearance](desktop/src/renderer/appearance.ts), [defaults](desktop/src/contracts/defaults.ts), [panel/setup](desktop/src/renderer/App.tsx), [settings](desktop/src/renderer/Settings.tsx), [choices](desktop/src/renderer/Choice.tsx) and [icons](desktop/src/renderer/Icon.tsx). The [surface contract](.impeccable/surfaces/desktop-src-renderer-app-tsx.md) owns the selected surface direction; [OpenSpec tasks](openspec/changes/archive/2026-11-12-redesign-desktop-interface/tasks.md) own progress.",
+    "keyCharacteristics": [
+      "Charcoal tonal layers with off-white primary text and muted supporting text.",
+      "Compact controls, restrained blue selection and visible keyboard focus.",
+      "Reserved panel chrome that reveals without moving the answer.",
+      "Advanced settings disclosed only when requested or needed for validation.",
+      "Configurable panel appearance with a fixed readable settings palette."
+    ],
+    "rules": [
+      {
+        "name": "The Independent Appearance Rule",
+        "body": "Panel preferences change the panel and its preview. Setup and Settings retain the fixed opaque palette. Fresh setup and explicit Restore appearance use 10% background transparency, 100% text visibility and the default panel type role. Existing saved appearance and frozen historical missing-field fallbacks remain authoritative; loading does not rewrite them.",
+        "section": "colors"
+      },
+      {
+        "name": "The Local Depth Rule",
+        "body": "Keep ordinary surfaces flat. Reserve the existing shadow for the choice overlay; use tonal changes and borders for navigation and control states.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do preserve the compact Raycast panel and calm Linear settings direction.",
+      "Do keep the toolbar's space reserved during hover and keyboard reveal.",
+      "Do retain visible keyboard focus and honor reduced motion.",
+      "Do keep the settings palette fixed while previewing configurable panel appearance.",
+      "Do use labeled fields, restrained SVG icons and explicit Save/Back actions.",
+      "Do reveal advanced controls when requested or required to correct validation."
+    ],
+    "donts": [
+      "Don't recolor existing saved or partial legacy appearance when introducing fresh defaults.",
+      "Don't let panel transparency reduce setup or settings readability.",
+      "Don't obscure the answer with toolbar or composer overlays.",
+      "Don't replace the confirmed charcoal system with unrelated decorative styling or a new branding metaphor.",
+      "Don't hide essential commands behind advanced disclosures or pointer-only access."
+    ]
+  }
+}

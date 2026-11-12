@@ -90,20 +90,23 @@ function measurePanel(state: AppState): void {
     copy.style.font = style.font;
     copy.style.fontSize = style.fontSize;
     copy.style.lineHeight = style.lineHeight;
-    copy.style.cssText += ';position:fixed;visibility:hidden;height:auto;max-height:none;overflow:visible;width:${width - 14}px;';
+    copy.style.cssText += ';position:fixed;visibility:hidden;height:auto;max-height:none;overflow:visible;width:${width - 16}px;';
     document.body.appendChild(copy);
-    const height = copy.getBoundingClientRect().height;
-    const controlsHeight = document.querySelector('.linux-controls')?.getBoundingClientRect().height || 0;
-    copy.remove(); resolve({ height, controlsHeight });
+    const height = copy.getBoundingClientRect().height + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+    const controlsHeight = document.querySelector('.panel-chrome')?.getBoundingClientRect().height || 0;
+    const input = document.querySelector('.question-form');
+    const inputStyle = input && getComputedStyle(input);
+    const inputHeight = input ? input.getBoundingClientRect().height + parseFloat(inputStyle.marginTop) + parseFloat(inputStyle.marginBottom) : 0;
+    copy.remove(); resolve({ height, controlsHeight, inputHeight });
   })))`;
   void window.webContents.executeJavaScript(script).then((result: unknown) => {
     if (!window || window.isDestroyed() || revision !== measurement || manualPanelSize || !isPanel(surface) || !result || typeof result !== 'object' ||
       !('height' in result) || !('controlsHeight' in result) || typeof result.height !== 'number' || !Number.isFinite(result.height) ||
-      typeof result.controlsHeight !== 'number' || !Number.isFinite(result.controlsHeight)) return;
+      typeof result.controlsHeight !== 'number' || !Number.isFinite(result.controlsHeight) ||
+      !('inputHeight' in result) || typeof result.inputHeight !== 'number' || !Number.isFinite(result.inputHeight)) return;
     const old = window.getBounds();
-    const inputHeight = surface === 'input' ? 56 : 0;
     const frameHeight = linux ? Math.max(0, old.height - window.getContentBounds().height) : 0;
-    const nextHeight = autoPanelHeight({ textHeight: result.height, controlsHeight: linux ? result.controlsHeight : 0, inputHeight,
+    const nextHeight = autoPanelHeight({ textHeight: result.height, controlsHeight: result.controlsHeight, inputHeight: result.inputHeight,
       frameHeight, workAreaHeight: area.height, minimumHeight: linux ? 140 : 80 });
     setBounds(clampBounds({ x: old.x + old.width - width, y: old.y + old.height - nextHeight, width, height: nextHeight }));
     panelBounds = window.getBounds();
@@ -138,7 +141,7 @@ function publish(state: AppState, capturing: boolean): void {
     platform.setPanelResizeEnabled(window.getNativeWindowHandle(), readyToShow && canResizePanel(state, capturing));
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
     platform.setHoverInputHeight(state.surface === 'settings' || state.surface === 'setup'
-      ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(56 * scale) : 0);
+      ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(52 * scale) : 0);
   }
   tray?.setImage(trayImage(state.busy));
   if (capturing || !state.visible || !readyToShow) hidePanel();

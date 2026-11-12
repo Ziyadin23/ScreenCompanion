@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { Icon } from './Icon';
 
 interface ChoiceProps {
   label: string; value: string; options: readonly string[]; onChange: (value: string) => void;
@@ -61,8 +62,8 @@ export function Choice({ label, value, options, onChange, editable = false, disa
         tabIndex={-1} onMouseDown={(event) => event.preventDefault()} onClick={() => {
           root.current?.querySelector('input')?.focus();
           if (open) setOpen(false); else show();
-        }}>▾</button>}
-      {!editable && <span className="choice-arrow" aria-hidden="true">▾</span>}
+        }}><Icon name="chevron" /></button>}
+      {!editable && <span className="choice-arrow" aria-hidden="true"><Icon name="chevron" /></span>}
     </div>
     {open && !disabled && <div id={`${id}-list`} role="listbox" aria-label={label} className="choice-list">
       {choices.map((option, index) => <div key={option} id={`${id}-${index}`} role="option" aria-selected={option === value}

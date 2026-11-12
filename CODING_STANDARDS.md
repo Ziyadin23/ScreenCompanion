@@ -88,8 +88,9 @@ After native changes, compile the Windows bridge with `npm run native:build` and
 
 ## UI behavior
 
-Before panel, Settings/setup, tray or appearance changes, read [setup and controls](docs/USER_GUIDE.md#setup-and-migration). Preserve answer-only selectable/copyable output, temporary input, focus-independent hover scrolling, Alt-drag, invisible-edge resizing, remembered size and tray/help access.
+Before panel, Settings/setup, tray or appearance changes, read [setup and controls](docs/USER_GUIDE.md#setup-and-migration). Preserve selectable/copyable plain-text output, the hover/focus toolbar with reserved space, temporary input, focus-independent hover scrolling, Alt-drag, invisible-edge resizing, remembered size and tray/help access.
 
+- Keep existing/partial legacy appearance fallbacks stable when changing fresh-setup or explicit-reset defaults. Loading never rewrites the vault.
 - Background transparency and text visibility remain independent. Panel/input colors use `AppearanceSettings`; Settings/key setup use the fixed readable `UiTheme`. Panel choices must not recolor Settings.
 - Preview drafts; Save encrypts/applies them and returns to the retained answer; Back discards them. Settings and answers are mutually exclusive. Hide/restore owned native color pickers and message boxes with Settings.
 - Coordinate shortcut changes with the controller and Windows bridge, including rollback on rejected bindings or save failures.

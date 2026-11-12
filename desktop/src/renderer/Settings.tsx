@@ -4,6 +4,7 @@ import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
+import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
@@ -11,6 +12,7 @@ import type { ShortcutField } from './shortcuts';
 type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
 const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates'];
 const PAGE_IDS: Record<Page, string> = { 'Answer & shortcuts': 'answer', Panel: 'panel', 'Models & API': 'models', Commands: 'commands', Updates: 'updates' };
+const PAGE_ICONS: Record<Page, IconName> = { 'Answer & shortcuts': 'answer', Panel: 'panel', 'Models & API': 'models', Commands: 'commands', Updates: 'updates' };
 const PAGE_HINTS: Record<Page, string> = {
   'Answer & shortcuts': 'Choose how SC answers and the keys you use to control it.',
   Panel: 'Preview the answer panel. Settings always keeps this readable palette.',
@@ -43,6 +45,9 @@ export function Settings({ state }: { state: AppState }) {
   const body = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const [advanced, setAdvanced] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [narrow, setNarrow] = useState(() => window.innerWidth < 600);
   const [focusRequest, setFocusRequest] = useState<{ field: string } | null>(null);
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
@@ -84,6 +89,11 @@ export function Settings({ state }: { state: AppState }) {
   }, [loadAttempt]);
 
   useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
+  useEffect(() => {
+    const resize = () => setNarrow(window.innerWidth < 600);
+    window.addEventListener('resize', resize);
+    return () => window.removeEventListener('resize', resize);
+  }, []);
   // Focus once after loading, so status updates and draft edits never steal it.
   useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded]);
   useEffect(() => {
@@ -191,6 +201,7 @@ export function Settings({ state }: { state: AppState }) {
       setPage(problem.page);
       if (problem.provider && problem.provider !== provider) changeProvider(problem.provider);
       if (problem.advanced) setAdvanced(true);
+      if (problem.field.startsWith('shortcut-')) setShortcutsOpen(true);
       setError(problem.message); setInvalidField(problem.field); setFocusRequest({ field: problem.field }); return;
     }
     savingRef.current = true; setSaving(true); setError('');
@@ -242,18 +253,21 @@ export function Settings({ state }: { state: AppState }) {
   return <section className="settings fixed-theme" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
-    <header className="dialog-header"><h1>SC settings</h1><span>v{state.version}</span></header>
-    <div className="tabs" role="tablist" aria-label="Settings pages">
+    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>SC settings</h1></div><span>v{state.version}</span></header>
+    <div className="settings-layout">
+    <div className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
       {PAGES.map((name) => <button key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}
         tabIndex={page === name ? 0 : -1} aria-controls="settings-page" disabled={blocked} onClick={() => { stopRecording(); setPage(name); }}
         onKeyDown={(event) => {
-          if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+          const previous = narrow ? 'ArrowLeft' : 'ArrowUp';
+          const next = narrow ? 'ArrowRight' : 'ArrowDown';
+          if ([previous, next, 'Home', 'End'].includes(event.key)) {
             event.preventDefault(); stopRecording();
             const index = event.key === 'Home' ? 0 : event.key === 'End' ? PAGES.length - 1 :
-              (PAGES.indexOf(page) + (event.key === 'ArrowRight' ? 1 : -1) + PAGES.length) % PAGES.length;
+              (PAGES.indexOf(page) + (event.key === next ? 1 : -1) + PAGES.length) % PAGES.length;
             setPage(PAGES[index]!); (event.currentTarget.parentElement?.children[index] as HTMLElement)?.focus();
           }
-        }}>{name}</button>)}
+        }}><Icon name={PAGE_ICONS[name]} />{name}</button>)}
     </div>
     <div ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
       <div className="page-intro"><h2 ref={heading} tabIndex={-1}>{page}</h2><p className="hint">{PAGE_HINTS[page]}</p></div>
@@ -265,12 +279,17 @@ export function Settings({ state }: { state: AppState }) {
           <section className="form-section" aria-labelledby="answer-behavior-heading"><h3 id="answer-behavior-heading">Answer behavior</h3>
           <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
             onChange={(value) => updateValues({ ResponseMode: value as SettingsDraft['values']['ResponseMode'] })} />
+          {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <div className="custom-instruction">
           <label htmlFor="custom-instruction">Custom instruction (used in Custom mode)</label>
           <textarea id="custom-instruction" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} maxLength={2000} rows={4}
-            readOnly={draft.values.ResponseMode !== 'Custom'} value={draft.values.CustomInstruction}
+            value={draft.values.CustomInstruction}
             onChange={(event) => updateValues({ CustomInstruction: event.target.value.slice(0, 2000) })} />
-          <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></section>
-          <section className="form-section" aria-labelledby="shortcut-heading"><h3 id="shortcut-heading">Keyboard shortcuts</h3>
+          <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></div>}</section>
+          <details className="advanced-settings" open={shortcutsOpen}>
+          <summary aria-disabled={blocked} onClick={(event) => {
+            event.preventDefault(); if (!blocked) { stopRecording(); setShortcutsOpen((value) => !value); }
+          }}>Keyboard shortcuts</summary>
+          <div className="advanced-content" hidden={!shortcutsOpen}>
           {state.platform === 'linux' ? <p className="hint">Configure Hyprland bindings to run SC with --action=capture, input, settings, visibility, test or exit. If the tray is unavailable, reopening SC restores the window.</p> : <>
           <p className="hint" id="shortcut-help">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
           <div className="shortcut-fields">
@@ -297,27 +316,30 @@ export function Settings({ state }: { state: AppState }) {
             stopRecording(); const defaults = defaultSettings('');
             updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
           }}>Restore shortcuts</button><button type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</button></div>
-          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></>}</section>
+          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></>}</div></details>
         </>}
         {page === 'Panel' && <>
           <section className="form-section" aria-labelledby="readability-heading"><h3 id="readability-heading">Text and transparency</h3>
           <label htmlFor="transparency">Background transparency: {draft.values.Appearance.TransparencyPercent}% (100%: text only)</label>
           <input id="transparency" aria-label="Background transparency" type="range" min={0} max={100}
             value={draft.values.Appearance.TransparencyPercent} onChange={(event) => appearance({ TransparencyPercent: Number(event.target.value) })} />
-          <label htmlFor="text-opacity">Text visibility: {draft.values.Appearance.TextOpacityPercent}%</label>
-          <input id="text-opacity" aria-label="Text visibility" type="range" min={15} max={100}
-            value={draft.values.Appearance.TextOpacityPercent} onChange={(event) => appearance({ TextOpacityPercent: Number(event.target.value) })} />
           <label className="number-row" htmlFor="font-size">Text size (points)<input id="font-size" aria-label="Answer text size" type="number" min={8} max={28}
             value={draft.values.Appearance.TextSizePoints} onChange={(event) => appearance({ TextSizePoints: Math.max(8, Math.min(28, Number(event.target.value) || 8)) })} /></label>
           </section><section className="form-section" aria-labelledby="panel-colors-heading"><h3 id="panel-colors-heading">Panel colors</h3>
           <Choice {...choiceAria('panel-theme')} label="Panel color theme" value={paletteName(draft.values.Appearance)} options={[...Object.keys(PALETTES), 'Custom']}
             onChange={(value) => { if (value in PALETTES) appearance(PALETTES[value as keyof typeof PALETTES]); }} />
+          <details className="advanced-settings" open={appearanceOpen}>
+          <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAppearanceOpen((value) => !value); }}>Advanced appearance</summary>
+          <div className="advanced-content" hidden={!appearanceOpen}>
+          <label htmlFor="text-opacity">Text visibility: {draft.values.Appearance.TextOpacityPercent}%</label>
+          <input id="text-opacity" aria-label="Text visibility" type="range" min={15} max={100}
+            value={draft.values.Appearance.TextOpacityPercent} onChange={(event) => appearance({ TextOpacityPercent: Number(event.target.value) })} />
           <div className="color-fields">{COLOR_FIELDS.map(({ field, label }) => <div key={field}><span>{label}</span>
             {state.platform === 'linux' ? <input type="color" aria-label={`${label} color`} value={draft.values.Appearance[field]}
               onChange={event => appearance({ [field]: event.target.value })} /> :
             <button type="button" aria-label={`${label} color`} style={{ background: draft.values.Appearance[field], color: contrastText(draft.values.Appearance[field]) }}
               onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</button>}</div>)}</div>
-          </section><section className="form-section" aria-labelledby="panel-preview-heading"><h3 id="panel-preview-heading">Answer preview</h3>
+          </div></details></section><section className="form-section" aria-labelledby="panel-preview-heading"><h3 id="panel-preview-heading">Answer preview</h3>
           <div className="preview-checker"><div className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
           </div></div>
@@ -369,6 +391,7 @@ export function Settings({ state }: { state: AppState }) {
           <button type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}
+    </div>
     </div>
     {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
     <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</span>

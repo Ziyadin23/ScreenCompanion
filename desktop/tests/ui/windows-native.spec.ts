@@ -89,6 +89,8 @@ async function settings(preview: Preview, tab?: string) {
   await globalShortcut(preview, [VK.control, VK.i]);
   await expect(preview.page.getByTestId('settings-save')).toBeEnabled();
   if (tab) await preview.page.getByRole('tab', { name: tab, exact: true }).click();
+  if (tab === 'Panel') await preview.page.getByText('Advanced appearance', { exact: true }).click();
+  if (!tab || tab === 'Answer & shortcuts') await preview.page.getByText('Keyboard shortcuts', { exact: true }).click();
 }
 async function inspect(handle: string) { return windowsEvent<NativeWindow>({ type: 'inspect', handle }); }
 async function picker(preview: Preview): Promise<NativeWindow | undefined> {
@@ -119,7 +121,7 @@ test.describe('Windows native key-free preview', () => {
     await expectProtected(preview.panelHandle);
     await panelKey(preview, [VK.escape]);
     await expect(page.getByTestId('question-input')).toHaveCount(0);
-    await expect(page.getByRole('button')).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'SC controls' }).getByRole('button')).toHaveCount(5);
     await expectProtected(preview.panelHandle);
     // Select and inspect text without touching the Windows clipboard.
     await globalShortcut(preview, [VK.control, VK.alt, VK.t]);
@@ -179,11 +181,11 @@ test.describe('Windows native key-free preview', () => {
     await page.getByTestId('settings-back').click();
     await expect(page.getByTestId('answer-text')).toBeVisible();
     await settings(preview, 'Panel');
-    await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('80');
+    await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('100');
     await page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('55');
     await page.getByRole('slider', { name: 'Background transparency', exact: true }).fill('50');
     await page.getByTestId('settings-save').click();
-    await expect(page.getByTestId('answer-text')).toHaveCSS('color', 'rgba(239, 242, 247, 0.55)');
+    await expect(page.getByTestId('answer-text')).toHaveCSS('color', 'rgba(242, 243, 245, 0.55)');
     await expect(page.getByTestId('answer-panel')).toHaveCSS('opacity', '1');
     expect((await state(preview)).appearance).toMatchObject({ TextOpacityPercent: 55, TransparencyPercent: 50 });
     await expectProtected(preview.panelHandle);
@@ -213,7 +215,7 @@ test.describe('Windows native key-free preview', () => {
     await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('60');
     await page.getByTestId('settings-back').click();
     await expect(page.getByTestId('answer-text')).toBeVisible();
-    expect((await state(preview)).appearance.TextOpacityPercent).toBe(80);
+    expect((await state(preview)).appearance.TextOpacityPercent).toBe(100);
   });
 
   test('real Alt-drag, invisible-edge resize and hover wheel work with a busy main thread', async ({ preview }) => {

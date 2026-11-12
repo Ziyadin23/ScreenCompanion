@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { defaultSettings } from '../../src/contracts/defaults';
+import { DEFAULT_APPEARANCE, LEGACY_APPEARANCE, defaultSettings } from '../../src/contracts/defaults';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../../src/storage';
 vi.mock('node:fs/promises', { spy: true });
 
@@ -75,7 +75,7 @@ describe('SSK3 settings', () => {
     expect(loaded?.InputShortcut).toEqual(defaultSettings('').InputShortcut);
     expect(loaded?.Models).toBeNull(); expect(loaded?.PipelineMode).toBeNull();
     expect(loaded?.ProviderKeys.DeepSeek).toBe('');
-    expect(loaded?.Appearance).toEqual({ ...defaultSettings('').Appearance, TransparencyPercent: 0, TextOpacityPercent: 15, TextSizePoints: 28 });
+    expect(loaded?.Appearance).toEqual({ ...LEGACY_APPEARANCE, TransparencyPercent: 0, TextOpacityPercent: 15, TextSizePoints: 28 });
     expect(await fs.readFile(current())).toEqual(original);
   });
   it('accepts historical numeric enum representations and writes canonical enum names', async () => {
@@ -86,6 +86,24 @@ describe('SSK3 settings', () => {
     await createSettingsStore(crypt, root).save(loaded);
     const plain = crypt.unprotectData((await fs.readFile(current())).subarray(4));
     try { expect(JSON.parse(plain.toString()).Models.Provider).toBe('DeepSeek'); } finally { plain.fill(0); }
+  });
+  it.each([undefined, null, {}, { TextSizePoints: 18, BackgroundColor: '#123456' }])('preserves historical missing appearance fields and vault bytes: %j', async Appearance => {
+    const crypt = encryption();
+    const data = { ...defaultSettings('synthetic-existing-key'), Appearance };
+    const original = await rawVault(current(), data, crypt);
+    const loaded = await createSettingsStore(crypt, root).load();
+    expect(loaded?.Appearance).toEqual({ ...LEGACY_APPEARANCE, ...(Appearance ?? {}) });
+    expect(await fs.readFile(current())).toEqual(original);
+  });
+  it('uses the new appearance only for fresh settings and preserves complete saved choices', async () => {
+    expect(defaultSettings('').Appearance).toEqual({ TransparencyPercent: 10, TextOpacityPercent: 100, TextSizePoints: 11,
+      BackgroundColor: '#1C1D20', TextColor: '#F2F3F5', AccentColor: '#385785' });
+    const crypt = encryption();
+    const Appearance = { ...LEGACY_APPEARANCE, TransparencyPercent: 67, TextSizePoints: 19 };
+    const original = await rawVault(current(), { ...defaultSettings('synthetic-existing-key'), Appearance }, crypt);
+    expect((await createSettingsStore(crypt, root).load())?.Appearance).toEqual(Appearance);
+    expect(await fs.readFile(current())).toEqual(original);
+    expect(DEFAULT_APPEARANCE).not.toEqual(LEGACY_APPEARANCE);
   });
   it.each([Buffer.from('SSK1synthetic-password'), Buffer.from('SSK2synthetic-password'), Buffer.from('SSK3foreign-user'), Buffer.from('damaged')])('retains an unreadable vault byte-for-byte', async bytes => {
     await fs.mkdir(join(root, 'SC')); await fs.writeFile(current(), bytes);

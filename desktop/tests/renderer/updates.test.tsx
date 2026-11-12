@@ -47,8 +47,8 @@ describe('update controls in Settings', () => {
   it('retains Settings drafts and the answer across update status changes and failures', async () => {
     const f = fixture(); render(<App />); await screen.findByTestId('answer-text');
     await act(async () => window.sc.command({ type: 'settings' }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Answer mode' })); fireEvent.click(screen.getByRole('option', { name: 'Custom' }));
     const instruction = await screen.findByRole('textbox', { name: 'Custom instruction' });
-    fireEvent.click(screen.getByRole('combobox', { name: 'Answer mode' })); fireEvent.click(screen.getByRole('option', { name: 'Custom' }));
     fireEvent.change(instruction, { target: { value: 'Temporary draft' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
     await act(async () => f.emit({ updates: { status: 'error', version: null, progress: null, message: 'Try again later.' } }));

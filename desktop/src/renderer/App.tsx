@@ -3,10 +3,18 @@ import type { ApiProvider, AppCommand, AppState, ResizeEdge } from '../contracts
 import { PROVIDERS } from '../contracts';
 import { Choice } from './Choice';
 import { Settings } from './Settings';
+import { Icon, type IconName } from './Icon';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
+  { label: 'Capture screen', icon: 'capture', command: { type: 'capture' }, request: true },
+  { label: 'Question', icon: 'question', command: { type: 'showInput' }, request: true },
+  { label: 'Settings', icon: 'settings', command: { type: 'settings' } },
+  { label: 'Hide', icon: 'hide', command: { type: 'toggleVisibility' } },
+  { label: 'Exit', icon: 'exit', command: { type: 'exit' } }
+];
 
 function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; platform: AppState['platform']; onCommand: (command: AppCommand) => void }) {
   const [provider, setProvider] = useState<ApiProvider>('OpenAI');
@@ -30,7 +38,7 @@ function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; p
     finally { pending.current = false; if (alive.current) setSaving(false); }
   }
   return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
-    <header className="dialog-header"><h1>Set up SC</h1></header>
+    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>Set up SC</h1></div></header>
     <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <p className="setup-intro">Choose your service and enter its API key to get started.</p>
       <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus
@@ -91,6 +99,10 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     pending.current = false;
     if (alive.current) { setSubmitting(false); if (success) setQuestion(''); else setError('The question could not be submitted. Try again.'); }
   }
+  async function control(command: AppCommand) {
+    setError('');
+    if (!await onCommand(command) && alive.current) setError('This action could not be completed. Try again.');
+  }
   const answer = state.surface === 'captureTest' ? captureTestText(state) : state.error ?
     `${state.error.message}\n\n${state.error.hint}\nCode: ${state.error.code}\nReport ID: ${state.error.reportId}\n${state.error.logSaved ? state.platform === 'linux' ? 'Log: ~/.config/SC/diagnostics.log (or $XDG_CONFIG_HOME/SC/diagnostics.log)' : 'Log: %LOCALAPPDATA%\\SC\\diagnostics.log' : 'Diagnostic log was not saved.'}${state.platform === 'linux' && state.answer ? `\n\nPrevious answer:\n${state.answer}` : ''}` : state.answer;
   return <main className="answer-panel" data-testid="answer-panel" aria-label="SC answer" aria-busy={state.busy}
@@ -103,27 +115,28 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
         selection?.removeAllRanges(); selection?.addRange(range);
         return;
       }
-      if (state.surface === 'input' && event.key === 'Enter' && !event.nativeEvent.isComposing && !event.defaultPrevented) {
+      if (event.target === input.current && event.key === 'Enter' && !event.nativeEvent.isComposing && !event.defaultPrevented) {
         event.preventDefault(); void submit();
       }
     }}
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
       if (event.button === 0 && event.altKey) { event.preventDefault(); event.stopPropagation(); void onCommand({ type: 'beginMove' }); }
     }}>
-    {state.platform === 'linux' && <nav className="linux-controls" aria-label="SC controls">
-      <button type="button" disabled={state.busy} onClick={() => { void onCommand({ type: 'capture' }); }}>Capture screen</button>
-      <button type="button" disabled={state.busy} onClick={() => { void onCommand({ type: 'showInput' }); }}>Question</button>
-      <button type="button" onClick={() => { void onCommand({ type: 'settings' }); }}>Settings</button>
-      <button type="button" onClick={() => { void onCommand({ type: 'toggleVisibility' }); }}>Hide</button>
-      <button type="button" onClick={() => { void onCommand({ type: 'exit' }); }}>Exit</button>
-    </nav>}
-    <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer}</div>
+    <div className="panel-chrome">
+      <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
+      <nav className="panel-toolbar" aria-label="SC controls">
+        {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
+          disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
+      </nav>
+    </div>
+    <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
     {state.surface === 'input' && <form className="question-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <input ref={input} data-testid="question-input" aria-label="Question" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
+      <input ref={input} data-testid="question-input" aria-label="Question" placeholder="Ask about your screen…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
         disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))} />
-      <button type="submit" disabled={state.busy || submitting || !question.trim()}>Send</button>
+      <button type="submit" aria-label="Send" title="Send" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
       {error && <span className="input-error" role="alert">{error}</span>}
     </form>}
+    {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
     {EDGES.map((edge) => <div key={edge} className={`resize-edge edge-${edge}`} data-testid={`resize-${edge}`} aria-hidden="true"
       onMouseDown={(event) => { if (event.button === 0 && !event.altKey) { event.preventDefault(); void onCommand({ type: 'beginResize', edge }); } }} />)}
   </main>;

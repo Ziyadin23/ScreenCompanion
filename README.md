@@ -1,7 +1,8 @@
 # SC
 
 SC answers questions from your screen or from text you type, then displays a
-selectable, copyable answer in a compact desktop panel.
+selectable, copyable answer in a compact desktop panel. The current source adds
+controls that reveal on hover or keyboard focus and a simpler settings sidebar.
 
 Each request takes one fresh monitor capture, including typed questions. You
 choose the AI service and supply your own API key; provider usage charges apply.
@@ -16,7 +17,7 @@ choose the AI service and supply your own API key; provider usage charges apply.
 | --- | --- | --- |
 | Latest Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.7** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source, unpublished | **0.5.0-beta.8** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Linux is available as source only**, targeting Fedora 44 x86-64 with Hyprland
 Wayland. No Linux RPM has been published, and target desktop checks remain open.
@@ -83,7 +84,7 @@ need qualification. See [Linux setup, prerequisites and limits](docs/USER_GUIDE.
 | **Ctrl+Alt+T** | Open/close the capture-exclusion test panel. |
 | **Ctrl+Backspace** | Exit SC. |
 
-These are Windows defaults; change them in **Settings → Answer & shortcuts**.
+These are Windows defaults; expand **Settings → Answer & shortcuts → Keyboard shortcuts** to change them.
 The tray menu also offers Show/Hide, Settings, Capture test and Exit. Linux uses
 window controls and optional Hyprland bindings.
 
