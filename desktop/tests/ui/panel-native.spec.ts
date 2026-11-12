@@ -262,6 +262,7 @@ test.describe('production Windows panel/store and shortcut contention', () => {
       const previous = (await state(session)).shortcuts;
       await session.page.evaluate(() => window.sc.command({ type: 'settings' }));
       await expect(session.page.getByTestId('settings-save')).toBeEnabled();
+      await session.page.getByText('Keyboard shortcuts', { exact: true }).click();
       for (const [label, key, expected] of [['Capture and answer', VK.f9, 'Ctrl+Shift+F9'], ['Capture test', VK.f10, 'Ctrl+Shift+F10']] as const) {
         // CDP clicks do not establish the OS foreground target for SendInput.
         await windowsEvent({ type: 'focus', handle: session.handle });
@@ -273,6 +274,7 @@ test.describe('production Windows panel/store and shortcut contention', () => {
         await expect(field).toHaveValue(expected);
       }
       await session.page.getByRole('tab', { name: 'Panel', exact: true }).click();
+      await session.page.getByText('Advanced appearance', { exact: true }).click();
       await session.page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('55');
       expect((await holder.request({ operation: 'probe', ...fresh })).ok).toBe(true);
       expect((await holder.request({ operation: 'hold', ...occupied })).ok).toBe(true);

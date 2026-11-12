@@ -1,8 +1,12 @@
 import type { AppearanceSettings, ModelSelection, VaultData, ApiProvider } from './index';
 
-export const DEFAULT_APPEARANCE: AppearanceSettings = {
+export const LEGACY_APPEARANCE: AppearanceSettings = {
   TransparencyPercent: 100, TextOpacityPercent: 80, TextSizePoints: 11,
   BackgroundColor: '#1A202C', TextColor: '#EFF2F7', AccentColor: '#354052'
+};
+export const DEFAULT_APPEARANCE: AppearanceSettings = {
+  TransparencyPercent: 10, TextOpacityPercent: 100, TextSizePoints: 11,
+  BackgroundColor: '#1C1D20', TextColor: '#F2F3F5', AccentColor: '#385785'
 };
 export const PROVIDER_MODELS: Record<ApiProvider, readonly string[]> = {
   OpenAI: ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra'], Groq: ['qwen/qwen3.8-27b'],

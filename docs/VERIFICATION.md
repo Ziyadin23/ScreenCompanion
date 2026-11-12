@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.7**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.8**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,15 +14,90 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-Current shared source is beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+This interface branch carries beta.8; its shared-main baseline remains beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
+| Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
+
+## Interface beta.8 verification (2026-11-12)
+
+[Issue #49](https://github.com/Ziyadin23/ScreenCompanion/issues/49) and its
+[OpenSpec owner](../openspec/changes/redesign-desktop-interface/tasks.md) track
+this local, unpublished candidate, based on `28421dd`. The 153-file Windows
+source manifest has SHA-256
+`2eb9185bed7a7a72e624abdc2291b0633b4d73b5498ad7b2db88caeaa327f45f`.
+Crash-recovery read-back matched every manifest file to the current source.
+Documentation/checkpoint additions after that snapshot do not change application bytes.
+
+Host `npm --prefix desktop run verify` passed **1,320 tests in 32 files**, types,
+lint and production bundles, exit 0. Final Windows R3 ran `npm run typecheck`,
+`npm run lint`, `npm test -- --maxWorkers=2`, `npm run build`,
+`npm run package:win`, `npm run test:windows`, full `npm run test:ui` with
+one worker, zero retries and a 6,600,000ms global timeout, then
+`npm run package:zip`: every command exited 0. Windows portable tests passed
+**1,296**, with **24 Linux-only platform skips**; native passed **54** and vault
+interoperability passed **8 cases / 136 oracle checks**. Full UI passed
+**37/37**, zero skips, retries or flaky cases, in 947.7 seconds. Protected vault
+and size-file hashes matched the initial baseline; independent postflight found
+no SC/Electron/Edge/OBS processes or held input.
+
+Retained earlier attempts: R1 passed native/vault but UI reported **9 passed,
+23 failed, 5 not run**. Twenty-two focus failures coincided with a low-battery
+system dialog; one assertion incorrectly expected an extra decimal zero in CSS
+alpha. The dialog was dismissed normally and the assertion corrected. R2 stopped
+at four portable test/hook deadlines (**1,292 passed, 24 skipped**); its timeout
+cause remains unproven. The final R3 bounded worker count does not establish that
+cause. Earlier failed attempts remain retained.
+
+The final isolated Hyprland inspection passed **20 captures / 15 checks**:
+all five categories at normal/narrow widths, panel input/answer at normal/minimum
+sizes and 28pt text, setup and empty/busy/error fixtures, dropdown containment,
+keyboard Settings activation and reduced motion. The fresh visual review's
+Enter-handler finding was fixed and its disposition is **ship**; the single
+mechanical detector returned no findings. [DESIGN.md](../DESIGN.md) and its
+sidecar record the implemented system. Synthetic setup/status fixtures establish
+layout only. The existing Settings-to-answer compositor limitation remains
+owned by Linux issue #19.
+
+The Linux RPM built with privately extracted build dependencies, exit 0, after
+an initial missing-`libcrypt.so.1` failure. Its isolated packaged key-free preview
+confirmed packaged identity/version, Question-to-Settings keyboard activation,
+layout and normal exit 0. The exact Windows portable EXE separately passed
+key-free startup/version and the same keyboard path, then exited 0 and removed
+its isolated profile. These do not qualify installation, keyring, portal capture,
+physical displays or general duplicate activation.
+
+**Recorder scope:** Microsoft Edge **157.0.4341.46**, Windows **11 build 26200**,
+whole-monitor `getDisplayMedia`, **1920×1080 VP8 WebM**. R2 completed **8 phases**,
+automation exit 0. Local framebuffer images and saved-video frames were inspected
+for backdrop control, capture-test panel, answer, question, Settings, its in-window
+listbox, owned native color picker and first-run setup. All seven SC surface
+phases were visible locally and omitted from the recording with the underlying
+backdrop retained. Independent decode produced **114 sampled frames**, with all
+eight binary phase markers represented. The clip SHA-256 is
+`5f1ddaf9bbd54584cef13370b9be97eaec91897144b639dfceb4d23a3ccec3fc`.
+The first recorder attempt stopped before any phase on a 1,079px kiosk viewport
+assertion; R2 permits that browser edge while retaining the strict full-monitor
+track check. Temporary profiles were removed and package/protected hashes matched.
+The fixture explicitly raised SC windows; this is **plain-layout saved Edge
+output only**, with no receiver, proctoring, OBS or default-topmost qualification.
+The broader recorder owner remains open.
+
+Local beta handoff copied the versioned installer, portable EXE/two-entry ZIP,
+README and RPM, verified copied SHA-256 values and updated the private latest-build
+record. Portable EXE SHA-256:
+`b235a6185c7a7638841c4b116e0af683f24f88e8401d3f123e12a458b309b7e5`;
+installer: `7008cd38f00b23caf6fd4d91b0aa0a08c1ed1bbd6613b2b4c1383ab97479d954`;
+ZIP: `7a67ff7f8da8bd9731c40557234941d9b49b26563a1d0b02172fffa705b87cc9`;
+RPM: `527dbfa35d50bd537e2071c90b2993001a0aff33e6f1de428ea75c3603e61812`.
+No paid model call, source merge or public release was performed. Other platform,
+recorder and live-quality owners retain their existing gates.
 
 ## Recorder continuation (2026-11-08)
 

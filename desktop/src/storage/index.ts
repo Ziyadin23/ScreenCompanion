@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROVIDERS, type AppearanceSettings, type ModelSelection, type PanelSize, type SettingsStore, type VaultData, type WindowsPlatform } from '../contracts';
-import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../contracts/defaults';
+import { LEGACY_APPEARANCE, defaultModels, defaultSettings } from '../contracts/defaults';
 import { validateShortcuts } from '../platform/shortcuts';
 
 const MAX_VAULT = 1024 * 1024;
@@ -83,13 +83,14 @@ function decode(value: unknown): VaultData {
   validateData(data, false);
   const appearance = value.Appearance;
   if (appearance !== undefined && appearance !== null && !object(appearance)) throw new SettingsError();
-  const a = { ...DEFAULT_APPEARANCE, ...(appearance ?? {}) } as AppearanceSettings;
+  // Historical files keep their original fallback appearance until explicitly reset.
+  const a = { ...LEGACY_APPEARANCE, ...(appearance ?? {}) } as AppearanceSettings;
   for (const [key, low, high] of [['TransparencyPercent', 0, 100], ['TextOpacityPercent', 15, 100], ['TextSizePoints', 8, 28]] as const) {
     if (!integer(a[key], -2147483648, 2147483647)) throw new SettingsError();
     a[key] = Math.max(low, Math.min(high, a[key]));
   }
   for (const key of ['BackgroundColor', 'TextColor', 'AccentColor'] as const) {
-    if (typeof a[key] !== 'string' || !COLOR.test(a[key])) a[key] = DEFAULT_APPEARANCE[key];
+    if (typeof a[key] !== 'string' || !COLOR.test(a[key])) a[key] = LEGACY_APPEARANCE[key];
   }
   data.Appearance = a;
   return data;

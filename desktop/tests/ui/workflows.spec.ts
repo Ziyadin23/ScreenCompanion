@@ -21,6 +21,7 @@ async function settings(page: Page, tab?: string) {
   await page.evaluate(() => window.sc.command({ type: 'settings' }));
   await expect(page.getByTestId('settings-save')).toBeEnabled();
   if (tab) await page.getByRole('tab', { name: tab }).click();
+  if (tab === 'Panel') await page.getByText('Advanced appearance', { exact: true }).click();
 }
 async function choice(page: Page, name: string, option: string) {
   await page.getByRole('combobox', { name, exact: true }).click();
@@ -35,8 +36,13 @@ test('Updates explains installed-only updates without making requests in the key
   await expect(page.getByTestId('answer-text')).toHaveText('Synthetic SC answer');
 });
 
-test('answer-only surface is selectable plain text with independent alpha and invisible resize edges', async ({ scPage: page }) => {
-  await expect(page.getByRole('button')).toHaveCount(0);
+test('compact panel keeps selectable text, independent alpha and revealable controls', async ({ scPage: page }) => {
+  await page.evaluate(() => (document.activeElement as HTMLElement)?.blur());
+  await page.mouse.move(-20, -20);
+  await expect(page.locator('.panel-toolbar')).toHaveCSS('opacity', '0');
+  await expect(page.getByRole('navigation', { name: 'SC controls' }).getByRole('button')).toHaveCount(5);
+  await page.getByTestId('answer-panel').hover();
+  await expect(page.locator('.panel-toolbar')).toHaveCSS('opacity', '1');
   await expect(page.getByTestId('question-input')).toHaveCount(0);
   await expect(page.locator('.resize-edge')).toHaveCount(8);
   const style = await page.getByTestId('answer-text').evaluate((element) => {
@@ -44,11 +50,20 @@ test('answer-only surface is selectable plain text with independent alpha and in
     return { text: text.color, background: panel.backgroundColor, opacity: panel.opacity, select: text.userSelect, whitespace: text.whiteSpace,
       edge: getComputedStyle(document.querySelector('.edge-left')!).width, scrollbar: text.scrollbarWidth };
   });
-  expect(style).toMatchObject({ text: 'rgba(239, 242, 247, 0.8)', opacity: '1', select: 'text', whitespace: 'pre-wrap', edge: '7px', scrollbar: 'none' });
-  expect(style.background).toMatch(/rgba\(26, 32, 44, 0\.00/);
+  expect(style).toMatchObject({ text: 'rgb(242, 243, 245)', opacity: '1', select: 'text', whitespace: 'pre-wrap', edge: '7px', scrollbar: 'none' });
+  expect(style.background).toBe('rgba(28, 29, 32, 0.9)');
 });
 
 test('temporary input sends with Enter, reports the key-free preview limit and clears on Escape', async ({ scPage: page }) => {
+  await page.evaluate(() => window.sc.command({ type: 'showInput' }));
+  await page.getByTestId('question-input').fill('Keep this draft away from submission');
+  await page.getByRole('button', { name: 'Settings', exact: true }).focus();
+  await page.mouse.move(-20, -20);
+  await expect(page.locator('.panel-toolbar')).toHaveCSS('opacity', '1');
+  await page.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
+  await expect(page.getByTestId('settings-save')).toBeEnabled();
+  await page.getByTestId('settings-back').click();
+  await expect(page.getByTestId('answer-text')).toHaveText('Synthetic SC answer');
   await page.evaluate(() => window.sc.command({ type: 'showInput' }));
   await page.getByTestId('question-input').fill('Synthetic typed question');
   await page.getByTestId('question-input').press('Enter');
@@ -73,11 +88,11 @@ test('Back discards appearance and Save applies the preview without recoloring S
   await expect(page.locator('.fixed-theme')).toHaveCSS('background-color', original);
   await page.getByTestId('settings-back').click();
   await settings(page, 'Panel');
-  await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('80');
+  await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('100');
   await choice(page, 'Panel color theme', 'Forest');
   await page.getByTestId('settings-save').click();
   await expect(page.getByTestId('answer-text')).toHaveText('Synthetic SC answer');
-  await expect(page.getByTestId('answer-text')).toHaveCSS('color', 'rgba(232, 244, 234, 0.8)');
+  await expect(page.getByTestId('answer-text')).toHaveCSS('color', 'rgb(232, 244, 234)');
 });
 
 test('service replacement drafts survive switching and are absent after Save', async ({ scPage: page }) => {
@@ -107,7 +122,7 @@ test('Settings navigation uses one keyboard tab stop and keeps every page inside
   await settings(page);
   await expect(page.getByRole('heading', { name: 'Answer & shortcuts', exact: true })).toBeFocused();
   const first = page.getByRole('tab', { name: 'Answer & shortcuts', exact: true });
-  await first.focus(); await first.press('ArrowRight');
+  await first.focus(); await first.press('ArrowDown');
   const panel = page.getByRole('tab', { name: 'Panel', exact: true });
   await expect(panel).toBeFocused(); await expect(panel).toHaveAttribute('aria-selected', 'true');
   await panel.press('Tab'); await expect(page.getByRole('tabpanel', { name: 'Panel', exact: true })).toBeFocused();

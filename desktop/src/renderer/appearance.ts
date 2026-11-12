@@ -3,7 +3,7 @@ import type { AppearanceSettings } from '../contracts';
 import { DEFAULT_APPEARANCE } from '../contracts/defaults';
 
 export const PALETTES = {
-  Dark: { BackgroundColor: '#1A202C', TextColor: '#EFF2F7', AccentColor: '#354052' },
+  Dark: { BackgroundColor: '#1C1D20', TextColor: '#F2F3F5', AccentColor: '#385785' },
   Light: { BackgroundColor: '#F3F5F8', TextColor: '#18202C', AccentColor: '#D7E2F2' },
   Midnight: { BackgroundColor: '#101827', TextColor: '#E5EEFF', AccentColor: '#264D88' },
   Forest: { BackgroundColor: '#14251F', TextColor: '#E8F4EA', AccentColor: '#2F6048' }
