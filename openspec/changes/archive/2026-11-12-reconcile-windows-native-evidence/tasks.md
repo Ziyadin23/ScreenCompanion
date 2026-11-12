@@ -21,7 +21,7 @@ Owner for [W8 / issue #13](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 
 ## Evidence audit — 2026-11-05
 
-- Task 1.1 delivered the [gate map](../../../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05). Read native holder/rollback, DPAPI, activation/disposal assertions, all generated panel edge cases, Settings contention and vault interoperability cases. `git diff v0.5.0-beta.6 HEAD -- desktop/tests/windows/verify.mjs desktop/tests/ui/panel-native.spec.ts desktop/native/runtime.cpp` exited 0 with no differences. Source equality is provenance only.
+- Task 1.1 delivered the [gate map](../../../../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05). Read native holder/rollback, DPAPI, activation/disposal assertions, all generated panel edge cases, Settings contention and vault interoperability cases. `git diff v0.5.0-beta.6 HEAD -- desktop/tests/windows/verify.mjs desktop/tests/ui/panel-native.spec.ts desktop/native/runtime.cpp` exited 0 with no differences. Source equality is provenance only.
 - Existing public evidence and dated private records agree: beta.6's 2026-10-28 native stage passed 54 + eight/136 before UI focus failure; split UI results remain distinct. Beta.7's pinned 2026-11-03 run passed 54 + eight/136 and all 37 UI cases. No new runtime result is claimed.
 - Remaining account/race/environment cases are explicit. The 2026-10-24 31-check result and beta.5/beta.6 failures remain unchanged. Next: align current navigation/status, then independent review and checks.
 
