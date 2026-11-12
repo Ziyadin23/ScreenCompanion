@@ -267,7 +267,7 @@ preflight separately passed five synthetic filesystem-boundary checks.
 This qualifies the published beta.6 installer hop in one Windows 11 VM. Earlier
 failed local updates and other runtime, recorder, Windows-version and live-quality
 limits retain their separate scope. See the
-[OpenSpec task record](../openspec/changes/verify-windows-public-update/tasks.md).
+[OpenSpec task record](../openspec/changes/archive/2026-11-12-verify-windows-public-update/tasks.md).
 
 ## Linux source-publication checks (2026-11-02)
 
@@ -446,7 +446,7 @@ was removed. The original failed attempt and later standalone observation were
 rechecked byte-identical.
 
 This completes the named beta.6 qualification scope and bounded explanation in
-the [activation task owner](../openspec/changes/verify-windows-packaged-activation/tasks.md).
+the [activation task owner](../openspec/changes/archive/2026-11-12-verify-windows-packaged-activation/tasks.md).
 It does not prove the historical timeout's cause or general reliability beyond
 this run, qualify beta.7 packages, or settle recorder/live-quality, fresh-machine,
 Windows 10, mixed-DPI or Linux gates.
