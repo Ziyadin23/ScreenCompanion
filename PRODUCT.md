@@ -20,4 +20,4 @@ Choose a service and enter its own API key during setup. Capture the screen or o
 - Windows capture exclusion is best effort and requires recorder-specific evidence; Linux windows can appear in recordings.
 - Existing keyboard shortcuts, fallback controls, hover scrolling, movement/resizing and remembered size remain usable.
 
-The user selected a compact Raycast-inspired panel and Linear-inspired settings. The accepted change and implementation progress are owned by [OpenSpec](openspec/changes/redesign-desktop-interface/tasks.md).
+The user selected a compact Raycast-inspired panel and Linear-inspired settings. The accepted change and implementation progress are owned by [OpenSpec](openspec/changes/archive/2026-11-12-redesign-desktop-interface/tasks.md).

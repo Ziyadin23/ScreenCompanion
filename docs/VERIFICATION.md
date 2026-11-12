@@ -28,7 +28,7 @@ The sections below are dated evidence, followed by support procedures and histor
 ## Interface beta.8 verification (2026-11-12)
 
 [Issue #49](https://github.com/Ziyadin23/ScreenCompanion/issues/49) and its
-[OpenSpec owner](../openspec/changes/redesign-desktop-interface/tasks.md) track
+[OpenSpec owner](../openspec/changes/archive/2026-11-12-redesign-desktop-interface/tasks.md) track
 this local, unpublished candidate, based on `28421dd`. The 153-file Windows
 source manifest has SHA-256
 `2eb9185bed7a7a72e624abdc2291b0633b4d73b5498ad7b2db88caeaa327f45f`.
