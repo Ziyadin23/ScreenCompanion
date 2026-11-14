@@ -32,4 +32,10 @@ describe('diagnostic privacy and renderer boundaries', () => {
     const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('synthetic');
     expect(settingsDraftSchema.safeParse({ values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: { OpenAI: 'bad\nkey' } }).success).toBe(false);
   });
+  it('requires an explicit screenshot choice and bounds measured input geometry', () => {
+    for (const includeScreenshot of [true, false]) expect(commandSchema.safeParse({ type: 'submit', question: 'Synthetic task', includeScreenshot }).success).toBe(true);
+    for (const includeScreenshot of [undefined, 'yes', 1]) expect(commandSchema.safeParse({ type: 'submit', question: 'Synthetic task', includeScreenshot }).success).toBe(false);
+    for (const height of [0, -1, 1.5, 32769, NaN]) expect(commandSchema.safeParse({ type: 'inputHeight', height }).success).toBe(false);
+    expect(commandSchema.safeParse({ type: 'inputHeight', height: 76 }).success).toBe(true);
+  });
 });

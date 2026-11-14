@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { DEFAULT_APPEARANCE, LEGACY_APPEARANCE, defaultSettings } from '../../src/contracts/defaults';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../../src/storage';
+import { MAX_MODEL_PIPELINES } from '../../src/contracts/model-pipelines';
 vi.mock('node:fs/promises', { spy: true });
 
 // Synthetic encryption verifies the storage contract on every OS; it makes no DPAPI claim.
@@ -57,7 +58,7 @@ describe('SSK3 settings', () => {
     const data = defaultSettings('synthetic-api-key');
     data.ProviderKeys.DeepSeek = 'synthetic-deepseek-key'; data.CustomInstruction = 'synthetic instruction';
     data.Models = { Provider: 'DeepSeek', AnswerModel: 'deepseek-v4-pro', VisionModel: 'deepseek-flash', Thinking: 'High', AnswerTokenLimit: 16000 };
-    data.PipelineMode = 'Balanced'; data.ResponseMode = 'Explain steps';
+    data.PipelineMode = 'Thorough'; data.ResponseMode = 'Explain steps';
     await store.save(data);
     const file = await fs.readFile(current());
     expect(file.subarray(0, 4).toString()).toBe('SSK3'); expect(file.includes(Buffer.from(data.ApiKey))).toBe(false);
@@ -141,10 +142,43 @@ describe('SSK3 settings', () => {
     { Capture: { Modifiers: 2, Key: 123 } }, { Capture: { Modifiers: 2, Key: 13 } },
     { Appearance: { ...defaultSettings('').Appearance, TextOpacityPercent: 14 } },
     { ProviderKeys: { ...defaultSettings('').ProviderKeys, DeepSeek: 'bad\rkey' } },
-    { PipelineMode: 'Direct' }, { Models: { Provider: 'OpenAI', AnswerModel: 'https://bad', VisionModel: 'ok', Thinking: 'None', AnswerTokenLimit: null } }
+    { PipelineMode: 'Balanced' }, { Models: { Provider: 'OpenAI', AnswerModel: 'https://bad', VisionModel: 'ok', Thinking: 'None', AnswerTokenLimit: null } }
   ])('rejects invalid saves before encryption', async patch => {
     const crypt = encryption(), data = { ...defaultSettings('synthetic'), ...patch } as Parameters<typeof validateSettings>[0];
     expect(() => validateSettings(data)).toThrow(); await expect(createSettingsStore(crypt, root).save(data)).rejects.toThrow();
+    expect(crypt.protectData).not.toHaveBeenCalled();
+  });
+  it.each(['Balanced', 'balanced', 1])('migrates legacy mode %j without changing encrypted bytes', async PipelineMode => {
+    const crypt = encryption();
+    const bytes = await rawVault(current(), { ...defaultSettings('synthetic'), PipelineMode }, crypt);
+    const loaded = await createSettingsStore(crypt, root).load();
+    expect(loaded?.PipelineMode).toBe('Thorough'); expect(loaded?.ModelPipelines).toEqual([]);
+    expect(await fs.readFile(current())).toEqual(bytes);
+  });
+  it('persists independent model preferences across a new store instance', async () => {
+    const crypt = encryption(), data = defaultSettings('synthetic');
+    data.PipelineMode = 'Direct';
+    data.ModelPipelines = [{ Provider: 'OpenAI', AnswerModel: 'shared-model', PipelineMode: 'Direct' },
+      { Provider: 'Gemini', AnswerModel: 'shared-model', PipelineMode: 'Thorough' },
+      { Provider: 'OpenAI', AnswerModel: 'another-model', PipelineMode: 'Thorough' }];
+    await createSettingsStore(crypt, root).save(data);
+    const bytes = await fs.readFile(current());
+    expect(await createSettingsStore(crypt, root).load()).toEqual(data);
+    expect(await fs.readFile(current())).toEqual(bytes);
+  });
+  it.each([
+    null, {}, [{ Provider: 'other', AnswerModel: 'model', PipelineMode: 'Thorough' }],
+    [{ Provider: 'OpenAI', AnswerModel: 'https://private.example', PipelineMode: 'Direct' }],
+    [{ Provider: 'OpenAI', AnswerModel: 'model', PipelineMode: 'Balanced' }],
+    Array.from({ length: 2 }, () => ({ Provider: 'OpenAI', AnswerModel: 'same-model', PipelineMode: 'Direct' })),
+    Array.from({ length: MAX_MODEL_PIPELINES + 1 }, (_, i) => ({ Provider: 'OpenAI', AnswerModel: 'model-' + i, PipelineMode: 'Direct' }))
+  ])('preserves malformed model-preference vaults and rejects saves before encryption: %j', async ModelPipelines => {
+    const crypt = encryption(), data = { ...defaultSettings('synthetic'), ModelPipelines };
+    const bytes = await rawVault(current(), data, crypt);
+    crypt.protectData.mockClear();
+    await expect(createSettingsStore(crypt, root).load()).rejects.toBeInstanceOf(SettingsError);
+    expect(await fs.readFile(current())).toEqual(bytes);
+    await expect(createSettingsStore(crypt, root).save(data as ReturnType<typeof defaultSettings>)).rejects.toBeInstanceOf(SettingsError);
     expect(crypt.protectData).not.toHaveBeenCalled();
   });
 });

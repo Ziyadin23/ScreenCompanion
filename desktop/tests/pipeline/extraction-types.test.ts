@@ -3,7 +3,7 @@ import { createPipelineRunner } from '../../src/pipeline';
 import { canonical, combined, configuration, context, detection, envelope, extraction, images, pipelineInput,
   StrictTransport, TrackingCropper, type Payload } from './fixtures';
 
-type ExtractionMode = 'Thorough' | 'Balanced';
+type ExtractionMode = 'Thorough';
 type Choice = 'multiple' | 'multi';
 type Attachment = 'image' | 'code' | 'image+code';
 const code = 'values = [12, 24, 36, 48]\nfor value in values:\n    print(value)\n';
@@ -26,7 +26,7 @@ function startRun(mode: ExtractionMode, fixture: ReturnType<typeof mixedChoice>,
   const cropper = new TrackingCropper();
   const transport = new StrictTransport([
     ...(mode === 'Thorough' ? [() => envelope('OpenAI', detection())] : []),
-    () => envelope('OpenAI', mode === 'Balanced' ? fixture : { questions: fixture.questions, images: fixture.images }),
+    () => envelope('OpenAI', { questions: fixture.questions, images: fixture.images }),
     payload => envelope('OpenAI', respond(payload))
   ]);
   const input = pipelineInput({ configuration: configuration({ mode }) });
@@ -35,10 +35,10 @@ function startRun(mode: ExtractionMode, fixture: ReturnType<typeof mixedChoice>,
 
 // Mocked responses exercise production extraction, crops and answer validation, not model classification.
 describe('mixed-feature extraction and choice contracts', () => {
-  const cases = (['Thorough', 'Balanced'] as const).flatMap(mode => (['multiple', 'multi'] as const).flatMap(choice =>
+  const cases = (['Thorough'] as const).flatMap(mode => (['multiple', 'multi'] as const).flatMap(choice =>
     (['image', 'code', 'image+code'] as const).map(attachment => ({ mode, choice, attachment }))));
 
-  it.each(['Thorough', 'Balanced'] as const)('%s sends explicit type precedence in the production extraction instruction', async mode => {
+  it.each(['Thorough'] as const)('%s sends explicit type precedence in the production extraction instruction', async mode => {
     const run = startRun(mode, mixedChoice('multiple', 'image+code'), payload => canonical(payload, 'B'));
     expect((await run.promise).text).toBe('B — 24');
     run.transport.done(); run.transport.cleared(); run.cropper.cleared();
@@ -76,26 +76,14 @@ describe('mixed-feature extraction and choice contracts', () => {
     { choice: 'multi', name: 'unknown selection', fields: { answer: null, answers: ['B', 'Z'] } },
     { choice: 'multi', name: 'duplicate selection', fields: { answer: null, answers: ['B', 'b'] } }
   ];
-  it.each((['Thorough', 'Balanced'] as const).flatMap(mode => invalid.map(item => ({ mode, ...item }))))(
+  it.each((['Thorough'] as const).flatMap(mode => invalid.map(item => ({ mode, ...item }))))(
     '$mode rejects $name with code and a required visual', async ({ mode, choice, fields }) => {
       const run = startRun(mode, mixedChoice(choice, 'image+code'), payload => canonical(payload, '', fields));
       await expect(run.promise).rejects.toMatchObject({ stage: 'ValidateAnswer', pipelineCode: 'InvalidChoice' });
       run.transport.done(); run.transport.cleared(); run.cropper.cleared();
     });
 
-  it.each((['multiple', 'multi'] as const).flatMap(choice => (['code', 'visual', 'option'] as const).map(missing => ({ choice, missing }))))(
-    'Balanced rejects missing $missing required by $choice evidence before answering', async ({ choice, missing }) => {
-      const fixture = mixedChoice(choice, 'image+code');
-      if (missing === 'code') fixture.questions[0]!.code = null;
-      if (missing === 'visual') fixture.questions[0]!.image_ids = [];
-      if (missing === 'option') fixture.questions[0]!.options.pop();
-      const cropper = new TrackingCropper(), transport = new StrictTransport([() => envelope('OpenAI', fixture)]);
-      await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }) })))
-        .rejects.toMatchObject({ stage: 'Extract', pipelineCode: 'IncompleteExtraction' });
-      transport.done(); transport.cleared(); cropper.cleared();
-    });
-
-  it.each(['Thorough', 'Balanced'] as const)('%s retains code and visual crops for a non-choice code task', async mode => {
+  it.each(['Thorough'] as const)('%s retains code and visual crops for a non-choice code task', async mode => {
     const fixture = mixedChoice('multiple', 'image+code');
     fixture.questions[0]!.type = 'code'; fixture.questions[0]!.options = [];
     fixture.questions[0]!.question = "Compute values[1] using the code and verify it against the rectangle's area.";

@@ -16,6 +16,13 @@ function fixture() {
 }
 
 describe('Linux platform behavior with synthetic desktop boundaries', () => {
+  it('routes the explicit screenshot shortcut separately from a custom focus-only input action', async () => {
+    const f = fixture(), action = vi.fn(); await f.platform.acquireInstance(() => {});
+    f.launch(['sc', '--action=input-with-screenshot']);
+    await f.platform.applyShortcuts(defaultSettings('synthetic'), false, action); f.platform.ready?.();
+    expect(action).toHaveBeenCalledExactlyOnceWith('input-with-screenshot');
+    f.launch(['sc', '--action=input']); expect(action).toHaveBeenLastCalledWith('input'); f.platform.dispose();
+  });
   it('restores a duplicate launch and queues a compositor action until initialization completes', async () => {
     const f = fixture(), activate = vi.fn(), action = vi.fn();
     expect(await f.platform.acquireInstance(activate)).toBe(true);

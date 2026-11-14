@@ -18,13 +18,13 @@ describe('trusted configuration and saved compatibility', () => {
   it('applies saved models/mode/budgets together and never takes QA state from settings', () => {
     const process = loadPipelineConfiguration({ API_PROVIDER: 'DeepSeek', PIPELINE_MODE: 'direct', ANSWER_MAX_OUTPUT_TOKENS: '4500', ASSESSMENT_MODE: 'standard' });
     const models = { ...defaultModels('DeepSeek'), AnswerModel: 'deepseek-v4-pro', Thinking: 'High' as const, AnswerTokenLimit: 16000 };
-    expect(withSavedSettings(process, { Models: models, PipelineMode: 'Balanced' })).toMatchObject({ answerModel: 'deepseek-v4-pro', thinking: 'High', answerMaxOutputTokens: 16000,
-      visionModel: 'deepseek-flash', mode: 'Balanced', assessmentMode: 'standard', extractionMaxOutputTokens: 6000 });
+    expect(withSavedSettings(process, { Models: models, PipelineMode: 'Thorough' })).toMatchObject({ answerModel: 'deepseek-v4-pro', thinking: 'High', answerMaxOutputTokens: 16000,
+      visionModel: 'deepseek-flash', mode: 'Thorough', assessmentMode: 'standard', extractionMaxOutputTokens: 6000 });
     expect(withSavedSettings(process, { Models: { ...models, AnswerTokenLimit: null }, PipelineMode: 'Thorough' }).answerMaxOutputTokens).toBe(4500);
     expect(withSavedSettings(process, { Models: defaultModels('Gemini'), PipelineMode: 'Thorough' }).provider).toBe('Gemini');
   });
   it.each([
-    { API_PROVIDER: 'other' }, { PIPELINE_MODE: 'other' }, { PIPELINE_MODE: 'direct' }, { ASSESSMENT_MODE: 'graded' },
+    { API_PROVIDER: 'other' }, { PIPELINE_MODE: 'other' }, { ASSESSMENT_MODE: 'graded' },
     { ENABLE_QUESTION_CROPPING: '1' }, { ENABLE_REFUSAL_RETRY: 'yes' }, { IMAGE_REGION_PADDING: 'NaN' }, { IMAGE_REGION_PADDING: '-.1' }, { IMAGE_REGION_PADDING: '.20001' },
     { EXTRACTION_MAX_OUTPUT_TOKENS: '255' }, { ANSWER_MAX_OUTPUT_TOKENS: '32001' }, { ANSWER_MAX_OUTPUT_TOKENS: '256.0' },
     { QUESTION_REGION: '0,0,1,1' }, { QUESTION_REGION: '0,0,0,.3' }, { QUESTION_REGION: 'NaN,0,.3,.3' }, { QUESTION_REGION: '0,0,.4' },
@@ -36,7 +36,21 @@ describe('trusted configuration and saved compatibility', () => {
     for (const changed of [{ AnswerTokenLimit: 255 }, { AnswerTokenLimit: 32001 }, { AnswerModel: 'bad model' }, { VisionModel: 'https://host' }, { Thinking: 'invalid' }]) {
       expect(() => withSavedSettings(loadPipelineConfiguration({}), { Models: { ...defaultModels('DeepSeek'), ...changed } as ReturnType<typeof defaultModels>, PipelineMode: 'Thorough' })).toThrow();
     }
-    expect(() => withSavedSettings(loadPipelineConfiguration({}), { Models: null, PipelineMode: 'Direct' })).toThrow();
+    expect(withSavedSettings(loadPipelineConfiguration({}), { Models: null, PipelineMode: 'Direct' }).mode).toBe('Direct');
+  });
+  it('normalizes the legacy process mode and allows Direct across providers', () => {
+    expect(loadPipelineConfiguration({ PIPELINE_MODE: 'balanced' }).mode).toBe('Thorough');
+    for (const provider of PROVIDERS) expect(loadPipelineConfiguration({ API_PROVIDER: provider, PIPELINE_MODE: 'direct' }))
+      .toMatchObject({ provider, mode: 'Direct' });
+  });
+  it('resolves model-specific choices before the legacy field without sharing provider identities', () => {
+    const Models = defaultModels('OpenAI');
+    const ModelPipelines = [{ Provider: 'OpenAI' as const, AnswerModel: Models.AnswerModel, PipelineMode: 'Direct' as const },
+      { Provider: 'Gemini' as const, AnswerModel: Models.AnswerModel, PipelineMode: 'Thorough' as const }];
+    const process = loadPipelineConfiguration({});
+    expect(withSavedSettings(process, { Models, ModelPipelines, PipelineMode: 'Thorough' }).mode).toBe('Direct');
+    expect(withSavedSettings(process, { Models: { ...Models, Provider: 'Gemini' }, ModelPipelines, PipelineMode: 'Direct' }).mode).toBe('Thorough');
+    expect(() => withSavedSettings(process, { Models, ModelPipelines: [...ModelPipelines, ModelPipelines[0]!], PipelineMode: null })).toThrow();
   });
   it('allows only bounded normalized regions', () => {
     for (const region of [{ x: NaN, y: 0, width: .2, height: .2 }, { x: -1, y: 0, width: .2, height: .2 }, { x: 1, y: 0, width: .2, height: .2 }, { x: 0, y: 0, width: 1, height: 1 }])

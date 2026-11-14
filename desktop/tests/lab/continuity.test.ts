@@ -17,7 +17,7 @@ describe('durable continuity at each synthetic reservation and transport boundar
   let directory: string, ledger: CampaignLedger, results: MetadataResults, continuity: CampaignContinuity;
   let damaged: { ledger: Buffer | null; results: Buffer | null } | undefined;
   const first = campaign()[0]!, second = campaign()[1]!;
-  const balanced = campaign().find(run => run.group === 'main' && run.mode === 'Balanced')!;
+  const otherThorough = campaign().find(run => run.group === 'main' && run.caseId === 'code' && run.mode === 'Thorough')!;
   const thorough = campaign().find(run => run.group === 'main' && run.mode === 'Thorough')!;
   beforeEach(async () => {
     directory = await fs.mkdtemp(join(tmpdir(), 'sc-fake-continuity-'));
@@ -83,17 +83,17 @@ describe('durable continuity at each synthetic reservation and transport boundar
       it(`blocks ${target} ${fault} between stages without a second reservation`, async () => {
         await perform([first]);
         let sends = 0;
-        await expect(perform([balanced], { afterSend: async (_run, index) => { ++sends; if (index === 1) await damage(target, fault); } })).rejects.toThrow('No new contact');
+        await expect(perform([otherThorough], { afterSend: async (_run, index) => { ++sends; if (index === 1) await damage(target, fault); } })).rejects.toThrow('No new contact');
         expect(sends).toBe(1); expect(ledger.count).toBe(2); expect(ledger.remaining).toBe(118);
-        expect(ledger.unresolved(balanced.id)).toBe(true); expect(ledger.completed(balanced.id)).toBe(false);
+        expect(ledger.unresolved(otherThorough.id)).toBe(true); expect(ledger.completed(otherThorough.id)).toBe(false);
         expect(await snapshot()).toEqual(damaged);
       });
     }
     it(`rechecks ${target} after a charge and before the underlying transport`, async () => {
       await perform([first]); let underlyingSends = 0, once = false;
-      await expect(perform([balanced], { afterReserve: async () => { if (!once) { once = true; await damage(target, 'modified'); } },
+      await expect(perform([otherThorough], { afterReserve: async () => { if (!once) { once = true; await damage(target, 'modified'); } },
         afterSend: async () => { ++underlyingSends; } })).rejects.toThrow('No new contact');
-      expect(underlyingSends).toBe(0); expect(ledger.count).toBe(2); expect(ledger.unresolved(balanced.id)).toBe(true);
+      expect(underlyingSends).toBe(0); expect(ledger.count).toBe(2); expect(ledger.unresolved(otherThorough.id)).toBe(true);
       expect(await snapshot()).toEqual(damaged);
     });
     it(`keeps ${target} poisoned even if the in-place bytes are restored`, async () => {
@@ -105,17 +105,17 @@ describe('durable continuity at each synthetic reservation and transport boundar
       expect(ledger.count).toBe(1); expect(ledger.remaining).toBe(119);
     });
   }
-  it('allows normal Thorough and Balanced attempts, then reopens and reconciles the exact history', async () => {
-    const transports = await perform([first, thorough, balanced]);
-    expect(transports.map(item => item.requests.length)).toEqual([1, 3, 2]);
-    expect(ledger.count).toBe(6); expect(ledger.remaining).toBe(114);
-    expect(ledger.latestStatus(thorough.id)).toBe('passed'); expect(ledger.latestStatus(balanced.id)).toBe('passed');
+  it('allows normal two Thorough attempts, then reopens and reconciles the exact history', async () => {
+    const transports = await perform([first, thorough, otherThorough]);
+    expect(transports.map(item => item.requests.length)).toEqual([1, 3, 3]);
+    expect(ledger.count).toBe(7); expect(ledger.remaining).toBe(113);
+    expect(ledger.latestStatus(thorough.id)).toBe('passed'); expect(ledger.latestStatus(otherThorough.id)).toBe('passed');
     await results.close(); await ledger.close();
     ledger = await CampaignLedger.open(join(directory, 'campaign.json'), FAKE_IDENTITY);
     results = await MetadataResults.open(join(directory, 'results.jsonl'));
     continuity = new CampaignContinuity(ledger, results);
     expect(() => ledger.reconcile(results.records)).not.toThrow();
     await expect(continuity.verify()).resolves.toBeUndefined();
-    expect(results.records).toHaveLength(3); expect(ledger.count).toBe(6);
+    expect(results.records).toHaveLength(3); expect(ledger.count).toBe(7);
   });
 });

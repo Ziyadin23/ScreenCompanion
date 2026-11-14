@@ -28,15 +28,15 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
           cropper: new FixtureCropper(), requiredVisuals: FAKE_REQUIRED_VISUALS, jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal });
       }, async record() { if (options.writeFailure) throw new Error('Synthetic result write failure.'); } });
   }
-  it.each([FAKE_CANDIDATE, 'b'.repeat(64)])('always runs fresh49/96 after initial2+diagnostic11 with final candidate %s', async candidate => {
+  it.each([FAKE_CANDIDATE, 'b'.repeat(64)])('always runs current33/64 after initial2+diagnostic11 with final candidate %s', async candidate => {
     let ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'initial-preflight' }); await perform(ledger, phaseRuns('initial-preflight')); expect(ledger.count).toBe(2); await ledger.close();
     ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'diagnostic' }); await perform(ledger, phaseRuns('diagnostic')); expect(ledger.count).toBe(13); await ledger.close();
     await freeze(candidate); ledger = await open({ candidate, phase: 'qualification' });
     expect(ledger.completed('preflight-flash')).toBe(false); expect(ledger.completed('main-mcq-plain-direct')).toBe(false);
     const calls: string[] = []; await perform(ledger, campaign(), { full: true, calls });
-    expect(calls).toEqual(campaign().map(run => run.id)); expect(calls).toHaveLength(49); expect(ledger.count).toBe(109); expect(ledger.qualificationPassed()).toBe(true);
+    expect(calls).toEqual(campaign().map(run => run.id)); expect(calls).toHaveLength(33); expect(ledger.count).toBe(77); expect(ledger.qualificationPassed()).toBe(true);
     await ledger.close(); ledger = await open({ candidate, phase: 'qualification' });
-    await perform(ledger, campaign(), { full: true, calls }); expect(calls).toHaveLength(49); expect(ledger.count).toBe(109);
+    await perform(ledger, campaign(), { full: true, calls }); expect(calls).toHaveLength(33); expect(ledger.count).toBe(77);
   });
   it('blocks qualification/scoped model gates after failed preflight and never silently repeats it', async () => {
     await freeze(FAKE_CANDIDATE); const ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
@@ -56,19 +56,19 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
     const calls: string[] = []; await expect(perform(ledger, [phaseRuns('diagnostic')[0]!], { calls })).rejects.toMatchObject({ code: 'preflight-required' });
     expect(calls).toHaveLength(0); expect(ledger.count).toBe(3);
   });
-  it('allows all stages of a current Thorough and Balanced attempt before completion', async () => {
+  it('allows all stages of a current Thorough and Direct attempt before completion', async () => {
     await freeze(FAKE_CANDIDATE); const ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
     await perform(ledger, campaign().slice(0, 2));
-    const runs = ['Thorough', 'Balanced'].map(mode => campaign().find(run => run.group === 'main' && run.mode === mode)!);
+    const runs = ['Thorough', 'Direct'].map(mode => campaign().find(run => run.group === 'main' && run.mode === mode)!);
     await perform(ledger, runs);
     const lines = (await fs.readFile(join(directory, 'ledger.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line));
     for (const [index, run] of runs.entries()) {
       const contacts = lines.filter(item => item.kind === 'contact' && item.runId === run.id);
-      expect(contacts.map(item => item.stage)).toEqual(index === 0 ? ['Locate', 'Extract', 'Answer'] : ['Extract', 'Answer']);
+      expect(contacts.map(item => item.stage)).toEqual(index === 0 ? ['Locate', 'Extract', 'Answer'] : ['Answer']);
       expect(contacts.map(item => item.attempt)).toEqual(Array(run.expectedCalls).fill(1));
       expect(ledger.latestStatus(run.id)).toBe('passed'); expect(ledger.unresolved(run.id)).toBe(false);
     }
-    expect(ledger.count).toBe(7);
+    expect(ledger.count).toBe(6);
   });
   it('rejects concurrent execution of the same attempt before either callback can duplicate a send', async () => {
     await freeze(FAKE_CANDIDATE); const ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
@@ -95,7 +95,7 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
     expect(ledger.qualificationPassed()).toBe(false); expect(ledger.latestStatus(run.id)).toBe('failed');
     await expect(ledger.finish(run.id, 2, 'passed')).rejects.toMatchObject({ code: 'invalid' }); await ledger.close();
     ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'reserve' }); await perform(ledger, [run], { repeat: true });
-    expect(ledger.qualificationPassed()).toBe(false); expect(ledger.count).toBe(97);
+    expect(ledger.qualificationPassed()).toBe(false); expect(ledger.count).toBe(65);
   });
   it('stops after a failed result write before completion or any later send', async () => {
     await freeze(FAKE_CANDIDATE); const ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
@@ -147,19 +147,19 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
     expect(calls).toEqual([]); expect(ledger.count).toBe(1); await ledger.close();
     await freeze(FAKE_CANDIDATE); ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
     await perform(ledger, campaign(), { full: true });
-    expect(ledger.qualificationPassed()).toBe(true); expect(ledger.count).toBe(97);
-    // A full qualification consumes its entire 96-send phase budget. Exercise the
-    // defensive gate with an in-memory synthetic orphan, without another charge.
+    expect(ledger.qualificationPassed()).toBe(true); expect(ledger.count).toBe(65);
+    // Exercise the unresolved-attempt gate with an in-memory synthetic orphan,
+    // without spending any of the retained historical phase allowance.
     const records = (ledger as unknown as { records: { kind: string; phase: string; runId: string; attempt: number }[] }).records;
     const orphan = records.find(item => item.kind === 'contact' && item.phase === 'diagnostic' && item.runId === run.id)!;
     orphan.phase = 'qualification'; orphan.attempt = 2;
     expect(ledger.qualificationPassed()).toBe(false);
     await expect(perform(ledger, [run], { calls })).rejects.toMatchObject({ code: 'unresolved' });
-    expect(calls).toEqual([]); expect(ledger.count).toBe(97);
+    expect(calls).toEqual([]); expect(ledger.count).toBe(65);
     orphan.phase = 'diagnostic'; orphan.attempt = 1;
     expect(ledger.qualificationPassed()).toBe(true); await ledger.close();
     ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'qualification' });
-    expect(ledger.qualificationPassed()).toBe(true); expect(ledger.count).toBe(97);
+    expect(ledger.qualificationPassed()).toBe(true); expect(ledger.count).toBe(65);
   });
   it('keeps a charged qualification orphan unresolved across reserve and reopen', async () => {
     await freeze(FAKE_CANDIDATE);

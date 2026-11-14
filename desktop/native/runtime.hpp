@@ -12,7 +12,7 @@ class Runtime : public std::enable_shared_from_this<Runtime> {
   void Attach(HWND panel);
   void Detach();
   void InputHeight(int height) { inputHeight_ = height; }
-  void SetPanelResizeEnabled(HWND window, bool enabled);
+  void SetPanelResizeEnabled(HWND window, bool enabled, int minimumHeight = 80);
   void BeginDrag(HWND window, int edge);
   void CancelDrag(HWND window);
   void StartProtection();
@@ -63,6 +63,7 @@ class Runtime : public std::enable_shared_from_this<Runtime> {
   size_t colorWorkers_ = 0;
   bool dragCancelled_ = true;
   bool panelResizeEnabled_ = false;
+  int panelMinimumHeight_ = 80;
   struct Drag { HWND window = nullptr; bool intercepted = false; int edge = 0; POINT pointer {}; RECT rectangle {}; RECT workArea {}; int minWidth = 180; int minHeight = 80; } drag_;
 };
 struct HttpResult { DWORD status = 0; std::map<std::string, std::string> headers; Bytes body; ~HttpResult() { Wipe(body); } };

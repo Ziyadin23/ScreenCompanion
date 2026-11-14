@@ -32,7 +32,7 @@ function sample(typescript: boolean): VaultData {
     },
     Models: { Provider: 'DeepSeek', AnswerModel: typescript ? 'deepseek-flash' : 'deepseek-v4-pro', VisionModel: 'deepseek-flash',
       Thinking: typescript ? 'Max' : 'High', AnswerTokenLimit: typescript ? 32000 : 16000 },
-    PipelineMode: typescript ? 'Direct' : 'Balanced',
+    PipelineMode: typescript ? 'Direct' : 'Thorough', ModelPipelines: [],
     ProviderKeys: { OpenAI: prefix + '-openai', Groq: prefix + '-groq', Gemini: prefix + '-gemini', Mistral: prefix + '-mistral',
       OpenRouter: prefix + '-openrouter', DeepSeek: prefix + '-deepseek' }
   };
@@ -41,6 +41,7 @@ function sample(typescript: boolean): VaultData {
 /** Compare every persisted field without ever handing secret-bearing values to an assertion. */
 function matches(actual: unknown, expected: unknown): boolean {
   if (actual === expected) return true;
+  if (Array.isArray(expected)) return Array.isArray(actual) && actual.length === expected.length && expected.every((item, index) => matches(actual[index], item));
   if (!actual || !expected || typeof actual !== 'object' || typeof expected !== 'object' || Array.isArray(actual) || Array.isArray(expected)) return false;
   const record = actual as Record<string, unknown>;
   // C# also serializes computed IsValid getters; these are not persisted settings fields.
@@ -140,6 +141,16 @@ describe.skipIf(process.platform !== 'win32')('real Windows C#/TypeScript SSK3 v
     check(!before.includes(Buffer.from(sample(false).ApiKey)), 'synthetic key is absent from encrypted bytes');
     check(matches(await store().load(), sample(false)), 'C# to TypeScript settings fields match');
     await checkBytes(current(), before, 'loading does not rewrite the original C# vault');
+  });
+  it('persists model-specific pipeline preferences through DPAPI while the legacy reader keeps active fields', async () => {
+    const data = sample(true);
+    data.ModelPipelines = [{ Provider: 'DeepSeek', AnswerModel: 'deepseek-flash', PipelineMode: 'Direct' },
+      { Provider: 'OpenAI', AnswerModel: 'synthetic-answer-model', PipelineMode: 'Thorough' }];
+    await store().save(data);
+    const before = await read(current());
+    check(matches(await store().load(), data), 'model pipeline preferences survive a fresh native DPAPI load');
+    await fixture('verify-current', true);
+    await checkBytes(current(), before, 'legacy reader preserves the extended encrypted vault');
   });
 
   it('saves changed TypeScript provider keys, models, reasoning, pipeline, appearance and shortcuts for production C# to verify', async () => {
