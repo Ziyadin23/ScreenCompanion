@@ -72,8 +72,10 @@ oracle checks** passed, exit 0. Windows portable tests passed **1,202**, with
 **24 Linux-only skips**. The first full UI attempt finished **37 passed / 1
 failed**, zero skips/retries, exit 1 in **1,435.0 seconds**. Its sole failure waited
 for the obsolete `Direct screenshot (DeepSeek)` option label. The corrected
-fixture is undergoing a second full 38-case run against the same verified
-application/native/package bytes; the first failed report remains retained.
+fixture's second full 38-case run was interrupted after 14 recorded passes, with
+no final matrix or cleanup verdict. It used the same verified application/native/
+package bytes; both attempts remain retained for issue #57. A fresh completed run
+and independent postflight are still required.
 The new real-OS Ctrl+Enter case passed in the first attempt, intercepting submit
 at IPC to verify the screenshot flag without making a model request.
 
