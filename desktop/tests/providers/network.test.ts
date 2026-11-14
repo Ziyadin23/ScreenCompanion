@@ -79,7 +79,7 @@ describe('all-provider incomplete successes stop without extraction repair or fa
     };
     const transport = new StrictTransport(stage === 'Extract' ? [first] : [first, answer], provider);
     const cropper = new TrackingCropper();
-    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Balanced', assessmentMode: 'qa' }) });
+    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) });
     await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({
       stage, pipelineCode: stage === 'Extract' ? 'IncompleteExtraction' : 'IncompleteResponse'
     });
@@ -102,7 +102,7 @@ describe('all-provider incomplete successes stop without extraction repair or fa
     };
     const extractionFailed = kind.startsWith('extraction');
     const transport = new StrictTransport(extractionFailed ? [first] : [first, answer]), cropper = new TrackingCropper();
-    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Balanced', assessmentMode: 'qa' }) });
+    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) });
     await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({
       stage: extractionFailed ? 'Extract' : kind === 'answer-incomplete' ? 'Answer' : 'ValidateAnswer',
       pipelineCode: extractionFailed ? 'IncompleteExtraction' : kind === 'answer-incomplete' ? 'IncompleteResponse' : 'MalformedResponse'

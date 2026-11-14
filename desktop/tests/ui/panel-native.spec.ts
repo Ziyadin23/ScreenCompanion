@@ -10,6 +10,7 @@ import type { NativeWindow } from './windows-events';
 
 // Windows only, with the production store and native bridge. Never submit a
 // question or invoke capture: setup/Save and these UI actions make zero API calls.
+// The screenshot-shortcut case intercepts typed submit at IPC after exercising real OS hotkeys.
 interface Session {
   app: ElectronApplication; page: Page; handle: string; local: string;
   restart(): Promise<void>;
@@ -44,6 +45,7 @@ const test = base.extend<{ session: Session }>({
       await session.page.getByTestId('setup-key').fill('synthetic-native-panel-store-key');
       await session.page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect.poll(() => state(session).then(value => value.ready)).toBe(true);
+      await expect(session.page.getByTestId('answer-text')).toContainText('Ctrl+Alt+Space');
       await use(session);
       const log = await readFile(join(local, 'SC', 'diagnostics.log'), 'utf8');
       expect(log).not.toMatch(/pipeline_(?:stage|usage)/u);
@@ -112,6 +114,29 @@ async function expectSavedSize(session: Session) {
 }
 
 test.describe('production Windows panel/store and shortcut contention', () => {
+  test('Ctrl+Enter restores input from another window and sends with screenshot from focused input once', async ({ session }) => {
+    await session.page.evaluate(() => window.sc.command({ type: 'showInput' }));
+    await session.page.getByTestId('question-input').fill('Synthetic shortcut question');
+    const foreign = await session.app.evaluate(({ BrowserWindow, ipcMain }) => {
+      const submissions: { includeScreenshot: boolean; length: number }[] = [];
+      Reflect.set(globalThis, 'scShortcutSubmissions', submissions);
+      ipcMain.removeHandler('sc:command');
+      ipcMain.handle('sc:command', (_event, command: { type: string; question?: string; includeScreenshot?: boolean }) => {
+        if (command.type === 'submit') submissions.push({ includeScreenshot: command.includeScreenshot === true, length: command.question?.length ?? 0 });
+      });
+      const other = new BrowserWindow({ width: 280, height: 180, title: 'Synthetic focus target', show: true });
+      other.focus();
+      return other.id;
+    });
+    await expect.poll(() => session.app.evaluate(({ BrowserWindow }, id) => BrowserWindow.getFocusedWindow()?.id === id, foreign)).toBe(true);
+    await keys([VK.control, VK.enter]);
+    await expect(session.page.getByTestId('question-input')).toBeFocused();
+    await expect(session.page.getByTestId('question-input')).toHaveValue('Synthetic shortcut question');
+    expect(await session.app.evaluate(() => Reflect.get(globalThis, 'scShortcutSubmissions'))).toEqual([]);
+    await keys([VK.control, VK.enter]);
+    await expect.poll(() => session.app.evaluate(() => Reflect.get(globalThis, 'scShortcutSubmissions'))).toEqual([{ includeScreenshot: true, length: 27 }]);
+    await session.app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.close(), foreign);
+  });
   test.skip(process.platform !== 'win32', 'Requires an interactive Windows desktop and built application/native bridge.');
   // One worker still serializes OS input, but a failed edge must not skip the
   // remaining independent edges, lifetime checks or persistence cases.
@@ -144,7 +169,7 @@ test.describe('production Windows panel/store and shortcut contention', () => {
 
       await resetBounds(session);
       const minimumBefore = await resize(session, edge, -1000 * horizontal, -1000 * vertical);
-      const minimum = geometry(minimumBefore), width = Math.round(180 * minimumBefore.dpi / 96), height = Math.round(80 * minimumBefore.dpi / 96);
+      const minimum = geometry(minimumBefore), width = Math.round(180 * minimumBefore.dpi / 96), height = Math.round((selected === 'input' ? 128 : 80) * minimumBefore.dpi / 96);
       if (horizontal < 0) minimum.left = minimum.right - width;
       if (horizontal > 0) minimum.right = minimum.left + width;
       if (vertical < 0) minimum.top = minimum.bottom - height;

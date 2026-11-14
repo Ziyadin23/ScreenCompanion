@@ -36,10 +36,12 @@ npm run test:windows
 The native harness runs **54 checks** for real JPEG capture/crops, DPAPI,
 loopback WinHTTP/proxy-interception/timeout/cancellation, activation, real OS
 shortcut contention/rollback/reclamation and cleanup.
-The following **8 interoperability cases** check C#/TypeScript SSK3 settings,
+The following **9 interoperability cases** check C#/TypeScript SSK3 settings,
 atomic migration, existing-vault priority and damaged-byte preservation, using
-isolated temporary profiles. The C# fixture reports **136 checks**. Both commands
-previously passed on Windows 11, exit 0. Nonfatal compiler warnings remain.
+isolated temporary profiles, including model-specific pipeline preferences and
+legacy-reader compatibility. The earlier eight-case suite reported **136 C#
+fixture checks** and passed on Windows 11, exit 0. Current-candidate results
+belong in the verification record. Nonfatal compiler warnings remain.
 
 The [dated native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
 separates native assertions from UI geometry and packaged-launch results. The
@@ -52,7 +54,7 @@ The [vault oracle](../desktop/tests/windows/interop/README.md) links fourteen fr
 byte-identical source files from v0.4.14 under its own `legacy/` directory. Its
 source manifest records the original release commit and SHA-256 digests. It does
 not depend on a C# application project in the repository root. To run just these
-eight cases after building the native bridge:
+nine cases after building the native bridge:
 
 ```powershell
 npx vitest run --config vitest.windows.config.ts
@@ -71,9 +73,9 @@ npm run preview:ui
 ```
 
 Allow up to **two hours** for an outer job running the complete Windows UI
-matrix. The 37 cases run serially: 21 panel/store cases allow 240 seconds each,
+matrix. The 38 cases run serially: 22 panel/store cases allow 240 seconds each,
 six native-preview cases allow 90 seconds each, and ten other cases use the
-30-second default. Their combined case budgets are **98 minutes**, before
+30-second default. Their combined case budgets are **102 minutes**, before
 runner startup and cleanup. A 20-minute outer deadline previously interrupted
 an otherwise passing beta.6 run after 31 cases; see the
 [retained attempts](../docs/VERIFICATION.md#beta6-extraction-guidance).
@@ -157,7 +159,9 @@ static indicators. It does not activate camera/microphone monitoring or connect
 to OES. Native capture/crop checks, model quality and named-recorder output are
 separate results.
 
-Live execution requires explicit `--live`, `--phase` and an executed `--candidate`
+The current two-mode source disables live execution because the frozen beta.5 authorization includes retired Balanced runs. Its earlier 49-operation/96-send plan and private counters remain historical; the current offline plan has 33 operations/64 ordinary sends and needs separate approval before any new live campaign.
+
+The historical runner contract required explicit `--live`, `--phase` and an executed `--candidate`
 identity, the coordinator-initialized fixed private registry, and the existing
 Windows-user encrypted DeepSeek key. Run `npm run test:deepseek -- --identity`
 on Windows after the native build. The [lab reference](../desktop/tests/lab/README.md#fixed-beta5-registry-and-executed-identity)

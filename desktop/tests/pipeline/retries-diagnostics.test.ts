@@ -5,7 +5,7 @@ import { canonical, combined, configuration, context, detection, envelope, expec
   StrictTransport, TrackingCropper, type Payload } from './fixtures';
 
 describe('trusted single refusal retry', () => {
-  it.each(PROVIDERS.flatMap(provider => (['Thorough', 'Balanced'] as const).flatMap(mode => [false, true].map(typed => ({ provider, mode, typed })))))('$provider $mode typed=$typed native assessment refusal retries once with fresh payload', async ({ provider, mode, typed }) => {
+  it.each(PROVIDERS.flatMap(provider => (['Thorough'] as const).flatMap(mode => [false, true].map(typed => ({ provider, mode, typed })))))('$provider $mode typed=$typed native assessment refusal retries once with fresh payload', async ({ provider, mode, typed }) => {
       const events: PipelineEvent[] = [];
       const first = mode === 'Thorough' ? [() => envelope(provider, detection()), () => envelope(provider, extraction('image'))] : [() => envelope(provider, combined('image'))];
       const transport = new StrictTransport([...first, () => envelope(provider, '', refusal), payload => envelope(provider, canonical(payload, '24'))], provider);
@@ -32,18 +32,18 @@ describe('trusted single refusal retry', () => {
     const message = assessmentRelated ? refusal : 'I cannot help provide this information.';
     const transport = new StrictTransport([() => envelope('OpenAI', combined()), ...Array.from({ length: answers }, () => (payload: Payload) => envelope('OpenAI', canonical(payload, message, { status: 'refusal' })))]);
     const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ typedQuestion: typed ? 'Do my requested task.' : undefined,
-      responseMode, customInstruction: '', configuration: configuration({ mode: 'Balanced', assessmentMode, enableRefusalRetry }) }));
+      responseMode, customInstruction: '', configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false, assessmentMode, enableRefusalRetry }) }));
     expect(result.text).toBe(message); transport.done();
   });
   it.each(RESPONSE_MODES)('native second refusal stays visible mode=%s', async responseMode => {
     const transport = new StrictTransport([() => envelope('OpenAI', combined()), () => envelope('OpenAI', '', refusal), () => envelope('OpenAI', '', refusal)]);
-    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ responseMode, configuration: configuration({ mode: 'Balanced', assessmentMode: 'qa' }) }));
+    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ responseMode, configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) }));
     expect(result.text).toBe(refusal); transport.done();
   });
   it.each(['transformation', 'missing_information', 'plain'] as const)('literal %s refusal words never trigger a lexical replacement', async disposition => {
     const transport = new StrictTransport([() => envelope('OpenAI', combined('content')), payload => envelope('OpenAI', disposition === 'plain' ? refusal : canonical(payload, refusal, { status: disposition }))]);
     const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ responseMode: disposition === 'transformation' ? 'Translate to English' : 'Default',
-      configuration: configuration({ mode: 'Balanced', assessmentMode: 'qa' }) }));
+      configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) }));
     expect(result.text).toBe(refusal); transport.done();
   });
   it.each([false, true])('Direct never retries assessment refusal native=%s', async native => {
@@ -56,7 +56,7 @@ describe('trusted single refusal retry', () => {
       expect(context(payload).requested_operation).toBe(responseMode === 'Custom' ? 'Custom' : 'TransformContent');
       return envelope('OpenAI', canonical(payload, refusal, { status: 'transformation' }));
     }]);
-    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ responseMode, customInstruction: 'Quote the source refusal.', configuration: configuration({ mode: 'Balanced', assessmentMode: 'qa' }) }));
+    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ responseMode, customInstruction: 'Quote the source refusal.', configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) }));
     expect(result.text).toBe(refusal); transport.done();
   });
 });
@@ -80,21 +80,21 @@ describe('content-free trace and failure cleanup', () => {
   });
   it('usage and stage observer exceptions cannot change the result', async () => {
     const transport = new StrictTransport([() => envelope('OpenAI', combined()), payload => ({ ...envelope('OpenAI', canonical(payload)), usage: { input_tokens: 100, output_tokens: 20 } })]);
-    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }), onEvent: () => { throw new Error('PRIVATE-OBSERVER-ERROR'); } }));
+    const result = await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false }), onEvent: () => { throw new Error('PRIVATE-OBSERVER-ERROR'); } }));
     expect(result.text).toBe('42'); transport.done(); transport.cleared();
   });
   it('emits reported usage without task content', async () => {
     const events: PipelineEvent[] = [];
     const transport = new StrictTransport([() => envelope('OpenAI', combined()), payload => ({ ...envelope('OpenAI', canonical(payload)), usage: { input_tokens: 100, output_tokens: 20,
       input_tokens_details: { cached_tokens: 40, cache_write_tokens: 10 }, output_tokens_details: { reasoning_tokens: 8 } } })]);
-    await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }), onEvent: event => events.push(event) }));
+    await createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false }), onEvent: event => events.push(event) }));
     expect(events.filter(event => event.kind === 'pipeline_usage').at(-1)?.usage).toEqual({ inputTokens: 100, outputTokens: 20, cachedInputTokens: 40, cacheWriteTokens: 10, reasoningTokens: 8 });
     transport.done();
   });
   it('cancellation clears configured crop/request buffers and counts failed call once', async () => {
     const events: PipelineEvent[] = [], cropper = new TrackingCropper();
     const transport = new StrictTransport([() => { throw new DOMException('PRIVATE-CANCELLED-CONTENT', 'AbortError'); }]);
-    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced', questionRegion: { x: .1, y: .1, width: .8, height: .8 } }), onEvent: event => events.push(event) })))
+    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', questionRegion: { x: .1, y: .1, width: .8, height: .8 } }), onEvent: event => events.push(event) })))
       .rejects.toMatchObject({ stage: 'Extract', pipelineCode: 'Timeout' });
     expect(events.filter(event => event.kind === 'pipeline_usage')).toHaveLength(1);
     expect(events.find(event => event.kind === 'pipeline_usage')).toMatchObject({ requestCount: 1, responseReceived: false, usage: null });

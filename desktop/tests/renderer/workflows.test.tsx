@@ -18,6 +18,63 @@ function advanced() {
   const summary = screen.getByText('Advanced model settings', { selector: 'summary' });
   if (!summary.parentElement!.hasAttribute('open')) fireEvent.click(summary);
 }
+describe('explicit screenshot submission', () => {
+  it.each(['shortcut', 'button', 'global'] as const)('sends text with a screenshot once via %s', async path => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Explain the current screen.' } }); input.focus(); driver.api.command.mockClear();
+    if (path === 'shortcut') fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    else if (path === 'button') fireEvent.click(screen.getByRole('button', { name: 'Send with screenshot' }));
+    else await act(async () => { driver.inputAction(true); driver.inputAction(true); });
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'submit', question: 'Explain the current screen.', includeScreenshot: true });
+  });
+  it('focuses input without sending when an opening intent arrives from another control', async () => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep this draft' } }); screen.getByRole('button', { name: 'Settings' }).focus(); driver.api.command.mockClear();
+    await act(async () => driver.inputAction(true));
+    expect(document.activeElement).toBe(input); expect((input as HTMLInputElement).value).toBe('Keep this draft'); expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('does not submit composition, repeat or extra-modifier Enter events', async () => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep composing' } }); input.focus(); driver.api.command.mockClear();
+    fireEvent.compositionStart(input); fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    await act(async () => driver.inputAction(true)); fireEvent.compositionEnd(input);
+    for (const extra of [{ repeat: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }]) fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true, ...extra });
+    expect(driver.api.command).not.toHaveBeenCalled(); expect((input as HTMLInputElement).value).toBe('Keep composing');
+  });
+});
+
+describe('durable model pipeline choices', () => {
+  it('restores separate model preferences after Save/reopen and discards later edits on Back', async () => {
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
+    const selectModel = (model: string) => { const input = screen.getByRole('combobox', { name: 'Answer model' }); fireEvent.change(input, { target: { value: model } }); fireEvent.blur(input); };
+    choose('Request pipeline', 'Direct screenshot');
+    selectModel('another-vision-model'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Thorough');
+    selectModel('gpt-6-luna'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
+    selectModel('another-vision-model'); choose('Request pipeline', 'Thorough');
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(driver.saved[0]?.values.ModelPipelines).toEqual(expect.arrayContaining([
+      { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', PipelineMode: 'Direct' },
+      { Provider: 'OpenAI', AnswerModel: 'another-vision-model', PipelineMode: 'Thorough' }
+    ]));
+    await openSettings(); tab('Models & API'); advanced(); selectModel('gpt-6-luna');
+    expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
+    choose('Request pipeline', 'Thorough'); fireEvent.click(screen.getByTestId('settings-back')); await screen.findByTestId('answer-text');
+    await openSettings(); tab('Models & API'); advanced(); selectModel('gpt-6-luna');
+    expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot'); expect(driver.saved).toHaveLength(1);
+  });
+  it('offers the same two choices on every service', async () => {
+    fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
+    for (const provider of PROVIDERS) {
+      choose('API service', provider === 'Gemini' ? 'Google Gemini' : provider);
+      fireEvent.click(screen.getByRole('combobox', { name: 'Request pipeline' }));
+      expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Thorough', 'Direct screenshot']);
+      fireEvent.keyDown(screen.getByRole('combobox', { name: 'Request pipeline' }), { key: 'Escape' });
+    }
+  });
+});
 function choose(name: string, value: string) {
   fireEvent.click(screen.getByRole('combobox', { name }));
   fireEvent.click(screen.getByRole('option', { name: value }));
@@ -65,7 +122,7 @@ describe('answer and temporary input', () => {
     fireEvent.change(input, { target: { value: 'One question' } });
     (target === 'Question' ? input : screen.getByRole('button', { name: 'Send' })).focus();
     await user.keyboard('{Enter}');
-    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'submit', question: 'One question' });
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'submit', question: 'One question', includeScreenshot: false });
   });
   it('offers Linux window controls even without a tray or global shortcuts', async () => {
     const driver = fixture({ platform: 'linux' } as Partial<AppState>); render(<App />);
@@ -109,7 +166,7 @@ describe('answer and temporary input', () => {
     expect((input as HTMLInputElement).maxLength).toBe(4000);
     fireEvent.change(input, { target: { value: '  What is 2 + 2?  ' } });
     fireEvent.submit(input.closest('form')!); fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(driver.api.command).toHaveBeenCalledWith({ type: 'submit', question: 'What is 2 + 2?' }));
+    await waitFor(() => expect(driver.api.command).toHaveBeenCalledWith({ type: 'submit', question: 'What is 2 + 2?', includeScreenshot: false }));
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'submit')).toHaveLength(1);
     expect(screen.getByTestId('answer-text').textContent).toBe('Synthetic SC answer');
     await act(async () => driver.emit({ surface: 'input', busy: true }));
@@ -396,7 +453,7 @@ describe('settings drafts and protected controls', () => {
     // Move focus to close editable suggestions, which stay in the same DOM surface.
     fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' }));
     fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-deepseek-replacement' } });
-    choose('Request pipeline', 'Direct screenshot (DeepSeek)');
+    choose('Request pipeline', 'Direct screenshot');
     choose('DeepSeek reasoning', 'High');
     expect((screen.getByRole('spinbutton', { name: 'Answer output token limit' }) as HTMLInputElement).value).toBe('16000');
     choose('API service', 'Groq');
@@ -424,17 +481,17 @@ describe('settings drafts and protected controls', () => {
     choose('API service', 'Groq'); expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('');
     expect(driver.saved).toHaveLength(0);
   });
-  it('limits Direct to DeepSeek and rejects Pro vision/direct while allowing Pro text answering', async () => {
+  it('offers Direct across providers and rejects Pro vision/direct while allowing Pro text answering', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API');
     advanced();
     fireEvent.click(screen.getByRole('combobox', { name: 'Request pipeline' })); expect(screen.getAllByRole('option')).toHaveLength(2);
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Request pipeline' }), { key: 'Escape' });
     choose('API service', 'DeepSeek'); fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-key' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Answer model' }), { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' })); choose('Request pipeline', 'Direct screenshot (DeepSeek)');
+    fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' })); choose('Request pipeline', 'Direct screenshot');
     fireEvent.click(screen.getByTestId('settings-save')); expect((await screen.findByRole('alert')).textContent).toContain('text answering only');
     expect(driver.saved).toHaveLength(0);
-    choose('Request pipeline', 'Balanced');
+    choose('Request pipeline', 'Thorough');
     fireEvent.click(screen.getByRole('combobox', { name: 'Screen-reading model' }));
     fireEvent.click(screen.getByRole('button', { name: 'Screen-reading model suggestions' }));
     expect(screen.queryByRole('option', { name: 'deepseek-v4-pro' })).toBeNull();
@@ -474,7 +531,7 @@ describe('settings drafts and protected controls', () => {
       'Shift+F5 — capture test', 'Ctrl+R — open settings',
       'Ctrl+Alt+E — exit app', 'Z — type a question'
     ]);
-    for (const shortcut of ['Ctrl+Alt+Space', 'Ctrl+/', 'Ctrl+Alt+T', 'Ctrl+I', 'Ctrl+Backspace', 'Ctrl+Enter']) {
+    for (const shortcut of ['Ctrl+Alt+Space', 'Ctrl+/', 'Ctrl+Alt+T', 'Ctrl+I', 'Ctrl+Backspace']) {
       expect(help).not.toContain(shortcut);
     }
   });

@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.8**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.10**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,16 +14,76 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-This interface branch carries beta.8; its pre-redesign shared-main baseline was beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+This source carries beta.10, based on shared-main `0627df2` with the accepted beta.8 interface. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
+| Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
-The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
+The sections below are dated evidence, followed by support procedures and historical limits.
+
+## Pipeline beta.10 verification (2026-11-14)
+
+[Issue #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57) and its
+[OpenSpec owner](../openspec/changes/simplify-pipelines-screen-submit/tasks.md)
+track the unreleased two-mode and explicit screenshot-send candidate. The user
+requested source integration while remaining qualification and runnable delivery
+stay open in issue #57; source merge does not complete these gates. Its
+155-file key-free source manifest has SHA-256
+`d9922f1d773191aa67559dc2837fbfb4f6929962fd0b58e9a37c3cb3dded3407`.
+The corrected 155-file UI-fixture snapshot has SHA-256
+`69b1cb3ccac82236f93339dbff0549d9735ea6a1099ed137ab46cf4b359ac4fd`;
+it changes only one current UI option label and the source-only oracle README.
+Application/native/build inputs and binaries are unchanged. Later documentation
+and checkpoint updates do not change application bytes.
+
+Host `npm --prefix desktop run verify` passed **1,226 tests in 33 files**, type
+checking, lint and production bundles, exit 0. `test:lab` passed **241 tests in
+11 files**, exit 0. The offline DeepSeek plan passed with **33 operations / 64
+ordinary sends**, zero actual requests. Live execution stays blocked because the
+frozen historical campaign includes retired Balanced runs; its original ledger
+and authorization limits are unchanged. Mocked all-six-provider Direct/text-only
+checks do not establish account access or live answer quality.
+
+The isolated headless Hyprland fixture passed **8 checks**, exit 0, using the real
+production renderer/controller/pipeline with injected synthetic capture and
+transport. It checked text-only without capture, Thorough and Direct screen
+submissions, cancelled capture retaining draft/answer with zero provider calls,
+text-only while capture was unavailable, distinct Linux input actions and
+normal/compact composer bounds. One batched inspection confirmed the two buttons
+and Ctrl+Enter hint, including **180×128** input. The compositor retained an
+enlarged normal window after Settings; Linux issue #19 remains open. This fixture
+does not qualify an actual portal, physical monitors, real vault or installed
+desktop. Two fixture-startup failures remain retained.
+
+One earlier full portable attempt passed every test but exited 1 on an unhandled
+loopback `ECONNRESET` in unchanged Linux transport coverage. The isolated 22-case
+transport diagnostic and final full verification passed; no transport root-cause
+fix is claimed. Earlier corrected fixture expectations remain recorded in the
+task checkpoint. Windows checks, packaged startup, named-recorder output and
+copied runnable delivery remain pending for this candidate.
+
+Windows compilation, packaging, **54 native checks** and **9 vault cases / 143
+oracle checks** passed, exit 0. Windows portable tests passed **1,202**, with
+**24 Linux-only skips**. The first full UI attempt finished **37 passed / 1
+failed**, zero skips/retries, exit 1 in **1,435.0 seconds**. Its sole failure waited
+for the obsolete `Direct screenshot (DeepSeek)` option label. The corrected
+fixture is undergoing a second full 38-case run against the same verified
+application/native/package bytes; the first failed report remains retained.
+The new real-OS Ctrl+Enter case passed in the first attempt, intercepting submit
+at IPC to verify the screenshot flag without making a model request.
+
+The x86-64 Linux RPM built, exit 0. Its unpacked payload passed isolated
+production key-free preview checks for packaged identity/version, both composer
+actions, keyboard Settings entry and the two-mode selector, then exited 0 and
+removed its profile. An initial private assertion expected Windows preview copy;
+the corrected Linux disclosure assertion passed with that failure retained. RPM
+metadata/resources were inspected. This is not an installation, upgrade, keyring
+or portal qualification.
 
 ## Interface beta.8 verification (2026-11-12)
 

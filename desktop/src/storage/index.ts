@@ -4,6 +4,7 @@ import { join, dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { PROVIDERS, type AppearanceSettings, type ModelSelection, type PanelSize, type SettingsStore, type VaultData, type WindowsPlatform } from '../contracts';
 import { LEGACY_APPEARANCE, defaultModels, defaultSettings } from '../contracts/defaults';
+import { validModelPipelines } from '../contracts/model-pipelines';
 import { validateShortcuts } from '../platform/shortcuts';
 
 const MAX_VAULT = 1024 * 1024;
@@ -47,8 +48,7 @@ function validModels(m: ModelSelection): boolean {
 function validateData(s: VaultData, saving: boolean): void {
   if (!s || !validKey(s.ApiKey) || !s.ApiKey.trim() || !s.ProviderKeys ||
     !PROVIDERS.every(p => validKey(s.ProviderKeys[p])) || (s.Models !== null && !validModels(s.Models)) ||
-    (s.PipelineMode !== null && (!['Thorough', 'Balanced', 'Direct'].includes(s.PipelineMode) ||
-      (s.PipelineMode === 'Direct' && (s.Models?.Provider ?? 'OpenAI') !== 'DeepSeek'))) ||
+    (s.PipelineMode !== null && !['Thorough', 'Direct'].includes(s.PipelineMode)) || !validModelPipelines(s.ModelPipelines) ||
     typeof s.ResponseMode !== 'string' || typeof s.CustomInstruction !== 'string' || s.CustomInstruction.length > 2000 ||
     typeof s.CommandsShown !== 'boolean') throw new SettingsError();
   if (saving) {
@@ -80,6 +80,7 @@ function decode(value: unknown): VaultData {
     data.Models.Thinking = enumValue(data.Models.Thinking, ['None', 'Low', 'High', 'Max']) as ModelSelection['Thinking'];
   }
   data.PipelineMode = enumValue(data.PipelineMode, ['Thorough', 'Balanced', 'Direct']) as VaultData['PipelineMode'];
+  if ((data.PipelineMode as string | null) === 'Balanced') data.PipelineMode = 'Thorough';
   validateData(data, false);
   const appearance = value.Appearance;
   if (appearance !== undefined && appearance !== null && !object(appearance)) throw new SettingsError();

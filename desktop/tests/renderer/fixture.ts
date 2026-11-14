@@ -19,6 +19,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
   };
   const listeners = new Set<(state: AppState) => void>();
   const scrollListeners = new Set<(delta: number) => void>();
+  const inputListeners = new Set<(submitScreenshot: boolean) => void>();
   const saved: SettingsDraft[] = [];
   const emit = (patch: Partial<AppState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener(state); };
   const api = {
@@ -44,10 +45,12 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     chooseColor: vi.fn(async (_initial: string) => '#123456' as string | null),
     update: vi.fn(async (_action) => {}),
     subscribe: vi.fn((listener: (value: AppState) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
-    onScroll: vi.fn((listener: (delta: number) => void) => { scrollListeners.add(listener); return () => { scrollListeners.delete(listener); }; })
+    onScroll: vi.fn((listener: (delta: number) => void) => { scrollListeners.add(listener); return () => { scrollListeners.delete(listener); }; }),
+    onInputAction: vi.fn((listener: (submitScreenshot: boolean) => void) => { inputListeners.add(listener); return () => { inputListeners.delete(listener); }; })
   } satisfies DesktopApi;
   window.sc = api;
   return { api, saved, emit, getState: () => state, getDraft: () => draft,
+    inputAction: (submitScreenshot: boolean) => { for (const listener of inputListeners) listener(submitScreenshot); },
     scroll: (delta: number) => { for (const listener of scrollListeners) listener(delta); },
     actions: () => Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, draft.values[field]])) as Record<AppAction, typeof values.Capture>
   };

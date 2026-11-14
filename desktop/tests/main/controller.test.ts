@@ -28,13 +28,57 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   const configuration: PipelineConfiguration = { provider: processMode === 'Direct' ? 'DeepSeek' : 'OpenAI', answerModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', visionModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', mode: processMode,
     assessmentMode: 'standard', enableQuestionCropping: true, enableRefusalRetry: true, imageRegionPadding: .08,
     questionRegion: null, extractionMaxOutputTokens: 6000, answerMaxOutputTokens: 2500, thinking: 'None' };
+  const host = { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: (state: AppState) => { states.push(state); }, scroll() {}, exit() {},
+    isFocused: vi.fn(() => false), inputAction: vi.fn(), inputHeight: vi.fn(), activate: vi.fn() };
   const controller = new ApplicationController({ platform, store: { load, save,
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
-    pipeline: { run }, host: { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: state => states.push(state), scroll() {}, exit() {} },
+    pipeline: { run }, host,
     diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName });
-  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg };
+  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg, host };
 }
 describe('production lifecycle with injected native boundaries', () => {
+  it('does not rewrite existing normalized settings at startup even when help has never been shown', async () => {
+    const saved = { ...defaultSettings('synthetic-existing'), PipelineMode: 'Thorough' as const, CommandsShown: false };
+    const f = fixture(saved); await f.controller.initialize();
+    expect(f.save).not.toHaveBeenCalled(); expect(saved.CommandsShown).toBe(false);
+    expect(f.controller.getSettingsDraft().values).toMatchObject({ CommandsShown: true, PipelineMode: 'Thorough' });
+    await f.controller.command({ type: 'settings' }); await f.controller.saveSettings(f.controller.getSettingsDraft());
+    expect(f.save).toHaveBeenCalledTimes(1); expect(f.save.mock.calls[0]![0].CommandsShown).toBe(true);
+  });
+  it('keeps generic Linux input opening separate from the explicit screenshot shortcut action', async () => {
+    const f = fixture(undefined, 'Thorough', 'linux'); await f.controller.initialize(); f.host.isFocused.mockReturnValue(true);
+    f.controller.onAction('input'); expect(f.host.inputAction).toHaveBeenLastCalledWith(false);
+    f.controller.onAction('input-with-screenshot'); expect(f.host.inputAction).toHaveBeenLastCalledWith(true);
+    expect(f.platform.captureMonitor).not.toHaveBeenCalled(); expect(f.run).not.toHaveBeenCalled();
+  });
+  it.each(['Thorough', 'Direct'] as const)('answers text-only with %s selected without consulting capture services', async mode => {
+    const f = fixture(undefined, mode); Object.assign(f.platform, { captureSelection: 'portal' });
+    f.platform.captureMonitor = vi.fn(async () => { throw new Error('Must not open the portal'); });
+    await f.controller.initialize();
+    const pending = f.controller.command({ type: 'submit', question: ' Explain the supplied text. ', includeScreenshot: false });
+    expect(f.run).toHaveBeenCalledOnce();
+    expect(f.run.mock.calls[0]![0]).toMatchObject({ jpeg: null, typedQuestion: 'Explain the supplied text.', configuration: { mode } });
+    expect(f.platform.captureMonitor).not.toHaveBeenCalled(); expect(f.platform.activeMonitor).not.toHaveBeenCalled(); expect(f.platform.monitorForWindow).not.toHaveBeenCalled();
+    f.outcome.resolve({ text: 'Text-only answer', requestId: 'synthetic' }); await pending;
+    expect(f.controller.getState()).toMatchObject({ busy: false, answer: 'Text-only answer' });
+  });
+  it('routes a focused global input action to the renderer without resubmitting or capturing', async () => {
+    const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'showInput' }); f.host.inputAction.mockClear();
+    f.host.isFocused.mockReturnValue(true); f.controller.onAction('input');
+    expect(f.host.inputAction).toHaveBeenCalledExactlyOnceWith(true);
+    expect(f.run).not.toHaveBeenCalled(); expect(f.platform.captureMonitor).not.toHaveBeenCalled();
+    f.host.inputAction.mockClear(); f.host.isFocused.mockReturnValue(false); f.controller.onAction('input');
+    await vi.waitFor(() => expect(f.host.inputAction).toHaveBeenCalledExactlyOnceWith(false));
+    expect(f.controller.getState().surface).toBe('input');
+  });
+  it('retains custom opening bindings and accepts measured input height only on the input surface', async () => {
+    const saved = { ...defaultSettings('synthetic'), CommandsShown: true, InputShortcut: { Modifiers: 2, Key: 81 } };
+    const f = fixture(saved); await f.controller.initialize();
+    await f.controller.command({ type: 'inputHeight', height: 80 }); expect(f.host.inputHeight).not.toHaveBeenCalled();
+    await f.controller.command({ type: 'showInput' }); f.host.inputAction.mockClear(); f.host.isFocused.mockReturnValue(true);
+    f.controller.onAction('input'); expect(f.host.inputAction).toHaveBeenCalledExactlyOnceWith(false);
+    await f.controller.command({ type: 'inputHeight', height: 80 }); expect(f.host.inputHeight).toHaveBeenCalledExactlyOnceWith(80);
+  });
   it('opens a usable Linux window at startup even without tray or shortcut access', async () => {
     const f = fixture(undefined, 'Thorough', 'linux'); await f.controller.initialize();
     expect(f.controller.getState()).toMatchObject({ platform: 'linux', visible: true, surface: 'input' });
@@ -57,7 +101,7 @@ describe('production lifecycle with injected native boundaries', () => {
     const f = fixture(); Object.assign(f.platform, { captureSelection: 'portal' });
     await f.controller.initialize(); await f.controller.command({ type: 'showInput' });
     f.platform.captureMonitor = vi.fn(async () => { throw new Error('cancelled'); });
-    await expect(f.controller.command({ type: 'submit', question: 'synthetic typed question' })).rejects.toMatchObject({ code: 'CAPTUREFAILED' });
+    await expect(f.controller.command({ type: 'submit', question: 'synthetic typed question', includeScreenshot: true })).rejects.toMatchObject({ code: 'CAPTUREFAILED' });
     expect(f.controller.getState()).toMatchObject({ surface: 'input', busy: false, visible: true });
     expect(f.run).not.toHaveBeenCalled();
   });
@@ -143,11 +187,11 @@ describe('production lifecycle with injected native boundaries', () => {
     f.outcome.resolve({ text: 'Synthetic answer', requestId: 'synthetic' }); await request;
     expect(JSON.stringify(f.controller.getState())).not.toContain('synthetic-service-key');
   });
-  it.each(PROVIDERS.flatMap(provider => (['Balanced', 'Direct'] as const).map(processMode => ({ provider, processMode }))))(
+  it.each(PROVIDERS.flatMap(provider => (['Thorough', 'Direct'] as const).map(processMode => ({ provider, processMode }))))(
     'keeps setup usable for $provider with inherited $processMode, including after restart', async ({ provider, processMode }) => {
       const f = fixture(null, processMode); await f.controller.initialize();
       await f.controller.setup({ provider, apiKey: 'synthetic-provider-key' });
-      const expected = processMode === 'Direct' && provider !== 'DeepSeek' ? 'Thorough' : processMode;
+      const expected = processMode;
       expect(f.controller.getSettingsDraft().values.PipelineMode).toBe(expected);
       const saved = f.save.mock.calls.at(-1)![0];
       const restarted = fixture(saved, processMode); await restarted.controller.initialize();
@@ -283,7 +327,7 @@ describe('production lifecycle with injected native boundaries', () => {
   });
   it('uses the panel monitor for typed input and preserves the typed task', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'showInput' });
-    const pending = f.controller.command({ type: 'submit', question: '  Explain this diagram  ' });
+    const pending = f.controller.command({ type: 'submit', question: '  Explain this diagram  ', includeScreenshot: true });
     await vi.waitFor(() => expect(f.run).toHaveBeenCalled());
     expect(f.platform.monitorForWindow).toHaveBeenCalledOnce(); expect(f.platform.activeMonitor).not.toHaveBeenCalled();
     expect(f.run.mock.calls[0]?.[0]).toMatchObject({ typedQuestion: 'Explain this diagram' });
@@ -295,7 +339,7 @@ describe('production lifecycle with injected native boundaries', () => {
       expect(f.controller.getState().surface).toBe('input');
       return { x: -1600, y: 0, width: 1600, height: 900 };
     });
-    const pending = f.controller.command({ type: 'submit', question: 'Synthetic task' });
+    const pending = f.controller.command({ type: 'submit', question: 'Synthetic task', includeScreenshot: true });
     await vi.waitFor(() => expect(f.run).toHaveBeenCalled());
     f.outcome.resolve({ text: 'Result', requestId: 'synthetic' }); await pending;
     await f.controller.command({ type: 'settings' }); await f.controller.command({ type: 'toggleVisibility' });

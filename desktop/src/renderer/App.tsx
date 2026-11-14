@@ -73,8 +73,10 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
+  const composing = useRef(false);
   const text = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
@@ -91,11 +93,27 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   useEffect(() => {
     if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) { setQuestion(''); setError(''); }
   }, [state.surface, state.platform, state.busy]);
-  async function submit() {
+  useEffect(() => window.sc.onInputAction((submitScreenshot) => {
+    if (state.surface !== 'input' || !state.visible || state.busy || pending.current || composing.current) return;
+    if (!submitScreenshot || document.activeElement !== input.current) { input.current?.focus(); return; }
+    void submit(true);
+  }), [state.surface, state.visible, state.busy, question]);
+  useEffect(() => {
+    const form = composer.current;
+    if (!form) return;
+    const measure = () => {
+      const height = Math.ceil(form.getBoundingClientRect().height + (parseFloat(getComputedStyle(form).marginBottom) || 0));
+      if (height > 0) void onCommand({ type: 'inputHeight', height });
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(form); measure();
+    return () => observer?.disconnect();
+  }, [state.surface]);
+  async function submit(includeScreenshot = false) {
     const value = question.trim();
     if (!value || pending.current || state.busy) return;
     pending.current = true; setSubmitting(true); setError('');
-    const success = await onCommand({ type: 'submit', question: value.slice(0, 4000) });
+    const success = await onCommand({ type: 'submit', question: value.slice(0, 4000), includeScreenshot });
     pending.current = false;
     if (alive.current) { setSubmitting(false); if (success) setQuestion(''); else setError('The question could not be submitted. Try again.'); }
   }
@@ -115,8 +133,9 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
         selection?.removeAllRanges(); selection?.addRange(range);
         return;
       }
-      if (event.target === input.current && event.key === 'Enter' && !event.nativeEvent.isComposing && !event.defaultPrevented) {
-        event.preventDefault(); void submit();
+      if (event.target === input.current && event.key === 'Enter' && !event.nativeEvent.isComposing && !composing.current && !event.defaultPrevented) {
+        event.preventDefault();
+        if (!event.repeat && !event.altKey && !event.shiftKey && !event.metaKey) void submit(event.ctrlKey);
       }
     }}
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
@@ -130,10 +149,14 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
       </nav>
     </div>
     <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
-    {state.surface === 'input' && <form className="question-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <input ref={input} data-testid="question-input" aria-label="Question" placeholder="Ask about your screen…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
-        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))} />
-      <button type="submit" aria-label="Send" title="Send" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+    {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
+      <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
+        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
+        onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
+      <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+      <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
+        onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
+      <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
       {error && <span className="input-error" role="alert">{error}</span>}
     </form>}
     {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}

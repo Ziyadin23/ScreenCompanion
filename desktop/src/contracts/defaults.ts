@@ -22,7 +22,7 @@ export function defaultSettings(apiKey: string): VaultData {
     ApiKey: apiKey, ResponseMode: 'Default', CustomInstruction: '',
     Capture: { Modifiers: 3, Key: 32 }, Visibility: { Modifiers: 2, Key: 191 }, Test: { Modifiers: 3, Key: 84 },
     SettingsShortcut: { Modifiers: 2, Key: 73 }, ExitShortcut: { Modifiers: 2, Key: 8 }, InputShortcut: { Modifiers: 2, Key: 13 },
-    Appearance: { ...DEFAULT_APPEARANCE }, CommandsShown: false, Models: null, PipelineMode: null,
+    Appearance: { ...DEFAULT_APPEARANCE }, CommandsShown: false, Models: null, PipelineMode: null, ModelPipelines: [],
     ProviderKeys: { OpenAI: '', Groq: '', Gemini: '', Mistral: '', OpenRouter: '', DeepSeek: '' }
   };
 }
