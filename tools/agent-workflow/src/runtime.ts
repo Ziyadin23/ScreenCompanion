@@ -11,7 +11,7 @@ import { GithubClient, type ConfirmedFailure, type GithubTransport, type IssueRe
 import { planningOwner } from './intake.js';
 import { materializePlan, OrcaClient, preparePlan, resolveExistingOwner, runSetup,
   type OrcaTransport, type PlanBundle, type PlanRequest, type WorkspaceReceipt } from './ownership.js';
-import { assertFrozenSource, attestVerificationDependencies, freezeCandidate, inspectCandidate, pushCandidate,
+import { assertFrozenSource, attestVerificationDependencies, freezeCandidate, inspectCandidate, observedCheckFailures, pushCandidate,
   verifyCandidate, type CandidateOptions, type DependencyAttestation, type FrozenCandidate, type VerificationReceipt } from './candidate.js';
 import { prepareVersionRecords, reserveCandidateVersion, type PreparedVersion } from './delivery.js';
 import { integrateCandidate, observePostflight, prepareObservedFinalization, prepareIntegrationIncident,
@@ -444,7 +444,7 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       let round = run.data.round as Round;
       if (!round?.revision) throw new WorkflowError('invalid_state', 'Correction round is not admitted.');
       if (!round.response) {
-        const response = await dispatch(context, 'implementer',
+        let instructions =
           `OpenSpec apply ${(run.data.plan as PlanBundle).owner.change}, issue #${issue.number}, ` +
           `only task ${(run.data.plan as PlanBundle).owner.taskIds?.join(', ') ?? '1.1, 1.2, 1.3'}. ` +
           `The coordinator explicitly transferred the validated local plan to this worktree. Read that plan and affected baseline rules. ` +
@@ -453,7 +453,21 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           `Preserve the full issue acceptance; a source PR does not complete required beta or target qualification. ` +
           `Baseline oracle: ${failure.oracleHash}. Previous round result: ${String(run.data.repairReason ?? 'initial correction')}.\n` +
           JSON.stringify({ issue: { number: issue.number, body: issue.body }, oracle: finding.oracle,
-            delivery: deliveryBoundaries(run.manifest) }),
+            delivery: deliveryBoundaries(run.manifest) });
+        const previous = ((run.data.roundHistory ?? []) as { number: number; frozen?: FrozenCandidate;
+          verification?: VerificationReceipt; review?: { head: string; findings: string[] } }[]).at(-1);
+        if (previous?.frozen) {
+          const details = { head: previous.frozen.head,
+            failedChecks: previous.verification ? observedCheckFailures(context.store, run.manifest.id,
+              previous.frozen, previous.verification, `round-${previous.number}-checks`) : [],
+            reviewFindings: previous.review?.head === previous.frozen.head ? previous.review.findings : [] };
+          const excerpt = JSON.stringify(details).slice(0, Math.max(0, Math.min(3500, Math.floor((7800 - instructions.length) / 2))));
+          // Diagnostic text is data, with the original issue/oracle kept intact and the worker's 8k bound preserved.
+          const separator = instructions.lastIndexOf('\n');
+          const detail = JSON.parse(instructions.slice(separator + 1)) as Record<string, unknown>;
+          instructions = instructions.slice(0, separator + 1) + JSON.stringify({ ...detail, previousFailureEvidence: excerpt });
+        }
+        const response = await dispatch(context, 'implementer', instructions,
           { workspace: allocation.path, revision: round.revision, attempt: round.number });
         round = { ...round, response }; remember(context, { round });
       }

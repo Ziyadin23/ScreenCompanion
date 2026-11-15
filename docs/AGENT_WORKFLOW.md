@@ -187,9 +187,15 @@ only fixed generated-output/cache locations are temporary writable mounts. The
 application's existing typecheck, lint, test and build scripts run as separate
 fixed checks. For Electron Vite, the frozen config is copied into a fresh temporary
 cache and supplied through its config option, allowing temporary bundles without
-source writes. An unknown aggregate verify script is refused. Runtime and
+source writes. Vitest's filesystem module cache is explicitly redirected to the
+private temporary directory, leaving installed dependencies read-only. An unknown aggregate verify script is refused. Runtime and
 dependency identities enter evidence. A source edit invalidates evidence;
 a repair that changes no source stops without repeating acceptance tests.
+After a coordinator freeze, subsequent edits can retain the index from that
+current commit. Hidden staged content that differs from baseline, current commit
+and working source is still rejected. Repair workers receive bounded excerpts of
+observed failed checks bound to the previous frozen source and environment, plus
+source-bound review findings; these diagnostic data grant no additional authority.
 
 Application corrections reserve a unique beta from a complete remote tag/release
 inventory and prepare exact manifest/lock/current-record updates before final

@@ -394,6 +394,12 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
         assert.equal(detail.issue.body, remoteIssue?.body);
         assert.equal(detail.issue.number, remoteIssue?.number);
         assert.match(detail.oracle.script, /USER_GUIDE/);
+        if (writes > 0) {
+          const previous = JSON.parse(detail.previousFailureEvidence);
+          assert.equal(previous.head, request.revision);
+          assert.deepEqual(previous.reviewFindings, ['Synthetic material review finding']);
+          assert.ok(request.instructions.length <= 8000);
+        }
         writes++; writeFileSync(join(request.workspace, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');
         return worker(request.role, { status: 'complete', summary: 'Destination corrected', notes: [], changedPaths: ['README.md'] });
       }
