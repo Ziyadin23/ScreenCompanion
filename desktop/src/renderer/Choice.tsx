@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Icon } from './Icon';
+import { VStack } from '@astryxdesign/core/Layout';
+import { Text } from '@astryxdesign/core/Text';
 
 interface ChoiceProps {
   label: string; value: string; options: readonly string[]; onChange: (value: string) => void;
@@ -51,10 +53,10 @@ export function Choice({ label, value, options, onChange, editable = false, disa
   const aria = { 'aria-label': label, 'aria-expanded': open && !disabled, 'aria-controls': open && !disabled ? `${id}-list` : undefined,
     'aria-activedescendant': open && !disabled && choices[active] ? `${id}-${active}` : undefined,
     'aria-autocomplete': editable ? 'list' as const : 'none' as const, 'aria-describedby': describedBy, 'aria-invalid': invalid };
-  return <div className={`choice ${above ? 'choice-above' : ''}`} ref={root} onKeyDown={keyDown}
+  return <VStack className={`choice ${above ? 'choice-above' : ''}`} ref={root} onKeyDown={keyDown}
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}>
     <label id={`${id}-label`} htmlFor={id}>{label}</label>
-    <div className="choice-control">
+    <VStack className="choice-control">
       {editable ? <input id={id} role="combobox" {...aria} value={value} maxLength={160} disabled={disabled} autoFocus={autoFocus}
         autoComplete="off" spellCheck={false} onChange={(event) => { onChange(event.target.value); show(); setActive(0); }} /> :
         <button id={id} type="button" role="combobox" {...aria} disabled={disabled} autoFocus={autoFocus} onClick={() => open ? setOpen(false) : show()}>{display(value)}</button>}
@@ -63,12 +65,12 @@ export function Choice({ label, value, options, onChange, editable = false, disa
           root.current?.querySelector('input')?.focus();
           if (open) setOpen(false); else show();
         }}><Icon name="chevron" /></button>}
-      {!editable && <span className="choice-arrow" aria-hidden="true"><Icon name="chevron" /></span>}
-    </div>
-    {open && !disabled && <div id={`${id}-list`} role="listbox" aria-label={label} className="choice-list">
-      {choices.map((option, index) => <div key={option} id={`${id}-${index}`} role="option" aria-selected={option === value}
+      {!editable && <Text className="choice-arrow" aria-hidden="true"><Icon name="chevron" /></Text>}
+    </VStack>
+    {open && !disabled && <VStack id={`${id}-list`} role="listbox" aria-label={label} className="choice-list">
+      {choices.map((option, index) => <VStack key={option} id={`${id}-${index}`} role="option" aria-selected={option === value}
         className={active === index ? 'active' : ''} onMouseDown={(event) => event.preventDefault()}
-        onMouseEnter={() => setActive(index)} onClick={() => select(option)}>{display(option)}</div>)}
-    </div>}
-  </div>;
+        onMouseEnter={() => setActive(index)} onClick={() => select(option)}>{display(option)}</VStack>)}
+    </VStack>}
+  </VStack>;
 }

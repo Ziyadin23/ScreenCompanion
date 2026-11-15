@@ -42,8 +42,8 @@ describe('answer and temporary input', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Try again');
     expect(document.body.textContent).not.toContain('private native details');
     await act(async () => driver.emit({ busy: true }));
-    for (const label of ['Capture screen', 'Question']) expect((screen.getByRole('button', { name: label }) as HTMLButtonElement).disabled).toBe(true);
-    for (const label of ['Settings', 'Hide', 'Exit']) expect((screen.getByRole('button', { name: label }) as HTMLButtonElement).disabled).toBe(false);
+    for (const label of ['Capture screen', 'Question']) expect(screen.getByRole('button', { name: label }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    for (const label of ['Settings', 'Hide', 'Exit']) expect(screen.getByRole('button', { name: label }).matches(':disabled, [aria-disabled="true"]')).toBe(false);
     expect(screen.getByTestId('answer-text').textContent).toBe('Synthetic SC answer');
   });
   it.each(['', 'Keep this draft'])('activates toolbar buttons with Enter while composing %j without submitting', async (draft) => {
@@ -114,7 +114,7 @@ describe('answer and temporary input', () => {
     expect(screen.getByTestId('answer-text').textContent).toBe('Synthetic SC answer');
     await act(async () => driver.emit({ surface: 'input', busy: true }));
     expect((screen.getByRole('textbox', { name: 'Question' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Send' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
   });
   it('bounds typed input, ignores whitespace, and clears temporary input on Escape', async () => {
     const driver = fixture({ surface: 'input' }); render(<App />);
@@ -194,8 +194,10 @@ describe('service and key setup', () => {
     render(<App />); const key = await screen.findByTestId('setup-key');
     fireEvent.change(key, { target: { value: 'synthetic-secret' } }); fireEvent.submit(key.closest('form')!); fireEvent.submit(key.closest('form')!);
     expect(driver.api.setup).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole('combobox', { name: 'API service' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'API service' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Saving…' }));
+    expect(driver.api.setup).toHaveBeenCalledTimes(1);
     await act(async () => reject(new Error('private setup path and credentials')));
     expect(screen.getByRole('alert').textContent).toContain('could not be saved');
     expect(document.body.textContent).not.toContain('private setup path and credentials');
@@ -253,7 +255,7 @@ describe('settings drafts and protected controls', () => {
     disclose('Keyboard shortcuts'); fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' }));
     tab('Panel'); disclose('Advanced appearance'); fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Text color' }));
-    await waitFor(() => expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByTestId('settings-save').matches(':disabled, [aria-disabled="true"]')).toBe(false));
     tab('Models & API');
     expect(screen.getByText('Advanced model settings', { selector: 'summary' }).parentElement!.hasAttribute('open')).toBe(false);
     expect(screen.queryByRole('combobox', { name: 'Answer model' })).toBeNull();
@@ -283,8 +285,9 @@ describe('settings drafts and protected controls', () => {
     driver.api.getSettingsDraft.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     render(<App />); await screen.findByText('Loading settings…');
     expect(screen.getByRole('region', { name: 'SC settings' }).getAttribute('aria-busy')).toBe('true');
-    expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('settings-save').getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByTestId('settings-save')); expect(driver.saved).toHaveLength(0);
+    expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
     await waitFor(() => expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(1));
     await act(async () => resolve({ ...driver.getDraft(), keyUpdates: { OpenAI: 'must-never-hydrate' } }));
     await screen.findByRole('combobox', { name: 'Answer mode' });
@@ -511,6 +514,6 @@ describe('settings drafts and protected controls', () => {
     fireEvent.click(screen.getByTestId('settings-save')); expect((await screen.findByRole('alert')).textContent).toContain('Settings were not saved');
     expect(document.body.textContent).not.toContain('private raw storage error');
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
-    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
   });
 });

@@ -5,6 +5,8 @@
 3. Use [OpenSpec](docs/DEVELOPMENT.md#openspec-lifecycle) as the sole planning and continuation workflow; the active change's `tasks.md` owns progress. Follow [issue intake](docs/DEVELOPMENT.md#github-issues-and-orca-tasks) for agreed independent work. Resume application work with the OpenSpec apply workflow.
 4. Before code, test or build edits or regression runs, read [the rules for your task](CODING_STANDARDS.md#choose-the-rules-for-your-task), including shared/verification prerequisites and every affected area. For documentation-only, naming, version or publication changes, read [documentation and status](CODING_STANDARDS.md#documentation-and-status).
 
+Before desktop UI work, read the generated [Astryx guidance](desktop/AGENTS.md).
+
 Keep credentials, vaults, private bundles, recordings and lab identifiers outside commits and release assets. Locate the [primary private workspace](docs/DEVELOPMENT.md#private-workspace-discovery), read its guidance and task-relevant `PROJECT_CONTEXT.md`, and keep private lab state there.
 
 Before Linux work, read the [required Linux context](CODING_STANDARDS.md#linux-work).

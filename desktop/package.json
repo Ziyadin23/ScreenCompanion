@@ -10,11 +10,13 @@
   "type": "module",
   "main": "out/main/index.js",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "electron-vite dev",
     "preview:ui": "electron-vite preview -- --synthetic-ui",
+    "preview:astryx": "vite --config vite.preview.config.ts",
+    "theme:build": "astryx theme build src/themes/sc-compact/scCompactTheme.ts",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -31,6 +33,9 @@
     "test:deepseek": "node scripts/deepseek-tests.mjs"
   },
   "dependencies": {
+    "@astryxdesign/core": "0.7.15",
+    "@astryxdesign/theme-neutral": "0.7.15",
+    "@stylexjs/stylex": "0.19.2",
     "electron-updater": "6.8.11",
     "react": "19.3.1",
     "react-dom": "19.3.1",
@@ -121,6 +126,7 @@
     }
   },
   "devDependencies": {
+    "@astryxdesign/cli": "0.7.15",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
     "@testing-library/jest-dom": "7.0.1",
