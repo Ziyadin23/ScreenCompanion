@@ -381,6 +381,10 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
         writes++; writeFileSync(join(request.workspace, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');
         return worker(request.role, { status: 'complete', summary: 'Destination corrected', notes: [], changedPaths: ['README.md'] });
       }
+      const acceptance = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+      assert.equal(acceptance.issue.body, remoteIssue?.body);
+      assert.equal(acceptance.delivery.issueClosure, 'after_all_acceptance');
+      assert.equal(acceptance.delivery.betaHandoff.required, false);
       return worker(request.role, { status: 'complete', summary: 'Synthetic review', notes: [], findings: noChangeRepair ? ['Synthetic material review finding'] : [],
         baseRevision: manifest.base, headRevision: request.reviewHead! });
     }

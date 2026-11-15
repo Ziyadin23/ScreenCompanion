@@ -140,8 +140,9 @@ The reviewer receives the actual frozen script and contract paths, plus the
 coordinator's existing delivery boundaries. Its scope verdict covers the whole
 outcome; it does not certify completed delivery. An application source PR may
 await required Windows beta handoff, with the issue and completion/merge gates
-still open. The implementer also receives the complete issue body and frozen
-oracle, so a narrow reproducer cannot silently replace the other acceptance.
+still open. The implementer and final candidate reviewer also receive the complete
+issue body and delivery boundaries; both see the frozen oracle, so a narrow
+reproducer cannot silently replace the other acceptance.
 
 ## Delegated correction and delivery
 
