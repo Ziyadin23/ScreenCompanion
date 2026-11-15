@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { makeManifest } from '../src/manifest.js';
+import { digest, makeManifest } from '../src/manifest.js';
 import { type OwnedProcessRequest, type OwnedProcessResult } from '../src/process.js';
 import { RunStore } from '../src/store.js';
 import { loadCodexProfile, runWorker, type WorkerProcessRunner } from '../src/worker.js';
@@ -194,6 +194,32 @@ test('a bounded native command event can exceed 64 KB and reuse its observed rec
   assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
   assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
   assert.equal(calls, 1); assert.equal(f.store.usage(f.manifest.id).workerInvocations, 1);
+});
+
+test('writer receives the observed setup handoff without trusting a missing receipt', async t => {
+  const f = fixture(t, 'issue', 2);
+  const key = `setup:${digest({ runId: f.manifest.id, workspace: f.root, revision: f.base })}`;
+  const identity = { workspace: f.root, revision: f.base, command: ['npm', '--prefix', 'desktop', 'ci'] };
+  await f.store.effect(f.manifest.id, key, 'setup', identity, { execute: async () => ({
+    status: 'exited', exitCode: 0, outputTruncated: false }), reconcile: async () => null });
+  const data = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...data, setup: { ok: true, operationKey: key },
+    trustedDependencies: { workspace: f.root, hash: 'e'.repeat(64) } } });
+  let calls = 0;
+  const runner: WorkerProcessRunner = { run: async request => {
+    if (++calls === 1) {
+      assert.ok(request.stdin?.includes('npm --prefix desktop ci completed successfully'));
+      assert.ok(request.stdin?.includes('Do not rerun dependency installation'));
+      assert.ok(request.stdin?.includes(key));
+    } else assert.equal(request.stdin?.includes('npm --prefix desktop ci completed successfully'), false);
+    return output(values.implementer);
+  }, reconcile: async () => { throw new Error('Unexpected reconcile'); } };
+  const request = { store: f.store, runId: f.manifest.id, role: 'implementer' as const,
+    workspace: f.root, revision: f.base, instructions: 'Use the delegated setup and correct the existing contract.' };
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
+  const current = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...current, setup: { ok: true, operationKey: `setup:${'f'.repeat(64)}` } } });
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
 });
 
 test('JSONL uses the last message of the completed turn and refuses events after completion', async t => {

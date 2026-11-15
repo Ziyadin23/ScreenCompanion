@@ -79,6 +79,27 @@ test('version preparation preserves dated evidence and validates exact JSON fiel
   assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
 });
 
+test('version preparation supports the checked-in source table and status header without changing history', t => {
+  const { root, store, manifest } = fixture(t);
+  for (const path of ['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/PUBLISHING.md', 'docs/STATUS.md'])
+    writeFileSync(join(root, path), readFileSync(new URL(`../../../../${path}`, import.meta.url)));
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const prepared = prepareVersionRecords(root, reservation), { previousVersion: old, version: next } = reservation;
+  const readme = prepared.changes[2]!, status = prepared.changes[4]!;
+  assert.equal(readme.after, readme.before.replace(`| Current source, unpublished | **${old}** |`,
+    `| Current source, unpublished | **${next}** |`));
+  assert.notEqual(readme.after, readme.before);
+  assert.equal(status.after, status.before.replace(`Source remains unpublished **${old}**;`,
+    `Source remains unpublished **${next}**;`));
+  assert.notEqual(status.after, status.before);
+  assert.doesNotThrow(() => validateVersionChanges(prepared.changes, reservation));
+  writeFileSync(join(root, 'README.md'), readme.before + `\nThe current source version is **${old}**, not yet published.\n`);
+  assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+  writeFileSync(join(root, 'README.md'), readme.before);
+  writeFileSync(join(root, 'docs/STATUS.md'), status.before + `\nApplication source is **${old}**;\n`);
+  assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+});
+
 test('synthetic transfer verifies artifacts, keeps paths private, and never qualifies automerge', async t => {
   const { temp, root, store, manifest } = fixture(t);
   const version = '0.5.0-beta.8', head = 'b'.repeat(40);

@@ -52,6 +52,12 @@ function versionJson(before: string, path: string, reservation: VersionReservati
 function versionDocument(before: string, path: string, reservation: VersionReservation): string {
   const old = reservation.previousVersion, next = reservation.version;
   if (path === 'README.md') {
+    if (before.includes('| Current source, unpublished |')) {
+      if (before.includes('The current source version is **'))
+        throw new WorkflowError('version_record_wait', 'README current-version records are ambiguous.', 2);
+      return replaceOnce(before, `| Current source, unpublished | **${old}** |`,
+        `| Current source, unpublished | **${next}** |`);
+    }
     let result = replaceOnce(before, `The current source version is **${old}**, not yet published.`,
       `The current source version is **${next}**, not yet published.`);
     result = replaceOnce(result, `Build output: \`desktop/dist/SC-Setup-v${old}.exe\``,
@@ -62,8 +68,14 @@ function versionDocument(before: string, path: string, reservation: VersionReser
   if (path === 'docs/PUBLISHING.md') return replaceOnce(before,
     `The current source version is ${old} and is unpublished.`,
     `The current source version is ${next} and is unpublished.`);
-  if (path === 'docs/STATUS.md') return replaceOnce(before,
-    `Application source is **${old}**;`, `Application source is **${next}**;`);
+  if (path === 'docs/STATUS.md') {
+    if (before.includes('Source remains unpublished **')) {
+      if (before.includes('Application source is **'))
+        throw new WorkflowError('version_record_wait', 'Status current-version records are ambiguous.', 2);
+      return replaceOnce(before, `Source remains unpublished **${old}**;`, `Source remains unpublished **${next}**;`);
+    }
+    return replaceOnce(before, `Application source is **${old}**;`, `Application source is **${next}**;`);
+  }
   throw new WorkflowError('invalid_version_change', 'Unexpected version record.');
 }
 export function prepareVersionRecords(root: string, reservation: VersionReservation): PreparedVersion {
