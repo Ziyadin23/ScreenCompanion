@@ -187,6 +187,42 @@ test('unrelated selected issue stops before planning, writer allocation or sourc
   }
 });
 
+test('whole-issue review receives the frozen oracle and truthful PR delivery limits without overriding rejection', async t => {
+  const { store, manifest } = fixture(t, 'pr', true); let scopeReviews = 0, mutations = 0;
+  let reviewContext: { finding: { oracle: unknown }; delivery: unknown } | undefined, scopeInstructions = '';
+  const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script:
+    `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` };
+  const issue = { number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open',
+    title: 'Reject duplicate fields', body: 'Correct desktop/src/providers/json.ts; complete local beta handoff and unrelated renderer changes.',
+    assignees: [{ login: 'Ziyadin23' }] };
+  const actions = createActions({ githubTransport: async (method, endpoint) => {
+    if (method === 'GET' && endpoint.endsWith('/issues/7')) return issue;
+    mutations++; throw new Error('Unexpected external effect');
+  }, executeWorker: async request => {
+    const common = { status: 'complete' as const, summary: 'Synthetic contract', notes: [] };
+    if (request.role === 'investigator') return worker(request.role, { ...common,
+      findings: [{ path: 'desktop/src/providers/json.ts', description: 'Duplicate fields are accepted.' }] });
+    if (request.role === 'reproducer') return worker(request.role, { ...common, reproduced: true, evidence: [], oracle });
+    if (request.baselineContractReview) return worker(request.role, { ...common,
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
+    assert.equal(request.issueOutcomeReview, true); scopeReviews++;
+    const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+    reviewContext = detail; scopeInstructions = request.instructions;
+    return worker(request.role, { ...common, baseRevision: manifest.base, headRevision: manifest.base,
+      findings: ['Renderer changes remain outside this correction.'],
+      issueOutcome: { identity: detail.identity, matched: true, complete: false } });
+  } });
+  const result = await executeRun(store, manifest.id, actions);
+  assert.deepEqual(reviewContext?.finding.oracle, oracle);
+  assert.deepEqual(reviewContext?.delivery, { mode: 'pr', sourcePullRequest: true,
+    coordinatorOwnedRecords: ['task-owner', 'application-version'],
+    betaHandoff: { required: true, qualified: false, blocks: ['completion', 'merge'] },
+    issueClosure: 'after_all_acceptance' });
+  assert.match(scopeInstructions, /coverage of the entire issue outcome, not completed delivery/);
+  assert.equal(result.status, 'awaiting_input'); assert.equal(result.error, 'issue_scope_review');
+  assert.equal(scopeReviews, 1); assert.equal(mutations, 0); assert.equal(store.usage(manifest.id).writingTasks, 0);
+});
+
 test('failed record postflight holds finalization and publishes a scoped incident without closure', async t => {
   const f = fixture(t, 'merge-eligible'); const runId = f.manifest.id;
   f.store.claim(runId);
@@ -338,6 +374,10 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
           baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
       if (request.role === 'planner') return worker(request.role, { status: 'complete', summary: 'Plan', notes: [], steps: [] });
       if (request.role === 'implementer') {
+        const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+        assert.equal(detail.issue.body, remoteIssue?.body);
+        assert.equal(detail.issue.number, remoteIssue?.number);
+        assert.match(detail.oracle.script, /USER_GUIDE/);
         writes++; writeFileSync(join(request.workspace, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');
         return worker(request.role, { status: 'complete', summary: 'Destination corrected', notes: [], changedPaths: ['README.md'] });
       }
