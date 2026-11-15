@@ -19,7 +19,7 @@ export interface ProfileSelection { name: string; binary: string; authFile: stri
 export interface WorkerRequest {
   store: RunStore; runId: string; role: WorkerRole; workspace: string; revision: string;
   instructions: string; attempt?: number; signal?: AbortSignal; write?: boolean; reviewHead?: string;
-  timeReservedByStage?: boolean; issueOutcomeReview?: boolean;
+  timeReservedByStage?: boolean; issueOutcomeReview?: boolean; baselineContractReview?: boolean;
 }
 export interface WorkerProcessRunner {
   run(request: OwnedProcessRequest): Promise<OwnedProcessResult>;
@@ -51,7 +51,11 @@ const issueReviewerOutput = outputs.reviewer.extend({ issueOutcome: z.object({
     ownerPath: z.string().max(300).nullable(), taskId: z.string().max(30).nullable(),
     taskHash: z.string().regex(/^[a-f0-9]{64}$/).nullable() }).strict(),
   matched: z.boolean(), complete: z.boolean() }).strict() }).strict();
-export type WorkerResponse = z.infer<(typeof outputs)[WorkerRole]> | z.infer<typeof issueReviewerOutput>;
+const baselineReviewerOutput = z.object({ ...common,
+  baseRevision: z.string().regex(revisionPattern), headRevision: z.string().regex(revisionPattern),
+  baselineContract: z.object({ valid: z.boolean(), concerns: z.array(item).max(12) }).strict() }).strict();
+export type WorkerResponse = z.infer<(typeof outputs)[WorkerRole]> | z.infer<typeof issueReviewerOutput> |
+  z.infer<typeof baselineReviewerOutput>;
 export interface WorkerResult {
   role: WorkerRole; operationKey: string; processDirectory: string; status: 'complete' | 'needs_decision' | 'failed';
   response?: WorkerResponse; failure?: string; elapsedMs: number;
@@ -108,7 +112,7 @@ function baselineGuidance(root: string, base: string): string {
 }
 
 function parseEvents(result: OwnedProcessResult, role: WorkerRole, base: string, head?: string,
-  issueOutcomeReview = false):
+  issueOutcomeReview = false, baselineContractReview = false):
   Pick<WorkerResult, 'status' | 'response' | 'failure' | 'usage'> {
   let usage: WorkerResult['usage'] = null;
   const failed = (failure: string) => ({ status: 'failed' as const, failure, usage });
@@ -140,7 +144,8 @@ function parseEvents(result: OwnedProcessResult, role: WorkerRole, base: string,
       }
     }
     if (!completed || !message) return failed('missing_final_message');
-    const response = (issueOutcomeReview ? issueReviewerOutput : outputs[role]).parse(JSON.parse(message)) as WorkerResponse;
+    const response = (baselineContractReview ? baselineReviewerOutput : issueOutcomeReview ? issueReviewerOutput : outputs[role])
+      .parse(JSON.parse(message)) as WorkerResponse;
     if (role === 'reviewer') {
       const review = response as z.infer<typeof outputs.reviewer>;
       if (review.baseRevision !== base || review.headRevision !== head) return failed('review_source_mismatch');
@@ -187,6 +192,8 @@ export async function runWorker(request: WorkerRequest, profile: CodexProfile,
     throw new WorkflowError('review_source_mismatch', 'Reviewer must bind the selected head.', 2);
   if (request.issueOutcomeReview && role !== 'reviewer')
     throw new WorkflowError('invalid_worker_request', 'Issue scope review requires a reviewer.', 2);
+  if (request.baselineContractReview && (role !== 'reviewer' || request.issueOutcomeReview))
+    throw new WorkflowError('invalid_worker_request', 'Baseline contract review requires its own read-only reviewer mode.', 2);
   const workspace = realpathSync(request.workspace);
   try {
     const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', workspace, ...args], {
@@ -197,8 +204,12 @@ export async function runWorker(request: WorkerRequest, profile: CodexProfile,
         git('rev-parse', 'HEAD') !== request.revision)
       throw new Error('Source mismatch');
   } catch { throw new WorkflowError('invalid_source', 'Worker workspace does not match the admitted repository and head.', 2); }
-  const schema = z.toJSONSchema(request.issueOutcomeReview ? issueReviewerOutput : outputs[role]);
-  const prompt = `You are a fresh ${role} session. ${roleText[role]}\n` +
+  const schema = z.toJSONSchema(request.baselineContractReview ? baselineReviewerOutput : request.issueOutcomeReview ? issueReviewerOutput : outputs[role]);
+  const responsibility = request.baselineContractReview ?
+    'Independently validate the frozen oracle against the existing baseline contract. The baseline defect is expected, not a review concern. ' +
+    'Set baselineContract.valid only for a sound, relevant oracle; concerns describes defects in that oracle or its contract. ' +
+    'Put observations about the reproduced baseline bug in notes. Do not edit files.' : roleText[role];
+  const prompt = `You are a fresh ${role} session. ${responsibility}\n` +
     `Trusted frozen run: repository=${manifest.repository}; baseline=${manifest.base}; source=${request.revision}; ` +
     `scope=${manifest.scope}; paths=${JSON.stringify(manifest.paths)}; delivery=${manifest.delivery}.\n` +
     (role === 'reviewer' ? `Review head=${request.reviewHead}.\n` : '') +
@@ -259,5 +270,5 @@ export async function runWorker(request: WorkerRequest, profile: CodexProfile,
   }
   if (!stageOwnsTime) store.settleTime(runId, `time:${key}`, Math.ceil(observed.result.elapsedMs));
   return { role, operationKey: key, processDirectory, elapsedMs: observed.result.elapsedMs, monetaryCost: 'unknown',
-    ...parseEvents(observed.result, role, manifest.base, request.reviewHead, request.issueOutcomeReview) };
+    ...parseEvents(observed.result, role, manifest.base, request.reviewHead, request.issueOutcomeReview, request.baselineContractReview) };
 }

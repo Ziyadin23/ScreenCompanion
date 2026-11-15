@@ -119,6 +119,27 @@ test('issue outcome review passes the strict worker JSONL boundary with a source
     { identity, matched: true, complete: true });
 });
 
+test('baseline contract review separates oracle concerns from the expected baseline defect', async t => {
+  const f = fixture(t, 'investigate', 2); let calls = 0;
+  const runner: WorkerProcessRunner = { run: async request => {
+    assert.equal(request.args.includes('--bind'), false);
+    assert.ok(request.stdin?.includes('The baseline defect is expected'));
+    const inputs = join(f.state, 'runs', f.manifest.id, 'worker-inputs');
+    const file = readdirSync(inputs).find(name => name.endsWith('.json'))!;
+    const schema = JSON.parse(readFileSync(join(inputs, file), 'utf8'));
+    assert.ok(schema.required.includes('baselineContract'));
+    assert.equal('findings' in schema.properties, false);
+    return output(++calls === 1 ? { ...common, baseRevision: f.base, headRevision: f.base,
+      findings: ['The expected baseline bug exists'] } : { ...common, baseRevision: f.base, headRevision: f.base,
+      notes: ['The expected baseline bug exists'], baselineContract: { valid: true, concerns: [] } });
+  }, reconcile: async () => { throw new Error('Unexpected reconcile'); } };
+  const request = { store: f.store, runId: f.manifest.id, role: 'reviewer' as const,
+    workspace: f.root, revision: f.base, reviewHead: f.base, baselineContractReview: true,
+    instructions: 'Independently validate the oracle against its existing contract.' };
+  assert.equal((await runWorker(request, f.profile, runner)).failure, 'invalid_worker_output');
+  assert.equal((await runWorker({ ...request, attempt: 1 }, f.profile, runner)).status, 'complete');
+});
+
 test('rejects authority fields, malformed or truncated JSONL, failures and output excess as observed attempts', async t => {
   const f = fixture(t, 'issue', 6);
   const outcomes = [
