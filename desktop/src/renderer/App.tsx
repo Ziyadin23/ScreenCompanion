@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApiProvider, AppCommand, AppState, ResizeEdge } from '../contracts';
-import { PROVIDERS } from '../contracts';
-import { Choice } from './Choice';
+import type { AppCommand, AppState, ResizeEdge } from '../contracts';
 import { Settings } from './Settings';
+import { Setup } from './Setup';
+import { Theme } from '@astryxdesign/core/theme';
+import { themes, defaultThemeSlug } from '../astryx-themes';
 import { Icon, type IconName } from './Icon';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
@@ -15,50 +16,6 @@ const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; reque
   { label: 'Hide', icon: 'hide', command: { type: 'toggleVisibility' } },
   { label: 'Exit', icon: 'exit', command: { type: 'exit' } }
 ];
-
-function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; platform: AppState['platform']; onCommand: (command: AppCommand) => void }) {
-  const [provider, setProvider] = useState<ApiProvider>('OpenAI');
-  const [key, setKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const pending = useRef(false);
-  const alive = useRef(true);
-  const keyInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const service = provider === 'Gemini' ? 'Google Gemini' : provider;
-  async function save() {
-    if (pending.current) return;
-    if (!key.trim() || /[\u0000-\u001f\u007f]/.test(key)) {
-      setError(`Enter your ${service} API key without line breaks or control characters.`); keyInput.current?.focus(); return;
-    }
-    pending.current = true; setSaving(true); setError('');
-    try { await window.sc.setup({ provider, apiKey: key.trim() }); if (alive.current) { setKey(''); setShowKey(false); } }
-    catch { if (alive.current) setError(platform === 'linux' ? 'The key could not be saved. Unlock your secure Linux keyring and try again.' : 'The key could not be saved. Try again.'); }
-    finally { pending.current = false; if (alive.current) setSaving(false); }
-  }
-  return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
-    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>Set up SC</h1></div></header>
-    <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <p className="setup-intro">Choose your service and enter its API key to get started.</p>
-      <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus
-        display={(value) => value === 'Gemini' ? 'Google Gemini' : value} onChange={(value) => {
-          setProvider(value as ApiProvider); setError(''); setShowKey(false); keyInput.current?.focus();
-        }} />
-      <label htmlFor="setup-key">{service} API key</label>
-      <input ref={keyInput} id="setup-key" data-testid="setup-key" type={showKey ? 'text' : 'password'} aria-label={`${service} API key`} autoComplete="off" spellCheck={false}
-        aria-invalid={!!error} aria-describedby={`setup-privacy${error ? ' setup-error' : ''}`}
-        maxLength={8192} value={key} disabled={saving} onChange={(event) => { setKey(event.target.value); setError(''); }} />
-      <label className="checkbox-row"><input type="checkbox" checked={showKey} disabled={saving} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
-      <p className="hint" id="setup-privacy">{platform === 'linux' ? 'Your key is encrypted using your unlocked Linux keyring.' : 'Your key is encrypted for your Windows account.'} Setup saves your service and key without contacting the service or checking access. You can change them in Settings → Models &amp; API.</p>
-      {platform === 'linux' && <p className="hint">Unlock your desktop keyring before saving. SC windows can appear in recordings and screen shares.</p>}
-      {legacyNotice && <p className="hint" role="note">An older key file was found. Enter your API key once more. The old file will be left unchanged.</p>}
-      {error && <p className="dialog-error" id="setup-error" role="alert">{error}</p>}
-      <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving setup…' : ''}</span><button className="primary-action" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-        <button type="button" disabled={saving} onClick={() => onCommand({ type: 'exit' })}>Cancel</button></footer>
-    </form>
-  </section>;
-}
 
 function captureTestText(state: AppState): string {
   if (state.platform === 'linux') return 'SC windows can appear in recordings and screen shares on Linux. Check the actual recording or received stream. Use the window controls to return or exit.';
@@ -199,7 +156,7 @@ export function App() {
     return () => document.removeEventListener('keydown', keyDown);
   }, [state?.surface]);
   if (!state) return error ? <div className="fixed-theme startup-error" role="alert">{error}</div> : null;
-  if (state.surface === 'setup') return <Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} />;
-  if (state.surface === 'settings') return <Settings key={snapshot!.settingsSession} state={state} />;
+  if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
+  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={snapshot!.settingsSession} state={state} /></Theme>;
   return <Answer state={state} onCommand={command} />;
 }

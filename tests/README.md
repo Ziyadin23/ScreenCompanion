@@ -7,7 +7,7 @@ questions; captured content and real credentials stay outside fixtures and outpu
 
 ## Portable verification
 
-Requires Node.js 22.12 or later:
+Requires Node.js 22.13 or later:
 
 ```sh
 npm ci
@@ -64,6 +64,24 @@ Windows CI runs this vault suite separately from the interactive native/UI
 checks. Portable success and native compilation do not substitute for real DPAPI.
 
 ## Electron workflows and preview
+
+The local Astryx review surface runs the real renderer with an in-memory synthetic
+bridge, independently of Electron:
+
+```sh
+npm --prefix desktop run preview:astryx
+```
+
+Open `http://127.0.0.1:43155/` for Settings or add `?surface=setup` for setup.
+Add `&platform=linux` to inspect Linux notices. Use only synthetic input: this
+preview does not store keys, capture a screen, call a provider or run an updater.
+Save/Back operate on its in-memory draft; reload restores the fixture. The review
+toolbar opens Settings and setup. Stop the server with Ctrl+C.
+
+The compact theme extends the installed Neutral package. After editing its
+source, run `npm --prefix desktop run theme:build` and retain the generated theme
+artifacts together. The browser preview is excluded from Electron production
+entry points; it cannot establish native, secure-storage or recorder evidence.
 
 Run Windows GUI checks/previews only inside the Windows VM with its headless frontend:
 

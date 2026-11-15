@@ -1,4 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { VStack, HStack } from '@astryxdesign/core/Layout';
+import { Text, Heading } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { TextArea } from '@astryxdesign/core/TextArea';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { Button } from '@astryxdesign/core/Button';
 import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
@@ -260,14 +266,14 @@ export function Settings({ state }: { state: AppState }) {
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
 
-  return <section className="settings fixed-theme" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
+  return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
-    <header className="dialog-header"><div className="dialog-title"><span className="app-mark" aria-hidden="true">SC</span><h1>SC settings</h1></div><span>v{state.version}</span></header>
-    <div className="settings-layout">
-    <div className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
-      {PAGES.map((name) => <button key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}
-        tabIndex={page === name ? 0 : -1} aria-controls="settings-page" disabled={blocked} onClick={() => { stopRecording(); setPage(name); }}
+    <HStack as="header" className="dialog-header"><HStack className="dialog-title"><Text className="app-mark" aria-hidden="true">SC</Text><Heading level={1}>SC settings</Heading></HStack><Text>v{state.version}</Text></HStack>
+    <VStack className="settings-layout">
+    <VStack className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
+      {PAGES.map((name) => <Button label={name} icon={<Icon name={PAGE_ICONS[name]} />} variant="ghost" key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}
+        tabIndex={page === name ? 0 : -1} aria-controls="settings-page" isDisabled={blocked} onClick={() => { stopRecording(); setPage(name); }}
         onKeyDown={(event) => {
           const previous = narrow ? 'ArrowLeft' : 'ArrowUp';
           const next = narrow ? 'ArrowRight' : 'ArrowDown';
@@ -277,37 +283,38 @@ export function Settings({ state }: { state: AppState }) {
               (PAGES.indexOf(page) + (event.key === next ? 1 : -1) + PAGES.length) % PAGES.length;
             setPage(PAGES[index]!); (event.currentTarget.parentElement?.children[index] as HTMLElement)?.focus();
           }
-        }}><Icon name={PAGE_ICONS[name]} />{name}</button>)}
-    </div>
-    <div ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
-      <div className="page-intro"><h2 ref={heading} tabIndex={-1}>{page}</h2><p className="hint">{PAGE_HINTS[page]}</p></div>
-      {!draft && <div className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
-        {loadFailed && <button type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</button>}</div>}
+        }} />)}
+    </VStack>
+    <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
+      <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading><p className="hint">{PAGE_HINTS[page]}</p></VStack>
+      {!draft && <VStack className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
+        {loadFailed && <Button label="Try loading again" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</Button>}</VStack>}
       {draft && <fieldset className="settings-fields" disabled={blocked}>
         <legend className="sr-only">{page} settings</legend>
         {page === 'Answer & shortcuts' && <>
-          <section className="form-section" aria-labelledby="answer-behavior-heading"><h3 id="answer-behavior-heading">Answer behavior</h3>
+          <section className="form-section" aria-labelledby="answer-behavior-heading"><Heading level={3} id="answer-behavior-heading">Answer behavior</Heading>
           <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
             onChange={(value) => updateValues({ ResponseMode: value as SettingsDraft['values']['ResponseMode'] })} />
-          {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <div className="custom-instruction">
-          <label htmlFor="custom-instruction">Custom instruction (used in Custom mode)</label>
-          <textarea id="custom-instruction" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} maxLength={2000} rows={4}
+          {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
+          <TextArea id="custom-instruction" label="Custom instruction (used in Custom mode)" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} rows={4}
+            ref={(input) => { if (input) input.maxLength = 2000; }} status={invalidField === 'custom-instruction' ? { type: 'error' } : undefined}
             value={draft.values.CustomInstruction}
-            onChange={(event) => updateValues({ CustomInstruction: event.target.value.slice(0, 2000) })} />
-          <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></div>}</section>
+            isDisabled={blocked} onChange={(value) => updateValues({ CustomInstruction: value.slice(0, 2000) })} />
+          <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></VStack>}</section>
           <details className="advanced-settings" open={shortcutsOpen}>
           <summary aria-disabled={blocked} onClick={(event) => {
             event.preventDefault(); if (!blocked) { stopRecording(); setShortcutsOpen((value) => !value); }
           }}>Keyboard shortcuts</summary>
-          <div className="advanced-content" hidden={!shortcutsOpen}>
+          <VStack className="advanced-content" hidden={!shortcutsOpen}>
           {state.platform === 'linux' ? <p className="hint">Configure Hyprland bindings to run SC with --action=capture, input, settings, visibility, test or exit. If the tray is unavailable, reopening SC restores the window.</p> : <>
           <p className="hint" id="shortcut-help">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
-          <div className="shortcut-fields">
-            {SHORTCUT_FIELDS.map(({ field, label }) => <div className="shortcut-row" key={field}>
-              <label htmlFor={`shortcut-${field}`}>{label}</label>
-              <input id={`shortcut-${field}`} className={recording === field ? 'recording' : ''} aria-label={`${label} shortcut`}
+          <VStack className="shortcut-fields">
+            {SHORTCUT_FIELDS.map(({ field, label }) => <VStack className="shortcut-row" key={field}>
+              <TextInput id={`shortcut-${field}`} label={label} aria-label={`${label} shortcut`}
+                controlClassName={recording === field ? 'recording' : undefined}
+                status={invalidField === `shortcut-${field}` ? { type: 'error' } : undefined}
                 {...fieldAria(`shortcut-${field}`, 'shortcut-help')}
-                readOnly autoComplete="off" value={recording === field ? recordNotice : formatShortcut(draft.values[field])}
+                isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(draft.values[field])}
                 onFocus={() => startRecording(field)} onClick={() => startRecording(field)} onBlur={stopRecording}
                 onKeyDown={(event) => {
                   if (recordingRef.current !== field) return;
@@ -320,60 +327,62 @@ export function Settings({ state }: { state: AppState }) {
                   event.preventDefault(); event.stopPropagation();
                   if (modifierForKey(bindingFromEvent(event).Key) && pendingModifier.current) record(pendingModifier.current);
                 }} />
-            </div>)}
-          </div>
-          <div className="inline-actions"><button type="button" onClick={() => {
+            </VStack>)}
+          </VStack>
+          <VStack className="inline-actions"><Button label="Restore shortcuts" type="button" onClick={() => {
             stopRecording(); const defaults = defaultSettings('');
             updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
-          }}>Restore shortcuts</button><button type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</button></div>
-          <span className="sr-only" role="status">{recording ? recordNotice : ''}</span></>}</div></details>
+          }}>Restore shortcuts</Button><Button label="Change API key" type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</Button></VStack>
+          <Text className="sr-only" role="status">{recording ? recordNotice : ''}</Text></>}</VStack></details>
         </>}
         {page === 'Panel' && <>
-          <section className="form-section" aria-labelledby="readability-heading"><h3 id="readability-heading">Text and transparency</h3>
+          <section className="form-section" aria-labelledby="readability-heading"><Heading level={3} id="readability-heading">Text and transparency</Heading>
           <label htmlFor="transparency">Background transparency: {draft.values.Appearance.TransparencyPercent}% (100%: text only)</label>
           <input id="transparency" aria-label="Background transparency" type="range" min={0} max={100}
             value={draft.values.Appearance.TransparencyPercent} onChange={(event) => appearance({ TransparencyPercent: Number(event.target.value) })} />
           <label className="number-row" htmlFor="font-size">Text size (points)<input id="font-size" aria-label="Answer text size" type="number" min={8} max={28}
             value={draft.values.Appearance.TextSizePoints} onChange={(event) => appearance({ TextSizePoints: Math.max(8, Math.min(28, Number(event.target.value) || 8)) })} /></label>
-          </section><section className="form-section" aria-labelledby="panel-colors-heading"><h3 id="panel-colors-heading">Panel colors</h3>
+          </section><section className="form-section" aria-labelledby="panel-colors-heading"><Heading level={3} id="panel-colors-heading">Panel colors</Heading>
           <Choice {...choiceAria('panel-theme')} label="Panel color theme" value={paletteName(draft.values.Appearance)} options={[...Object.keys(PALETTES), 'Custom']}
             onChange={(value) => { if (value in PALETTES) appearance(PALETTES[value as keyof typeof PALETTES]); }} />
           <details className="advanced-settings" open={appearanceOpen}>
           <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAppearanceOpen((value) => !value); }}>Advanced appearance</summary>
-          <div className="advanced-content" hidden={!appearanceOpen}>
+          <VStack className="advanced-content" hidden={!appearanceOpen}>
           <label htmlFor="text-opacity">Text visibility: {draft.values.Appearance.TextOpacityPercent}%</label>
           <input id="text-opacity" aria-label="Text visibility" type="range" min={15} max={100}
             value={draft.values.Appearance.TextOpacityPercent} onChange={(event) => appearance({ TextOpacityPercent: Number(event.target.value) })} />
-          <div className="color-fields">{COLOR_FIELDS.map(({ field, label }) => <div key={field}><span>{label}</span>
+          <VStack className="color-fields">{COLOR_FIELDS.map(({ field, label }) => <VStack key={field}><Text>{label}</Text>
             {state.platform === 'linux' ? <input type="color" aria-label={`${label} color`} value={draft.values.Appearance[field]}
               onChange={event => appearance({ [field]: event.target.value })} /> :
-            <button type="button" aria-label={`${label} color`} style={{ background: draft.values.Appearance[field], color: contrastText(draft.values.Appearance[field]) }}
-              onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</button>}</div>)}</div>
-          </div></details></section><section className="form-section" aria-labelledby="panel-preview-heading"><h3 id="panel-preview-heading">Answer preview</h3>
-          <div className="preview-checker"><div className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
+            <Button label={`${label} color`} type="button" aria-label={`${label} color`} style={{ background: draft.values.Appearance[field], color: contrastText(draft.values.Appearance[field]) }}
+              onClick={() => { void chooseColor(field); }}>{draft.values.Appearance[field]}</Button>}</VStack>)}</VStack>
+          </VStack></details></section><section className="form-section" aria-labelledby="panel-preview-heading"><Heading level={3} id="panel-preview-heading">Answer preview</Heading>
+          <VStack className="preview-checker"><VStack className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
-          </div></div>
-          <button type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</button></section>
+          </VStack></VStack>
+          <Button label="Restore appearance" type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</Button></section>
         </>}
         {page === 'Models & API' && <>
-          <section className="form-section" aria-labelledby="service-heading"><h3 id="service-heading">Service connection</h3>
+          <section className="form-section" aria-labelledby="service-heading"><Heading level={3} id="service-heading">Service connection</Heading>
           <Choice {...choiceAria('api-service')} label="API service" value={provider} options={PROVIDERS} display={(value) => value === 'Gemini' ? 'Google Gemini' : value}
             onChange={(value) => changeProvider(value as ApiProvider)} />
-          <label htmlFor="service-key">API key for {provider === 'Gemini' ? 'Google Gemini' : provider}</label>
-          <input id="service-key" aria-label="Service API key" {...fieldAria('service-key', 'service-key-status service-key-help')} data-testid="service-key"
-            type={showKey ? 'text' : 'password'} autoComplete="off" spellCheck={false} maxLength={8192}
+          <TextInput id="service-key" label={`API key for ${provider === 'Gemini' ? 'Google Gemini' : provider}`} aria-label="Service API key" {...fieldAria('service-key', 'service-key-status service-key-help')} data-testid="service-key"
+            ref={(input) => { if (input) input.maxLength = 8192; }}
+            type={showKey ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false} isDisabled={blocked}
+            status={invalidField === 'service-key' ? { type: 'error' } : undefined}
             placeholder={draft.keyPresence[provider] ? 'Leave empty to keep the saved key' : 'Enter API key'}
-            value={draft.keyUpdates[provider] ?? ''} onChange={(event) => {
-              const value = event.target.value;
-              modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value } }));
+            value={draft.keyUpdates[provider] ?? ''} onChange={(value) => {
+              modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value.slice(0, 8192) } }));
             }} />
-          <small id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</small>
-          <label className="checkbox-row"><input type="checkbox" checked={showKey} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
+          <HStack className="key-feedback" gap={3} wrap="wrap" hAlign="between">
+            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
+            <CheckboxInput label="Show API key" size="sm" value={showKey} isDisabled={blocked} onChange={setShowKey} />
+          </HStack>
           <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies this service to future questions without testing the key or making a model request.</p>
           <p className="hint">{DATA_NOTICE[provider]}</p></section>
           <details className="advanced-settings" open={advanced}>
             <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAdvanced((value) => !value); }}>Advanced model settings</summary>
-            <div className="advanced-content" hidden={!advanced}>
+            <VStack className="advanced-content" hidden={!advanced}>
           <p className="hint">Defaults are ready to use. Change these only if your account supports the model IDs and features you select.</p>
           <Choice {...choiceAria('request-pipeline', 'pipeline-help')} label="Request pipeline" value={pipeline} options={['Thorough', 'Direct']}
             display={(value) => value === 'Direct' ? 'Direct screenshot' : value}
@@ -385,27 +394,27 @@ export function Settings({ state }: { state: AppState }) {
             options={PROVIDER_MODELS[provider].filter((value) => provider !== 'DeepSeek' || value !== 'deepseek-v4-pro')}
             onChange={(value) => updateModels({ VisionModel: value })} />
           <p className="hint" id="model-help">Choose a suggestion or enter an exact model ID. Screen reading requires image support; answering requires structured responses and support for any task images.</p>
-          <div className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
+          <VStack className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
             display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={blocked || provider !== 'DeepSeek'}
             onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
               AnswerTokenLimit: value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? 16000 : models.AnswerTokenLimit })} />
-            <div><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
+            <VStack><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
               type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
-              value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></div></div>
+              value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></VStack></VStack>
           <p className="hint" id="deepseek-help">{provider === 'DeepSeek' ? 'Pro is text-only: use it for typed text or answering tasks without necessary images through Thorough. Reasoning shares the output budget and may increase latency and API cost. Leave the limit empty to use the configured limit.' : 'Reasoning and the output token limit are available for DeepSeek. Other services use their configured limits.'}</p>
-            </div>
+            </VStack>
           </details>
           <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`} The pipeline is saved per answer model; text-only sends skip screen reading.</p>
         </>}
         {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? 'Use the window controls. Hyprland bindings can launch SC with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(state.shortcuts)}</pre>
-          <button type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</button></>}
+          <Button label="Open capture test" type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</Button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}
-    </div>
-    </div>
+    </VStack>
+    </VStack>
     {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
-    <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</span>
-      <button className="primary-action" type="button" data-testid="settings-save" disabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</button>
-      <button type="button" data-testid="settings-back" disabled={blocked} onClick={() => { void back(); }}>Back</button></footer>
+    <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
+      <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
+      <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>
   </section>;
 }

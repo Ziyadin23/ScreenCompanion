@@ -147,13 +147,17 @@ and [verification results](docs/VERIFICATION.md) for the full limits and recorde
 
 ## Build and further documentation
 
-With Node.js 22.12 or later, run these commands from the repository root to verify
+With Node.js 22.13 or later, run these commands from the repository root to verify
 and bundle the application:
 
 ```sh
 npm --prefix desktop ci
 npm --prefix desktop run verify
 ```
+
+For local interface review, `npm --prefix desktop run preview:astryx` serves a
+synthetic Astryx Settings/setup preview. The [preview guide](tests/README.md#electron-workflows-and-preview)
+explains its in-memory behavior and verification limits.
 
 For native builds, isolated UI previews, Windows packaging and Fedora RPMs, use
 the contributor, test and publishing guides below. Windows native builds require

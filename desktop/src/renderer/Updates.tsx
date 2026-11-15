@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { VStack, HStack } from '@astryxdesign/core/Layout';
+import { Button } from '@astryxdesign/core/Button';
+import { Text } from '@astryxdesign/core/Text';
 import type { AppState, UpdateAction } from '../contracts';
 
 export function Updates({ state, dirty }: { state: AppState; dirty: boolean }) {
@@ -17,27 +20,27 @@ export function Updates({ state, dirty }: { state: AppState; dirty: boolean }) {
     finally { running.current = false; if (alive.current) setPending(false); }
   }
   const working = pending || ['checking', 'downloading', 'installing'].includes(update.status);
-  if (state.platform === 'linux') return <div aria-label="SC updates">
-    <p>Current version: <strong>{state.version}</strong></p>
-    <p className="hint">Install a newer RPM manually to update SC. Close SC before updating.</p>
-  </div>;
-  return <div aria-label="SC updates">
-    <p>Current version: <strong>{state.version}</strong></p>
-    {update.status === 'disabled' ? <p className="hint">Portable and preview builds use manual updates. For the portable version, close SC before replacing its EXE. Install SC to use in-app updates.</p> :
-      <p className="hint">This installed copy supports in-app updates. {state.version.includes('-') ? 'This beta receives beta and stable updates.' : 'This version receives stable updates.'}</p>}
-    <p role="status" aria-live="polite">{update.message}</p>
+  if (state.platform === 'linux') return <VStack gap={4} aria-label="SC updates">
+    <Text as="p">Current version: <strong>{state.version}</strong></Text>
+    <Text as="p" className="hint">Install a newer RPM manually to update SC. Close SC before updating.</Text>
+  </VStack>;
+  return <VStack gap={4} aria-label="SC updates">
+    <Text as="p">Current version: <strong>{state.version}</strong></Text>
+    {update.status === 'disabled' ? <Text as="p" className="hint">Portable and preview builds use manual updates. For the portable version, close SC before replacing its EXE. Install SC to use in-app updates.</Text> :
+      <Text as="p" className="hint">This installed copy supports in-app updates. {state.version.includes('-') ? 'This beta receives beta and stable updates.' : 'This version receives stable updates.'}</Text>}
+    <Text as="p" role="status" aria-live="polite">{update.message}</Text>
     {update.status === 'downloading' && <progress aria-label="Update download" max={100} value={update.progress ?? 0} />}
-    {update.status !== 'disabled' && <><div className="update-actions">
-      <button type="button" disabled={working || update.status === 'downloaded'} onClick={() => { void act('check'); }}>Check for updates</button>
-      {update.status === 'available' && <button type="button" disabled={working} onClick={() => { void act('download'); }}>Download update</button>}
-      {update.status === 'error' && update.version && <button type="button" disabled={working} onClick={() => { void act('download'); }}>Retry download</button>}
-      {update.status === 'downloaded' && <button type="button" aria-describedby={dirty || state.settingsDirty ? 'update-draft-notice' : undefined}
-        disabled={working || state.busy || dirty || state.settingsDirty} onClick={() => { void act('install'); }}>Restart and install</button>}
-      </div>
-      {state.busy && update.status === 'downloaded' && <p className="hint">Wait for the current answer before restarting.</p>}
-      {(dirty || state.settingsDirty) && <p className="hint" id="update-draft-notice" role="note">Save your Settings changes or use Back to discard them before restarting. Reopen Updates afterward to install.</p>}
-      <p className="hint">SC checks on startup. Downloads and installation start only when you choose them. Saved API keys and settings are retained.</p>
+    {update.status !== 'disabled' && <><HStack className="update-actions">
+      <Button label="Check for updates" type="button" isDisabled={working || update.status === 'downloaded'} onClick={() => { void act('check'); }}>Check for updates</Button>
+      {update.status === 'available' && <Button label="Download update" type="button" isDisabled={working} onClick={() => { void act('download'); }}>Download update</Button>}
+      {update.status === 'error' && update.version && <Button label="Retry download" type="button" isDisabled={working} onClick={() => { void act('download'); }}>Retry download</Button>}
+      {update.status === 'downloaded' && <Button label="Restart and install" type="button" aria-describedby={dirty || state.settingsDirty ? 'update-draft-notice' : undefined}
+        isDisabled={working || state.busy || dirty || state.settingsDirty} onClick={() => { void act('install'); }}>Restart and install</Button>}
+      </HStack>
+      {state.busy && update.status === 'downloaded' && <Text as="p" className="hint">Wait for the current answer before restarting.</Text>}
+      {(dirty || state.settingsDirty) && <Text as="p" className="hint" id="update-draft-notice" role="note">Save your Settings changes or use Back to discard them before restarting. Reopen Updates afterward to install.</Text>}
+      <Text as="p" className="hint">SC checks on startup. Downloads and installation start only when you choose them. Saved API keys and settings are retained.</Text>
     </>}
-    {error && <p className="dialog-error" role="alert">{error}</p>}
-  </div>;
+    {error && <Text as="p" className="dialog-error" role="alert">{error}</Text>}
+  </VStack>;
 }

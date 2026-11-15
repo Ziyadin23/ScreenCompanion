@@ -44,7 +44,7 @@ Read the [pipeline contracts](PIPELINE.md), [user behavior](USER_GUIDE.md) and a
 
 ## Setup and checks
 
-Use Node.js 22.12 or later. From the repository root:
+Use Node.js 22.13 or later (required by the Astryx CLI). From the repository root:
 
 ```sh
 npm --prefix desktop ci

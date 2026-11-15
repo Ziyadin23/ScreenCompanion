@@ -1,0 +1,44 @@
+# Tasks
+
+Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompanion/issues/55). Runtime and runnable delivery continue in [issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63). This file owns the continuation beyond the archived preview. [Design](design.md) records integration boundaries.
+
+## 1. Preserve and integrate the source
+
+- [x] 1.1 Verify worktree ownership and the existing preview checkpoint; preserve a committed preview baseline, run documented dependency setup and record its exit before integration edits.
+- [x] 1.2 Merge current main into the preview, preserving all current pipeline, model-preference and explicit-submit behavior. Verify affected renderer tests, documentation and a diff audit against main without changing native/controller/storage/provider behavior.
+- [x] 1.3 Run complete host verification, built-renderer Astryx doctor, synthetic wide/narrow interface and answer-panel checks, documentation selftest/link validation, strict OpenSpec and whitespace checks. Record every attempt and final source identity; obtain independent Standards/Spec review.
+
+## 2. Source publication and actionable intake
+
+- [ ] 2.1 Publish a reviewed PR, verify all five enforced checks on its exact head, merge through unchanged protection and verify the main postflight and integrated tree. Refresh status, issue/card navigation and private context without claiming new runtime qualification.
+- [ ] 2.2 Publish and read back assigned focused audit issues and runtime continuation; reconcile obsolete/duplicate intake with successor links and verified closure reasons. Preserve distinct unfinished Windows/Linux/live/recorder and icon work.
+
+## 3. Runnable candidate qualification
+
+- [ ] 3.1 Reserve a new unused beta for the combined application, run applicable Windows native/vault/full UI, packaged startup and named-recorder checks in the authorized isolated lab, and verify affected Linux preview/package behavior. Retain earlier failures and preserve the separate broader platform owners.
+- [ ] 3.2 Build and verify the versioned key-free EXE, installer, exact EXE/README ZIP and matching README, complete copied-byte local delivery and private latest-build records, then review final evidence and documentation against the actual candidate. Keep this change active until these requirements pass.
+
+## Checkpoint — 2026-11-15
+
+- User requested merging the new interface into main, preparing new issues assigned to them and removing unnecessary ones. The earlier interface PR #53 is already merged; this resumes the later Astryx Settings/setup preview. The request authorizes source publication/integration and issue maintenance; no public application release or paid campaign is requested.
+- Reused inactive worktree `Ziyadin23/issue-55-astryx-settings`, HEAD/base `0627df2`. Existing dirty source and archived setup/preview artifacts are task-owned, as recorded by the preview owner. The original issue #54 worktree and primary checkout's untracked retrospective files remain untouched.
+- Main is `3b29e416a24418d4044f3088ca0d3734ca003d3c`, fetched and CI-successful. Main protection readback requires PRs, five strict checks and administrator enforcement with no force/deletion bypass; settings remain unchanged.
+- Verified GitHub login `Ziyadin23`; searched all open/closed issues before intake. Created/read back #59 (Settings save session), #60 (option text validation), #61 (final panel-size persistence) and #62 (Responses status validation), each OPEN and assigned to `Ziyadin23`, with concrete reproduction, immutable current-source links and OpenSpec-first continuation. These fixes are not implemented by this integration.
+- Runtime, recorder and runnable-delivery completion remain separate from source integration. The latest private delivered build is beta.9; pipeline beta.10 verification and delivery remain unfinished in #57. Keep application tasks open and record the exact follow-up owner; existing candidate results do not transfer to changed application bytes.
+
+### Integration verification
+
+- `npm --prefix desktop ci` exited 0: 597 packages installed, pinned dependencies resolved. The existing npm audit summary reports 14 moderate advisories; no automatic dependency upgrade was performed.
+- Committed the existing preview and integration planning as `1cd42c2`, preserving a recoverable baseline. Merged `origin/main` at `3b29e41` as `8f6c487`; resolved Settings presentation/help and current-status conflicts while retaining both intents.
+- First combined `npm --prefix desktop run verify` exited 2 at type checking: the development-only preview bridge lacked the newly required `onInputAction` subscription. Added the content-free no-op subscription matching its existing `onScroll` fixture boundary. The corrected full verify exited 0: types/lint, **1,227 tests / 34 files**, and production bundles. No assertions were weakened.
+- `git diff origin/main -- desktop/src/main desktop/src/contracts desktop/src/platform desktop/src/pipeline desktop/src/providers desktop/src/storage desktop/src/preload desktop/native` was empty. Current production pipeline/controller/native/storage behavior is byte-identical to main; renderer regressions cover both submit actions and per-model preferences.
+- `npx astryx doctor --built out/renderer` exited 0: **20 pass / 2 related system-font advisories / 0 fail**. No external font is fetched. Workflow selftest, documentation (**96 files / 440 links**), strict OpenSpec (**9/9**) each exited 0 at this checkpoint; final source/privacy/whitespace review and synthetic browser inspection are pending.
+- Added complete license notices for all nine new production packages and bundled syntax themes, using pinned installed license texts and the upstream package-repository license where a tarball omits its root license. Published historical assets remain unchanged.
+- Created/read back runtime continuation #63, OPEN and assigned to `Ziyadin23`. Its first action is to continue tasks 3.1–3.2 from this owner after source publication. Four audit fixes #59–#62 remain independently assigned and unimplemented.
+- Closed #11 as redundant intake, retaining all Windows 11 clean-environment work in #39. Closed #22 after verifying PR #4 is already closed and its head has no unique patches against current main (`git cherry` produced no entries). No distinct platform, live-quality, recorder or icon issue was closed.
+- Independent read-only **Standards: zero substantive findings; Spec: zero substantive findings** against main `3b29e41` and head `2f24543`. Subsequent changes are evidence/navigation only; application bytes remain unchanged.
+- Combined-source synthetic browser inspection completed **eight views/checks**, zero page errors and zero external requests: wide Settings, wide/narrow all-provider Direct, narrow Panel and Commands, narrow setup error/focus, Linux setup notices and retained-answer input with both enabled send actions. All eight captures were personally inspected. Orca's embedded screenshot failed with a no-drawn-frame CDP timeout; its DOM/layout check passed. The fallback used isolated headless Chrome with synthetic in-memory data. Its first private harness attempt retained seven captures before failing on an incorrect `Your question` selector; correcting it to the actual `Question` label completed the full eight-view pass without changing application code. These are browser checks, not native/recorder evidence.
+
+## Workflow follow-up
+
+- Once runtime/delivery and final review are complete, archive this `skip_specs` change and verify moved links, strict OpenSpec and documentation. Source integration alone does not make it archive-ready.
