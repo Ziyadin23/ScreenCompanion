@@ -310,7 +310,7 @@ The panel's background alpha and answer text alpha are independent. Inputs stay 
 
 ### Temporary composer
 
-The question field and square Send action sit below the answer with no overlay. Enter submits from question input; Enter on a focused toolbar button invokes that button. Empty or busy input disables Send. Errors sit above the composer in a compact readable surface. Keep the normal and compact geometry described in Layout aligned with native input exclusion and window sizing.
+The question field and distinct Send and Send with screenshot actions sit below the answer with no overlay. Enter sends text only; Ctrl+Enter from focused input includes one fresh screen capture. The visible shortcut hint and measured composer height keep the screen-send action discoverable and native hover exclusion aligned. Enter on a focused toolbar button invokes that button. Empty or busy input disables both send actions. Errors sit above the composer in a compact readable surface. Keep the normal and compact geometry described in Layout aligned with native input exclusion and window sizing.
 
 ### Advanced disclosures and feedback
 

@@ -4,8 +4,8 @@ SC answers questions from your screen or from text you type, then displays a
 selectable, copyable answer in a compact desktop panel. The current source adds
 controls that reveal on hover or keyboard focus and a simpler settings sidebar.
 
-Each request takes one fresh monitor capture, including typed questions. You
-choose the AI service and supply your own API key; provider usage charges apply.
+Send text on its own, or include a fresh screenshot with Ctrl+Enter while typing.
+You choose the AI service and supply your own API key; provider usage charges apply.
 
 [Website](https://ziyadin23.github.io/screencompanion-website/) ·
 [Downloads](#release-status) · [Quick start](#quick-start) ·
@@ -17,7 +17,7 @@ choose the AI service and supply your own API key; provider usage charges apply.
 | --- | --- | --- |
 | Latest Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.8** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source, unpublished | **0.5.0-beta.10** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Linux is available as source only**, targeting Fedora 44 x86-64 with Hyprland
 Wayland. No Linux RPM has been published, and target desktop checks remain open.
@@ -40,8 +40,9 @@ setup without installed developer tools remains unqualified; see the
    Saving makes no model request. Your account needs access to the selected models
    and any required credits.
 3. **Ask a question.** Press **Ctrl+Alt+Space** for a visible question. To type one,
-   press **Ctrl+Enter**, then **Enter** or **Send**. Your typed question takes
-   priority over unrelated visible questions.
+   press **Ctrl+Enter**, then **Enter** or **Send** for text only. While typing,
+   **Ctrl+Enter** or **Send with screenshot** includes a fresh screen capture. Your
+   typed question takes priority over unrelated visible questions.
 4. **Control the panel.** Use **Ctrl+/** to hide/show it and **Ctrl+I** for Settings.
    Later launches load saved settings and start hidden; opening another copy
    restores the running app.
@@ -78,7 +79,7 @@ need qualification. See [Linux setup, prerequisites and limits](docs/USER_GUIDE.
 | Default shortcut | Action |
 | --- | --- |
 | **Ctrl+Alt+Space** | Capture the foreground app's monitor and answer. |
-| **Ctrl+Enter** | Open temporary question input. |
+| **Ctrl+Enter** | Open question input; while typing, send text with a fresh screenshot. |
 | **Ctrl+/** | Hide/show the current panel or Settings. |
 | **Ctrl+I** | Open Settings. |
 | **Ctrl+Alt+T** | Open/close the capture-exclusion test panel. |
@@ -114,24 +115,24 @@ OpenRouter or DeepSeek and select a request pipeline:
 | Pipeline | Screen-question workflow | Ordinary API calls |
 | --- | --- | ---: |
 | **Thorough** (default) | Locate the question → extract it → answer. | 3 |
-| **Balanced** | Locate and extract together → answer. | 2 |
-| **Direct screenshot** (DeepSeek Flash only) | Send the full captured monitor directly to answering. | 1 |
+| **Direct screenshot** (image-capable answer model) | Send the full captured monitor directly to answering. | 1 |
 
-Thorough can use two calls for typed tasks needing no screen content or with
-advanced crop settings. See the [pipeline reference](docs/PIPELINE.md#pipeline-modes)
+Pipeline preferences are saved per service and answer model. Text-only sends use
+one answering call and never capture. Old Balanced selections become Thorough,
+which can use two screen calls with advanced crop settings or no relevant region. See the [pipeline reference](docs/PIPELINE.md#pipeline-modes)
 for conditions and local validation.
 
 Screen-reading models must support images and structured JSON; answer models need
 structured JSON and support for any required task images. DeepSeek Flash supports
 screenshots; DeepSeek Pro (`deepseek-v4-pro`) is a text-only answering option for
-Thorough or Balanced. See [model requirements and settings](docs/USER_GUIDE.md#service-and-model-selection)
+typed text or Thorough tasks without required images. See [model requirements and settings](docs/USER_GUIDE.md#service-and-model-selection)
 for compatible models, DeepSeek reasoning and answer output-token limits.
 
 ## Privacy and limits
 
 - **What leaves your PC:** questions and captured screen content go to your selected
-  API provider. Thorough/Balanced can send the full monitor for screen reading;
-  answering receives extracted content and relevant crops. DeepSeek Direct sends
+  API provider. Thorough can send the full monitor for screen reading;
+  answering receives extracted content and relevant crops. Direct sends
   the full monitor straight to answering.
 - **What SC stores:** no screenshot or answer history. Windows keys/settings are
   encrypted for your Windows account; Linux settings require a secure keyring.

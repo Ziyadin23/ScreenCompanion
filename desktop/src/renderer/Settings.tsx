@@ -8,6 +8,7 @@ import { Button } from '@astryxdesign/core/Button';
 import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
+import { modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
@@ -30,8 +31,7 @@ interface ValidationProblem { message: string; page: Page; field: string; advanc
 const COLOR_FIELDS = [{ field: 'BackgroundColor', label: 'Background' }, { field: 'TextColor', label: 'Text' }, { field: 'AccentColor', label: 'Buttons' }] as const;
 const PIPELINE_NOTICE: Record<PipelineMode, string> = {
   Thorough: 'Locates the question, extracts it, then answers in three model calls. Both models must support structured responses; screen reading requires images.',
-  Balanced: 'Combines screen reading and answering in two model calls. Both models must support structured responses; screen reading requires images.',
-  Direct: 'Sends the full captured monitor directly to the answer model in one call. No extraction or verification; the screen-reading model is unused. Direct requires DeepSeek Flash.'
+  Direct: 'Sends the full captured monitor directly to the answer model in one call. The answer model must support images and structured responses; the screen-reading model is unused.'
 };
 const DATA_NOTICE: Record<ApiProvider, string> = {
   OpenAI: 'Uses stateless Responses with store: false. Review your provider account data policies before sending sensitive content.',
@@ -59,7 +59,6 @@ export function Settings({ state }: { state: AppState }) {
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelSelection>>>({});
-  const [pipelines, setPipelines] = useState<Partial<Record<ApiProvider, PipelineMode | null>>>({});
   const [showKey, setShowKey] = useState(false);
   const [recording, setRecording] = useState<ShortcutField | null>(null);
   const recordingRef = useRef<ShortcutField | null>(null);
@@ -81,11 +80,13 @@ export function Settings({ state }: { state: AppState }) {
       const copy = structuredClone(result);
       // Saved secrets never cross the renderer boundary, even as masked text.
       copy.keyUpdates = {};
+      const models = copy.values.Models ?? defaultModels();
+      const mode = modelPipeline(copy.values.ModelPipelines, models) ?? copy.values.PipelineMode ?? 'Thorough';
+      copy.values.PipelineMode = mode;
+      copy.values.ModelPipelines = rememberModelPipeline(copy.values.ModelPipelines, models, mode);
       draftRef.current = copy;
       setDraft(copy);
-      const models = copy.values.Models ?? defaultModels();
       setModelDrafts({ [models.Provider]: models });
-      setPipelines({ [models.Provider]: copy.values.PipelineMode });
     }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
     return () => {
       cancelled = true; alive.current = false;
@@ -146,14 +147,21 @@ export function Settings({ state }: { state: AppState }) {
   const provider = models.Provider;
   const pipeline = draft?.values.PipelineMode ?? 'Thorough';
   function updateModels(patch: Partial<ModelSelection>) {
-    updateValues({ Models: { ...models, ...patch } });
+    const next = { ...models, ...patch };
+    updateValues({ Models: next, ...(next.AnswerModel.trim() !== models.AnswerModel.trim() ?
+      { PipelineMode: modelPipeline(draft!.values.ModelPipelines, next) ?? 'Thorough' } : {}) });
+  }
+  function changePipeline(mode: PipelineMode) {
+    if (!draft) return;
+    const preference = { Provider: provider, AnswerModel: models.AnswerModel.trim(), PipelineMode: mode };
+    updateValues({ PipelineMode: mode, ...(validModelPipelines([preference]) ?
+      { ModelPipelines: rememberModelPipeline(draft.values.ModelPipelines, models, mode) } : {}) });
   }
   function changeProvider(selected: ApiProvider) {
     if (!draft || selected === provider) return;
     setModelDrafts((previous) => ({ ...previous, [provider]: models }));
-    setPipelines((previous) => ({ ...previous, [provider]: draft.values.PipelineMode }));
-    updateValues({ Models: modelDrafts[selected] ?? defaultModels(selected),
-      PipelineMode: selected in pipelines ? pipelines[selected]! : pipeline === 'Direct' ? 'Thorough' : draft.values.PipelineMode });
+    const next = modelDrafts[selected] ?? defaultModels(selected);
+    updateValues({ Models: next, PipelineMode: modelPipeline(draft.values.ModelPipelines, next) ?? 'Thorough' });
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
@@ -192,10 +200,11 @@ export function Settings({ state }: { state: AppState }) {
     });
     if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
     if (!draft.keyUpdates[provider]?.trim() && !draft.keyPresence[provider]) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
-    if (pipeline === 'Direct' && provider !== 'DeepSeek') return model('Direct screenshot is available only for DeepSeek.', 'request-pipeline');
     if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
       (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
+    if (!validModelPipelines(rememberModelPipeline(draft.values.ModelPipelines, models, pipeline)))
+      return model('The saved model pipeline list is full or invalid. Choose a model with an existing preference.', 'answer-model');
     return null;
   }
   async function save() {
@@ -213,6 +222,7 @@ export function Settings({ state }: { state: AppState }) {
     savingRef.current = true; setSaving(true); setError('');
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
+    outgoing.values.ModelPipelines = rememberModelPipeline(outgoing.values.ModelPipelines, outgoing.values.Models, pipeline);
     outgoing.values.CustomInstruction = outgoing.values.CustomInstruction.trim();
     for (const key of PROVIDERS) {
       const replacement = outgoing.keyUpdates[key]?.trim();
@@ -374,9 +384,9 @@ export function Settings({ state }: { state: AppState }) {
             <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAdvanced((value) => !value); }}>Advanced model settings</summary>
             <VStack className="advanced-content" hidden={!advanced}>
           <p className="hint">Defaults are ready to use. Change these only if your account supports the model IDs and features you select.</p>
-          <Choice {...choiceAria('request-pipeline', 'pipeline-help')} label="Request pipeline" value={pipeline} options={provider === 'DeepSeek' ? ['Thorough', 'Balanced', 'Direct'] : ['Thorough', 'Balanced']}
-            display={(value) => value === 'Direct' ? 'Direct screenshot (DeepSeek)' : value}
-            onChange={(value) => updateValues({ PipelineMode: value as PipelineMode })} />
+          <Choice {...choiceAria('request-pipeline', 'pipeline-help')} label="Request pipeline" value={pipeline} options={['Thorough', 'Direct']}
+            display={(value) => value === 'Direct' ? 'Direct screenshot' : value}
+            onChange={(value) => changePipeline(value as PipelineMode)} />
           <p className="hint" id="pipeline-help">{PIPELINE_NOTICE[pipeline]}</p>
           <Choice {...choiceAria('answer-model', 'model-help')} label="Answer model" editable value={models.AnswerModel} options={PROVIDER_MODELS[provider]}
             onChange={(value) => updateModels({ AnswerModel: value })} />
@@ -391,10 +401,10 @@ export function Settings({ state }: { state: AppState }) {
             <VStack><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
               type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
               value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></VStack></VStack>
-          <p className="hint" id="deepseek-help">{provider === 'DeepSeek' ? 'Pro is text-only: use it for answering tasks without necessary images through Thorough or Balanced. Reasoning shares the output budget and may increase latency and API cost. Leave the limit empty to use the configured limit.' : 'Reasoning and the output token limit are available for DeepSeek. Other services use their configured limits.'}</p>
+          <p className="hint" id="deepseek-help">{provider === 'DeepSeek' ? 'Pro is text-only: use it for typed text or answering tasks without necessary images through Thorough. Reasoning shares the output budget and may increase latency and API cost. Leave the limit empty to use the configured limit.' : 'Reasoning and the output token limit are available for DeepSeek. Other services use their configured limits.'}</p>
             </VStack>
           </details>
-          <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`}</p>
+          <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`} The pipeline is saved per answer model; text-only sends skip screen reading.</p>
         </>}
         {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? 'Use the window controls. Hyprland bindings can launch SC with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(state.shortcuts)}</pre>
           <Button label="Open capture test" type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</Button></>}

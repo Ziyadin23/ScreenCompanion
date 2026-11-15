@@ -188,13 +188,14 @@ void Runtime::Attach(HWND panel) {
 void Runtime::Detach() {
   Call([&] { drag_.window = nullptr; dragCancelled_ = true; panelResizeEnabled_ = false; panel_ = nullptr; if (mouseHook_) { UnhookWindowsHookEx(mouseHook_); mouseHook_ = nullptr; } });
 }
-void Runtime::SetPanelResizeEnabled(HWND window, bool enabled) {
+void Runtime::SetPanelResizeEnabled(HWND window, bool enabled, int minimumHeight) {
   Call([&] {
     if (window != panel_) {
       if (enabled) throw std::runtime_error("The panel resize owner is not attached.");
       return; // Startup may disable resizing before the panel is attached.
     }
     panelResizeEnabled_ = enabled;
+    panelMinimumHeight_ = minimumHeight;
     if (!enabled && drag_.edge != 0) { drag_.window = nullptr; dragCancelled_ = true; }
   });
 }
@@ -225,7 +226,7 @@ bool Runtime::ConfigureDrag(HWND window, int edge, POINT pointer) {
   UINT dpi = GetDpiForWindow(window); if (!dpi) dpi = 96;
   drag_.window = window; drag_.intercepted = false; drag_.edge = edge; drag_.pointer = pointer; drag_.rectangle = bounds; drag_.workArea = monitor.rcWork;
   drag_.minWidth = std::min(MulDiv(180, dpi, 96), static_cast<int>(monitor.rcWork.right - monitor.rcWork.left));
-  drag_.minHeight = std::min(MulDiv(80, dpi, 96), static_cast<int>(monitor.rcWork.bottom - monitor.rcWork.top));
+  drag_.minHeight = std::min(MulDiv(panelMinimumHeight_, dpi, 96), static_cast<int>(monitor.rcWork.bottom - monitor.rcWork.top));
   return true;
 }
 LRESULT CALLBACK Runtime::MouseProc(int code, WPARAM message, LPARAM data) {

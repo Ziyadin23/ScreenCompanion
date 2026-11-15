@@ -12,8 +12,8 @@ export interface CampaignManifest {
 }
 export const DIAGNOSTIC_IDS = [
   'main-mcq-plain-direct', 'main-selection-plain-direct', 'main-selection-proctoring-direct',
-  'main-numeric-proctoring-direct', 'main-diagram-plain-direct', 'main-code-plain-balanced',
-  'main-diagram-plain-balanced', 'main-diagram-proctoring-balanced'
+  'main-numeric-proctoring-direct', 'main-diagram-plain-direct', 'main-code-plain-thorough',
+  'main-diagram-plain-thorough'
 ] as const;
 export const isObject = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 export const exactKeys = (value: Record<string, unknown>, names: readonly string[]): boolean => Object.keys(value).sort().join(',') === [...names].sort().join(',');

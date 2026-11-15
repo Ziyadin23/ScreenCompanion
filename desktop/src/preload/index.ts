@@ -17,6 +17,10 @@ const api: DesktopApi = {
   onScroll(listener) {
     const handler = (_event: Electron.IpcRendererEvent, delta: number) => listener(delta);
     ipcRenderer.on('sc:scroll', handler); return () => { ipcRenderer.removeListener('sc:scroll', handler); };
+  },
+  onInputAction(listener) {
+    const handler = (_event: Electron.IpcRendererEvent, submitScreenshot: boolean) => listener(submitScreenshot);
+    ipcRenderer.on('sc:input-action', handler); return () => { ipcRenderer.removeListener('sc:input-action', handler); };
   }
 };
 contextBridge.exposeInMainWorld('sc', Object.freeze(api));

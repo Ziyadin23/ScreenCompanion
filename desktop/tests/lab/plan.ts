@@ -2,7 +2,7 @@ import { BASELINE_CALLS, campaign, CAMPAIGN_CAP } from './cases';
 import { CAMPAIGN_ID, PHASE_LIMITS, phaseRuns } from './campaign';
 
 const runs = campaign();
-console.log(JSON.stringify({ schema: 2, campaign: CAMPAIGN_ID, status: 'plan', live: false, actualSends: 0, cap: CAMPAIGN_CAP,
+console.log(JSON.stringify({ schema: 2, campaign: CAMPAIGN_ID, status: 'plan', live: false, liveExecution: 'blocked: the frozen beta5 campaign includes retired Balanced runs; a new approved campaign is required', actualSends: 0, cap: CAMPAIGN_CAP,
   registry: '%LOCALAPPDATA%/SC-private-lab/beta5/campaign.json', counter: 'ledger.jsonl', results: 'results.jsonl', lock: 'campaign.lock',
   baselineCalls: BASELINE_CALLS, reserveCalls: PHASE_LIMITS.reserve,
   phases: Object.entries(PHASE_LIMITS).map(([phase, limit]) => ({ phase, contactLimit: limit,

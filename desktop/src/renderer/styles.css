@@ -50,10 +50,12 @@ input, textarea { caret-color: var(--ui-accent); }
 }
 .answer-text::-webkit-scrollbar { display: none; }
 .answer-empty { color: inherit; opacity: .8; }
-.question-form { display: flex; position: relative; margin: 0 12px 12px; gap: 8px; color: var(--input-text); font-size: 14px; flex-shrink: 0; }
-.question-form input { flex: 1; width: 0; min-width: 0; height: 40px; padding: 8px 12px; color: var(--input-text); background: var(--input-background); border: 0; border-radius: var(--radius-control); }
+.question-form { display: grid; grid-template-columns: minmax(0, 1fr) 40px 40px; position: relative; margin: 0 12px 12px; gap: 6px 8px; color: var(--input-text); font-size: 14px; flex-shrink: 0; }
+.question-form input { width: 100%; min-width: 0; height: 40px; padding: 8px 12px; color: var(--input-text); background: var(--input-background); border: 0; border-radius: var(--radius-control); }
 .question-form input::placeholder { color: var(--input-text); opacity: .75; }
 .question-form button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; padding: 0; border: 0; border-radius: var(--radius-control); background: var(--button-background); color: var(--button-text); }
+.question-form .screenshot-send { background: var(--input-background); color: var(--input-text); }
+.question-send-help { grid-column: 1 / -1; font-size: 11px; line-height: 1.5; text-align: right; }
 .input-error { position: absolute; z-index: 5; bottom: calc(100% + 6px); font-size: 12px; padding: 8px; border-radius: 6px; color: var(--input-text); background: var(--input-background); }
 .panel-action-error { margin: 0 12px 12px; padding: 8px; border-radius: 6px; background: var(--input-background); color: var(--input-text); font-size: 12px; }
 .resize-edge { position: absolute; z-index: 4; }
@@ -187,9 +189,11 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
-@media (max-height: 120px) {
-  .answer-text { padding: 0; }
+@media (max-height: 160px) {
   .answer-panel:has(.question-form) .answer-text { display: none; }
   .question-form { margin: auto 8px 8px; }
   .question-form input, .question-form button { height: 36px; }
+}
+@media (max-height: 120px) {
+  .answer-text { padding: 0; }
 }

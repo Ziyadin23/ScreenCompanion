@@ -1,7 +1,7 @@
 /** Shared contracts. The integration lead owns this file; coordinate changes before editing. */
 export const PROVIDERS = ['OpenAI', 'Groq', 'Gemini', 'Mistral', 'OpenRouter', 'DeepSeek'] as const;
 export type ApiProvider = typeof PROVIDERS[number];
-export type PipelineMode = 'Thorough' | 'Balanced' | 'Direct';
+export type PipelineMode = 'Thorough' | 'Direct';
 export type DeepSeekReasoning = 'None' | 'Low' | 'High' | 'Max';
 export const RESPONSE_MODES = ['Default', 'Brief', 'Explain steps', 'Translate to English', 'Summarize', 'Custom'] as const;
 export type ResponseMode = typeof RESPONSE_MODES[number];
@@ -14,15 +14,17 @@ export interface ModelSelection {
   Provider: ApiProvider; AnswerModel: string; VisionModel: string;
   Thinking: DeepSeekReasoning; AnswerTokenLimit: number | null;
 }
+export interface ModelPipelinePreference { Provider: ApiProvider; AnswerModel: string; PipelineMode: PipelineMode }
 /** PascalCase names and enum strings are the existing SSK3 serialized contract. */
 export interface VaultData {
   ApiKey: string; ResponseMode: ResponseMode; CustomInstruction: string;
   Capture: HotkeyBinding; Visibility: HotkeyBinding; Test: HotkeyBinding;
   SettingsShortcut: HotkeyBinding; ExitShortcut: HotkeyBinding; InputShortcut: HotkeyBinding;
   Appearance: AppearanceSettings; CommandsShown: boolean; Models: ModelSelection | null;
-  PipelineMode: PipelineMode | null; ProviderKeys: Record<ApiProvider, string>;
+  PipelineMode: PipelineMode | null; ModelPipelines: ModelPipelinePreference[]; ProviderKeys: Record<ApiProvider, string>;
 }
 export type AppAction = 'capture' | 'test' | 'visibility' | 'settings' | 'exit' | 'input';
+export type DesktopAction = AppAction | 'input-with-screenshot';
 export interface PixelBounds { x: number; y: number; width: number; height: number }
 export interface PanelSize { Width: number; Height: number }
 export interface NormalizedRegion { x: number; y: number; width: number; height: number }
@@ -46,10 +48,10 @@ export interface DesktopPlatform extends HttpTransport, ImageCropper {
   activeMonitor(): PixelBounds;
   monitorForWindow(handle: Buffer): PixelBounds;
   captureMonitor(bounds?: PixelBounds): Promise<CapturedFrame>;
-  applyShortcuts(settings: VaultData, recording: boolean, onAction: (action: AppAction) => void): Promise<void>;
+  applyShortcuts(settings: VaultData, recording: boolean, onAction: (action: DesktopAction) => void): Promise<void>;
   attachPanel(handle: Buffer, onWheel: (delta: number) => void): () => void;
   setHoverInputHeight(heightPixels: number): void;
-  setPanelResizeEnabled(handle: Buffer, enabled: boolean): void;
+  setPanelResizeEnabled(handle: Buffer, enabled: boolean, minimumHeight?: number): void;
   beginMove(handle: Buffer): void;
   beginResize(handle: Buffer, edge: ResizeEdge): void;
   cancelPanelInteraction(handle: Buffer): void;
@@ -85,7 +87,7 @@ export interface PipelineEvent {
   responseReceived?: boolean; usage?: ModelUsage | null;
 }
 export interface PipelineInput {
-  jpeg: Buffer; typedQuestion?: string; apiKey: string; responseMode: ResponseMode;
+  jpeg: Buffer | null; typedQuestion?: string; apiKey: string; responseMode: ResponseMode;
   customInstruction: string; configuration: PipelineConfiguration; signal: AbortSignal;
   onEvent?: (event: PipelineEvent) => void;
 }
@@ -112,7 +114,8 @@ export interface SettingsDraft {
 }
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
-  | { type: 'submit'; question: string }
+  | { type: 'submit'; question: string; includeScreenshot: boolean }
+  | { type: 'inputHeight'; height: number }
   | { type: 'recordShortcut'; recording: boolean }
   | { type: 'settingsDraftChanged'; dirty: boolean }
   | { type: 'beginResize'; edge: ResizeEdge };
@@ -128,4 +131,5 @@ export interface DesktopApi {
   update(action: UpdateAction): Promise<void>;
   subscribe(listener: (state: AppState) => void): () => void;
   onScroll(listener: (delta: number) => void): () => void;
+  onInputAction(listener: (submitScreenshot: boolean) => void): () => void;
 }

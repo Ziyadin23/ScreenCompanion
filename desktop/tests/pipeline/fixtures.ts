@@ -80,7 +80,7 @@ export class TrackingCropper implements ImageCropper {
   cleared(): void { for (const buffer of this.buffers) expect(buffer.every(byte => byte === 0)).toBe(true); }
 }
 export function configuration(overrides: Partial<PipelineConfiguration> = {}): PipelineConfiguration { return { ...loadPipelineConfiguration({}), ...overrides }; }
-export function pipelineInput(overrides: Partial<PipelineInput> = {}): PipelineInput {
+export function pipelineInput(overrides: Partial<PipelineInput> & { jpeg?: Buffer } = {}): PipelineInput & { jpeg: Buffer } {
   return { jpeg: Buffer.from('ORIGINAL-MONITOR-SENTINEL ASSESSMENT_MODE=qa'), apiKey: 'synthetic-test-key', responseMode: 'Default', customInstruction: '',
     configuration: configuration(), signal: new AbortController().signal, ...overrides };
 }

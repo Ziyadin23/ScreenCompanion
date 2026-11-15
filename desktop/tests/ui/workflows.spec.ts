@@ -103,7 +103,7 @@ test('service replacement drafts survive switching and are absent after Save', a
   await page.getByText('Advanced model settings', { exact: true }).click();
   await choice(page, 'API service', 'DeepSeek');
   await page.getByTestId('service-key').fill('synthetic-ui-key');
-  await choice(page, 'Request pipeline', 'Direct screenshot (DeepSeek)');
+  await choice(page, 'Request pipeline', 'Direct screenshot');
   await choice(page, 'DeepSeek reasoning', 'High');
   await expect(page.getByRole('spinbutton', { name: 'Answer output token limit', exact: true })).toHaveValue('16000');
   await expect(page.getByRole('combobox', { name: 'Screen-reading model', exact: true })).toBeDisabled();

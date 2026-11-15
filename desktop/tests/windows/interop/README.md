@@ -11,7 +11,7 @@ commit, original paths relative to `src/`, and SHA-256 digests. Keep those files
 frozen so changes to the current implementation cannot silently change the oracle.
 The complete historical C# application and its suites remain in that release tag.
 
-With the .NET 10 SDK and Windows Desktop runtime available, run the eight cases
+With the .NET 10 SDK and Windows Desktop runtime available, run the nine cases
 from `desktop/` after `npm run native:build`:
 
 ```powershell
