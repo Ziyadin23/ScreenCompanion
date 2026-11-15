@@ -3,16 +3,17 @@
 The development tool under `tools/agent-workflow/` uses TypeScript, LangGraph and
 local SQLite state. Start it when needed; it does not install a resident service.
 The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-records implementation progress and qualification. The current runner supports
-bounded investigation, independent executable reproduction and report/issues
-delivery. Isolated Codex source access has a real read-only qualification;
-the original discovery pilot reached its deliberately short 90-second limit.
-A later bounded report-only discovery completed on 2026-11-16 with no findings
-or publication; the [current checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-retains both outcomes. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
-CI wait/resume without a second writer. Actual publication, protected automatic
-merge and Windows beta delivery still require the qualification gates in that
-owner. An unavailable capability produces a saved wait.
+records implementation progress and qualification. The current runner implements bounded investigation, independent executable
+reproduction, owned plan/apply workspaces, frozen checks, separate review and
+report/issues/PR delivery. A real report-only discovery completed with no
+findings. A genuine pipeline candidate passed its oracle and 1,333 portable tests,
+but final independent review found an uncovered acceptance gap; the run stopped
+at its original resource bound without publishing a PR. The
+[current checkpoint and metrics](../openspec/changes/add-local-langgraph-workflow/tasks.md)
+retain the failed attempts and interventions. The PR/CI-wait/resume path has a
+synthetic end-to-end test; genuine PR delivery, protected automatic merge and
+Windows beta delivery retain their separate qualification gates. An unavailable
+capability produces a saved wait; an exhausted run retains its original limits.
 
 ## Install and verify
 
@@ -35,8 +36,12 @@ cd tools/agent-workflow
 npm install --global --prefix "$HOME/.local" --ignore-scripts "$PWD"
 ```
 
-This exposes `~/.local/bin/sc-dev`; that directory must be on `PATH`. The link
-uses this checkout's built tool, so retain it and rebuild after tool changes.
+This exposes `~/.local/bin/sc-dev`; that directory must be on `PATH`. That recipe
+links this checkout's built tool, so retain it and rebuild after tool changes.
+The qualified local environment instead uses a verified package/dependency runtime
+snapshot outside writing worktrees, with source identity and installed-command
+checks recorded in private setup receipts. It retains the existing account and
+state; credentials are not part of that package.
 `sc-dev` accepts the same arguments as the longer npm command. For example:
 
 ```sh
