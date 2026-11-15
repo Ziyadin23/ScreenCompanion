@@ -130,6 +130,8 @@ Raw worker/session output is private and bounded. Public output is regenerated f
 
 For discovery, assemble a context pack from applicable guidance/contracts, selected source/tests, the accepted baseline and prior matching findings. Verify expected behavior from those sources and freeze a reproducer before implementing. A confirmed bug must fail for the stated reason on the baseline; a speculative concern or unavailable physical environment is an investigation result.
 
+Baseline contract review has a distinct strict result for oracle validity and material oracle/contract concerns, bound to the frozen source. The expected reproduced defect belongs in notes; it is not a reason to reject a sound oracle. This review cannot replace the observed failing assertion, candidate-code review or whole-issue acceptance review.
+
 Search open and closed issues by the stable finding fingerprint and equivalent outcome, not just title similarity. Reuse open tasks. A follow-up to a closed task must show a current regression/distinct remaining scope and retain the historical link. Read back newly published issues and preserve unrelated assignees/labels/body content.
 
 Reuse an existing OpenSpec task group where it matches. Otherwise a planning stage creates the minimal required change and publishes or explicitly transfers it before an independent worker uses it. Bug fixes preserve the existing behavioral contract; a source correction without a changed requirement can use the schema's legitimate spec-skip route. Automatic runs do not invent a new requirement to fit a generated fix.

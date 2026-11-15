@@ -118,6 +118,10 @@ coordinator executes its frozen assertion script in a credential-free sandbox.
 Only an observed baseline assertion failure with a separate source-bound review
 of its existing contract can enter issue publication. Unrelated assertions and
 review concerns remain unconfirmed; a passing oracle disproves the suspicion.
+Baseline review returns an explicit oracle-validity result and concerns about
+the oracle or its contract. Notes may describe the expected baseline defect;
+that defect does not itself reject an otherwise sound reproducer. Candidate-code
+review and whole-issue acceptance use their own results.
 The coordinator generates public issue fields from scope and evidence identities;
 raw investigator prose stays private. A model's boolean verdict never creates an
 issue.

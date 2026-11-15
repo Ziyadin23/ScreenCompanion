@@ -137,6 +137,8 @@ async function fixture(t: { after(fn: () => void): void }, failedRecord = false,
       if (request.role === 'reproducer') return response(request, { ...common, reproduced: true, evidence: [], oracle: {
         kind: 'portable-node', contractPaths: ['docs/USER_GUIDE.md'], script: `import assert from 'node:assert/strict';import * as fs from 'node:fs';assert.match(fs.readFileSync('/workspace/README.md','utf8'),/docs\\/USER_GUIDE\\.md/);` } });
       if (request.role === 'planner') return response(request, { ...common, steps: [] });
+      if (request.baselineContractReview) return response(request, { ...common,
+        baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
       if (request.role === 'reviewer' && request.instructions.includes('Independently compare this existing issue')) {
         const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1)) as Row;
         return response(request, { ...common, baseRevision: manifest.base, headRevision: manifest.base,

@@ -62,8 +62,12 @@ test('report discovery uses separate investigation/reproduction and a real froze
     calls.push(request.role); assert.equal(request.timeReservedByStage, true);
     if (request.role === 'investigator') return worker(request.role, { status: 'complete', summary: 'Candidate', notes: [],
       findings: [{ path: 'desktop/src/providers/json.ts', description: 'Duplicate fields accepted.' }] });
-    if (request.role === 'reviewer') return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] });
+    if (request.role === 'reviewer') {
+      const review = { status: 'complete' as const, summary: 'The oracle correctly exposes the baseline defect', notes: [],
+        baseRevision: manifest.base, headRevision: manifest.base, findings: ['P1: The baseline accepts duplicate keys'],
+        baselineContract: { valid: true, concerns: [] } };
+      return worker(request.role, review);
+    }
     return worker(request.role, { status: 'complete', summary: 'Proposed oracle', notes: [], reproduced: true, evidence: [],
       oracle: { kind: 'portable-node', contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict'; const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` } });
@@ -104,7 +108,7 @@ test('issues delivery publishes only independently confirmed evidence with local
   }, executeWorker: async request => worker(request.role, request.role === 'investigator' ?
     { status: 'complete', summary: 'Candidate', notes: [], findings: [{ path: 'desktop/src/providers/json.ts', description: 'PRIVATE_LAB_IDENTIFIER duplicate keys accepted.' }] } :
     request.role === 'reviewer' ? { status: 'complete', summary: 'Confirmed contract', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] } :
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } } :
     { status: 'complete', summary: 'Contract oracle', notes: [], reproduced: false, evidence: [], oracle: {
       kind: 'portable-node', contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));`
@@ -145,7 +149,8 @@ test('material baseline review findings retain an unconfirmed private finding', 
       assert.equal(request.revision, manifest.base); assert.equal(request.reviewHead, manifest.base);
       assert.notEqual(request.write, true);
       return worker(request.role, { status: 'complete', summary: 'Contract mismatch', notes: [],
-        baseRevision: manifest.base, headRevision: manifest.base, findings: ['The assertion does not express the contract.'] });
+        baseRevision: manifest.base, headRevision: manifest.base,
+        baselineContract: { valid: false, concerns: ['The assertion does not express the contract.'] } });
     } });
   const result = await executeRun(store, manifest.id, actions);
   assert.equal(result.status, 'completed'); assert.deepEqual(roles, ['investigator', 'reproducer', 'reviewer']);
@@ -171,7 +176,7 @@ test('unrelated selected issue stops before planning, writer allocation or sourc
       contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` } });
     return worker(request.role, { status: 'complete', summary: 'Contract confirmed', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] });
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
   } });
   const result = await executeRun(store, manifest.id, actions);
   assert.equal(result.status, 'awaiting_input');
@@ -328,9 +333,9 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
           baseRevision: manifest.base, headRevision: manifest.base, findings: [],
           issueOutcome: { identity: detail.identity as never, matched: true, complete: true } });
       }
-      if (request.role === 'reviewer' && request.revision === manifest.base)
-        return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [], findings: [],
-          baseRevision: manifest.base, headRevision: manifest.base });
+      if (request.baselineContractReview)
+        return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [],
+          baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
       if (request.role === 'planner') return worker(request.role, { status: 'complete', summary: 'Plan', notes: [], steps: [] });
       if (request.role === 'implementer') {
         writes++; writeFileSync(join(request.workspace, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');

@@ -124,7 +124,7 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       } };
   }
   async function dispatch(context: Context, role: WorkerRequest['role'], instructions: string,
-    selected: Partial<Pick<WorkerRequest, 'workspace' | 'revision' | 'reviewHead' | 'attempt' | 'issueOutcomeReview'>> = {}) {
+    selected: Partial<Pick<WorkerRequest, 'workspace' | 'revision' | 'reviewHead' | 'attempt' | 'issueOutcomeReview' | 'baselineContractReview'>> = {}) {
     const { run, store, signal } = context;
     requireFrozenSource(run.manifest, run.manifest.root, run.manifest.base);
     const request: WorkerRequest = { store, runId: run.manifest.id, role,
@@ -264,13 +264,14 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
                 `Independently inspect baseline ${run.manifest.base}, existing contract paths ${JSON.stringify(parsed.oracle.contractPaths)}, ` +
                 `and exact frozen oracle ${JSON.stringify(parsed.oracle)} for candidate ${finding.id} at ${finding.path}. ` +
                 `The coordinator observed assertion failure ${evidence.outputHash}. Decide whether the assertion actually tests the ` +
-                'claimed behavior under those contracts. Report material concerns in findings; do not use investigator prose as proof. ' +
+                'claimed behavior under those contracts. Return baselineContract.valid and concerns about the oracle; ' +
+                'the expected baseline defect is not an oracle concern. Do not use investigator prose as proof. ' +
                 `Return baseRevision=${run.manifest.base} and headRevision=${run.manifest.base}. Do not edit files or contact GitHub.`,
-                { revision: run.manifest.base, reviewHead: run.manifest.base });
+                { revision: run.manifest.base, reviewHead: run.manifest.base, baselineContractReview: true });
               const review = z.object({ baseRevision: z.literal(run.manifest.base), headRevision: z.literal(run.manifest.base),
-                findings: z.array(z.string()).max(12) }).passthrough().parse(response);
+                baselineContract: z.object({ valid: z.boolean(), concerns: z.array(z.string()).max(12) }).strict() }).passthrough().parse(response);
               baselineReview = { base: run.manifest.base, oracleHash: evidence.oracleHash, contractHash: evidence.contractHash,
-                findingId: finding.id, clean: review.findings.length === 0 };
+                findingId: finding.id, clean: review.baselineContract.valid && review.baselineContract.concerns.length === 0 };
               if (!baselineReview.clean) state = 'unconfirmed';
             }
             findings[index] = { ...finding, state, oracle: parsed.oracle, evidence, baselineReview,
