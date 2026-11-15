@@ -170,6 +170,15 @@ credential-free sandbox. Its successful receipt and a dependency fingerprint are
 recorded before the writer starts. Documentation-only work may explicitly skip
 package installation. Setup failure blocks coding. Workers cannot own commits,
 versions, GitHub access or merge policy.
+The fresh writer receives the source/workspace-bound successful setup receipt
+and dependency identity as trusted context. It reuses that installation instead
+of repeating package installation. Missing or mismatched receipts cannot produce
+a successful-setup handoff; unavailable dependencies remain a decision.
+For that verified installation, model workers receive a read-only application
+dependency mount after a fresh integrity check. Its identity enters the worker
+operation key. Private dependency caches stay hidden behind empty temporary
+caches, and all other ignored workspace files remain masked. Dependency drift
+stops dispatch before a replacement worker starts.
 
 The coordinator inspects all actual changes, freezes a complete commit H, runs
 the same baseline-failing oracle on H, executes fixed affected checks, and starts
@@ -187,6 +196,9 @@ inventory and prepare exact manifest/lock/current-record updates before final
 verification. Real Windows packaging/transfer is unavailable until its separate
 profile is qualified. Such a candidate can remain a reviewable PR but cannot
 report full delivery or merge by substituting portable checks.
+Current README table/status-header records and their earlier prose layouts are
+supported explicitly. Historical versions and published asset links are retained;
+unknown or ambiguous current-version records stop for inspection.
 
 A source PR stays open while CI is pending. `resume` observes CI again without
 starting another writer. Automatic merge also needs the trusted category,

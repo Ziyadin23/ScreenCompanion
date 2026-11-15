@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import test from 'node:test';
@@ -120,6 +120,49 @@ test('model workers cannot read ignored workspace credentials and ordinary verif
     "console.log(require('fs').readlinkSync('/proc/self/ns/net'))"]), stateDirectory: f.state, key: 'no-network', timeoutMs: 10_000 });
   assert.equal(network.exitCode, 0, network.stderr);
   assert.notEqual(network.stdout.trim(), readlinkSync('/proc/self/ns/net'));
+});
+
+test('model dependency projection is read-only with private caches and ignored secrets still hidden', async t => {
+  const f = fixture(t);
+  writeFileSync(join(f.root, '.gitignore'), '.env\ndesktop/node_modules/\n');
+  writeFileSync(join(f.root, '.env'), 'SYNTHETIC_PRIVATE');
+  const dependencies = join(f.root, 'desktop/node_modules');
+  mkdirSync(join(dependencies, 'fixture'), { recursive: true });
+  writeFileSync(join(dependencies, 'fixture/index.js'), 'module.exports=42;\n');
+  for (const cache of ['.vite', '.vite-temp', '.cache']) {
+    mkdirSync(join(dependencies, cache)); writeFileSync(join(dependencies, cache, 'secret'), 'SYNTHETIC_CACHE_SECRET');
+  }
+  const sandbox = prepareSandbox({ workspace: f.root, revision: f.revision, writable: true,
+    stateDirectory: f.state, authFile: f.auth, modelDependencies: 'application' });
+  t.after(() => sandbox.dispose());
+  const script = `const fs=require('fs'),p='/workspace/desktop/node_modules/fixture/index.js';
+    const value=fs.existsSync(p)?require(p):null;let denied=false;
+    try{fs.writeFileSync(p,'tamper')}catch{denied=true}
+    const caches=['.vite','.vite-temp','.cache'];const hidden=caches.every(c=>!fs.existsSync('/workspace/desktop/node_modules/'+c+'/secret'));
+    for(const c of caches){const d='/workspace/desktop/node_modules/'+c;fs.mkdirSync(d,{recursive:true});fs.writeFileSync(d+'/generated','temporary')}
+    fs.writeFileSync('/workspace/README.md','scoped edit');
+    console.log(JSON.stringify({value,denied,hidden,env:fs.readFileSync('/workspace/.env','utf8'),state:fs.existsSync(${JSON.stringify(f.secret)})}));`;
+  const result = await runOwnedProcess({ ...sandbox.request('/usr/bin/node', ['-e', script]),
+    stateDirectory: f.state, key: 'model-dependencies', timeoutMs: 10_000 });
+  assert.equal(result.exitCode, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { value: 42, denied: true, hidden: true, env: '', state: false });
+  assert.equal(readFileSync(join(dependencies, 'fixture/index.js'), 'utf8'), 'module.exports=42;\n');
+  for (const cache of ['.vite', '.vite-temp', '.cache']) {
+    assert.equal(readFileSync(join(dependencies, cache, 'secret'), 'utf8'), 'SYNTHETIC_CACHE_SECRET');
+    assert.equal(existsSync(join(dependencies, cache, 'generated')), false);
+  }
+});
+
+test('model dependency projection rejects external root and cache symlinks', t => {
+  for (const cache of [false, true]) {
+    const f = fixture(t), dependencies = join(f.root, 'desktop/node_modules');
+    mkdirSync(join(f.root, 'desktop'));
+    if (cache) { mkdirSync(dependencies); symlinkSync(f.state, join(dependencies, '.cache')); }
+    else symlinkSync(f.state, dependencies);
+    assert.throws(() => prepareSandbox({ workspace: f.root, revision: f.revision, writable: true,
+      stateDirectory: f.state, authFile: f.auth, modelDependencies: 'application' }),
+    { code: cache ? 'unsafe_output_path' : 'unsafe_dependency_path' });
+  }
 });
 
 test('selected native runtime helpers are mounted individually and remain read-only', async t => {

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { makeManifest } from '../src/manifest.js';
+import { digest, makeManifest } from '../src/manifest.js';
 import { type OwnedProcessRequest, type OwnedProcessResult } from '../src/process.js';
 import { RunStore } from '../src/store.js';
 import { loadCodexProfile, runWorker, type WorkerProcessRunner } from '../src/worker.js';
+import { attestVerificationDependencies } from '../src/candidate.js';
 
 function fixture(t: { after(fn: () => void): void }, mode: 'issue' | 'investigate' = 'issue', max = 5) {
   const temp = mkdtempSync(join(tmpdir(), 'sc-worker-'));
@@ -194,6 +195,43 @@ test('a bounded native command event can exceed 64 KB and reuse its observed rec
   assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
   assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
   assert.equal(calls, 1); assert.equal(f.store.usage(f.manifest.id).workerInvocations, 1);
+});
+
+test('writer receives the observed setup handoff without trusting a missing receipt', async t => {
+  const f = fixture(t, 'issue', 2);
+  mkdirSync(join(f.root, 'desktop/node_modules/fixture'), { recursive: true });
+  writeFileSync(join(f.root, '.gitignore'), 'desktop/node_modules/\n');
+  writeFileSync(join(f.root, 'desktop/package.json'), '{"name":"fixture","version":"1.0.0"}');
+  writeFileSync(join(f.root, 'desktop/package-lock.json'), '{"name":"fixture","version":"1.0.0","packages":{"":{"version":"1.0.0"}}}');
+  writeFileSync(join(f.root, 'desktop/node_modules/fixture/index.js'), 'module.exports=42;');
+  const key = `setup:${digest({ runId: f.manifest.id, workspace: f.root, revision: f.base })}`;
+  const identity = { workspace: f.root, revision: f.base, command: ['npm', '--prefix', 'desktop', 'ci'] };
+  await f.store.effect(f.manifest.id, key, 'setup', identity, { execute: async () => ({
+    status: 'exited', exitCode: 0, outputTruncated: false }), reconcile: async () => null });
+  const data = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...data, setup: { ok: true, operationKey: key },
+    trustedDependencies: attestVerificationDependencies(f.root, ['application']) } });
+  let calls = 0;
+  const runner: WorkerProcessRunner = { run: async request => {
+    if (++calls === 1) {
+      assert.ok(request.stdin?.includes('npm --prefix desktop ci completed successfully'));
+      assert.ok(request.stdin?.includes('Do not rerun dependency installation'));
+      assert.ok(request.stdin?.includes(key));
+      assert.ok(request.args.some((arg, index) => arg === '--ro-bind' && request.args[index + 1] === join(f.root, 'desktop/node_modules')));
+    } else assert.equal(request.stdin?.includes('npm --prefix desktop ci completed successfully'), false);
+    return output(values.implementer);
+  }, reconcile: async () => { throw new Error('Unexpected reconcile'); } };
+  const request = { store: f.store, runId: f.manifest.id, role: 'implementer' as const,
+    workspace: f.root, revision: f.base, instructions: 'Use the delegated setup and correct the existing contract.' };
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
+  const current = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...current, setup: { ok: true, operationKey: `setup:${'f'.repeat(64)}` } } });
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
+  const restored = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...restored, setup: { ok: true, operationKey: key } } });
+  writeFileSync(join(f.root, 'desktop/node_modules/fixture/index.js'), 'tampered');
+  await assert.rejects(runWorker(request, f.profile, runner), { code: 'stale_environment' });
+  assert.equal(calls, 2);
 });
 
 test('JSONL uses the last message of the completed turn and refuses events after completion', async t => {
