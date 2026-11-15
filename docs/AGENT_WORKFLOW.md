@@ -158,6 +158,12 @@ separate fresh apply worker for the selected task. It does not create a second
 change or copy a local template over the tracked owner. Generated narrow plans
 record their issue link and task IDs so a later matching run can reuse them.
 
+Orca transport uses the session's `ORCA_CLI_COMMAND` when configured, with the
+installed `orca-ide` as its default. Repository selection uses the primary
+checkout identified by the admitted common Git directory; a linked source
+checkout remains the frozen investigation source. The allocated workspace still
+must match the exact repository, issue, branch, baseline and ownership marker.
+
 Application setup runs the documented `npm --prefix desktop ci` inside a
 credential-free sandbox. Its successful receipt and a dependency fingerprint are
 recorded before the writer starts. Documentation-only work may explicitly skip

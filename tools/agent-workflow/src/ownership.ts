@@ -177,7 +177,8 @@ export function materializePlan(request: { plan: PlanBundle; manifest: Manifest;
 
 export type OrcaTransport = (args: string[]) => Promise<unknown>;
 export async function orcaTransport(args: string[]): Promise<unknown> {
-  const { stdout } = await exec('orca-ide', args, { timeout: 15_000, maxBuffer: 1_000_000,
+  const binary = process.env.ORCA_CLI_COMMAND ?? 'orca-ide';
+  const { stdout } = await exec(binary, args, { timeout: 15_000, maxBuffer: 1_000_000,
     env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: process.env.HOME ?? '/dev/null' } });
   return JSON.parse(stdout) as unknown;
 }
@@ -186,9 +187,10 @@ export class OrcaClient {
   constructor(private readonly store: RunStore, private readonly runId: string,
     private readonly transport: OrcaTransport = orcaTransport) {}
   private get manifest(): Manifest { return this.store.get(this.runId).manifest; }
+  private get repositorySelector(): string { return `path:${dirname(this.manifest.commonDir)}`; }
   private async call(args: string[]): Promise<Json> { return object(object(await this.transport(args)).result); }
   private async list(): Promise<unknown[]> {
-    const result = await this.call(['worktree', 'list', '--repo', `path:${this.manifest.root}`, '--limit', '1000', '--json']);
+    const result = await this.call(['worktree', 'list', '--repo', this.repositorySelector, '--limit', '1000', '--json']);
     const scope = result.hostScope === undefined ? null : object(result.hostScope);
     if (!Array.isArray(result.worktrees) || result.truncated === true || result.complete === false ||
         (!scope && result.complete !== true) ||
@@ -238,7 +240,7 @@ export class OrcaClient {
       name: expected.name, base: this.manifest.base, marker: expected.marker };
     return this.store.effect(this.runId, `orca:create:${issue.number}`, 'orca-create', request, {
       execute: async () => {
-        try { await this.call(['worktree', 'create', '--repo', `path:${this.manifest.root}`, '--name', expected.name,
+        try { await this.call(['worktree', 'create', '--repo', this.repositorySelector, '--name', expected.name,
           '--no-parent', '--setup', 'skip', '--base-branch', this.manifest.base, '--branch', expected.branch,
           '--reference', issue.url, '--comment', expected.marker, '--json']); }
         catch { /* An acknowledgement loss is resolved by a full read-back below. */ }
