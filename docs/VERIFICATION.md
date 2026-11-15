@@ -29,13 +29,15 @@ The sections below are dated evidence, followed by support procedures and histor
 
 ## Astryx interface integration (2026-11-15)
 
-[Issue #55](https://github.com/Ziyadin23/ScreenCompanion/issues/55) covers the requested source integration of the completed Astryx setup/Settings preview into current main `3b29e41`. The [active owner](../openspec/changes/integrate-astryx-interface/tasks.md) retains unfinished runtime/delivery tasks under [issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63). The source preserves Thorough/Direct, per-model preferences and separate text-only/screenshot sends. Main/controller/native/storage/provider/pipeline/preload files have no diff from the main baseline.
+[PR #64](https://github.com/Ziyadin23/ScreenCompanion/pull/64) merged the completed Astryx setup/Settings preview into main at `a6258db` on 2026-11-15, closing source issue #55. The baseline was `3b29e41`. The [active owner](../openspec/changes/integrate-astryx-interface/tasks.md) retains unfinished runtime/delivery tasks under [issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63). The source preserves Thorough/Direct, per-model preferences and separate text-only/screenshot sends. Main/controller/native/storage/provider/pipeline/preload files have no diff from the main baseline.
 
 Combined `npm --prefix desktop run verify` passed **1,227 tests / 34 files**, types, lint and production bundles, exit 0. The initial attempt stopped at type checking because the development-only preview bridge lacked the new input-action subscription; its no-op fixture subscription was added and no behavioral assertion was weakened. `npx astryx doctor --built out/renderer` passed **20 checks / 0 failures**, exit 0, with two related system-font advisories; no external fonts are fetched. Independent Standards and Spec reviews each found zero substantive issues against head `2f24543`.
 
 Eight synthetic browser views/checks passed with zero page errors and zero external requests, including wide/narrow Settings, current Direct selection, Panel/Commands, setup validation/focus, Linux notices and retained-answer input with both send actions. All captures were inspected. The embedded Orca screenshot timed out before drawing a frame, while DOM/layout checks passed; isolated headless Chrome supplied the visual evidence. An earlier private harness attempt used the wrong input label and is retained separately from the corrected full eight-view result.
 
-These checks do not run a provider, real capture/keyring, native application, VM, packaged startup or recorder. Published releases and prior local deliveries remain unchanged. Windows/runtime/recorder and the next versioned runnable handoff are still required; no new beta delivery or platform compatibility result is claimed.
+Exact-head PR and push CI and the [main postflight](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43741042629) each passed all five jobs, including hosted Windows verification, native compilation, actual vault interoperability and packaging. Those hosted jobs do not establish target GUI, recorder or runnable delivery.
+
+The local host/browser checks do not run a provider, real capture/keyring, native application, VM, packaged startup or recorder. Published releases and prior local deliveries remain unchanged. Windows/runtime/recorder and the next versioned runnable handoff are still required; no new beta delivery or platform compatibility result is claimed.
 
 ## Pipeline beta.10 verification (2026-11-14)
 
