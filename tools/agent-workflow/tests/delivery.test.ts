@@ -9,7 +9,7 @@ import { makeManifest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { reserveCandidateVersion, prepareVersionRecords, validateVersionChanges, handoffBeta } from '../src/delivery.js';
 
-function fixture(t: { after(fn: () => void): void }) {
+function fixture(t: { after(fn: () => void): void }, currentRecords = false) {
   const temp = mkdtempSync(join(tmpdir(), 'sc-delivery-'));
   const root = join(temp, 'repo'); mkdirSync(join(root, 'desktop'), { recursive: true }); mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'desktop/package.json'), '{"name":"sc","version":"0.5.0-beta.7","scripts":{"build":"ok"}}\n');
@@ -17,6 +17,8 @@ function fixture(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, 'README.md'), 'The current source version is **0.5.0-beta.7**, not yet published.\nBuild output: `desktop/dist/SC-Setup-v0.5.0-beta.7.exe`, the portable\n`SC-v0.5.0-beta.7.exe` and its matching two-file ZIP with `README.txt`.\nDated 2026-01-01 0.5.0-beta.7 evidence.\n');
   writeFileSync(join(root, 'docs/PUBLISHING.md'), 'The current source version is 0.5.0-beta.7 and is unpublished.\nVersion 0.5.0-beta.7 historical evidence.\n');
   writeFileSync(join(root, 'docs/STATUS.md'), 'Snapshot: **2026-11-03 UTC**. Application source is **0.5.0-beta.7**; latest published beta.6.\nDated beta.7 evidence remains.\n');
+  if (currentRecords) for (const path of ['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/PUBLISHING.md', 'docs/STATUS.md'])
+    writeFileSync(join(root, path), readFileSync(new URL(`../../../../${path}`, import.meta.url)));
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'), base: 'a'.repeat(40), scope: 'providers-json' });
   const store = new RunStore(join(temp, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(temp, { recursive: true, force: true }); });
@@ -80,9 +82,7 @@ test('version preparation preserves dated evidence and validates exact JSON fiel
 });
 
 test('version preparation supports the checked-in source table and status header without changing history', t => {
-  const { root, store, manifest } = fixture(t);
-  for (const path of ['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/PUBLISHING.md', 'docs/STATUS.md'])
-    writeFileSync(join(root, path), readFileSync(new URL(`../../../../${path}`, import.meta.url)));
+  const { root, store, manifest } = fixture(t, true);
   const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
   const prepared = prepareVersionRecords(root, reservation), { previousVersion: old, version: next } = reservation;
   const readme = prepared.changes[2]!, status = prepared.changes[4]!;
@@ -98,6 +98,25 @@ test('version preparation supports the checked-in source table and status header
   writeFileSync(join(root, 'README.md'), readme.before);
   writeFileSync(join(root, 'docs/STATUS.md'), status.before + `\nApplication source is **${old}**;\n`);
   assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+});
+
+test('differently valued current records are ambiguous in both supported layouts', t => {
+  for (const current of [false, true]) {
+    const { root, store, manifest } = fixture(t, current);
+    const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+    const other = '9.9.9-beta.999'; assert.notEqual(reservation.previousVersion, other);
+    for (const [path, extra] of [
+      ['README.md', current ? `| Current source, unpublished | **${other}** | conflicting |` :
+        `The current source version is **${other}**, not yet published.`],
+      ['docs/STATUS.md', current ? `Source remains unpublished **${other}**;` : `Application source is **${other}**;`],
+      ['docs/PUBLISHING.md', `The current source version is ${other} and is unpublished.`]
+    ]) {
+      const before = readFileSync(join(root, path!), 'utf8');
+      writeFileSync(join(root, path!), `${before}\n${extra}\n`);
+      assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+      writeFileSync(join(root, path!), before);
+    }
+  }
 });
 
 test('synthetic transfer verifies artifacts, keeps paths private, and never qualifies automerge', async t => {

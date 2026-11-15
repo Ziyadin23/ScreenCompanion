@@ -28,6 +28,10 @@ function replaceOnce(text: string, from: string, to: string): string {
   if (text.split(from).length !== 2) throw new WorkflowError('version_record_wait', 'Required current-version record is ambiguous.', 2);
   return text.replace(from, to);
 }
+function assertUniqueVersionRecord(text: string, markers: string[]): void {
+  const count = markers.reduce((total, marker) => total + text.split(marker).length - 1, 0);
+  if (count !== 1) throw new WorkflowError('version_record_wait', 'Current-version record is unknown or ambiguous.', 2);
+}
 function versionJson(before: string, path: string, reservation: VersionReservation): string {
   const parsed = JSON.parse(before) as Record<string, unknown>;
   if (parsed.version !== reservation.previousVersion) throw new WorkflowError('version_record_wait', 'Desktop version records disagree.', 2);
@@ -52,9 +56,8 @@ function versionJson(before: string, path: string, reservation: VersionReservati
 function versionDocument(before: string, path: string, reservation: VersionReservation): string {
   const old = reservation.previousVersion, next = reservation.version;
   if (path === 'README.md') {
+    assertUniqueVersionRecord(before, ['| Current source, unpublished |', 'The current source version is **']);
     if (before.includes('| Current source, unpublished |')) {
-      if (before.includes('The current source version is **'))
-        throw new WorkflowError('version_record_wait', 'README current-version records are ambiguous.', 2);
       return replaceOnce(before, `| Current source, unpublished | **${old}** |`,
         `| Current source, unpublished | **${next}** |`);
     }
@@ -65,13 +68,14 @@ function versionDocument(before: string, path: string, reservation: VersionReser
     return replaceOnce(result, `\`SC-v${old}.exe\` and its matching two-file ZIP`,
       `\`SC-v${next}.exe\` and its matching two-file ZIP`);
   }
-  if (path === 'docs/PUBLISHING.md') return replaceOnce(before,
-    `The current source version is ${old} and is unpublished.`,
-    `The current source version is ${next} and is unpublished.`);
+  if (path === 'docs/PUBLISHING.md') {
+    assertUniqueVersionRecord(before, ['The current source version is ']);
+    return replaceOnce(before, `The current source version is ${old} and is unpublished.`,
+      `The current source version is ${next} and is unpublished.`);
+  }
   if (path === 'docs/STATUS.md') {
+    assertUniqueVersionRecord(before, ['Source remains unpublished **', 'Application source is **']);
     if (before.includes('Source remains unpublished **')) {
-      if (before.includes('Application source is **'))
-        throw new WorkflowError('version_record_wait', 'Status current-version records are ambiguous.', 2);
       return replaceOnce(before, `Source remains unpublished **${old}**;`, `Source remains unpublished **${next}**;`);
     }
     return replaceOnce(before, `Application source is **${old}**;`, `Application source is **${next}**;`);

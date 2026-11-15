@@ -174,6 +174,11 @@ The fresh writer receives the source/workspace-bound successful setup receipt
 and dependency identity as trusted context. It reuses that installation instead
 of repeating package installation. Missing or mismatched receipts cannot produce
 a successful-setup handoff; unavailable dependencies remain a decision.
+For that verified installation, model workers receive a read-only application
+dependency mount after a fresh integrity check. Its identity enters the worker
+operation key. Private dependency caches stay hidden behind empty temporary
+caches, and all other ignored workspace files remain masked. Dependency drift
+stops dispatch before a replacement worker starts.
 
 The coordinator inspects all actual changes, freezes a complete commit H, runs
 the same baseline-failing oracle on H, executes fixed affected checks, and starts
