@@ -107,6 +107,17 @@ test('status and reports never start a missing run or disclose raw private state
     assert.equal(result.stdout.includes('SYNTHETIC_PRIVATE_CONTENT'), false);
     assert.equal(result.stdout.includes(root), false);
   }
+  const writer = new RunStore(state, manifest); t.after(() => writer.close());
+  for (const [error, action] of [['owner_unverifiable', 'inspect_owned_execution'],
+    ['invalid_checkpoint', 'inspect_saved_state']]) {
+    writer.update(manifest.id, { status: 'quarantined', error });
+    const structured = invoke(root, 'status', manifest.id, '--state-dir', state);
+    assert.equal(structured.status, 0, structured.stderr);
+    assert.equal(JSON.parse(structured.stdout).nextAction, action);
+    const markdown = invoke(root, 'report', manifest.id, '--state-dir', state, '--format', 'markdown');
+    assert.equal(markdown.status, 0, markdown.stderr);
+    assert.ok(markdown.stdout.includes(`Next action: ${action}`));
+  }
 });
 
 test('an unavailable executor yields a resumable run and observes cancellation without model calls', t => {

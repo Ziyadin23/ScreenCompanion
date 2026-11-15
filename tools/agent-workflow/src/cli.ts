@@ -135,7 +135,8 @@ function report(run: RunRecord, store: RunStore) {
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
-    costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ? 'inspect_owned_execution' :
+    costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ?
+      run.error === 'invalid_checkpoint' ? 'inspect_saved_state' : 'inspect_owned_execution' :
       run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
 }
 function exitFor(run: RunRecord): number {
@@ -238,7 +239,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         `Issues: ${value.issues.map(issue => `#${issue.number}${issue.reused ? ' (reused)' : ''}`).join(', ') || 'none'}\n` +
         `PR: ${value.pull?.url ?? 'none'}\nSource merge: ${value.sourceMerge ?? 'none'}\nPostflight: ${value.postflight ?? 'not observed'}\n` +
         (value.review ? `Source inspection: ${value.review.findings} concerns; independent commands not executed\n` : '') +
-        `Next gate: ${value.waitingFor ?? 'none'}\nRepairs: ${value.retryCount}; intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
+        `Next gate: ${value.waitingFor ?? 'none'}\nNext action: ${value.nextAction ?? 'none'}\n` +
+        `Repairs: ${value.retryCount}; intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
         `Workers: ${value.usage.workerInvocations}; active ms: ${value.usage.activeMs}\n` +
         `Observed tokens: ${value.tokens.observedInput} input, ${value.tokens.observedOutput} output; complete: ${value.tokens.complete}\nCost: unknown\n` : JSON.stringify(value));
       return 0;
