@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { digest, ORACLE_RUNTIME, WorkflowError } from './manifest.js';
 import type { RunStore } from './store.js';
+import { assertOracleRuntime } from './intake.js';
 
 export type GithubTransport = (method: 'GET' | 'POST', endpoint: string, body?: unknown) => Promise<unknown>;
 type Json = Record<string, unknown>;
@@ -235,6 +236,7 @@ export class GithubClient {
         observed.outputHash === input.outputHash && observed.outcome === 'failed') { confirmedEvidence = observed; break; }
     }
     if (!confirmedEvidence) fail('github_unconfirmed_finding');
+    assertOracleRuntime(this.store, this.runId, { ...input, workspace: this.manifest.root });
     const problem = text(input.problem); const reproduction = text(input.reproduction, 2000);
     const acceptance = text(input.acceptance, 1000); const owner = text(input.owner, 300);
     const environment = text(input.environment, 200);

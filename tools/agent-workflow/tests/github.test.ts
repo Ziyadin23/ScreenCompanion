@@ -59,7 +59,7 @@ function finding(): ConfirmedFailure {
     reproduction: 'Synthetic response returns an empty answer', acceptance: 'Valid response is retained',
     dependencies: ['Published baseline contract'], prerequisite: 'Publish local planning files',
     fingerprint: '1'.repeat(64), source, oracleHash: '2'.repeat(64), contractHash: '3'.repeat(64),
-    environment: 'linux-portable-synthetic', outputHash: '4'.repeat(64), outcome: 'failed',
+    environment: 'linux-portable-synthetic', outputHash: digest(['', '']), outcome: 'failed',
     owner: 'openspec/changes/fix-json/tasks.md', provenance: 'local' };
 }
 function pull(): PullRequestInput {
@@ -67,7 +67,8 @@ function pull(): PullRequestInput {
     problem: 'Parser drops a valid response', result: 'Valid response retained', validation: 'Portable tests passed',
     limits: 'Windows unverified', provenance: 'local', marker: '5'.repeat(64) };
 }
-function confirm(f: ReturnType<typeof fixture>): void {
+async function confirm(f: ReturnType<typeof fixture>): Promise<void> {
+  await observeOracle(f, source, 42);
   const input = finding();
   f.store.update(f.manifest.id, { data: { findings: [{ path: input.path, fingerprint: input.fingerprint,
     state: 'confirmed', evidence: { source: input.source, oracleHash: input.oracleHash,
@@ -110,12 +111,12 @@ test('a writing task claims only the verified configured assignee and preserves 
   await assert.rejects(fixture(t, 'report').client.claimSelectedIssue(7), { code: 'delivery_denied' });
 });
 test('confirmed issue is read back and an open equivalent is reused', async t => {
-  const f = fixture(t); confirm(f); const created = await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); const created = await f.client.publishIssue(finding());
   assert.equal(created.number, 11); assert.equal((await f.client.publishIssue(finding())).number, 11);
   assert.equal(f.posts(), 1);
 });
 test('matching unassigned issue gains the configured assignee without losing metadata', async t => {
-  const f = fixture(t); confirm(f);
+  const f = fixture(t); await confirm(f);
   const created = await f.client.publishIssue(finding());
   const row = f.issues[0]!; row.assignees = []; row.assignee = null; row.labels = [{ name: 'existing' }];
   const reused = await f.client.publishIssue(finding());
@@ -124,20 +125,20 @@ test('matching unassigned issue gains the configured assignee without losing met
   assert.deepEqual(row.assignees, [{ login: 'Ziyadin23' }]);
 });
 test('lost issue acknowledgement reconciles its journal without a second post', async t => {
-  const f = fixture(t); confirm(f); f.loseAck();
+  const f = fixture(t); await confirm(f); f.loseAck();
   await assert.rejects(f.client.publishIssue(finding()), { code: 'github_unavailable' });
   assert.equal((await f.client.publishIssue(finding())).number, 11); assert.equal(f.posts(), 1);
 });
 test('closed equivalent and conflicting owner stop publication', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
   await assert.rejects(f.client.publishIssue(finding()), { code: 'github_closed_equivalent' });
-  const fresh = fixture(t); confirm(fresh);
+  const fresh = fixture(t); await confirm(fresh);
   fresh.issues.push({ ...f.issues[0], state: 'open', assignees: [{ login: 'someone-else' }], assignee: { login: 'someone-else' } });
   await assert.rejects(fresh.client.publishIssue(finding()), { code: 'github_owner_conflict' });
   assert.equal(fresh.posts(), 0);
 });
 test('distinct regression publishes one linked follow-up', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
   f.issues[0]!.body += `\nFix verified: ${head}`;
   const fixedKey = await observeOracle(f, head, 0); const currentKey = await observeOracle(f, source, 42);
   const findings = f.store.get(f.manifest.id).data.findings as Record<string, unknown>[];
@@ -167,7 +168,7 @@ test('distinct regression publishes one linked follow-up', async t => {
     { code: 'github_closed_equivalent' });
 });
 test('closed regression cannot be asserted with a forged record and failed prior oracle', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding());
   f.issues[0]!.state = 'closed'; f.issues[0]!.body += `\nFix verified: ${head}`;
   f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
     regressions: [{ previousIssue: 11, fixedCommit: head, ancestry: 'verified', fixedOperationKey: 'oracle:forged' }] } });
@@ -181,7 +182,7 @@ test('closed regression cannot be asserted with a forged record and failed prior
   assert.equal(f.posts(), 1);
 });
 test('partial behavior match with a different acceptance outcome is ambiguous', async t => {
-  const f = fixture(t); confirm(f);
+  const f = fixture(t); await confirm(f);
   f.issues.push({ number: 9, html_url: `https://github.com/${repo}/issues/9`, state: 'open',
     body: `Problem: ${finding().problem}\nScope: ${finding().path}\nAcceptance: Do not retain responses`,
     assignees: [{ login: 'Ziyadin23' }], assignee: { login: 'Ziyadin23' } });
@@ -189,7 +190,7 @@ test('partial behavior match with a different acceptance outcome is ambiguous', 
   assert.equal(f.posts(), 0);
 });
 test('published issue states dependencies and local planning transfer prerequisite', async t => {
-  const f = fixture(t); confirm(f); const receipt = await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); const receipt = await f.client.publishIssue(finding());
   assert.match(receipt.body, /Dependencies: Published baseline contract/);
   assert.match(receipt.body, /Next prerequisite: Publish local planning files/);
   assert.match(receipt.body, /publish.*transfer/i);

@@ -150,6 +150,19 @@ export interface OracleEvidence {
   environment: 'linux-portable-synthetic'; outcome: 'passed' | 'failed' | 'unavailable';
   operationKey: string; exitCode: number | null; outputHash: string;
 }
+export function assertOracleRuntime(store: RunStore, runId: string,
+  proof: Pick<OracleEvidence, 'source' | 'oracleHash' | 'contractHash' | 'outputHash' | 'outcome'> & { workspace: string }): void {
+  const identity = { runId, source: proof.source, workspace: proof.workspace,
+    oracleHash: proof.oracleHash, contractHash: proof.contractHash, runtime: ORACLE_RUNTIME };
+  const observed = store.observedEffect(runId, `oracle:${digest(identity)}`);
+  const result = z.object({ status: z.literal('exited'), exitCode: z.number(),
+    stdout: z.string(), stderr: z.string(), outputTruncated: z.literal(false) }).safeParse(observed?.receipt);
+  if (!['failed', 'passed'].includes(proof.outcome) || observed?.kind !== 'verification' ||
+      observed.requestHash !== digest(identity) || !result.success ||
+      result.data.exitCode !== (proof.outcome === 'failed' ? 42 : 0) ||
+      digest([result.data.stdout, result.data.stderr]) !== proof.outputHash)
+    throw new WorkflowError('stale_oracle_runtime', 'Oracle evidence requires current runtime qualification before dispatch or publication.', 2);
+}
 export async function runOracle(request: {
   store: RunStore; runId: string; workspace: string; revision: string;
   oracle: Oracle; signal?: AbortSignal; timeReservedByStage?: boolean;

@@ -320,6 +320,9 @@ limits. Initial defaults allow 5 candidate findings, 3 new issues, one writing
 task, one concurrent writer, 12 worker invocations and two repair rounds.
 Worker duration is bounded to 20 minutes, active run duration to 120 minutes and
 one CI observation period to 30 minutes. Failed/interrupted attempts count.
+The worker-duration ceiling also bounds each non-CI graph stage, which can
+contain several sequential roles. Lowering `--worker-seconds` therefore shortens
+that complete stage; it is suitable for a smoke, not proof of full delivery.
 Unavailable model-cost data is reported as unknown; these limits do not pretend
 to enforce a monetary ceiling. SC live-provider campaigns retain separate scope
 and budgets, with zero such calls in ordinary workflow runs.
