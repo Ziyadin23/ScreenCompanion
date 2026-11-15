@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { POLICY_CONFIG } from './policy-config.js';
 
 export const WORKFLOW_VERSION = '0.1.0';
+export const ORACLE_RUNTIME = 'node-typescript-relative-v1';
 export const deliverySchema = z.enum(['report', 'issues', 'pr', 'merge-eligible']);
 export type Delivery = z.infer<typeof deliverySchema>;
 

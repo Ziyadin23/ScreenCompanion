@@ -6,7 +6,10 @@ The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
 records implementation progress and qualification. The current runner supports
 bounded investigation, independent executable reproduction and report/issues
 delivery. Isolated Codex source access has a real read-only qualification;
-the discovery pilot reached its deliberately short 90-second limit. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
+the original discovery pilot reached its deliberately short 90-second limit.
+A later bounded report-only discovery completed on 2026-11-16 with no findings
+or publication; the [current checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md)
+retains both outcomes. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
 CI wait/resume without a second writer. Actual publication, protected automatic
 merge and Windows beta delivery still require the qualification gates in that
 owner. An unavailable capability produces a saved wait.
@@ -98,6 +101,15 @@ be selected before admission, for example `--workers 3 --worker-seconds 180
 --active-minutes 10`. These flags can only lower the trusted defaults and cannot
 change a saved run's limits. A short timeout can end a valid investigation before
 it establishes any finding.
+
+Prepare application dependencies in that source checkout with the normal
+`npm --prefix desktop ci` setup before provider/pipeline investigation. Oracle
+execution imports production `.ts` modules directly. A fixed trusted Node
+resolver supports extensionless relative TypeScript imports and parameter
+properties, without giving the proposed test filesystem, transpiler or VM
+imports. The runtime protocol is part of the observed oracle operation identity
+and is checked again before issue-regression reuse or integration. Missing
+dependencies or unsupported code remain unavailable evidence.
 
 The command writes an admitted run ID to stderr and its final structured report
 to stdout. A missing execution capability produces a durable `awaiting_input`

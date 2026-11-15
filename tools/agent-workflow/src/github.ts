@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { digest, WorkflowError } from './manifest.js';
+import { digest, ORACLE_RUNTIME, WorkflowError } from './manifest.js';
 import type { RunStore } from './store.js';
 
 export type GithubTransport = (method: 'GET' | 'POST', endpoint: string, body?: unknown) => Promise<unknown>;
@@ -205,7 +205,8 @@ export class GithubClient {
       throw new WorkflowError('delivery_denied', 'Frozen delivery permission does not allow this publication.');
   }
   private oracleProof(source: string, oracleHash: string, contractHash: string, expectedExit: 0 | 42): Json {
-    const identity = { runId: this.runId, source, workspace: this.manifest.root, oracleHash, contractHash };
+    const identity = { runId: this.runId, source, workspace: this.manifest.root, oracleHash, contractHash,
+      runtime: ORACLE_RUNTIME };
     const key = `oracle:${digest(identity)}`;
     const observed = this.store.observedEffect(this.runId, key);
     if (!observed || observed.kind !== 'verification' || observed.requestHash !== digest(identity))

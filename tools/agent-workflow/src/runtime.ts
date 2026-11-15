@@ -241,6 +241,10 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           `Independently test candidate ${finding.id}: ${finding.path}: ${finding.description}\n` +
           'Identify the expected behavior in existing baseline contracts. Propose a minimal deterministic portable-node oracle ' +
           'using node:assert/strict and imports under /workspace, plus its existing baseline contractPaths. ' +
+          'Import production .ts modules directly; the trusted runner handles TypeScript parameter properties and extensionless relative imports. ' +
+          'Only node:assert/strict and literal scoped /workspace source imports are allowed (docs-links also permits node:fs/node:path). ' +
+          'Do not copy, transpile, evaluate or read source text; do not import vm, module, typescript, fs or other helpers for application oracles. ' +
+          'Assertions must directly reference an imported production binding, for example assert.rejects(() => importedFunction(syntheticInput)). ' +
           'The coordinator will execute these exact frozen bytes on baseline and candidate without credentials or network. ' +
           'Return oracle=null when native/GUI/packaged/live evidence is needed or the contract cannot be established. ' +
           'Your reproduced boolean is advisory; do not claim external qualification.');

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { GithubClient, type ConfirmedFailure, type GithubTransport, type PullRequestInput } from '../src/github.js';
-import { digest, makeManifest } from '../src/manifest.js';
+import { digest, makeManifest, ORACLE_RUNTIME } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 
 const source = 'a'.repeat(40), head = 'b'.repeat(40), repo = 'example/sc';
@@ -80,7 +80,7 @@ function linkIssue(f: ReturnType<typeof fixture>): void {
 async function observeOracle(f: ReturnType<typeof fixture>, revision: string, exitCode: number): Promise<string> {
   const input = finding();
   const identity = { runId: f.manifest.id, source: revision, workspace: f.manifest.root,
-    oracleHash: input.oracleHash, contractHash: input.contractHash };
+    oracleHash: input.oracleHash, contractHash: input.contractHash, runtime: ORACLE_RUNTIME };
   const key = `oracle:${digest(identity)}`;
   await f.store.effect(f.manifest.id, key, 'verification', identity, { execute: async () => ({
     status: 'exited', exitCode, outputTruncated: false, signal: null, stdout: '', stderr: '', elapsedMs: 1
