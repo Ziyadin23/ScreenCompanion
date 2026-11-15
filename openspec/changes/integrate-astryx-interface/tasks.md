@@ -6,7 +6,7 @@ Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompani
 
 - [x] 1.1 Verify worktree ownership and the existing preview checkpoint; preserve a committed preview baseline, run documented dependency setup and record its exit before integration edits.
 - [x] 1.2 Merge current main into the preview, preserving all current pipeline, model-preference and explicit-submit behavior. Verify affected renderer tests, documentation and a diff audit against main without changing native/controller/storage/provider behavior.
-- [ ] 1.3 Run complete host verification, built-renderer Astryx doctor, synthetic wide/narrow interface and answer-panel checks, documentation selftest/link validation, strict OpenSpec and whitespace checks. Record every attempt and final source identity; obtain independent Standards/Spec review.
+- [x] 1.3 Run complete host verification, built-renderer Astryx doctor, synthetic wide/narrow interface and answer-panel checks, documentation selftest/link validation, strict OpenSpec and whitespace checks. Record every attempt and final source identity; obtain independent Standards/Spec review.
 
 ## 2. Source publication and actionable intake
 
@@ -36,6 +36,8 @@ Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompani
 - Added complete license notices for all nine new production packages and bundled syntax themes, using pinned installed license texts and the upstream package-repository license where a tarball omits its root license. Published historical assets remain unchanged.
 - Created/read back runtime continuation #63, OPEN and assigned to `Ziyadin23`. Its first action is to continue tasks 3.1–3.2 from this owner after source publication. Four audit fixes #59–#62 remain independently assigned and unimplemented.
 - Closed #11 as redundant intake, retaining all Windows 11 clean-environment work in #39. Closed #22 after verifying PR #4 is already closed and its head has no unique patches against current main (`git cherry` produced no entries). No distinct platform, live-quality, recorder or icon issue was closed.
+- Independent read-only **Standards: zero substantive findings; Spec: zero substantive findings** against main `3b29e41` and head `2f24543`. Subsequent changes are evidence/navigation only; application bytes remain unchanged.
+- Combined-source synthetic browser inspection completed **eight views/checks**, zero page errors and zero external requests: wide Settings, wide/narrow all-provider Direct, narrow Panel and Commands, narrow setup error/focus, Linux setup notices and retained-answer input with both enabled send actions. All eight captures were personally inspected. Orca's embedded screenshot failed with a no-drawn-frame CDP timeout; its DOM/layout check passed. The fallback used isolated headless Chrome with synthetic in-memory data. Its first private harness attempt retained seven captures before failing on an incorrect `Your question` selector; correcting it to the actual `Question` label completed the full eight-view pass without changing application code. These are browser checks, not native/recorder evidence.
 
 ## Workflow follow-up
 
