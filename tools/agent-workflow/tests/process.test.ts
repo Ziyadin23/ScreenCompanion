@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,6 +17,43 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function until(predicate: () => boolean, ms = 3000) {
   const end = Date.now() + ms;
   while (!predicate()) { if (Date.now() > end) throw new Error('Timed out waiting for child'); await delay(20); }
+}
+
+for (const code of ['ENOENT', 'ESRCH']) {
+  test(`wrapper and coordinator tolerate a proc entry disappearing with ${code}`, async t => {
+    const f = fixture(t);
+    const preload = join(f.root, 'vanishing-proc.mjs');
+    writeFileSync(preload, `import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const list = fs.readdirSync, read = fs.readFileSync;
+fs.readdirSync = (...args) => args[0] === '/proc' ? [...list(...args), '2147483646'] : list(...args);
+fs.readFileSync = (...args) => {
+  if (args[0] === '/proc/2147483646/stat') {
+    const error = new Error('synthetic disappearing process'); error.code = '${code}'; throw error;
+  }
+  return read(...args);
+};
+syncBuiltinESMExports();\n`);
+    const op = join(f.root, 'wrapper'); mkdirSync(op, { mode: 0o700 });
+    writeFileSync(join(op, 'request.json'), JSON.stringify({ command: process.execPath,
+      args: ['-e', 'setTimeout(()=>process.exit(0),80)'], cwd: f.cwd, env: {}, timeoutMs: 3000 }));
+    const wrapper = spawn(process.execPath, ['--import', preload,
+      new URL('../src/process-entry.js', import.meta.url).pathname, op],
+    { detached: true, stdio: 'ignore', env: {} });
+    await new Promise<void>((resolve, reject) => {
+      wrapper.once('error', reject); wrapper.once('close', () => resolve());
+    });
+    assert.equal(existsSync(join(op, 'failure.json')), false);
+    assert.equal(JSON.parse(readFileSync(join(op, 'exit.json'), 'utf8')).exitCode, 0);
+    await runOwnedProcess({ ...f, key: 'inspect', command: process.execPath,
+      args: ['-e', 'process.exit(0)'], env: {}, timeoutMs: 3000 });
+    const inspected = spawnSync(process.execPath, ['--import', preload, '--input-type=module', '-e',
+      'const {inspectOwnedProcess}=await import(process.argv[1]);console.log(inspectOwnedProcess(process.argv[2],process.argv[3]).state)',
+      new URL('../src/process.js', import.meta.url).href, f.stateDirectory, 'inspect'],
+    { encoding: 'utf8', timeout: 5000, env: {} });
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.equal(inspected.stdout.trim(), 'exited');
+  });
 }
 
 test('executes with direct arguments, explicit environment and private durable receipts', async t => {

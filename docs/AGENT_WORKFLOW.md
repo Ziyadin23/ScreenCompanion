@@ -25,6 +25,27 @@ This independent package does not add dependencies to the Electron application.
 Its tests use synthetic data, temporary Git repositories and local state. They
 make no model/provider requests or GitHub mutations.
 
+After building, a user-local command can be installed from the package directory:
+
+```sh
+cd tools/agent-workflow
+npm install --global --prefix "$HOME/.local" --ignore-scripts "$PWD"
+```
+
+This exposes `~/.local/bin/sc-dev`; that directory must be on `PATH`. The link
+uses this checkout's built tool, so retain it and rebuild after tool changes.
+`sc-dev` accepts the same arguments as the longer npm command. For example:
+
+```sh
+sc-dev doctor
+sc-dev runs
+sc-dev run --scope providers-json --delivery report
+```
+
+Run from the intended clean source checkout or select it with `--repo`. Doctor
+checks prerequisites; saved runs can still have an unresolved execution or
+integration hold. Inspect `runs` before dispatching new work.
+
 The hosted `agent-workflow` check uses a fresh Ubuntu 24.04 runner. Its setup
 copies the selected `actions/setup-node` Node/npm installation into `/usr`,
 which the fixed sandbox profile mounts read-only, and verifies the copied bytes,
@@ -180,6 +201,7 @@ Replace `<run-id>` with the admitted identity:
 
 ```sh
 npm --prefix tools/agent-workflow run workflow -- status <run-id>
+npm --prefix tools/agent-workflow run workflow -- runs
 npm --prefix tools/agent-workflow run workflow -- report <run-id> --format markdown
 npm --prefix tools/agent-workflow run workflow -- resume <run-id>
 npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
@@ -194,6 +216,20 @@ when a coordinator has exited. A confirmed stop records `cancelled`; an uncertai
 launch or termination records `quarantined` and blocks replacement writers.
 The coordinator never kills a reused numeric PID or process group. Inspection
 remains available after the coordinator exits.
+
+`runs` lists up to twenty recent runs for this repository, including their IDs,
+safe error codes and next actions. An empty history returns an empty list without
+creating state. A quarantined run explicitly reports that execution inspection
+is required.
+
+Linux process scans tolerate an enumerated process disappearing with `ENOENT`
+or `ESRCH`; permission and other inspection failures still prevent execution.
+After a verified host boot-ID change, an owned process without a terminal receipt
+is classified as interrupted. Cancel that run to record the interruption and
+release its execution hold. Its command result remains unknown, original files
+and consumed allowances are retained, and cancellation does not resolve unknown
+GitHub effects or an integration hold. A missing PID within the same boot is
+insufficient evidence for this recovery.
 
 State defaults to a private repository-specific directory under the user's XDG
 state location. `--state-dir <private-directory>` chooses a separate private

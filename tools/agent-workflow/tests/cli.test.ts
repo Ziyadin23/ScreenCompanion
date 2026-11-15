@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -26,6 +26,14 @@ function invoke(root: string, ...args: string[]) {
   return spawnSync(process.execPath, [cli, ...args], { cwd: root, encoding: 'utf8', timeout: 10_000,
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: join(root, 'no-credentials'), LANGSMITH_TRACING: 'false' } });
 }
+
+test('installed command runs through the package bin symlink', t => {
+  const { root } = fixture(t);
+  const link = join(root, 'sc-dev'); symlinkSync(cli, link);
+  const result = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8', timeout: 5000, env: {} });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(JSON.parse(result.stdout).commands.includes('runs'));
+});
 
 test('doctor checks capabilities beyond executable presence without claiming live authentication', t => {
   const { root, git } = fixture(t);
@@ -79,19 +87,23 @@ test('status and reports never start a missing run or disclose raw private state
   const { root, state, git } = fixture(t);
   const absent = invoke(root, 'status', 'absent', '--state-dir', state);
   assert.equal(absent.status, 4); assert.equal(existsSync(state), false);
+  const empty = invoke(root, 'runs', '--state-dir', state);
+  assert.equal(empty.status, 0); assert.deepEqual(JSON.parse(empty.stdout), []);
+  assert.equal(existsSync(state), false);
   const manifest = makeManifest({ repository: 'github.com/example/sc', root,
     commonDir: join(root, '.git'), base: git('rev-parse', 'HEAD').trim(), scope: 'providers-json' });
   const store = new RunStore(state, manifest); store.admit(manifest);
   store.update(manifest.id, { status: 'awaiting_input', data: { rawWorkerOutput: 'SYNTHETIC_PRIVATE_CONTENT',
     privatePath: root, roundHistory: [{ number: 0, reason: 'synthetic_failed_check' }] } });
   store.close();
-  for (const command of ['status', 'report']) {
-    const result = invoke(root, command, manifest.id, '--state-dir', state);
+  for (const command of ['status', 'report', 'runs']) {
+    const result = invoke(root, command, ...(command === 'runs' ? [] : [manifest.id]), '--state-dir', state);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).status, 'awaiting_input');
-    assert.equal(JSON.parse(result.stdout).retryCount, 1);
-    assert.equal(JSON.parse(result.stdout).interventionRequired, true);
-    assert.equal(JSON.parse(result.stdout).interventionCount, null);
+    const value = command === 'runs' ? JSON.parse(result.stdout)[0] : JSON.parse(result.stdout);
+    assert.equal(value.status, 'awaiting_input');
+    assert.equal(value.retryCount, 1);
+    assert.equal(value.interventionRequired, true);
+    assert.equal(value.interventionCount, null);
     assert.equal(result.stdout.includes('SYNTHETIC_PRIVATE_CONTENT'), false);
     assert.equal(result.stdout.includes(root), false);
   }

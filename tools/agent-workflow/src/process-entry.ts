@@ -27,7 +27,7 @@ function groupMembers(): number[] {
       if (Number(fields[2]) === process.pid && fields[0] !== 'Z' && fields[0] !== 'X')
         members.push(Number(name));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
     }
   }
   if (!members.includes(process.pid)) throw new Error('Wrapper is not its own process-group leader');

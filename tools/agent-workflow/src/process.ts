@@ -21,8 +21,9 @@ export interface OwnedProcessResult {
   outputTruncated: boolean; elapsedMs: number;
 }
 export interface OwnedProcessInspection {
-  state: 'absent' | 'pending' | 'running' | 'exited' | 'unverifiable';
+  state: 'absent' | 'pending' | 'running' | 'exited' | 'interrupted' | 'unverifiable';
   pid?: number; identity?: string; processGroup?: number; result?: OwnedProcessResult;
+  reason?: 'host_restarted';
 }
 interface SavedRequest {
   key: string; command: string; args: string[]; cwd: string; env: Record<string, string>;
@@ -101,7 +102,7 @@ function processGroupMembers(group: number): number[] {
         const stat = raw.slice(raw.lastIndexOf(')') + 2).split(' ');
         if (Number(stat[2]) === group && stat[0] !== 'Z' && stat[0] !== 'X') members.push(Number(name));
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
       }
     }
   } catch { throw new WorkflowError('owner_unverifiable', 'Process group cannot be verified.'); }
@@ -139,10 +140,20 @@ export function inspectOwnedProcess(stateDirectory: string, key: string): OwnedP
       return { state: 'unverifiable' };
     const exit = safeRead(join(op, 'exit.json'), exitSchema);
     const final = safeRead(join(op, 'outcome.json'), outcomeSchema);
-    const members = processGroupMembers(start.processGroup);
-    const identity = processIdentity(start.pid);
-    if (identity && identity !== start.identity) return { state: 'unverifiable', pid: start.pid, identity: start.identity, processGroup: start.processGroup };
     if (exit && (exit.identity !== start.identity || exit.endedAt < start.startedAt)) return { state: 'unverifiable' };
+    let boot: string;
+    try { boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(); }
+    catch { return { state: 'unverifiable' }; }
+    const previousBoot = start.identity.split(':')[0]!;
+    if (!z.uuid().safeParse(boot).success || !z.uuid().safeParse(previousBoot).success)
+      return { state: 'unverifiable' };
+    const restarted = previousBoot !== boot;
+    // A host restart proves termination, but cannot supply the lost command result.
+    if (restarted && !exit) return { state: 'interrupted', reason: 'host_restarted',
+      pid: start.pid, identity: start.identity, processGroup: start.processGroup };
+    const members = restarted ? [] : processGroupMembers(start.processGroup);
+    const identity = restarted ? null : processIdentity(start.pid);
+    if (identity && identity !== start.identity) return { state: 'unverifiable', pid: start.pid, identity: start.identity, processGroup: start.processGroup };
     if (members.length === 0 && exit) {
       const observed = result(op, start, exit);
       if (final && (final.status !== observed.status || final.exitCode !== observed.exitCode ||
@@ -186,6 +197,8 @@ async function waitForExit(stateDirectory: string, key: string, signal?: AbortSi
     if (signal?.aborted) return cancelOwnedProcess(stateDirectory, key);
     const current = inspectOwnedProcess(stateDirectory, key);
     if (current.state === 'exited') return current.result!;
+    if (current.state === 'interrupted')
+      throw new WorkflowError('execution_interrupted', 'The host restarted before a terminal result; cancel this run before new dispatch.', 2);
     if (current.state === 'absent')
       throw new WorkflowError('owner_unverifiable', 'Owned process state disappeared.');
     if (current.state === 'unverifiable') {

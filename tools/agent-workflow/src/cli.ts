@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -130,11 +131,12 @@ function report(run: RunRecord, store: RunStore) {
     integrationHold: hold?.active === true ? { active: true, reason: safeCode(hold.reason) } : null,
     retryCount: Array.isArray(run.data.roundHistory) ? run.data.roundHistory.length : 0,
     interventionCount: null,
-    interventionRequired: run.status === 'awaiting_input',
+    interventionRequired: run.status === 'awaiting_input' || run.status === 'quarantined',
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
-    costUsd: null, costStatus: 'unknown', nextAction: run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
+    costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ? 'inspect_owned_execution' :
+      run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
 }
 function exitFor(run: RunRecord): number {
   if (run.status === 'cancelled') return 130;
@@ -154,12 +156,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   } });
   const command = positionals[0];
   if (values.help || !command) {
-    console.log(JSON.stringify({ commands: ['doctor', 'run', 'status <run-id>', 'report <run-id>',
+    console.log(JSON.stringify({ commands: ['doctor', 'runs', 'run', 'status <run-id>', 'report <run-id>',
       'resume <run-id>', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
       deliveries: ['report', 'issues', 'pr', 'merge-eligible'] }));
     return 0;
   }
-  if (!['doctor', 'run', 'status', 'report', 'resume', 'cancel', 'backup', 'migrate', 'prune'].includes(command) ||
+  if (!['doctor', 'runs', 'run', 'status', 'report', 'resume', 'cancel', 'backup', 'migrate', 'prune'].includes(command) ||
       positionals.length !== (['status', 'report', 'resume', 'cancel', 'backup', 'migrate'].includes(command) ? 2 : 1))
     throw new WorkflowError('invalid_arguments', 'Unknown command or missing run identity.');
   if (values.format && !['json', 'markdown'].includes(values.format))
@@ -201,7 +203,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       policyHash: manifest.policyHash, workerCalls: 0, remoteMutations: 0 }));
     return 0;
   }
-  const inspection = command === 'status' || command === 'report';
+  const inspection = command === 'status' || command === 'report' || command === 'runs';
+  if (command === 'runs' && !existsSync(join(stateDirectory, 'journal.sqlite'))) {
+    console.log('[]'); return 0;
+  }
   if (command !== 'run' && !existsSync(join(stateDirectory, 'journal.sqlite')))
     throw new WorkflowError('run_not_found', 'No saved run exists in this repository state.');
   if (command === 'migrate') {
@@ -210,6 +215,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   }
   const store = new RunStore(stateDirectory, manifest, { readOnly: inspection });
   try {
+    if (command === 'runs') {
+      console.log(JSON.stringify(store.listRuns().map(run => report(run, store))));
+      return 0;
+    }
     if (command === 'backup') {
       await store.backup(resolve(positionals[1]!));
       console.log(JSON.stringify({ snapshot: 'complete', scope: 'sqlite-only', executionReceiptsRetainedAtOriginal: true }));
@@ -251,7 +260,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   } finally { store.close(); }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && existsSync(process.argv[1]) && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().then(code => { process.exitCode = code; }).catch(error => {
     const failure = error instanceof WorkflowError ? error : new WorkflowError('invalid_arguments', 'Invalid command or unavailable local prerequisite.');
     console.error(JSON.stringify({ error: failure.code, message: failure.message }));
