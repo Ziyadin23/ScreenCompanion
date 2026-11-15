@@ -176,9 +176,9 @@ export function materializePlan(request: { plan: PlanBundle; manifest: Manifest;
 }
 
 export type OrcaTransport = (args: string[]) => Promise<unknown>;
+export function orcaExecutable(): string { return process.env.ORCA_CLI_COMMAND ?? 'orca-ide'; }
 export async function orcaTransport(args: string[]): Promise<unknown> {
-  const binary = process.env.ORCA_CLI_COMMAND ?? 'orca-ide';
-  const { stdout } = await exec(binary, args, { timeout: 15_000, maxBuffer: 1_000_000,
+  const { stdout } = await exec(orcaExecutable(), args, { timeout: 15_000, maxBuffer: 1_000_000,
     env: { PATH: process.env.PATH ?? '/usr/bin:/bin', HOME: process.env.HOME ?? '/dev/null' } });
   return JSON.parse(stdout) as unknown;
 }

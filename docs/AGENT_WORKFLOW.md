@@ -75,6 +75,7 @@ supported local executables, the private state location, namespace availability,
 selected account files and read-only protection metadata. It reports local
 readiness separately from protected-merge prerequisites. Account-file availability
 does not establish live authentication or candidate/platform qualification.
+The Orca probe resolves the same configured session command as task execution.
 
 Available initial scopes are `providers-json`, `pipeline` and `docs-links`.
 Their source/test paths come from trusted configuration. A task or model cannot

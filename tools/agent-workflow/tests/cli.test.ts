@@ -55,6 +55,26 @@ test('doctor checks capabilities beyond executable presence without claiming liv
   assert.equal(doctor(repository, join(root, 'state'), probe, () => true).stateAccess, false);
 });
 
+test('doctor probes the configured Orca executable for both ready and missing sessions', t => {
+  const { root, state, git } = fixture(t);
+  const repository = { root, commonDir: join(root, '.git'), repository: 'github.com/example/sc',
+    base: git('rev-parse', 'HEAD').trim(), branch: 'main' };
+  const selected = '/synthetic/selected-orca', previous = process.env.ORCA_CLI_COMMAND;
+  process.env.ORCA_CLI_COMMAND = selected;
+  t.after(() => { if (previous === undefined) delete process.env.ORCA_CLI_COMMAND; else process.env.ORCA_CLI_COMMAND = previous; });
+  for (const available of [true, false]) {
+    const calls: string[] = [];
+    const result = doctor(repository, state, (name, args) => {
+      calls.push(name);
+      if (args[0] === '--version') return { status: name === selected ? Number(!available) :
+        name === 'orca-ide' ? Number(available) : 0, stdout: name === 'node' ? 'v22.12.0' : 'v1.2.3' };
+      return { status: name === 'bwrap' ? 0 : 1, stdout: '' };
+    }, () => true);
+    assert.equal(result.tools['orca-ide'], available); assert.equal(result.ready, available);
+    assert.ok(calls.includes(selected)); assert.equal(calls.includes('orca-ide'), false);
+  }
+});
+
 test('dry-run resolves trusted scope without creating state or dispatching work', t => {
   const { root, state } = fixture(t);
   const result = invoke(root, 'run', '--scope', 'providers-json', '--state-dir', state, '--dry-run');

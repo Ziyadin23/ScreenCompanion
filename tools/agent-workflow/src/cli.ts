@@ -12,6 +12,7 @@ import { cancelRun } from './recovery.js';
 import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
+import { orcaExecutable } from './ownership.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
 export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirectory: string,
@@ -19,7 +20,7 @@ export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirecto
   profileAvailable?: () => boolean) {
   const names = ['node', 'git', 'gh', 'codex', 'orca-ide', 'bwrap'];
   const versions = Object.fromEntries(names.map(name => {
-    const result = probe(name, ['--version']);
+    const result = probe(name === 'orca-ide' ? orcaExecutable() : name, ['--version']);
     const version = String(result.stdout ?? '').match(/(?:^|[^0-9])(\d+)\.(\d+)(?:\.(\d+))?\b/);
     const supported = result.status === 0 && !!version &&
       (name !== 'node' || Number(version[1]) > 22 || Number(version[1]) === 22 && Number(version[2]) >= 12);
