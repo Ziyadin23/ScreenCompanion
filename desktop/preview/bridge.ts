@@ -43,7 +43,8 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     chooseColor: async () => null,
     update: async () => {},
     subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
-    onScroll: () => () => {}
+    onScroll: () => () => {},
+    onInputAction: () => () => {}
   };
   return { api, open: (next: Surface) => emit({ surface: next, visible: true, settingsDirty: false }) };
 }

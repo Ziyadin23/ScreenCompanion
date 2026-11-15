@@ -1,11 +1,11 @@
 # Tasks
 
-Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompanion/issues/55). This file owns the continuation beyond the archived preview. [Design](design.md) records integration boundaries.
+Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompanion/issues/55). Runtime and runnable delivery continue in [issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63). This file owns the continuation beyond the archived preview. [Design](design.md) records integration boundaries.
 
 ## 1. Preserve and integrate the source
 
-- [ ] 1.1 Verify worktree ownership and the existing preview checkpoint; preserve a committed preview baseline, run documented dependency setup and record its exit before integration edits.
-- [ ] 1.2 Merge current main into the preview, preserving all current pipeline, model-preference and explicit-submit behavior. Verify affected renderer tests, documentation and a diff audit against main without changing native/controller/storage/provider behavior.
+- [x] 1.1 Verify worktree ownership and the existing preview checkpoint; preserve a committed preview baseline, run documented dependency setup and record its exit before integration edits.
+- [x] 1.2 Merge current main into the preview, preserving all current pipeline, model-preference and explicit-submit behavior. Verify affected renderer tests, documentation and a diff audit against main without changing native/controller/storage/provider behavior.
 - [ ] 1.3 Run complete host verification, built-renderer Astryx doctor, synthetic wide/narrow interface and answer-panel checks, documentation selftest/link validation, strict OpenSpec and whitespace checks. Record every attempt and final source identity; obtain independent Standards/Spec review.
 
 ## 2. Source publication and actionable intake
@@ -25,6 +25,17 @@ Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompani
 - Main is `3b29e416a24418d4044f3088ca0d3734ca003d3c`, fetched and CI-successful. Main protection readback requires PRs, five strict checks and administrator enforcement with no force/deletion bypass; settings remain unchanged.
 - Verified GitHub login `Ziyadin23`; searched all open/closed issues before intake. Created/read back #59 (Settings save session), #60 (option text validation), #61 (final panel-size persistence) and #62 (Responses status validation), each OPEN and assigned to `Ziyadin23`, with concrete reproduction, immutable current-source links and OpenSpec-first continuation. These fixes are not implemented by this integration.
 - Runtime, recorder and runnable-delivery completion remain separate from source integration. The latest private delivered build is beta.9; pipeline beta.10 verification and delivery remain unfinished in #57. Keep application tasks open and record the exact follow-up owner; existing candidate results do not transfer to changed application bytes.
+
+### Integration verification
+
+- `npm --prefix desktop ci` exited 0: 597 packages installed, pinned dependencies resolved. The existing npm audit summary reports 14 moderate advisories; no automatic dependency upgrade was performed.
+- Committed the existing preview and integration planning as `1cd42c2`, preserving a recoverable baseline. Merged `origin/main` at `3b29e41` as `8f6c487`; resolved Settings presentation/help and current-status conflicts while retaining both intents.
+- First combined `npm --prefix desktop run verify` exited 2 at type checking: the development-only preview bridge lacked the newly required `onInputAction` subscription. Added the content-free no-op subscription matching its existing `onScroll` fixture boundary. The corrected full verify exited 0: types/lint, **1,227 tests / 34 files**, and production bundles. No assertions were weakened.
+- `git diff origin/main -- desktop/src/main desktop/src/contracts desktop/src/platform desktop/src/pipeline desktop/src/providers desktop/src/storage desktop/src/preload desktop/native` was empty. Current production pipeline/controller/native/storage behavior is byte-identical to main; renderer regressions cover both submit actions and per-model preferences.
+- `npx astryx doctor --built out/renderer` exited 0: **20 pass / 2 related system-font advisories / 0 fail**. No external font is fetched. Workflow selftest, documentation (**96 files / 440 links**), strict OpenSpec (**9/9**) each exited 0 at this checkpoint; final source/privacy/whitespace review and synthetic browser inspection are pending.
+- Added complete license notices for all nine new production packages and bundled syntax themes, using pinned installed license texts and the upstream package-repository license where a tarball omits its root license. Published historical assets remain unchanged.
+- Created/read back runtime continuation #63, OPEN and assigned to `Ziyadin23`. Its first action is to continue tasks 3.1–3.2 from this owner after source publication. Four audit fixes #59–#62 remain independently assigned and unimplemented.
+- Closed #11 as redundant intake, retaining all Windows 11 clean-environment work in #39. Closed #22 after verifying PR #4 is already closed and its head has no unique patches against current main (`git cherry` produced no entries). No distinct platform, live-quality, recorder or icon issue was closed.
 
 ## Workflow follow-up
 

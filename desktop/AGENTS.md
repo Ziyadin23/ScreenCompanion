@@ -2,7 +2,7 @@
 
 Project-specific guidance for AI coding agents.
 
-Read [SC's agent guidance](../AGENTS.md) and its required standards before desktop edits. Setup and Settings use Astryx in the local preview; preserve the answer panel's saved appearance and native behavior. [Preview and theme commands](../tests/README.md#electron-workflows-and-preview) own the review workflow.
+Read [SC's agent guidance](../AGENTS.md) and its required standards before desktop edits. Setup and Settings use Astryx; preserve the answer panel's saved appearance and native behavior. [Preview and theme commands](../tests/README.md#electron-workflows-and-preview) own the review workflow.
 
 <!-- ASTRYX:START -->
 Astryx v0.7.15 · 174 components
