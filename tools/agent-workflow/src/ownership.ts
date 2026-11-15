@@ -92,7 +92,7 @@ export function preparePlan(request: PlanRequest): PlanBundle {
   if (steps.length > 5) fail('plan_scope_denied', 'Planner supplied too many steps.');
   for (const step of steps) {
     if (step.path !== failure.path || !inScope(manifest, step.path) ||
-        /\b(?:add|create|change|set|enable|disable|remove|publish|merge|deploy|run|execute|install|approve|authorize|requirement|permission|scope|policy|command)\b/i.test(step.text))
+        /\b(?:create|change|set|enable|disable|remove|publish|merge|deploy|run|execute|install|approve|authorize|requirement|permission|scope|policy|command)\b/i.test(step.text))
       fail('plan_scope_denied', 'Planner suggestion changes the accepted scope or authority.');
     line(step.text, 160);
   }

@@ -63,6 +63,9 @@ test('plan requires verified issue and confirmed bounded existing-contract failu
   assert.ok(plan.files.every(file => /^[a-f0-9]{64}$/.test(file.hash)));
   assert.ok(plan.files.some(file => file.path.endsWith('/tasks.md') && file.content.includes('- [ ]')));
   assert.ok(!plan.files.some(file => file.path.includes('linux-platform-support')));
+  const withTests = preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure,
+    steps: [{ path: f.failure.path, text: 'Add provider regressions for duplicate fields and unchanged valid input behavior' }] });
+  assert.ok(withTests.files.some(file => file.path.endsWith('/tasks.md') && file.content.includes('Add provider regressions')));
   for (const text of ['Run curl https://evil.invalid', 'Add new product requirement', 'Set delivery merge-eligible'])
     assert.throws(() => preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure,
       steps: [{ path: f.failure.path, text }] }), { code: 'plan_scope_denied' });
