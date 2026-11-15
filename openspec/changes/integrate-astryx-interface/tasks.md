@@ -10,8 +10,8 @@ Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompani
 
 ## 2. Source publication and actionable intake
 
-- [ ] 2.1 Publish a reviewed PR, verify all five enforced checks on its exact head, merge through unchanged protection and verify the main postflight and integrated tree. Refresh status, issue/card navigation and private context without claiming new runtime qualification.
-- [ ] 2.2 Publish and read back assigned focused audit issues and runtime continuation; reconcile obsolete/duplicate intake with successor links and verified closure reasons. Preserve distinct unfinished Windows/Linux/live/recorder and icon work.
+- [x] 2.1 Publish a reviewed PR, verify all five enforced checks on its exact head, merge through unchanged protection and verify the main postflight and integrated tree. Refresh status, issue/card navigation and private context without claiming new runtime qualification.
+- [x] 2.2 Publish and read back assigned focused audit issues and runtime continuation; reconcile obsolete/duplicate intake with successor links and verified closure reasons. Preserve distinct unfinished Windows/Linux/live/recorder and icon work.
 
 ## 3. Runnable candidate qualification
 
@@ -42,3 +42,14 @@ Source integration owner: [issue #55](https://github.com/Ziyadin23/ScreenCompani
 ## Workflow follow-up
 
 - Once runtime/delivery and final review are complete, archive this `skip_specs` change and verify moved links, strict OpenSpec and documentation. Source integration alone does not make it archive-ready.
+
+
+### Source integration and issue readback — 2026-11-15
+
+- User-authorized protected squash merge of PR #64 completed at **2026-11-15T17:25:39Z**: reviewed head `64e17e963cee14556c0444fa822833fcfd9ddad3` → main `a6258db635c5261f81f36d6b25c5f56d88a473c9`. Both trees are `25bf647c6834cfbc6c613ceba352806c221095be`; no application change followed review. PR run `43740212361` and push run `43740176293` each passed all five jobs, including Windows verify/native compilation/vault interoperability/package. [Main postflight `43741042629`](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43741042629) completed successfully with all five jobs, including Windows verification/native/vault/package; it adds no target GUI/recorder or local-delivery proof. Protection readback is byte-identical; no administrative bypass, force, deletion or setting change occurred.
+- Primary main fast-forwarded to `a6258db`; the integration branch merged that main to make the pending checkpoint/status receipt a documentation-only diff. Existing setup origin and primary retrospective files are preserved. The source branch/worktree remains available for runtime continuation.
+- Final readback verified **#59, #60, #61, #62 and #63 OPEN and assigned to `Ziyadin23`**; **#11, #22, #54 and #55 CLOSED** for the recorded duplicate/historical/completed-source scopes. Refreshed #28 and #39 with current continuation headers while retaining their dated acceptance/history. The PR body's accidental automatic closing keyword before #59 closed it on merge; the description was corrected and #59 was immediately reopened with an explanatory receipt. No audit defect is claimed fixed.
+- Runtime/delivery task group 3 remains unchecked and owned by #63; #57 retains its separate pipeline evidence/continuation. Keep this active because native/full UI, packaged/recorder and the next runnable beta are unfinished. The source-only merge is complete; no new application version/binary was delivered and no release/live-model/VM/device action occurred in this turn.
+
+- Source integration and issue maintenance are **5/7 complete**; only tasks 3.1–3.2 remain. The final receipt changes only this task owner and status/verification Markdown. Dependency setup is explicitly skipped for that documentation-only receipt; application, test, dependency, build and distributed-artifact bytes remain unchanged from the reviewed/integrated candidate.
+- Final receipt verification: workflow selftest, documentation **96 files / 442 links**, strict OpenSpec **9/9** and `git diff --check` passed, exit 0. New issue states/assignees and four scoped closures were independently read back; the five primary retrospective files match their pre-fast-forward SHA-256 baseline. Owned synthetic browser/server cleanup was verified with an empty worktree port inventory. Private current context/card and durable receipts are updated.
