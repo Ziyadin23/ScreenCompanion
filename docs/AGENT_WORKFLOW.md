@@ -6,7 +6,10 @@ The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
 records implementation progress and qualification. The current runner supports
 bounded investigation, independent executable reproduction and report/issues
 delivery. Isolated Codex source access has a real read-only qualification;
-the discovery pilot reached its deliberately short 90-second limit. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
+the original discovery pilot reached its deliberately short 90-second limit.
+A later bounded report-only discovery completed on 2026-11-16 with no findings
+or publication; the [current checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md)
+retains both outcomes. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
 CI wait/resume without a second writer. Actual publication, protected automatic
 merge and Windows beta delivery still require the qualification gates in that
 owner. An unavailable capability produces a saved wait.
@@ -24,6 +27,27 @@ npm --prefix tools/agent-workflow run workflow -- --help
 This independent package does not add dependencies to the Electron application.
 Its tests use synthetic data, temporary Git repositories and local state. They
 make no model/provider requests or GitHub mutations.
+
+After building, a user-local command can be installed from the package directory:
+
+```sh
+cd tools/agent-workflow
+npm install --global --prefix "$HOME/.local" --ignore-scripts "$PWD"
+```
+
+This exposes `~/.local/bin/sc-dev`; that directory must be on `PATH`. The link
+uses this checkout's built tool, so retain it and rebuild after tool changes.
+`sc-dev` accepts the same arguments as the longer npm command. For example:
+
+```sh
+sc-dev doctor
+sc-dev runs
+sc-dev run --scope providers-json --delivery report
+```
+
+Run from the intended clean source checkout or select it with `--repo`. Doctor
+checks prerequisites; saved runs can still have an unresolved execution or
+integration hold. Inspect `runs` before dispatching new work.
 
 The hosted `agent-workflow` check uses a fresh Ubuntu 24.04 runner. Its setup
 copies the selected `actions/setup-node` Node/npm installation into `/usr`,
@@ -77,6 +101,15 @@ be selected before admission, for example `--workers 3 --worker-seconds 180
 --active-minutes 10`. These flags can only lower the trusted defaults and cannot
 change a saved run's limits. A short timeout can end a valid investigation before
 it establishes any finding.
+
+Prepare application dependencies in that source checkout with the normal
+`npm --prefix desktop ci` setup before provider/pipeline investigation. Oracle
+execution imports production `.ts` modules directly. A fixed trusted Node
+resolver supports extensionless relative TypeScript imports and parameter
+properties, without giving the proposed test filesystem, transpiler or VM
+imports. The runtime protocol is part of the observed oracle operation identity
+and is checked again before issue-regression reuse or integration. Missing
+dependencies or unsupported code remain unavailable evidence.
 
 The command writes an admitted run ID to stderr and its final structured report
 to stdout. A missing execution capability produces a durable `awaiting_input`
@@ -180,6 +213,7 @@ Replace `<run-id>` with the admitted identity:
 
 ```sh
 npm --prefix tools/agent-workflow run workflow -- status <run-id>
+npm --prefix tools/agent-workflow run workflow -- runs
 npm --prefix tools/agent-workflow run workflow -- report <run-id> --format markdown
 npm --prefix tools/agent-workflow run workflow -- resume <run-id>
 npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
@@ -194,6 +228,20 @@ when a coordinator has exited. A confirmed stop records `cancelled`; an uncertai
 launch or termination records `quarantined` and blocks replacement writers.
 The coordinator never kills a reused numeric PID or process group. Inspection
 remains available after the coordinator exits.
+
+`runs` lists up to twenty recent runs for this repository, including their IDs,
+safe error codes and next actions. An empty history returns an empty list without
+creating state. A quarantined run explicitly reports that execution inspection
+is required.
+
+Linux process scans tolerate an enumerated process disappearing with `ENOENT`
+or `ESRCH`; permission and other inspection failures still prevent execution.
+After a verified host boot-ID change, an owned process without a terminal receipt
+is classified as interrupted. Cancel that run to record the interruption and
+release its execution hold. Its command result remains unknown, original files
+and consumed allowances are retained, and cancellation does not resolve unknown
+GitHub effects or an integration hold. A missing PID within the same boot is
+insufficient evidence for this recovery.
 
 State defaults to a private repository-specific directory under the user's XDG
 state location. `--state-dir <private-directory>` chooses a separate private
@@ -272,6 +320,9 @@ limits. Initial defaults allow 5 candidate findings, 3 new issues, one writing
 task, one concurrent writer, 12 worker invocations and two repair rounds.
 Worker duration is bounded to 20 minutes, active run duration to 120 minutes and
 one CI observation period to 30 minutes. Failed/interrupted attempts count.
+The worker-duration ceiling also bounds each non-CI graph stage, which can
+contain several sequential roles. Lowering `--worker-seconds` therefore shortens
+that complete stage; it is suitable for a smoke, not proof of full delivery.
 Unavailable model-cost data is reported as unknown; these limits do not pretend
 to enforce a monetary ceiling. SC live-provider campaigns retain separate scope
 and budgets, with zero such calls in ordinary workflow runs.

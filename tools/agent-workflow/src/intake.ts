@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSyn
 import { join } from 'node:path';
 import { z } from 'zod';
 import ts from 'typescript';
-import { digest, WorkflowError, type Manifest } from './manifest.js';
+import { digest, ORACLE_RUNTIME, WorkflowError, type Manifest } from './manifest.js';
 import { reconcileOwnedProcess, runOwnedProcess } from './process.js';
 import { prepareSandbox } from './sandbox.js';
 import { type RunStore } from './store.js';
@@ -54,6 +54,21 @@ export function planningOwner(manifest: Manifest, taskText: string) {
 export const oracleSchema = z.object({ kind: z.literal('portable-node'), script: z.string().min(1).max(8000),
   contractPaths: z.array(z.string().min(1).max(500)).min(1).max(8) }).strict();
 export type Oracle = z.infer<typeof oracleSchema>;
+// Production TS uses extensionless imports and parameter properties; models must not rewrite it.
+const oracleResolver = `export async function resolve(specifier, context, next) {
+  try { return await next(specifier, context); }
+  catch (failure) {
+    const missing = error => ['ERR_MODULE_NOT_FOUND', 'ERR_UNSUPPORTED_DIR_IMPORT'].includes(error.code);
+    if (!missing(failure) || !specifier.startsWith('.') || !context.parentURL?.startsWith('file:///workspace/')) throw failure;
+    const target = new URL(specifier, context.parentURL);
+    if (!target.href.startsWith('file:///workspace/') || /\\.[^/]+$/.test(target.pathname)) throw failure;
+    for (const suffix of ['.ts', '/index.ts']) {
+      try { return await next(target.href + suffix, context); }
+      catch (error) { if (!missing(error)) throw error; }
+    }
+    throw failure;
+  }
+}`;
 function inspectOracle(manifest: Manifest, script: string): boolean {
   const source = ts.createSourceFile('oracle.mjs', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
   let importsSource = false, importsAssert = false;
@@ -135,6 +150,19 @@ export interface OracleEvidence {
   environment: 'linux-portable-synthetic'; outcome: 'passed' | 'failed' | 'unavailable';
   operationKey: string; exitCode: number | null; outputHash: string;
 }
+export function assertOracleRuntime(store: RunStore, runId: string,
+  proof: Pick<OracleEvidence, 'source' | 'oracleHash' | 'contractHash' | 'outputHash' | 'outcome'> & { workspace: string }): void {
+  const identity = { runId, source: proof.source, workspace: proof.workspace,
+    oracleHash: proof.oracleHash, contractHash: proof.contractHash, runtime: ORACLE_RUNTIME };
+  const observed = store.observedEffect(runId, `oracle:${digest(identity)}`);
+  const result = z.object({ status: z.literal('exited'), exitCode: z.number(),
+    stdout: z.string(), stderr: z.string(), outputTruncated: z.literal(false) }).safeParse(observed?.receipt);
+  if (!['failed', 'passed'].includes(proof.outcome) || observed?.kind !== 'verification' ||
+      observed.requestHash !== digest(identity) || !result.success ||
+      result.data.exitCode !== (proof.outcome === 'failed' ? 42 : 0) ||
+      digest([result.data.stdout, result.data.stderr]) !== proof.outputHash)
+    throw new WorkflowError('stale_oracle_runtime', 'Oracle evidence requires current runtime qualification before dispatch or publication.', 2);
+}
 export async function runOracle(request: {
   store: RunStore; runId: string; workspace: string; revision: string;
   oracle: Oracle; signal?: AbortSignal; timeReservedByStage?: boolean;
@@ -151,7 +179,8 @@ export async function runOracle(request: {
     return { path, hash: digest(baselineFile(manifest, path)) };
   });
   const oracleHash = digest(oracle); const contractHash = digest(contracts);
-  const identity = { runId, source: request.revision, workspace: request.workspace, oracleHash, contractHash };
+  const identity = { runId, source: request.revision, workspace: request.workspace, oracleHash, contractHash,
+    runtime: ORACLE_RUNTIME };
   const key = `oracle:${digest(identity)}`;
   const runDirectory = join(store.directory, 'runs', runId);
   const processDirectory = join(runDirectory, 'processes');
@@ -168,7 +197,9 @@ export async function runOracle(request: {
   const sandbox = prepareSandbox({ workspace: request.workspace, revision: request.revision,
     writable: false, stateDirectory: runDirectory, network: false, scriptFile });
   // The independent runner classifies assertion failures separately from unavailable runtime evidence.
-  const script = `try { await import('file:///run/sc-oracle.mjs'); }
+  const script = `import { register } from 'node:module';
+register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(oracleResolver)}`)}, 'file:///run/');
+try { await import('file:///run/sc-oracle.mjs'); }
 catch (failure) { process.exitCode = failure?.code === 'ERR_ASSERTION' ? 42 : 43; }`;
   let launched = false; let terminal = false;
   try {
@@ -176,7 +207,7 @@ catch (failure) { process.exitCode = failure?.code === 'ERR_ASSERTION' ? 42 : 43
     const receipt = await store.effect(runId, key, 'verification', identity, {
       execute: async () => {
         launched = true;
-        return runOwnedProcess({ ...sandbox.request('/usr/bin/node', ['--experimental-strip-types', '--input-type=module', '-']),
+        return runOwnedProcess({ ...sandbox.request('/usr/bin/node', ['--experimental-transform-types', '--input-type=module', '-']),
           stateDirectory: processDirectory, key, stdin: script, timeoutMs, signal: request.signal });
       },
       reconcile: async () => {

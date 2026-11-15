@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { execFileSync } from 'node:child_process';
@@ -22,6 +23,43 @@ function fixture(t: { after(fn: () => void): void }) {
   t.after(() => rmSync(temp, { recursive: true, force: true }));
   return { manifest, directory, root, temp };
 }
+
+test('cancellation reconciles a previous-boot worker without inventing its result or resetting budgets', async t => {
+  const { manifest, directory } = fixture(t);
+  const store = new RunStore(directory, manifest); t.after(() => store.close()); store.admit(manifest);
+  const key = 'worker:previous-boot';
+  const stateDirectory = join(directory, 'runs', manifest.id, 'processes');
+  store.registerOwnedProcess(manifest.id, key, stateDirectory);
+  store.reserve(manifest.id, key, 'workerInvocations');
+  await assert.rejects(store.effect(manifest.id, key, 'worker', { role: 'synthetic' }, {
+    execute: async () => {
+      await runOwnedProcess({ stateDirectory, key, command: process.execPath,
+        args: ['-e', 'process.exit(0)'], cwd: manifest.root, env: {}, timeoutMs: 3000 });
+      throw new Error('lost acknowledgement');
+    }, reconcile: async () => null
+  }));
+  const op = join(stateDirectory, digest(key));
+  const startPath = join(op, 'start.json');
+  const start = JSON.parse(readFileSync(startPath, 'utf8'));
+  writeFileSync(startPath, JSON.stringify({ ...start, identity: `${randomUUID()}:1` }), { mode: 0o600 });
+  const preservedStart = readFileSync(startPath, 'utf8');
+  rmSync(join(op, 'exit.json')); rmSync(join(op, 'outcome.json'), { force: true });
+  store.update(manifest.id, { status: 'quarantined', error: 'owner_unverifiable' });
+  assert.equal(inspectOwnedProcess(stateDirectory, key).state, 'interrupted');
+  await assert.rejects(store.reconcileOwnedExecutions(manifest.id), { code: 'owner_unverifiable' });
+  const next = makeManifest({ repository: manifest.repository, root: manifest.root,
+    commonDir: manifest.commonDir, base: manifest.base, scope: manifest.scope });
+  // A new run is still blocked until cancellation reconciles the abandoned worker.
+  store.admit(next);
+  assert.throws(() => store.claim(next.id), { code: 'repository_owned' });
+  assert.equal((await cancelRun(store, manifest.id)).status, 'cancelled');
+  assert.equal(store.usage(manifest.id).workerInvocations, 1);
+  assert.equal(inspectOwnedProcess(stateDirectory, key).state, 'interrupted');
+  assert.equal(readFileSync(startPath, 'utf8'), preservedStart);
+  assert.deepEqual(store.observedEffect(manifest.id, key)?.receipt,
+    { status: 'interrupted', reason: 'host_restarted', result: 'unknown' });
+  store.claim(next.id); store.release(next.id);
+});
 
 test('admission and budgets persist across handles without resetting allowances', t => {
   const { manifest, directory } = fixture(t);

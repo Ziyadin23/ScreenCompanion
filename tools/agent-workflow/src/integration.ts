@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { execFileSync } from 'node:child_process';
-import { digest, WorkflowError, type Manifest } from './manifest.js';
+import { digest, ORACLE_RUNTIME, WorkflowError, type Manifest } from './manifest.js';
 import { assertFrozenSource, selectVerificationCommands,
   type CandidateOptions, type FrozenCandidate, type VerificationReceipt } from './candidate.js';
 import { decideMerge } from './policy.js';
@@ -141,7 +141,7 @@ function requireSavedEvidence(request: IntegrationRequest): void {
     const operation = store.observedEffect(runId, evidence.operationKey);
     const result = operation && object(operation.receipt);
     if (operation?.kind !== 'verification' || operation.requestHash !== digest({ runId, source, workspace,
-      oracleHash: evidence.oracleHash, contractHash: evidence.contractHash }) ||
+      oracleHash: evidence.oracleHash, contractHash: evidence.contractHash, runtime: ORACLE_RUNTIME }) ||
         result?.status !== 'exited' || result.exitCode !== exitCode || result.outputTruncated !== false ||
         typeof result.stdout !== 'string' || typeof result.stderr !== 'string' ||
         evidence.outputHash !== digest([result.stdout, result.stderr]))

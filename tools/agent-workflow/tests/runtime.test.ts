@@ -7,7 +7,7 @@ import test from 'node:test';
 import { createActions } from '../src/runtime.js';
 import { preparePlan } from '../src/ownership.js';
 import { executeRun } from '../src/graph.js';
-import { digest, makeManifest } from '../src/manifest.js';
+import { digest, makeManifest, ORACLE_RUNTIME } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { type WorkerRequest, type WorkerResult } from '../src/worker.js';
 
@@ -31,6 +31,30 @@ function worker(role: WorkerRequest['role'], response: WorkerResult['response'])
   return { role, operationKey: `synthetic-${role}`, processDirectory: '', status: 'complete', response,
     elapsedMs: 1, usage: { inputTokens: 1, outputTokens: 1 }, monetaryCost: 'unknown' };
 }
+
+test('old runtime receipts stop issue publication and planning before external effects', async t => {
+  for (const stage of ['issues', 'plan'] as const) {
+    const { store, manifest } = fixture(t, 'pr'); let effects = 0;
+    const oracleHash = '1'.repeat(64), contractHash = '2'.repeat(64);
+    const identity = { runId: manifest.id, source: manifest.base, workspace: manifest.root, oracleHash, contractHash };
+    const operationKey = `oracle:${digest(identity)}`;
+    await store.effect(manifest.id, operationKey, 'verification', identity, { execute: async () => ({
+      status: 'exited', exitCode: 42, signal: null, outputTruncated: false, stdout: '', stderr: '', elapsedMs: 1
+    }), reconcile: async () => null });
+    const evidence = { source: manifest.base, oracleHash, contractHash, operationKey,
+      outputHash: digest(['', '']), environment: 'linux-portable-synthetic', outcome: 'failed', exitCode: 42 };
+    store.update(manifest.id, { data: { findings: [{ id: 'old-runtime', path: 'desktop/src/providers/json.ts',
+      description: 'Duplicate keys accepted', state: 'confirmed', fingerprint: '3'.repeat(64), evidence,
+      baselineReview: { base: manifest.base, oracleHash, contractHash, findingId: 'old-runtime', clean: true } }],
+    issueReceipts: [{ number: 7, url: 'https://github.com/example/sc/issues/7', body: 'Accepted task', state: 'open', reused: false }] } });
+    const actions = createActions({ githubTransport: async () => { effects++; throw new Error('No external effect expected'); },
+      executeWorker: async () => { effects++; throw new Error('No worker expected'); } });
+    await assert.rejects(actions[stage]!({ store, run: store.get(manifest.id), signal: new AbortController().signal }),
+      { code: 'stale_oracle_runtime' });
+    assert.equal(effects, 0);
+    assert.equal(store.usage(manifest.id).writingTasks, 0);
+  }
+});
 
 test('report discovery uses separate investigation/reproduction and a real frozen baseline oracle', async t => {
   const { store, manifest } = fixture(t); const calls: string[] = [];
@@ -353,7 +377,12 @@ test('application setup is required before the first writer even when its only i
   const f = fixture(t, 'pr');
   const issue = { number: 7, url: 'https://github.com/example/sc/issues/7', state: 'open' as const, body: 'Synthetic task', reused: false };
   const evidence = { source: f.manifest.base, oracleHash: 'a'.repeat(64), contractHash: 'b'.repeat(64),
-    outputHash: 'c'.repeat(64), environment: 'linux-portable-synthetic', outcome: 'failed' as const };
+    outputHash: digest(['', '']), environment: 'linux-portable-synthetic', outcome: 'failed' as const };
+  const identity = { runId: f.manifest.id, source: f.manifest.base, workspace: f.root,
+    oracleHash: evidence.oracleHash, contractHash: evidence.contractHash, runtime: ORACLE_RUNTIME };
+  await f.store.effect(f.manifest.id, `oracle:${digest(identity)}`, 'verification', identity, {
+    execute: async () => ({ status: 'exited', exitCode: 42, outputTruncated: false,
+      stdout: '', stderr: '', signal: null, elapsedMs: 1 }), reconcile: async () => null });
   const failure = { ...evidence, path: 'desktop/src/providers/json.ts', problem: 'Existing contract fails',
     reproduction: 'Independent baseline assertion fails', acceptance: 'Existing contract passes',
     fingerprint: 'd'.repeat(64), dependencies: [], prerequisite: 'Scoped correction', owner: 'local', provenance: 'local' as const };

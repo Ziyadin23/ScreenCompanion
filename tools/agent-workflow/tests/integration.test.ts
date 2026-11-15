@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { digest, makeManifest } from '../src/manifest.js';
+import { digest, makeManifest, ORACLE_RUNTIME } from '../src/manifest.js';
 import { decideMerge, classifyDiff } from '../src/policy.js';
 import { freezeCandidate, selectVerificationCommands, type VerificationReceipt } from '../src/candidate.js';
 import { RunStore } from '../src/store.js';
@@ -59,7 +59,7 @@ async function syntheticApi(t: { after(fn: () => void): void }, issueLimit = 3) 
     base: 'main', body: '', state: 'open' as const, reused: false };
   const oracleHash = '1'.repeat(64), contractHash = '2'.repeat(64);
   const oracle = async (source: string, exitCode: 0 | 42) => {
-    const request = { runId: manifest.id, source, workspace: root, oracleHash, contractHash };
+    const request = { runId: manifest.id, source, workspace: root, oracleHash, contractHash, runtime: ORACLE_RUNTIME };
     const operationKey = `oracle:${digest(request)}`;
     const result = { status: 'exited', exitCode, signal: null, stdout: 'synthetic', stderr: '',
       outputTruncated: false, elapsedMs: 1 };

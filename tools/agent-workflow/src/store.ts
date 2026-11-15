@@ -63,7 +63,7 @@ export function processIdentity(pid = process.pid): string | null {
     if (!start) throw new Error('Missing start identity');
     return `${readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${start}`;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    if (['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) return null;
     throw new WorkflowError('owner_unverifiable', 'Execution ownership cannot be verified.');
   }
 }
@@ -179,6 +179,12 @@ export class RunStore {
       if (error instanceof WorkflowError) throw error;
       throw new WorkflowError('invalid_state', 'Saved run data is invalid and has been preserved.');
     }
+  }
+  listRuns(limit = 20): RunRecord[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+      throw new WorkflowError('invalid_arguments', 'Run list limit must be between 1 and 1000.');
+    return this.db.prepare('SELECT id FROM runs WHERE repository=? ORDER BY updated_at DESC, id LIMIT ?')
+      .all(this.repository.repository, limit).map(raw => this.get(z.object({ id: z.uuid() }).parse(raw).id));
   }
   repositoryIntegrationHold(): { runId: string; head: string; reason: string } | null {
     let active: { runId: string; head: string; reason: string } | null = null;
@@ -366,12 +372,15 @@ export class RunStore {
         throw new WorkflowError('owner_unverifiable', 'Owned execution has no supported registered receipt.');
       const inspected = inspectOwnedProcess(entry.stateDirectory, entry.key);
       if (inspected.state === 'exited' && inspected.result) this.observe(id, op.key, inspected.result);
+      else if (inspected.state === 'interrupted' && this.get(id).cancelRequested)
+        this.observe(id, op.key, { status: 'interrupted', reason: inspected.reason, result: 'unknown' });
       else if (inspected.state !== 'absent' || op.state !== 'prepared')
         throw new WorkflowError('owner_unverifiable', 'Owned execution has not been reconciled.');
     }
     for (const entry of entries) {
       const inspected = inspectOwnedProcess(entry.stateDirectory, entry.key);
-      if (inspected.state === 'running' || inspected.state === 'pending' || inspected.state === 'unverifiable')
+      if (inspected.state === 'running' || inspected.state === 'pending' || inspected.state === 'unverifiable' ||
+          inspected.state === 'interrupted' && !this.get(id).cancelRequested)
         throw new WorkflowError('owner_unverifiable', 'Owned execution remains active or uncertain.');
       if (inspected.state === 'absent' && rows.some(op => op.key === entry.key && op.state !== 'prepared'))
         throw new WorkflowError('owner_unverifiable', 'Owned execution receipt is absent.');

@@ -4,11 +4,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { makeManifest } from '../src/manifest.js';
+import { makeManifest, type Scope } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { normalizeFindings, planningOwner, runOracle } from '../src/intake.js';
 
-function fixture(t: { after(fn: () => void): void }) {
+function fixture(t: { after(fn: () => void): void }, scope: Scope = 'providers-json') {
   const directory = mkdtempSync(join(tmpdir(), 'sc-intake-'));
   const root = join(directory, 'repo'); mkdirSync(root);
   const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
@@ -21,11 +21,30 @@ function fixture(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, 'openspec/changes/linux-platform-support/tasks.md'), '# Tasks\n\n- [ ] 4.1 Native evidence still required\n');
   git('add', '.'); git('commit', '-m', 'synthetic contract');
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
-    base: git('rev-parse', 'HEAD'), scope: 'providers-json', modelProfile: 'fixture' });
+    base: git('rev-parse', 'HEAD'), scope, modelProfile: 'fixture' });
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
   return { root, git, manifest, store };
 }
+
+test('portable oracle executes TypeScript dependency graphs and parameter properties on both candidates', async t => {
+  const { root, git, manifest, store } = fixture(t, 'pipeline');
+  writeFileSync(join(root, 'docs/contract.md'), '# Contract\n\nreadValue returns expected.\n');
+  const source = join(root, 'desktop/src/pipeline'); mkdirSync(source);
+  writeFileSync(join(source, 'value.ts'), "export class Value { constructor(public readonly text: string = 'wrong') {} }\n");
+  writeFileSync(join(source, 'index.ts'), "import {Value} from './value'; export function readValue(): string { return new Value().text; }\n");
+  git('add', '.'); git('commit', '-m', 'synthetic TypeScript graph');
+  const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script:
+    "import assert from 'node:assert/strict'; import {readValue} from '/workspace/desktop/src/pipeline/index.ts'; assert.equal(readValue(), 'expected');" };
+  const before = await runOracle({ store, runId: manifest.id, workspace: root, revision: git('rev-parse', 'HEAD'), oracle });
+  assert.equal(before.outcome, 'failed');
+  writeFileSync(join(source, 'value.ts'), "export class Value { constructor(public readonly text: string = 'expected') {} }\n");
+  git('add', '.'); git('commit', '-m', 'correct synthetic value');
+  const after = await runOracle({ store, runId: manifest.id, workspace: root, revision: git('rev-parse', 'HEAD'), oracle });
+  assert.equal(after.outcome, 'passed');
+  assert.equal(after.oracleHash, before.oracleHash);
+  assert.equal(after.contractHash, before.contractHash);
+});
 
 test('scoped findings deduplicate deterministically and reject injected paths/authority', t => {
   const { manifest } = fixture(t);

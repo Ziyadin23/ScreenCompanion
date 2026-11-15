@@ -5,7 +5,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { z } from 'zod';
 import { type Actions, type Context, type StepResult } from './graph.js';
 import { digest, WorkflowError, type Manifest } from './manifest.js';
-import { inScope, normalizeFindings, oracleSchema, requireFrozenSource, runOracle, type OracleEvidence } from './intake.js';
+import { assertOracleRuntime, inScope, normalizeFindings, oracleSchema, requireFrozenSource, runOracle, type OracleEvidence } from './intake.js';
 import { loadCodexProfile, runWorker, type CodexProfile, type WorkerRequest, type WorkerResult } from './worker.js';
 import { GithubClient, type ConfirmedFailure, type GithubTransport, type IssueReceipt } from './github.js';
 import { planningOwner } from './intake.js';
@@ -76,7 +76,7 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
   function remember(context: Context, data: Record<string, unknown>) {
     const run = latest(context); context.store.update(run.manifest.id, { data: { ...run.data, ...data } });
   }
-  function task(context: Context) {
+  function task(context: Context, requireCurrentRuntime = true) {
     const run = latest(context);
     const issue = z.array(z.object({ number: z.number().int().positive(), url: z.string(), body: z.string(),
       state: z.literal('open'), reused: z.boolean() }).strict()).parse(run.data.issueReceipts)[0];
@@ -89,6 +89,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       throw new WorkflowError('stale_evidence', 'Independent baseline contract review is required.', 2);
     const evidence = z.object({ source: z.string(), oracleHash: z.string(), contractHash: z.string(),
       environment: z.string(), outputHash: z.string(), outcome: z.literal('failed') }).passthrough().parse(finding.evidence);
+    if (requireCurrentRuntime)
+      assertOracleRuntime(context.store, run.manifest.id, { ...evidence, workspace: run.manifest.root });
     const fingerprint = z.string().regex(/^[a-f0-9]{64}$/).parse(finding.fingerprint);
     if (issue.reused) {
       const review = run.data.issueOutcome as Record<string, unknown> | undefined;
@@ -241,6 +243,10 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           `Independently test candidate ${finding.id}: ${finding.path}: ${finding.description}\n` +
           'Identify the expected behavior in existing baseline contracts. Propose a minimal deterministic portable-node oracle ' +
           'using node:assert/strict and imports under /workspace, plus its existing baseline contractPaths. ' +
+          'Import production .ts modules directly; the trusted runner handles TypeScript parameter properties and extensionless relative imports. ' +
+          'Only node:assert/strict and literal scoped /workspace source imports are allowed (docs-links also permits node:fs/node:path). ' +
+          'Do not copy, transpile, evaluate or read source text; do not import vm, module, typescript, fs or other helpers for application oracles. ' +
+          'Assertions must directly reference an imported production binding, for example assert.rejects(() => importedFunction(syntheticInput)). ' +
           'The coordinator will execute these exact frozen bytes on baseline and candidate without credentials or network. ' +
           'Return oracle=null when native/GUI/packaged/live evidence is needed or the contract cannot be established. ' +
           'Your reproduced boolean is advisory; do not claim external qualification.');
@@ -291,6 +297,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
         throw new WorkflowError('stale_evidence', 'Issue publication requires independent baseline contract review.', 2);
       const client = new GithubClient(store, run.manifest.id, dependencies.githubTransport);
       const receipts: IssueReceipt[] = [];
+      for (const finding of findings)
+        assertOracleRuntime(store, run.manifest.id, { ...finding.evidence!, workspace: run.manifest.root });
       if (run.manifest.issue) {
         const issue = await client.selectedIssue();
         if (digest({ number: issue.number, url: issue.html_url, title: issue.title, body: issue.body }) !==
@@ -522,6 +530,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       if (!verification?.passed || verification.head !== frozen.head || !review?.clean || review.head !== frozen.head ||
           oracle?.source !== frozen.head || oracle.outcome !== 'passed')
         throw new WorkflowError('stale_evidence', 'Publication requires passing exact-source oracle, checks and review.');
+      assertOracleRuntime(context.store, run.manifest.id, { ...oracle,
+        workspace: (run.data.allocation as WorkspaceReceipt).path });
       assertFrozenSource(run.manifest, frozen, inspection(context));
       if (issue.reused) {
         const remote = await new GithubClient(context.store, run.manifest.id, dependencies.githubTransport)
@@ -590,7 +600,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       return { next: 'finalize', data: { waitingFor: null } };
     },
     finalize: async context => {
-      const { run, issue } = task(context);
+      // Already-integrated work must retain incident/recovery access under its original proof.
+      const { run, issue } = task(context, false);
       const failedRecord = latest(context).data.recordPostflight as { state?: string } | undefined;
       if (failedRecord?.state === 'failed') {
         const incident = prepareRecordIntegrationIncident({ store: context.store, runId: run.manifest.id });
