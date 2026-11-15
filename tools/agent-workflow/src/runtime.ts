@@ -149,8 +149,15 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
     }
     const latest = store.get(run.manifest.id);
     const workers = z.array(z.record(z.string(), z.unknown())).parse(latest.data.workerResults ?? []);
-    if (!workers.some(worker => worker.operationKey === result.operationKey))
-      store.update(run.manifest.id, { data: { ...latest.data, workerResults: [...workers, result] } });
+    const previous = workers.find(worker => worker.operationKey === result.operationKey);
+    if (!previous) store.update(run.manifest.id, { data: { ...latest.data, workerResults: [...workers, result] } });
+    else if (digest(previous) !== digest(result)) {
+      const history = z.array(z.record(z.string(), z.unknown())).max(100).parse(latest.data.workerResultHistory ?? []);
+      if (history.length === 100) throw new WorkflowError('worker_history_limit', 'Worker revalidation history reached its bound.', 2);
+      store.update(run.manifest.id, { data: { ...latest.data,
+        workerResults: workers.map(worker => worker.operationKey === result.operationKey ? result : worker),
+        workerResultHistory: [...history, previous] } });
+    }
     if (result.status === 'failed') throw new WorkflowError('worker_failed', 'Worker attempt failed; retained evidence identifies the outcome.');
     if (result.status === 'needs_decision') throw new WorkflowError('needs_decision', 'Worker requested a scope or capability decision.', 2);
     return result.response;

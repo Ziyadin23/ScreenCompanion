@@ -180,6 +180,22 @@ test('stable identity reuses observed receipt and cumulative allowance survives 
   await assert.rejects(runWorker({ ...input, instructions: 'Different' }, f.profile, runner), { code: 'budget_exhausted' });
 });
 
+test('a bounded native command event can exceed 64 KB and reuse its observed receipt', async t => {
+  const f = fixture(t, 'issue', 1); let calls = 0;
+  const final = output(values.investigator);
+  const event = JSON.stringify({ type: 'item.completed', item: { type: 'command_execution',
+    aggregated_output: 'Source contract excerpt\n'.repeat(4000) } }) + '\n';
+  assert.ok(Buffer.byteLength(event) > 64_000);
+  assert.ok(Buffer.byteLength(event + final.stdout) < 1_000_000);
+  const runner: WorkerProcessRunner = { run: async () => { calls++; return { ...final, stdout: event + final.stdout }; },
+    reconcile: async () => { throw new Error('Unexpected reconcile'); } };
+  const request = { store: f.store, runId: f.manifest.id, role: 'investigator' as const,
+    workspace: f.root, revision: f.base, instructions: 'Inspect the existing scoped contract.' };
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
+  assert.equal((await runWorker(request, f.profile, runner)).status, 'complete');
+  assert.equal(calls, 1); assert.equal(f.store.usage(f.manifest.id).workerInvocations, 1);
+});
+
 test('JSONL uses the last message of the completed turn and refuses events after completion', async t => {
   const f = fixture(t);
   const final = output(values.investigator);

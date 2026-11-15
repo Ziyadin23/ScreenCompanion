@@ -192,6 +192,9 @@ Finalization checks only the selected task rows proved by this run and preserves
 other task text and acceptance. A reused issue uses its verified existing-issue
 receipt for closure; a newly published issue retains its separate publication
 receipt requirement. Both paths recheck the exact remote issue before closure.
+For incremental maintenance PRs, use issue references and inspect GitHub's
+closing-issue readback before merge. Only intentionally completed issue outcomes
+belong in that list.
 
 ## Codex execution boundary
 
@@ -233,6 +236,12 @@ npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
 Status/report read existing state without worker execution or remote mutation.
 They omit raw worker content, credential material and private paths. Resume keeps
 the original scope and resource consumption; it rejects new authority options.
+After a tool compatibility fix, explicit resume can validate the same observed
+worker receipt again without launching another process or consuming a second
+worker allowance. A changed interpretation retains the original result in
+private history; current reports count each execution once. Worker JSONL stays
+bounded to 1,000,000 bytes and 1,000 events, with separate final-message/schema
+limits. A single source-read event can occupy that existing total-byte bound.
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain
