@@ -9,7 +9,8 @@ own API key. Provider usage charges apply.
 
 [Website](https://ziyadin23.github.io/screencompanion-website/) ·
 [Downloads](#release-status) · [Quick start](#quick-start) ·
-[User guide](docs/USER_GUIDE.md) · [Build from source](#build-and-further-documentation)
+[User guide](docs/USER_GUIDE.md) · [Contribute](CONTRIBUTING.md) ·
+[Build from source](#build-and-further-documentation)
 
 ## Release status
 
@@ -191,7 +192,8 @@ legacy-vault interoperability tests.
 | --- | --- |
 | [User guide](docs/USER_GUIDE.md) | Setup, controls, models, privacy and troubleshooting |
 | [Project status](docs/STATUS.md) | Current workstreams and unfinished work |
-| [Contributor guide](docs/DEVELOPMENT.md) | Setup, source map and development workflow |
+| [Contributing](CONTRIBUTING.md) | First contribution, setup, checks and pull requests |
+| [Development guide](docs/DEVELOPMENT.md) | Setup, source map and full development workflow |
 | [Pipeline reference](docs/PIPELINE.md) | Request flow and advanced configuration |
 | [Tests](tests/README.md) | Commands, fixtures and platform prerequisites |
 | [Verification](docs/VERIFICATION.md) | Recorded results, failures and support limits |

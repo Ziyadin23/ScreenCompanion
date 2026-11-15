@@ -1,6 +1,6 @@
 # Developing SC
 
-Start with the workflow below. The [document ownership table](#document-ownership) identifies where each policy or reference lives; the application manifest owns executable commands and versions, and the active OpenSpec change owns implementation progress.
+New contributors can start with [Contributing to SC](../CONTRIBUTING.md) for the public issue-to-PR path. This guide owns the detailed workflow below. The [document ownership table](#document-ownership) identifies where each policy or reference lives; the application manifest owns executable commands and versions, and the active OpenSpec change owns implementation progress.
 
 ## Contributor workflow
 
@@ -171,6 +171,7 @@ Keep private context, credentials, vaults, bundles, lab identifiers and recordin
 | Owner | Content |
 | --- | --- |
 | [README](../README.md), [package manifest](../desktop/package.json) | User introduction/publication status; current source version and commands |
+| [Contributing](../CONTRIBUTING.md) | Public contribution entry point, checkout, checks and PR guidance |
 | [Agent routing](../AGENTS.md), [standards](../CODING_STANDARDS.md) | Entry points; shared and affected-area engineering rules |
 | This guide, [status](STATUS.md) | Contributor navigation/workflow; dated overview pointing to task/evidence owners |
 | [User guide](USER_GUIDE.md), [pipeline](PIPELINE.md) | User behavior/privacy; request/configuration contracts |
