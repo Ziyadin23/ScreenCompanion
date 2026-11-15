@@ -125,7 +125,8 @@ function parseEvents(result: OwnedProcessResult, role: WorkerRole, base: string,
   let message: string | undefined; let completed = false;
   try {
     for (const line of lines) {
-      if (!line || Buffer.byteLength(line) > 64_000) return failed('output_oversized');
+      // The total-byte bound also bounds each event; source-read events can legitimately be large.
+      if (!line) return failed('output_oversized');
       if (completed) return failed('events_after_completion');
       const event = z.object({ type: z.string(), item: z.unknown().optional(), usage: z.unknown().optional() }).passthrough().parse(JSON.parse(line));
       if (event.type === 'item.completed') {

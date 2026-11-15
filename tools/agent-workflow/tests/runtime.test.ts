@@ -32,6 +32,22 @@ function worker(role: WorkerRequest['role'], response: WorkerResult['response'])
     elapsedMs: 1, usage: { inputTokens: 1, outputTokens: 1 }, monetaryCost: 'unknown' };
 }
 
+test('revalidated observed worker result retains its prior interpretation without a second allowance', async t => {
+  const { store, manifest } = fixture(t); let interpretations = 0;
+  const actions = createActions({ executeWorker: async request => {
+    const key = 'synthetic-observed-worker'; store.reserve(manifest.id, key, 'workerInvocations');
+    return ++interpretations === 1 ? { role: request.role, operationKey: key, processDirectory: '',
+      status: 'failed', failure: 'output_oversized', elapsedMs: 1, usage: null, monetaryCost: 'unknown' } :
+      { ...worker(request.role, { status: 'complete', summary: 'Observed empty discovery', notes: [], findings: [] }), operationKey: key };
+  } });
+  assert.equal((await executeRun(store, manifest.id, actions)).status, 'failed');
+  const result = await executeRun(store, manifest.id, actions);
+  assert.equal(result.status, 'completed'); assert.equal(store.usage(manifest.id).workerInvocations, 1);
+  const current = result.data.workerResults as WorkerResult[], history = result.data.workerResultHistory as WorkerResult[];
+  assert.equal(current.length, 1); assert.equal(current[0]?.status, 'complete');
+  assert.equal(history.length, 1); assert.equal(history[0]?.failure, 'output_oversized');
+});
+
 test('old runtime receipts stop issue publication and planning before external effects', async t => {
   for (const stage of ['issues', 'plan'] as const) {
     const { store, manifest } = fixture(t, 'pr'); let effects = 0;

@@ -126,6 +126,8 @@ A launch wrapper creates a durable start receipt before worker execution and rec
 
 Raw worker/session output is private and bounded. Public output is regenerated from validated fields; credentials, private machine paths and lab data are not copied into issues or check artifacts. Default workflow tracing stays local; optional external trace export is a later explicit choice.
 
+The complete native JSONL output bound also bounds individual source-read events; final messages retain their separate schema/length limits. Explicit resume after a compatible parser correction may revalidate the same observed receipt without rerunning its process. A changed interpretation preserves its predecessor in bounded private history and updates the current per-execution result; consumed execution/time allowances remain unchanged.
+
 ### 7. Preserve issue, OpenSpec and Orca ownership
 
 For discovery, assemble a context pack from applicable guidance/contracts, selected source/tests, the accepted baseline and prior matching findings. Verify expected behavior from those sources and freeze a reproducer before implementing. A confirmed bug must fail for the stated reason on the baseline; a speculative concern or unavailable physical environment is an investigation result.

@@ -75,6 +75,7 @@ supported local executables, the private state location, namespace availability,
 selected account files and read-only protection metadata. It reports local
 readiness separately from protected-merge prerequisites. Account-file availability
 does not establish live authentication or candidate/platform qualification.
+The Orca probe resolves the same configured session command as task execution.
 
 Available initial scopes are `providers-json`, `pipeline` and `docs-links`.
 Their source/test paths come from trusted configuration. A task or model cannot
@@ -158,6 +159,12 @@ separate fresh apply worker for the selected task. It does not create a second
 change or copy a local template over the tracked owner. Generated narrow plans
 record their issue link and task IDs so a later matching run can reuse them.
 
+Orca transport uses the session's `ORCA_CLI_COMMAND` when configured, with the
+installed `orca-ide` as its default. Repository selection uses the primary
+checkout identified by the admitted common Git directory; a linked source
+checkout remains the frozen investigation source. The allocated workspace still
+must match the exact repository, issue, branch, baseline and ownership marker.
+
 Application setup runs the documented `npm --prefix desktop ci` inside a
 credential-free sandbox. Its successful receipt and a dependency fingerprint are
 recorded before the writer starts. Documentation-only work may explicitly skip
@@ -192,6 +199,9 @@ Finalization checks only the selected task rows proved by this run and preserves
 other task text and acceptance. A reused issue uses its verified existing-issue
 receipt for closure; a newly published issue retains its separate publication
 receipt requirement. Both paths recheck the exact remote issue before closure.
+For incremental maintenance PRs, use issue references and inspect GitHub's
+closing-issue readback before merge. Only intentionally completed issue outcomes
+belong in that list.
 
 ## Codex execution boundary
 
@@ -233,6 +243,12 @@ npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
 Status/report read existing state without worker execution or remote mutation.
 They omit raw worker content, credential material and private paths. Resume keeps
 the original scope and resource consumption; it rejects new authority options.
+After a tool compatibility fix, explicit resume can validate the same observed
+worker receipt again without launching another process or consuming a second
+worker allowance. A changed interpretation retains the original result in
+private history; current reports count each execution once. Worker JSONL stays
+bounded to 1,000,000 bytes and 1,000 events, with separate final-message/schema
+limits. A single source-read event can occupy that existing total-byte bound.
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain
