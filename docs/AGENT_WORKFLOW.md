@@ -56,8 +56,9 @@ integration hold. Inspect `runs` before dispatching new work.
 
 The hosted `agent-workflow` check uses a fresh Ubuntu 24.04 runner. Its setup
 copies the selected `actions/setup-node` Node/npm installation into `/usr`,
-which the fixed sandbox profile mounts read-only, and verifies the copied bytes,
-npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
+which the fixed sandbox profile mounts read-only, normalizes that copy to root
+ownership without group/world write access, and verifies the copied bytes,
+Node metadata, npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
 `1.16.0`, then checks both ordinary and nested user, PID and network namespaces
 with a fresh `/proc` mount for each. Ubuntu
 24.04's [AppArmor user namespace restriction](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)
@@ -307,6 +308,41 @@ For an uncertain owned process, private operation files may include
 exit code and signal). These are diagnostics only. A missing file is ambiguous;
 neither file proves a terminal effect or authorizes replacement, finalization or
 issue closure. Preserve the original state and execution evidence for recovery.
+
+## Explicit continuation and Windows capability
+
+An exhausted unpublished task can receive a new, explicitly authorized bounded
+admission on the current clean source and policy:
+
+```sh
+sc-dev run --continue-from <run-id> --repo /path/to/clean/source --dry-run
+sc-dev run --continue-from <run-id> --repo /path/to/clean/source
+```
+
+This keeps the original manifest, worktree, receipts and spent limits. The new
+admission starts fresh verification; it inherits no passing proof. Identical
+admission retries reuse the same child, and reports show linked cumulative
+resources. Older policy metadata remains readable for inspection; execution
+still requires the current policy. Unknown effects must be reconciled first.
+A retained parent workspace must match its exact recorded ownership and frozen
+source before any new worker runs. The continuation uses a separate owned
+workspace; another issue-linked workspace is still a conflict.
+
+A real Windows capability is selected explicitly with `--beta-profile <name>`.
+Its owner-only configuration lives in the coordinator's private state under
+`profiles/<name>.json`; credentials remain in private handles. The profile binds
+its helper, runtime and resource-token identities. Changing any selected
+identity stops execution for explicit revalidation. The helper's actual observed
+result must bind the candidate source/version, artifacts, complete Windows
+verification and cleanup before transfer can qualify. Synthetic results cannot
+qualify a real handoff.
+
+The normal default remains twelve workers, two repairs, twenty minutes per
+worker and 120 active minutes. The documented Windows UI matrix can require up
+to two hours in addition to setup/build. A selected Windows profile can explicitly
+request `--active-minutes 180`; 180 is the ceiling, and the helper timeout is
+separately bounded to at most 150 minutes and the remaining active allowance.
+No additional time is added during resume.
 
 ## Recovery and retention
 

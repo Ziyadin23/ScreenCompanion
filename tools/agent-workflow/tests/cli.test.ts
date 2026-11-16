@@ -103,6 +103,43 @@ test('CLI rejects malformed references and authority options before state creati
   }
 });
 
+test('exhausted issue reports its review and previews an explicit linked continuation without dispatch', t => {
+  const { root, state, git } = fixture(t);
+  const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
+    base: git('rev-parse', 'HEAD').trim(), scope: 'pipeline', mode: 'issue', issue: 60, delivery: 'pr' });
+  const store = new RunStore(state, manifest); store.admit(manifest);
+  store.update(manifest.id, { status: 'budget_exhausted', stage: 'review', error: 'budget_exhausted',
+    data: { reviewReceipt: { head: manifest.base, clean: false, findings: ['Synthetic private review detail'] } } });
+  store.close();
+  const report = invoke(root, 'status', manifest.id, '--state-dir', state);
+  assert.equal(report.status, 0, report.stderr);
+  const value = JSON.parse(report.stdout);
+  assert.equal(value.nextAction, 'inspect_findings_and_authorize_linked_continuation');
+  assert.equal(value.candidateReview.findings, 1); assert.equal(value.candidateReview.clean, false);
+  assert.equal(report.stdout.includes('Synthetic private review detail'), false);
+  const preview = invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state, '--dry-run');
+  assert.equal(preview.status, 0, preview.stderr);
+  const next = JSON.parse(preview.stdout);
+  assert.equal(next.continuationOf, manifest.id); assert.equal(next.scope, 'pipeline');
+  assert.equal(next.delivery, 'pr'); assert.equal(next.workerCalls, 0);
+  const reader = new RunStore(state, manifest, { readOnly: true }); t.after(() => reader.close());
+  assert.equal(reader.listRuns().length, 1);
+  mkdirSync(join(state, 'profiles'), { mode: 0o700 });
+  const helper = join(state, 'helper.mjs'), token = join(state, 'resource-token');
+  writeFileSync(helper, 'export {};\n', { mode: 0o600 });
+  writeFileSync(token, 'synthetic-resource', { mode: 0o600 });
+  writeFileSync(join(state, 'profiles/local.json'), JSON.stringify({ version: 1,
+    environmentId: 'synthetic', targetDirectory: `${state}-target`, helperPath: helper,
+    timeoutMs: 7_500_000, resourceTokenFile: token }), { mode: 0o600 });
+  const allowed = invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state,
+    '--beta-profile', 'local', '--active-minutes', '180', '--dry-run');
+  assert.equal(allowed.status, 0, allowed.stderr);
+  assert.equal(JSON.parse(allowed.stdout).limits.activeMs, 10_800_000);
+  assert.equal(invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state,
+    '--beta-profile', 'local', '--active-minutes', '181', '--dry-run').status, 4);
+  assert.equal(reader.listRuns().length, 1);
+});
+
 test('status and reports never start a missing run or disclose raw private state', t => {
   const { root, state, git } = fixture(t);
   const absent = invoke(root, 'status', 'absent', '--state-dir', state);

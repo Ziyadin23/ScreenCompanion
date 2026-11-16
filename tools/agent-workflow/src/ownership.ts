@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, sep } from 'node:path';
 import { digest, WorkflowError, type Manifest } from './manifest.js';
-import { baselineFile, inScope, planningOwner } from './intake.js';
+import { baselineFile, inScope, planningOwner, requireFrozenSource } from './intake.js';
 import { inspectOwnedProcess, reconcileOwnedProcess, runOwnedProcess, type OwnedProcessResult } from './process.js';
 import { prepareSandbox } from './sandbox.js';
 import { type RunStore } from './store.js';
@@ -198,12 +198,13 @@ export class OrcaClient {
       fail('orca_incomplete', 'Orca worktree listing is incomplete.');
     return result.worktrees;
   }
-  private identity(issue: IssueReceipt) {
-    const suffix = this.runId.slice(0, 8);
+  private identity(issue: IssueReceipt, runId = this.runId) {
+    const suffix = runId.slice(0, 8);
     return { branch: `sc-agent/issue-${issue.number}-${suffix}`, name: `issue-${issue.number}-agent-${suffix}`,
-      marker: `sc-agent:${this.runId}:issue-${issue.number}` };
+      marker: `sc-agent:${runId}:issue-${issue.number}` };
   }
-  private verify(rowInput: unknown, issue: IssueReceipt, expected: ReturnType<OrcaClient['identity']>): WorkspaceReceipt {
+  private verify(rowInput: unknown, issue: IssueReceipt, expected: ReturnType<OrcaClient['identity']>,
+    manifest = this.manifest, revision = manifest.base): WorkspaceReceipt {
     const row = object(rowInput); const path = row.path;
     const branch = row.branch ?? (row.git && object(row.git).branch);
     const head = row.head ?? (row.git && object(row.git).head);
@@ -214,22 +215,79 @@ export class OrcaClient {
       object(item).url === issue.url) && issue.url : undefined);
     if (typeof row.id !== 'string' || !row.id || typeof path !== 'string' || !isAbsolute(path) ||
         (branch !== expected.branch && branch !== `refs/heads/${expected.branch}`) ||
-        name !== expected.name || head !== this.manifest.base || issueNumber !== issue.number ||
+        name !== expected.name || head !== revision || issueNumber !== issue.number ||
         reference !== issue.url || typeof row.comment !== 'string' || !row.comment.startsWith(expected.marker) || row.isArchived === true ||
-        (row.commonDir && realpathSync(row.commonDir as string) !== realpathSync(this.manifest.commonDir)))
+        (row.commonDir && realpathSync(row.commonDir as string) !== realpathSync(manifest.commonDir)))
       fail('workspace_conflict', 'Orca workspace is stale or belongs to another task.');
-    cleanWorkspace(this.manifest, path, this.manifest.base, expected.branch);
-    return { id: row.id, path, branch: expected.branch, head: this.manifest.base,
+    if (revision === manifest.base) cleanWorkspace(manifest, path, revision, expected.branch);
+    else {
+      try { requireFrozenSource(manifest, path, revision); }
+      catch { return fail('workspace_conflict', 'Preserved candidate source no longer matches its frozen owner.'); }
+      if (git(path, 'symbolic-ref', '--short', 'HEAD') !== expected.branch)
+        fail('workspace_conflict', 'Preserved candidate branch changed.');
+    }
+    return { id: row.id, path, branch: expected.branch, head: revision,
       issue: issue.number, marker: expected.marker };
+  }
+  private async preservedWorkspaces(issue: IssueReceipt, rows: unknown[]): Promise<Set<string>> {
+    const preserved = new Set<string>(), seen = new Set<string>();
+    let next = this.manifest.continuationOf;
+    while (next) {
+      if (seen.has(next) || seen.size >= 100) fail('workspace_conflict', 'Continuation history cannot be verified.');
+      seen.add(next);
+      const parent = this.store.inspect(next);
+      next = parent.manifest.continuationOf;
+      if (!parent.data.allocation) continue;
+      const allocation = object(parent.data.allocation);
+      if (allocation.issue !== issue.number) continue;
+      if (parent.manifest.commonDir !== this.manifest.commonDir)
+        fail('workspace_conflict', 'Continuation workspace belongs to another repository.');
+      const expected = this.identity(issue, parent.manifest.id);
+      const frozen = object(parent.data.frozen ?? {}), round = object(parent.data.round ?? {});
+      const revision = frozen.head ?? object(round.prepared ?? {}).head ?? allocation.head;
+      if (typeof revision !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(revision))
+        fail('workspace_conflict', 'Preserved candidate identity is unavailable.');
+      const matches = rows.filter(input => {
+        const row = object(input);
+        return row.id === allocation.id || row.path === allocation.path;
+      });
+      if (matches.length !== 1) fail('workspace_conflict', 'Preserved task workspace is missing or ambiguous.');
+      const listed = object(matches[0]);
+      const shown = await this.call(['worktree', 'show', '--worktree', `id:${String(listed.id)}`, '--json']);
+      const verified = this.verify(shown.worktree, issue, expected, parent.manifest, revision);
+      if (verified.id !== allocation.id || verified.path !== allocation.path || verified.branch !== allocation.branch ||
+          verified.marker !== allocation.marker)
+        fail('workspace_conflict', 'Preserved task ownership changed.');
+      preserved.add(verified.id);
+    }
+    return preserved;
+  }
+  async verifyContinuation(issue: IssueReceipt): Promise<void> {
+    if (!this.manifest.continuationOf) return;
+    issueIdentity(this.manifest, issue);
+    const rows = await this.list(), preserved = await this.preservedWorkspaces(issue, rows);
+    const candidates = this.candidates(issue, rows, preserved);
+    if (candidates.length > 1) fail('workspace_conflict', 'Several workspaces claim the continued task.');
+    if (candidates.length) {
+      const row = object(candidates[0]);
+      const shown = await this.call(['worktree', 'show', '--worktree', `id:${String(row.id)}`, '--json']);
+      this.verify(shown.worktree, issue, this.identity(issue));
+    }
+  }
+  private candidates(issue: IssueReceipt, rows: unknown[], preserved: Set<string>): unknown[] {
+    const expected = this.identity(issue);
+    return rows.filter(input => { const row = object(input);
+      return !preserved.has(String(row.id)) && (row.branch === expected.branch ||
+        object(row.git ?? {}).branch === `refs/heads/${expected.branch}` ||
+        row.name === expected.name || row.displayName === expected.name ||
+        (typeof row.comment === 'string' && row.comment.startsWith(expected.marker)) ||
+        row.issue === issue.number || row.linkedIssue === issue.number); });
   }
   async allocate(issue: IssueReceipt): Promise<WorkspaceReceipt> {
     issueIdentity(this.manifest, issue);
     const expected = this.identity(issue); const rows = await this.list();
-    const candidates = rows.filter(input => { const row = object(input);
-      return row.branch === expected.branch || object(row.git ?? {}).branch === `refs/heads/${expected.branch}` ||
-        row.name === expected.name || row.displayName === expected.name ||
-        (typeof row.comment === 'string' && row.comment.startsWith(expected.marker)) ||
-        row.issue === issue.number || row.linkedIssue === issue.number; });
+    const preserved = await this.preservedWorkspaces(issue, rows);
+    const candidates = this.candidates(issue, rows, preserved);
     if (candidates.length > 1) fail('workspace_conflict', 'Several workspaces claim the same task.');
     if (candidates.length === 1) {
       const listed = object(candidates[0]);

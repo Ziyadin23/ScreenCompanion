@@ -77,6 +77,79 @@ test('admission and budgets persist across handles without resetting allowances'
   assert.equal(statSync(join(directory, 'journal.sqlite')).mode & 0o777, 0o600);
 });
 
+test('explicit linked continuation preserves spent resources and proof, admits once and retires parent dispatch', t => {
+  const { manifest, directory } = fixture(t), store = new RunStore(directory, manifest); t.after(() => store.close());
+  store.admit(manifest); store.reserve(manifest.id, 'first', 'workerInvocations');
+  store.reserve(manifest.id, 'second', 'workerInvocations');
+  store.update(manifest.id, { status: 'budget_exhausted', stage: 'review', error: 'budget_exhausted',
+    data: { verification: { passed: true }, workerResults: [
+      { usage: { inputTokens: 11, outputTokens: 4 } }, { usage: { inputTokens: 7, outputTokens: 2 } }
+    ] } });
+  const before = store.get(manifest.id);
+  const input = { repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base: 'b'.repeat(40), scope: manifest.scope, continuationOf: manifest.id, limits: { workerInvocations: 2 } };
+  const child = store.admit(makeManifest(input));
+  assert.deepEqual(store.get(manifest.id), before);
+  assert.deepEqual(child.data, {}); assert.equal(child.manifest.continuationOf, manifest.id);
+  assert.equal(store.usage(child.manifest.id).workerInvocations, 0);
+  assert.equal(store.admit(makeManifest(input)).manifest.id, child.manifest.id);
+  assert.throws(() => store.admit(makeManifest({ ...input, base: 'c'.repeat(40) })), { code: 'continuation_conflict' });
+  assert.throws(() => store.claim(manifest.id), { code: 'continuation_superseded' });
+  store.reserve(child.manifest.id, 'third', 'workerInvocations');
+  const total = store.cumulativeUsage(child.manifest.id);
+  assert.equal(total.runs, 2); assert.equal(total.usage.workerInvocations, 3);
+  assert.equal(total.inputTokens, 18); assert.equal(total.outputTokens, 6); assert.equal(total.tokensComplete, false);
+  assert.deepEqual(store.get(manifest.id), before);
+});
+
+test('historical policy continuation preserves raw admission while execution still requires current policy', t => {
+  const { manifest, directory } = fixture(t); let store = new RunStore(directory, manifest);
+  store.admit(manifest); store.reserve(manifest.id, 'spent', 'workerInvocations');
+  store.update(manifest.id, { status: 'budget_exhausted' }); store.close();
+  const db = new Database(join(directory, 'journal.sqlite'));
+  const historical = JSON.stringify({ ...manifest, policyHash: 'b'.repeat(64) });
+  db.prepare('UPDATE runs SET manifest=? WHERE id=?').run(historical, manifest.id); db.close();
+  const child = makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base: 'c'.repeat(40), scope: manifest.scope, continuationOf: manifest.id });
+  store = new RunStore(directory, child); t.after(() => store.close());
+  assert.throws(() => store.claim(manifest.id), { code: 'incompatible_state' });
+  assert.equal(store.inspect(manifest.id).manifest.policyHash, 'b'.repeat(64));
+  store.admit(child); assert.equal(store.cumulativeUsage(child.id).usage.workerInvocations, 1);
+  const reader = new RunStore(directory, child, { readOnly: true }); t.after(() => reader.close());
+  assert.equal(reader.listRuns().length, 2);
+  assert.equal(reader.get(manifest.id).manifest.policyHash, 'b'.repeat(64));
+  const raw = new Database(join(directory, 'journal.sqlite'), { readonly: true });
+  assert.equal((raw.prepare('SELECT manifest FROM runs WHERE id=?').get(manifest.id) as { manifest: string }).manifest, historical);
+  raw.close();
+});
+
+test('continuation refuses unexhausted tasks, publication and uncertain effects', async t => {
+  const { manifest, directory } = fixture(t), store = new RunStore(directory, manifest); t.after(() => store.close());
+  store.admit(manifest);
+  const next = () => makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base: manifest.base, scope: manifest.scope, continuationOf: manifest.id });
+  assert.throws(() => store.admit(next()), { code: 'continuation_denied' });
+  store.update(manifest.id, { status: 'budget_exhausted', data: { pull: { number: 1 } } });
+  assert.throws(() => store.admit(next()), { code: 'continuation_denied' });
+  store.update(manifest.id, { data: {} });
+  await assert.rejects(store.effect(manifest.id, 'uncertain', 'worker', {}, {
+    execute: async () => { throw new Error('lost worker result'); }, reconcile: async () => null
+  }));
+  assert.throws(() => store.admit(next()), { code: 'continuation_denied' });
+});
+
+test('unacknowledged remote publication cannot be bypassed through continuation', async t => {
+  const { manifest, directory } = fixture(t), store = new RunStore(directory, manifest); t.after(() => store.close());
+  store.admit(manifest); store.update(manifest.id, { status: 'budget_exhausted' });
+  await assert.rejects(store.effect(manifest.id, 'remote-pr', 'github_pr', {}, {
+    execute: async () => { throw new Error('response lost after remote publication'); }, reconcile: async () => null
+  }));
+  const child = makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base: manifest.base, scope: manifest.scope, continuationOf: manifest.id });
+  assert.throws(() => store.admit(child), { code: 'continuation_denied' });
+  assert.equal(store.listRuns().length, 1);
+});
+
 test('an effect precondition can reject safely before the unknown side-effect boundary', async t => {
   const { manifest, directory } = fixture(t);
   const store = new RunStore(directory, manifest); t.after(() => store.close()); store.admit(manifest);

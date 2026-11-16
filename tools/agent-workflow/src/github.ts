@@ -379,7 +379,8 @@ export class GithubClient {
       else if (current) {
         const conclusion = current.conclusion ?? current.status ?? current.state;
         state = conclusion === 'success' ? 'success' : conclusion === 'skipped' ? 'skipped' :
-          ['queued', 'in_progress', 'pending', 'requested', 'waiting'].includes(String(conclusion)) ? 'pending' : 'failure';
+          ['queued', 'in_progress', 'pending', 'requested', 'waiting'].includes(String(conclusion)) ? 'pending' :
+            ['failure', 'error', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(String(conclusion)) ? 'failure' : 'missing';
       }
       return { name, state, attempts: [...checkAttempts, ...statusAttempts]
         .map(item => String(item.conclusion ?? item.status ?? item.state ?? 'unknown')) };

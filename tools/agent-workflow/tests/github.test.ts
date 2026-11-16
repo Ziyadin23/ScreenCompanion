@@ -268,6 +268,17 @@ test('CI does not compare IDs across check runs and statuses and keeps queued ch
   runs[0]!.status = 'queued';
   assert.equal((await client.checks(head, false)).gates[0]?.state, 'pending');
 });
+test('unrecognized CI outcomes stay unavailable instead of inventing a failed regression', async t => {
+  const f = fixture(t);
+  for (const conclusion of ['neutral', 'unrecognized', 'completed', 'timed_out']) {
+    const transport: GithubTransport = async (_method, endpoint) => endpoint.includes('check-runs') ?
+      { total_count: 1, check_runs: [{ id: 1, name: 'changes', head_sha: head, conclusion }] } : [];
+    const result = await new GithubClient(f.store, f.manifest.id, transport).checks(head, false);
+    assert.equal(result.ready, false);
+    assert.equal(result.gates[0]?.state, conclusion === 'timed_out' ? 'failure' : 'missing');
+  }
+});
+
 test('missing protection yields a read-only concrete proposal', async t => {
   const f = fixture(t); const snapshot = await f.client.protection();
   assert.equal(snapshot.available, false); assert.equal(snapshot.protectedForMerge, false);

@@ -14,9 +14,10 @@ import { materializePlan, OrcaClient, preparePlan, resolveExistingOwner, runSetu
 import { assertFrozenSource, attestVerificationDependencies, freezeCandidate, inspectCandidate, observedCheckFailures, pushCandidate,
   verifyCandidate, type CandidateOptions, type DependencyAttestation, type FrozenCandidate, type VerificationReceipt } from './candidate.js';
 import { prepareVersionRecords, reserveCandidateVersion, type PreparedVersion } from './delivery.js';
+import { qualifyConfiguredBeta } from './beta-profile.js';
 import { integrateCandidate, observePostflight, prepareObservedFinalization, prepareIntegrationIncident,
-  publishIntegrationIncident, type IntegrationTransport, type MergeReceipt, type Postflight } from './integration.js';
-import { prepareRecordIntegrationIncident, publishAndFinalizeRecords, publishRecordIntegrationIncident } from './finalization.js';
+  publishIntegrationIncident, prepareIntegrationRecovery, type IntegrationTransport, type MergeReceipt, type Postflight } from './integration.js';
+import { prepareRecordIntegrationIncident, prepareRecordIntegrationRecovery, publishAndFinalizeRecords, publishRecordIntegrationIncident } from './finalization.js';
 
 export interface RuntimeDependencies {
   executeWorker?: (request: WorkerRequest) => Promise<WorkerResult>;
@@ -82,6 +83,22 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
   function remember(context: Context, data: Record<string, unknown>) {
     const run = latest(context); context.store.update(run.manifest.id, { data: { ...run.data, ...data } });
   }
+  async function recovery(context: Context, record = false) {
+    try {
+      return await (record ? prepareRecordIntegrationRecovery : prepareIntegrationRecovery)({ store: context.store,
+        runId: context.run.manifest.id, transport: dependencies.integrationTransport });
+    } catch (error) {
+      return { state: 'wait', reason: error instanceof WorkflowError ? error.code : 'recovery_unavailable' };
+    }
+  }
+  function priorReview(context: Context) {
+    const parent = context.run.manifest.continuationOf;
+    if (!parent) return null;
+    const review = context.store.inspect(parent).data.reviewReceipt as { head?: unknown; findings?: unknown } | undefined;
+    if (typeof review?.head !== 'string' || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(review.head) || !Array.isArray(review.findings)) return null;
+    return { head: review.head, findings: review.findings.filter((value): value is string => typeof value === 'string')
+      .slice(0, 3).map(value => value.slice(0, 1200)) };
+  }
   function task(context: Context, requireCurrentRuntime = true) {
     const run = latest(context);
     const issue = z.array(z.object({ number: z.number().int().positive(), url: z.string(), body: z.string(),
@@ -121,6 +138,7 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
     return { workspace: allocation.path, owner: plan.owner.change,
       administrative: Object.fromEntries(plan.files.map(file => [file.path, file.hash])),
       versionRecords: (data.versionPreparation as PreparedVersion | undefined)?.versionRecords,
+      versionReservation: (data.versionPreparation as PreparedVersion | undefined)?.reservation,
       targetExists: target => {
         try {
           const path = realpathSync(join(allocation.path, target.split('#')[0]!));
@@ -208,6 +226,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       const issue = await client.selectedIssue();
       const body = String(issue.body ?? '');
       if (body.length > 4000) throw new WorkflowError('oversized_context', 'Selected issue exceeds the bounded context; narrow its task before dispatch.', 2);
+      if (run.manifest.continuationOf) await new OrcaClient(store, run.manifest.id, dependencies.orcaTransport)
+        .verifyContinuation({ number: Number(issue.number), url: String(issue.html_url), body, state: 'open', reused: true });
       let owner: ReturnType<typeof planningOwner> | null = null;
       try { owner = planningOwner(run.manifest, body); }
       catch (error) {
@@ -261,7 +281,9 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           'Do not copy, transpile, evaluate or read source text; do not import vm, module, typescript, fs or other helpers for application oracles. ' +
           'Assertions must directly reference an imported production binding, for example assert.rejects(() => importedFunction(syntheticInput)). ' +
           'The coordinator will execute these exact frozen bytes on baseline and candidate without credentials or network. ' +
-          'Return oracle=null when native/GUI/packaged/live evidence is needed or the contract cannot be established. ' +
+          'Cover each affected schema/task variant in the full selected issue, not only a representative happy path. ' +
+          'Return oracle=null when native/GUI/packaged/live evidence is needed or the contract cannot be established.\n' +
+          JSON.stringify({ issue: run.data.selectedIssue ?? null, priorRejectedReview: priorReview(context) }) + '\n' +
           'Your reproduced boolean is advisory; do not claim external qualification.');
         const parsed = z.object({ oracle: oracleSchema.nullable() }).passthrough().parse(proposed);
         if (!parsed.oracle) findings[index] = { ...finding, state: 'unconfirmed', reason: 'target_or_contract_unavailable' };
@@ -448,12 +470,15 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           `OpenSpec apply ${(run.data.plan as PlanBundle).owner.change}, issue #${issue.number}, ` +
           `only task ${(run.data.plan as PlanBundle).owner.taskIds?.join(', ') ?? '1.1, 1.2, 1.3'}. ` +
           `The coordinator explicitly transferred the validated local plan to this worktree. Read that plan and affected baseline rules. ` +
-          `Correct only the existing contract in ${failure.path}, with focused additive tests under admitted paths. ` +
+          `Correct the full existing schema contract in ${failure.path}, with focused additive tests under admitted paths. ` +
+          (run.manifest.scope === 'pipeline' ?
+            'Every supplied option requires string text, including non-choice and transformation tasks; do not narrow validation to choice types. ' +
+            'If the existing lab fidelity fixture becomes invalid, its admitted correction is the exact Wrong option text literal plus the approved well-formed-wrong-transcription title/comment; preserve every assertion and all other bytes. ' : '') +
           'Do not edit planning records, versions, policy, dependencies or Git metadata; the coordinator owns them. ' +
           `Preserve the full issue acceptance; a source PR does not complete required beta or target qualification. ` +
           `Baseline oracle: ${failure.oracleHash}. Previous round result: ${String(run.data.repairReason ?? 'initial correction')}.\n` +
           JSON.stringify({ issue: { number: issue.number, body: issue.body }, oracle: finding.oracle,
-            delivery: deliveryBoundaries(run.manifest) });
+            delivery: deliveryBoundaries(run.manifest), priorRejectedReview: priorReview(context) });
         const previous = ((run.data.roundHistory ?? []) as { number: number; frozen?: FrozenCandidate;
           verification?: VerificationReceipt; review?: { head: string; findings: string[] } }[]).at(-1);
         if (previous?.frozen) {
@@ -461,8 +486,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
             failedChecks: previous.verification ? observedCheckFailures(context.store, run.manifest.id,
               previous.frozen, previous.verification, `round-${previous.number}-checks`) : [],
             reviewFindings: previous.review?.head === previous.frozen.head ? previous.review.findings : [] };
-          const excerpt = JSON.stringify(details).slice(0, Math.max(0, Math.min(3500, Math.floor((7800 - instructions.length) / 2))));
-          // Diagnostic text is data, with the original issue/oracle kept intact and the worker's 8k bound preserved.
+          const excerpt = JSON.stringify(details).slice(0, Math.max(0, Math.min(3500, Math.floor((15800 - instructions.length) / 2))));
+          // Diagnostic text is data; preserve the complete issue/oracle and the worker's bounded task pack.
           const separator = instructions.lastIndexOf('\n');
           const detail = JSON.parse(instructions.slice(separator + 1)) as Record<string, unknown>;
           instructions = instructions.slice(0, separator + 1) + JSON.stringify({ ...detail, previousFailureEvidence: excerpt });
@@ -557,7 +582,22 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       return reviewReceipt.clean ? { next: 'handoff' } : repair(context, 'independent_review_findings');
     },
     handoff: async context => {
-      const frozen = latest(context).data.frozen as FrozenCandidate;
+      const run = latest(context), frozen = run.data.frozen as FrozenCandidate;
+      if (frozen.checks.includes('application') && run.manifest.betaProfile) {
+        const version = (run.data.versionPreparation as PreparedVersion | undefined)?.reservation.version;
+        if (!version) throw new WorkflowError('invalid_state', 'Verified candidate version is unavailable.');
+        assertFrozenSource(run.manifest, frozen, inspection(context));
+        try {
+          const receipt = await qualifyConfiguredBeta({ store: context.store, runId: run.manifest.id,
+            workspace: (run.data.allocation as WorkspaceReceipt).path, head: frozen.head, version, signal: context.signal });
+          assertFrozenSource(run.manifest, frozen, inspection(context));
+          return { next: 'publish', data: { betaReceipt: receipt,
+            beta: { required: true, qualified: receipt.public.qualified }, waitingFor: null } };
+        } catch (error) {
+          if (!(error instanceof WorkflowError) || !['beta_capability_unavailable', 'beta_profile_changed'].includes(error.code)) throw error;
+          return { next: 'handoff', status: 'awaiting_input', data: { waitingFor: error.code } };
+        }
+      }
       return { next: 'publish', data: { beta: frozen.checks.includes('application') ?
         { required: true, qualified: false, waitingFor: 'windows_beta_profile' } : { required: false, qualified: false } } };
     },
@@ -592,7 +632,9 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
         marker: digest({ run: run.manifest.id, issue: issue.number, kind: 'source' }),
         problem: `Correct confirmed contract in ${failure.path}`, result: 'Existing contract restored within the selected scope.',
         validation: `Frozen oracle passes on ${frozen.head}; affected checks and independent source review passed.`,
-        limits: frozen.checks.includes('application') ? 'Windows beta handoff and native/GUI qualification remain pending.' :
+        limits: frozen.checks.includes('application') ? (run.data.beta as { qualified?: boolean })?.qualified ?
+          'Exact-candidate Windows beta handoff is verified; public release, recorder and live-provider claims remain separate.' :
+          'Windows beta handoff and native/GUI qualification remain pending.' :
           'Documentation-only candidate; no application or platform qualification is claimed.' });
       await new OrcaClient(context.store, run.manifest.id, dependencies.orcaTransport)
         .setCard(run.data.allocation as WorkspaceReceipt, 'in-review', `source PR #${pull.number}; checks pending #${issue.number}`);
@@ -627,12 +669,16 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       const run = latest(context), merge = run.data.integration as MergeReceipt;
       const postflight = await observePostflight({ store: context.store, runId: run.manifest.id, merge,
         transport: dependencies.integrationTransport });
-      if (postflight.state === 'failed') {
-        const incident = prepareIntegrationIncident(merge, postflight);
+      const failure = latest(context).data.postflightFailure as Postflight | undefined;
+      if (postflight.state === 'failed' || failure?.state === 'failed') {
+        const failed = failure ?? postflight;
+        const incident = prepareIntegrationIncident(merge, failed);
         remember(context, { incident });
-        const published = await publishIntegrationIncident({ store: context.store, runId: run.manifest.id, merge, postflight,
+        const published = await publishIntegrationIncident({ store: context.store, runId: run.manifest.id, merge, postflight: failed,
           transport: dependencies.integrationTransport });
-        return { next: 'postflight', status: 'awaiting_input', data: { incidentReceipt: published, waitingFor: 'integration_hold' } };
+        const recoveryPreparation = await recovery(context);
+        return { next: 'postflight', status: 'awaiting_input', data: { incidentReceipt: published,
+          recoveryPreparation, waitingFor: 'integration_hold' } };
       }
       if (postflight.state !== 'ready') return { next: 'postflight', status: postflight.reason ? 'awaiting_input' : 'awaiting_external',
         data: { waitingFor: postflight.reason ?? 'main_checks' } };
@@ -641,13 +687,16 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
     finalize: async context => {
       // Already-integrated work must retain incident/recovery access under its original proof.
       const { run, issue } = task(context, false);
-      const failedRecord = latest(context).data.recordPostflight as { state?: string } | undefined;
+      const data = latest(context).data;
+      const failedRecord = (data.recordPostflightFailure ?? data.recordPostflight) as { state?: string } | undefined;
       if (failedRecord?.state === 'failed') {
         const incident = prepareRecordIntegrationIncident({ store: context.store, runId: run.manifest.id });
         remember(context, { recordIncident: incident });
         const receipt = await publishRecordIntegrationIncident({ store: context.store, runId: run.manifest.id,
           transport: dependencies.integrationTransport });
+        const preparedRecovery = receipt.state === 'wait' ? null : await recovery(context, true);
         return { next: 'finalize', status: 'awaiting_input', data: { recordIncidentReceipt: receipt,
+          recordRecoveryPreparation: preparedRecovery,
           waitingFor: receipt.state === 'wait' ? receipt.reason : 'record_postflight_failed' } };
       }
       const finalization = prepareObservedFinalization({ store: context.store, runId: run.manifest.id,
@@ -661,7 +710,9 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           remember(context, { recordIncident: incident });
           const receipt = await publishRecordIntegrationIncident({ store: context.store, runId: run.manifest.id,
             transport: dependencies.integrationTransport });
+          const preparedRecovery = receipt.state === 'wait' ? null : await recovery(context, true);
           return { next: 'finalize', status: 'awaiting_input', data: { recordIncidentReceipt: receipt,
+            recordRecoveryPreparation: preparedRecovery,
             waitingFor: receipt.state === 'wait' ? receipt.reason : 'record_postflight_failed' } };
         }
         return { next: 'finalize', status: result.reason === 'record_postflight_pending' ||

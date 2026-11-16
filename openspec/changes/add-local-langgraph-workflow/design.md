@@ -270,3 +270,12 @@ Rollback is to stop dispatch, disable the local merge policy and retain worktree
 - [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode): script/CI execution; installed CLI help verified JSON/schema/cwd capabilities.
 - [GitHub merge endpoint](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request): expected-head matching; installed `gh pr merge --help` also exposes a head guard.
 - [Contributor workflow](../../../docs/DEVELOPMENT.md), [engineering rules](../../../CODING_STANDARDS.md), [tests](../../../tests/README.md) and [verification](../../../docs/VERIFICATION.md): task ownership, check selection and evidence limits.
+
+
+### Operator-selected continuation and real Windows profile — 2026-11-16
+
+The user requested completing the remaining blocks with subagents after the exhausted pilot was explained. A new `run --continue-from <id>` admission references the exhausted, unpublished task and uses the current explicit source/policy/scope. It preserves the old manifest, worktree, receipts and consumed limits; it copies no acceptance proof. One continuation can be admitted per parent, identical retries reuse it, old dispatch is retired, and reports include cumulative linked usage/tokens. Read-only historical-policy inspection does not grant execution under that policy.
+
+Normal model limits remain12 calls/two repairs,20 minutes per worker and120 active minutes. A selected private Windows profile can explicitly request180 active minutes for the documented up-to-two-hour UI verification plus installation/build/native/package work. The helper timeout is separately fixed in the private profile (125 minutes for this qualification, maximum150), bounded again by the run's remaining active allowance. This is declared at fresh admission, never added during resume.
+
+Real capability selection binds private profile/helper/Node/resource-token identities. A credential-free coordinator launch invokes only that pinned private helper; machine credentials stay in existing private handles and unnamed-memory files, never in graph state or durable arguments. Actual exact-source Windows verify/native/vault/fullUI/package/key-free/protected-state/cleanup proof must be observed before a qualified transfer. Synthetic evidence remains unqualified. Pipeline PR delivery is separate from the narrower proven JSON-parser automatic-merge category.

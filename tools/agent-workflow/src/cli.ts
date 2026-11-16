@@ -6,13 +6,14 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { executeRun } from './graph.js';
-import { DEFAULT_LIMITS, digest, makeManifest, WorkflowError } from './manifest.js';
+import { DEFAULT_LIMITS, WINDOWS_ACTIVE_MS, digest, makeManifest, WorkflowError } from './manifest.js';
 import { RunStore, type RunRecord } from './store.js';
 import { cancelRun } from './recovery.js';
 import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
+import { selectBetaProfile } from './beta-profile.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
 export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirectory: string,
@@ -114,9 +115,15 @@ function report(run: RunRecord, store: RunStore) {
   const hold = run.data.integrationHold as { active?: boolean; reason?: string } | undefined;
   const review = run.data.pullReview as { head?: string; findings?: unknown[]; evidenceLevel?: string } | undefined;
   const usage = store.usage(run.manifest.id);
+  const cumulative = store.cumulativeUsage(run.manifest.id);
   return { runId: run.manifest.id, repository: run.manifest.repository, scope: run.manifest.scope,
     delivery: run.manifest.delivery, base: run.manifest.base, status: run.status, stage: run.stage,
     cancelRequested: run.cancelRequested, error: run.error, usage,
+    continuationOf: run.manifest.continuationOf ?? null, cumulative,
+    candidateReview: run.data.reviewReceipt ? { head: sha((run.data.reviewReceipt as { head?: unknown }).head),
+      clean: (run.data.reviewReceipt as { clean?: unknown }).clean === true,
+      findings: Array.isArray((run.data.reviewReceipt as { findings?: unknown }).findings) ?
+        (run.data.reviewReceipt as { findings: unknown[] }).findings.length : 0 } : null,
     waitingFor: safeCode(run.data.waitingFor),
     findings: { total: findings.length, confirmed: findings.filter(f => f?.state === 'confirmed').length,
       disproved: findings.filter(f => f?.state === 'disproved').length, unconfirmed: findings.filter(f => f?.state === 'unconfirmed').length },
@@ -138,7 +145,8 @@ function report(run: RunRecord, store: RunStore) {
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
     costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ?
       run.error === 'invalid_checkpoint' ? 'inspect_saved_state' : 'inspect_owned_execution' :
-      run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
+      run.status === 'budget_exhausted' ? 'inspect_findings_and_authorize_linked_continuation' :
+        run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
 }
 function exitFor(run: RunRecord): number {
   if (run.status === 'cancelled') return 130;
@@ -154,7 +162,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     'state-dir': { type: 'string' }, 'model-profile': { type: 'string' },
     'dry-run': { type: 'boolean' }, help: { type: 'boolean' }, format: { type: 'string' },
     'retention-days': { type: 'string' }, workers: { type: 'string' },
-    'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' }
+    'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' },
+    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }
   } });
   const command = positionals[0];
   if (values.help || !command) {
@@ -173,27 +182,40 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       retentionDays < 1 || retentionDays > 3650)
     throw new WorkflowError('invalid_arguments', 'Retention must be between 1 and 3650 days for prune.');
   const repository = repositoryAt(values.repo ? resolve(values.repo) : process.cwd());
-  function ceiling(value: string | undefined, maximum: number): number {
-    const parsed = Number(value ?? maximum);
+  const stateDirectory = values['state-dir'] ? resolve(values['state-dir']) :
+    join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
+      'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
+  let parent: RunRecord | undefined;
+  if (values['continue-from']) {
+    if (command !== 'run') throw new WorkflowError('invalid_arguments', 'A continuation is a new explicit run admission.');
+    const reader = new RunStore(stateDirectory, makeManifest({ ...repository, scope: 'providers-json' }), { readOnly: true });
+    try { parent = reader.get(values['continue-from']); } finally { reader.close(); }
+  }
+  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) : undefined;
+  function ceiling(value: string | undefined, maximum: number, fallback = maximum): number {
+    const parsed = Number(value ?? fallback);
     if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum)
       throw new WorkflowError('invalid_arguments', 'A CLI resource allowance must be positive and at most the trusted default.');
     return parsed;
   }
-  const manifest = makeManifest({ ...repository, scope: values.scope ?? 'providers-json',
-    mode: values.mode ?? (values.issue ? 'issue' : values.pr ? 'review' : 'investigate'),
-    ...(values.issue ? { issue: /^\d+$/.test(values.issue) ? Number(values.issue) : -1 } : {}),
-    ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } : {}),
-    delivery: values.delivery ?? 'report', modelProfile: values['model-profile'] ?? 'selected', limits: {
+  const manifest = makeManifest({ ...repository, scope: values.scope ?? parent?.manifest.scope ?? 'providers-json',
+    mode: values.mode ?? (values.issue ? 'issue' : values.pr ? 'review' : parent?.manifest.mode ?? 'investigate'),
+    ...(values.issue ? { issue: /^\d+$/.test(values.issue) ? Number(values.issue) : -1 } :
+      parent?.manifest.issue ? { issue: parent.manifest.issue } : {}),
+    ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } :
+      parent?.manifest.pr ? { pr: parent.manifest.pr } : {}),
+    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(betaProfile ? { betaProfile } : {}),
+    delivery: values.delivery ?? parent?.manifest.delivery ?? 'report',
+    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: {
       workerInvocations: ceiling(values.workers, DEFAULT_LIMITS.workerInvocations),
       workerMs: ceiling(values['worker-seconds'], DEFAULT_LIMITS.workerMs / 1000) * 1000,
-      activeMs: ceiling(values['active-minutes'], DEFAULT_LIMITS.activeMs / 60_000) * 60_000
+      activeMs: ceiling(values['active-minutes'], (betaProfile ? WINDOWS_ACTIVE_MS : DEFAULT_LIMITS.activeMs) / 60_000,
+        DEFAULT_LIMITS.activeMs / 60_000) * 60_000
     } });
   if (command !== 'run' && Object.keys(values).some(key =>
-    ['scope', 'mode', 'issue', 'pr', 'delivery', 'model-profile', 'dry-run', 'workers', 'worker-seconds', 'active-minutes'].includes(key)))
+    ['scope', 'mode', 'issue', 'pr', 'delivery', 'model-profile', 'dry-run', 'workers', 'worker-seconds', 'active-minutes',
+      'continue-from', 'beta-profile'].includes(key)))
     throw new WorkflowError('invalid_arguments', 'Saved runs cannot receive new authority options.');
-  const stateDirectory = values['state-dir'] ? resolve(values['state-dir']) :
-    join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
-      'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
   if (command === 'doctor') {
     const result = doctor(repository, stateDirectory);
     console.log(JSON.stringify(result));
@@ -202,6 +224,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   if (command === 'run' && values['dry-run']) {
     console.log(JSON.stringify({ dryRun: true, repository: manifest.repository, scope: manifest.scope,
       delivery: manifest.delivery, mode: manifest.mode, limits: manifest.limits,
+      continuationOf: manifest.continuationOf ?? null, betaProfile: manifest.betaProfile?.name ?? null,
       policyHash: manifest.policyHash, workerCalls: 0, remoteMutations: 0 }));
     return 0;
   }
@@ -230,8 +253,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       console.log(JSON.stringify({ removedRuns: await store.prune(Date.now() - retentionDays * 86_400_000), retentionDays }));
       return 0;
     }
-    const id = command === 'run' ? manifest.id : positionals[1]!;
-    let run = command === 'run' ? store.admit(manifest) : store.get(id);
+    let run = command === 'run' ? store.admit(manifest) : store.get(positionals[1]!);
+    const id = run.manifest.id;
     if (inspection) {
       const value = report(run, store);
       console.log(values.format === 'markdown' ?
@@ -243,6 +266,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         `Next gate: ${value.waitingFor ?? 'none'}\nNext action: ${value.nextAction ?? 'none'}\n` +
         `Repairs: ${value.retryCount}; intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
         `Workers: ${value.usage.workerInvocations}; active ms: ${value.usage.activeMs}\n` +
+        `Continuation of: ${value.continuationOf ?? 'none'}; cumulative workers: ${value.cumulative.usage.workerInvocations}; ` +
+        `cumulative active ms: ${value.cumulative.usage.activeMs}\n` +
         `Observed tokens: ${value.tokens.observedInput} input, ${value.tokens.observedOutput} output; complete: ${value.tokens.complete}\nCost: unknown\n` : JSON.stringify(value));
       return 0;
     }
