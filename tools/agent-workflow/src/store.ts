@@ -70,8 +70,10 @@ export function processIdentity(pid = process.pid): string | null {
 
 export class RunStore {
   private readonly db: Database.Database;
+  private readonly inspectionOnly: boolean;
   readonly directory: string;
   constructor(directory: string, private readonly repository: Manifest, options: { readOnly?: boolean } = {}) {
+    this.inspectionOnly = options.readOnly ?? false;
     this.directory = canonical(directory);
     if ([repository.root, dirname(repository.commonDir)].some(root => inside(canonical(root), this.directory)))
       throw new WorkflowError('unsafe_state_path', 'Workflow state must be outside source and Git metadata.');
@@ -156,7 +158,40 @@ export class RunStore {
       throw new WorkflowError('foreign_repository', 'Admission targets a different repository.');
     const serialized = JSON.stringify(manifest);
     readManifest(serialized);
+    let admittedId = manifest.id;
     this.guardedWrite(() => {
+      const latestTask = manifest.mode === 'issue' ? this.db.prepare(`SELECT id,status FROM runs WHERE repository=?
+        AND json_extract(manifest,'$.mode')='issue' AND json_extract(manifest,'$.issue')=?
+        ORDER BY created_at DESC,rowid DESC LIMIT 1`).get(manifest.repository, manifest.issue) as
+          { id: string; status: RunStatus } | undefined : undefined;
+      if (!manifest.continuationOf && latestTask?.status === 'budget_exhausted' && latestTask.id !== manifest.id)
+        throw new WorkflowError('continuation_required', 'The exhausted issue has preserved history; use an explicit linked continuation.');
+      if (manifest.continuationOf) {
+        const parent = this.inspect(manifest.continuationOf);
+        if (parent.manifest.id === manifest.id || parent.status !== 'budget_exhausted' || parent.cancelRequested ||
+            parent.manifest.commonDir !== manifest.commonDir || parent.manifest.mode !== manifest.mode ||
+            parent.manifest.issue !== manifest.issue || parent.manifest.pr !== manifest.pr ||
+            parent.data.pull || parent.data.integration)
+          throw new WorkflowError('continuation_denied', 'Continuation requires an exhausted unpublished task in this repository.');
+        const child = this.db.prepare(`SELECT id FROM runs WHERE repository=?
+          AND json_extract(manifest,'$.continuationOf')=?`).get(manifest.repository, parent.manifest.id);
+        if (child) {
+          const previous = this.inspect(z.object({ id: z.uuid() }).parse(child).id);
+          if (digest({ ...previous.manifest, id: undefined }) !== digest({ ...manifest, id: undefined }))
+            throw new WorkflowError('continuation_conflict', 'An admitted continuation already owns this task; inspect it first.');
+          admittedId = previous.manifest.id; return;
+        }
+        if (latestTask && latestTask.id !== parent.manifest.id)
+          throw new WorkflowError('continuation_conflict', 'Continue the latest admission of this issue, preserving its cumulative history.');
+        if (this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM operations WHERE run_id=?
+          AND state!='observed' LIMIT 1`).get(parent.manifest.id))
+          throw new WorkflowError('continuation_denied', 'Reconcile outstanding execution or integration before continuation.');
+        for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+          const owner = leaseSchema.parse(raw);
+          if (processIdentity(owner.pid) === owner.identity)
+            throw new WorkflowError('repository_owned', 'Active coordination must stop before continuation admission.');
+        }
+      }
       const previous = this.db.prepare('SELECT manifest FROM runs WHERE id=?').get(manifest.id);
       if (previous && z.object({ manifest: z.string() }).parse(previous).manifest !== serialized)
         throw new WorkflowError('admission_conflict', 'Run identity already belongs to another admission.');
@@ -165,14 +200,18 @@ export class RunStore {
         (id,repository,manifest,status,stage,created_at,updated_at) VALUES (?,?,?,'ready','preflight',?,?)`)
         .run(manifest.id, manifest.repository, serialized, now, now);
     });
-    return this.get(manifest.id);
+    return this.get(admittedId);
   }
   get(id: string): RunRecord {
+    return this.readRun(id, this.inspectionOnly);
+  }
+  inspect(id: string): RunRecord { return this.readRun(id, true); }
+  private readRun(id: string, inspectionOnly: boolean): RunRecord {
     const raw = this.db.prepare('SELECT * FROM runs WHERE id=? AND repository=?').get(id, this.repository.repository);
     if (!raw) throw new WorkflowError('run_not_found', 'No saved run with this identity in this repository.');
     try {
       const row = rowSchema.parse(raw);
-      return { manifest: readManifest(row.manifest), status: row.status, stage: row.stage,
+      return { manifest: readManifest(row.manifest, inspectionOnly), status: row.status, stage: row.stage,
         data: z.record(z.string(), z.unknown()).parse(JSON.parse(row.data)),
         cancelRequested: row.cancel_requested === 1, error: row.error };
     } catch (error) {
@@ -286,9 +325,13 @@ export class RunStore {
   }
   claim(id: string): void {
     const run = this.get(id);
+    readManifest(JSON.stringify(run.manifest));
     const identity = processIdentity();
     if (!identity) throw new WorkflowError('owner_unverifiable', 'Current execution identity is unavailable.');
     this.guardedWrite(() => {
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`)
+        .get(run.manifest.repository, id))
+        throw new WorkflowError('continuation_superseded', 'This preserved run has an admitted continuation; inspect that run.');
       const hold = this.repositoryIntegrationHold();
       if (hold && hold.runId !== id)
         throw new WorkflowError('repository_owned', 'Another run has unresolved integration; resume it first.');
@@ -405,6 +448,9 @@ export class RunStore {
   }
   usage(id: string): Record<Counter, number> {
     this.get(id);
+    return this.readUsage(id);
+  }
+  private readUsage(id: string): Record<Counter, number> {
     const result: Record<Counter, number> = { findings: 0, issues: 0, writingTasks: 0, workerInvocations: 0, repairs: 0, activeMs: 0 };
     for (const raw of this.db.prepare(`SELECT counter,SUM(COALESCE(timings.spent_ms,reservations.amount)) AS amount
       FROM reservations LEFT JOIN timings USING(run_id,key) WHERE run_id=? GROUP BY counter`).all(id)) {
@@ -412,6 +458,31 @@ export class RunStore {
       result[row.counter] = row.amount;
     }
     return result;
+  }
+  cumulativeUsage(id: string): { usage: Record<Counter, number>; inputTokens: number; outputTokens: number;
+    tokensComplete: boolean; runs: number } {
+    const usage: Record<Counter, number> = { findings: 0, issues: 0, writingTasks: 0,
+      workerInvocations: 0, repairs: 0, activeMs: 0 };
+    let inputTokens = 0, outputTokens = 0, tokensComplete = true;
+    const seen = new Set<string>(); let next: string | undefined = id;
+    while (next) {
+      if (seen.has(next) || seen.size >= 100)
+        throw new WorkflowError('invalid_state', 'Continuation history is cyclic or exceeds its bound.');
+      seen.add(next);
+      const run = this.inspect(next), spent = this.readUsage(next);
+      for (const counter of counterNames) usage[counter] += spent[counter];
+      const workers = Array.isArray(run.data.workerResults) ? run.data.workerResults : [];
+      tokensComplete &&= workers.length === spent.workerInvocations;
+      for (const worker of workers) {
+        const counts = worker?.usage;
+        if (Number.isSafeInteger(counts?.inputTokens) && counts.inputTokens >= 0 &&
+            Number.isSafeInteger(counts?.outputTokens) && counts.outputTokens >= 0) {
+          inputTokens += counts.inputTokens; outputTokens += counts.outputTokens;
+        } else tokensComplete = false;
+      }
+      next = run.manifest.continuationOf;
+    }
+    return { usage, inputTokens, outputTokens, tokensComplete, runs: seen.size };
   }
   settleTime(id: string, key: string, spent: number): void {
     if (!Number.isSafeInteger(spent) || spent < 0)

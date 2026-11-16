@@ -1,6 +1,16 @@
 # Tasks
 
-## Current continuation — 2026-11-16
+## User-authorized completion — 2026-11-16
+
+- After the five remaining blocks and the exhausted pilot were explained, the user instructed: “работай над ними с помощью суб агентов”. This authorizes continued implementation/qualification of those blocks and explicit delegated work; previously recorded verified-merge authority persists. No public release or paid SC-provider campaign is added.
+- Current owned writing checkout: `Ziyadin23/workflow-complete-delivery`, base `5086bd4`; the primary checkout remains coordination-only with its unrelated retrospective files preserved. The existing successful tool dependency installation is retained. No fresh model dispatch occurs until the updated tool is verified.
+- Keep the old `b0578df3` manifest, twelve consumed workers, two repairs, source `7abb9cc`, rejected candidate `92e1ae5`, receipts and outcome intact. Add an explicit operator-selected continuation admission on the current trusted source/policy with parent linkage, at most twelve additional workers/two repairs, normal default120 active minutes; the explicitly selected real Windows profile may request180 active minutes to cover the documented up-to-two-hour UI job plus setup/build, visible cumulative accounting and no copied acceptance proof. A retry must reuse the admitted continuation rather than multiply budgets or writing ownership. This is a newly authorized continuation, not an implicit reset or widening of the old run.
+- Coordinated path ownership in this one issue #28 task: parent owns manifest/CLI/store/runtime/candidate integration and planning/status; the policy subagent owns policy/integration/finalization modules and matching tests; the Windows subagent owns delivery module/tests and exclusive private lab qualification; the contract subagent supplies independent read-only full-contract production probes. Shared package builds are serialized by the parent. Subagents do not commit, publish or change each other's files.
+- Complete the existing five outcome tasks: genuine selected-issue PR delivery, real Windows beta handoff, narrow proven parser policy, postflight/hold/recovery/finalization, and eligible automatic-merge pilots. The pipeline fix stays outside the narrow parser automatic-merge category. Revalidate final tool/CI, metrics and independent review for the new source before closure. All previous dated evidence below remains historical.
+
+- Initial integrated verification passed types/lint/build and266/268 tests; two recovery integration failures were retained and corrected. The next pass reached272/273, exposing the preserved-parent revision guard before model dispatch. Independent review also reproduced a tagged-template test-policy escape and a retained-failure publication mismatch; fixes and nonexecuting regressions are included. Final integrated `npm --prefix tools/agent-workflow run verify` exited0: types/lint/build and273/273 tests, zero failures/skips/cancellations. The final ownership preflight also rejects an unrelated same-issue workspace before model dispatch. Independent committed-source review and hosted checks remain next; no new live coordinator admission or application delivery is claimed.
+
+## Integrated environment checkpoint — 2026-11-16 (historical)
 
 - The user requested a working autonomous development environment after the workflow assessment and explicitly authorized merging checked changes. Continue issue #28 and this existing owner. Required protection, independent review, exact-source checks and separately scoped beta/platform/provider gates remain binding.
 - Executable environment fixes are integrated through PRs #70–#75, latest `267de1c` (reviewed source `517e0a1`, equal integrated tree). All ten latest PR/push checks and the [main postflight](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43772181177) passed. Protection was read back unchanged and the primary checkout's five unrelated retrospective files remain byte-identical.
@@ -158,9 +168,9 @@ Use the OpenSpec apply workflow after the plan is accepted. Each group includes 
 ## 9. Full workflow qualification and continuation
 
 - [x] 9.1 Run the complete offline end-to-end/fault matrix across report/issues/PR/merge-eligible modes, every side-effect crash boundary, signal cancellation, policy changes and repeated resume; verify zero duplicate effects, competing writers, successful-cancellation orphans or out-of-policy merges in that matrix.
-- [x] 9.2 Run applicable full local/hosted checks for the final tool/CI revision, including the real Linux isolation smoke; verify the observed outputs and preserve exact commands, exit statuses, source identities and limitations without claiming new application/platform qualification.
-- [x] 9.3 Reconcile pilot metrics, operator/recovery guidance, contributor routing and the status overview with observed Git/GitHub/Orca state; verify one planning owner, honest private/public evidence boundaries and useful-fix/intervention/resource reports.
-- [x] 9.4 Complete the final independent review and implementation checkpoint, linking source/CI/pilot receipts and the next unresolved gate; verify issue #28 closes only when its accepted implementation/delivery scope is actually satisfied.
+- [ ] 9.2 Run applicable full local/hosted checks for the final tool/CI revision, including the real Linux isolation smoke; verify the observed outputs and preserve exact commands, exit statuses, source identities and limitations without claiming new application/platform qualification.
+- [ ] 9.3 Reconcile pilot metrics, operator/recovery guidance, contributor routing and the status overview with observed Git/GitHub/Orca state; verify one planning owner, honest private/public evidence boundaries and useful-fix/intervention/resource reports.
+- [ ] 9.4 Complete the final independent review and implementation checkpoint, linking source/CI/pilot receipts and the next unresolved gate; verify issue #28 closes only when its accepted implementation/delivery scope is actually satisfied.
 
 ## CI prerequisite repair — 2026-11-11
 

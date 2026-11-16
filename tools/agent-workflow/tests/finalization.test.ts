@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { digest, makeManifest } from '../src/manifest.js';
 import { prepareFinalization, type IntegrationTransport, type MergeReceipt, type Postflight } from '../src/integration.js';
 import { publishAndFinalizeRecords, prepareRecordIntegrationIncident,
-  publishRecordIntegrationIncident } from '../src/finalization.js';
+  publishRecordIntegrationIncident, prepareRecordIntegrationRecovery } from '../src/finalization.js';
 import { RunStore } from '../src/store.js';
 
 const source = 'a'.repeat(40), squash = 'b'.repeat(40), record = 'c'.repeat(40), recordMerge = 'd'.repeat(40);
@@ -335,4 +335,75 @@ test('record incident publication reconciles lost create acknowledgement and ret
   assert.equal('number' in receipt && receipt.number, 33);
   assert.equal(f.incidentPosts(), 1);
   assert.equal(f.store.repositoryIntegrationHold()?.reason, 'record_postflight_failed');
+});
+
+test('unavailable record main checks persist a hold and cannot close the issue until a fresh observation', async t => {
+  const f = await fixture(t);
+  const unavailable: IntegrationTransport = (method, endpoint, body) => {
+    if (endpoint.includes(`/commits/${recordMerge}/check-runs`)) throw new Error('unavailable');
+    return f.transport(method, endpoint, body);
+  };
+  const result = await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: unavailable });
+  assert.deepEqual(result, { state: 'wait', reason: 'record_postflight_pending', pr: 32 });
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'record_postflight_pending');
+  assert.equal(f.issue.state, 'open'); assert.equal(f.counts().closes, 0);
+  assert.equal((await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport })).state, 'done');
+  assert.equal(f.counts().closes, 1);
+});
+
+test('a qualified boolean cannot finalize an application without the observed real beta receipts', async t => {
+  const f = await fixture(t);
+  f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
+    frozen: { checks: ['documentation', 'application'] }, beta: { required: true, qualified: true },
+    betaReceipt: { public: { head: source, qualified: true, qualificationKind: 'windows' } } } });
+  assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport }), { state: 'wait', reason: 'beta_handoff_unavailable' });
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'beta_handoff_unavailable');
+  assert.equal(f.issue.state, 'open');
+  assert.deepEqual(f.counts(), { refPosts: 0, prPosts: 0, merges: 0, closes: 0 });
+});
+
+test('missing beta evidence cannot replace an unresolved confirmed-failure hold', async t => {
+  const f = await fixture(t);
+  f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
+    frozen: { checks: ['application'] }, integrationHold: { active: true, head: squash, reason: 'main_checks_failed' } } });
+  assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport }), { state: 'wait', reason: 'repository_integration_hold' });
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'main_checks_failed');
+  assert.equal(f.counts().merges, 0);
+});
+
+test('an issue closed outside the workflow is not claimed as a journaled scoped closure', async t => {
+  const f = await fixture(t); f.issue.state = 'closed';
+  const result = await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport });
+  assert.deepEqual(result, { state: 'wait', reason: 'issue_closed_outside_workflow', pr: 32 });
+  assert.equal(f.counts().closes, 0);
+  assert.equal(f.store.get(f.manifest.id).data.recordFinalization, undefined);
+  assert.notEqual(f.store.repositoryIntegrationHold(), null);
+});
+
+test('record recovery prepares an inverse of only the selected owner file and preserves the hold', async t => {
+  const f = await fixture(t); f.setPostflightGate('failure');
+  await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport });
+  const beforeTree = '2'.repeat(40), afterTree = '4'.repeat(40), original = '5'.repeat(40), modified = '6'.repeat(40);
+  const api: IntegrationTransport = async (method, endpoint, body) => {
+    assert.equal(method, 'GET');
+    if (endpoint === `/repos/example/sc/git/commits/${recordMerge}`)
+      return { tree: { sha: afterTree }, parents: [{ sha: squash }] };
+    if (endpoint === `/repos/example/sc/git/trees/${beforeTree}?recursive=1`)
+      return { sha: beforeTree, truncated: false, tree: [{ path, mode: '100644', type: 'blob', sha: original }] };
+    if (endpoint === `/repos/example/sc/git/trees/${afterTree}?recursive=1`)
+      return { sha: afterTree, truncated: false, tree: [{ path, mode: '100644', type: 'blob', sha: modified }] };
+    return f.transport(method, endpoint, body);
+  };
+  const recovery = await prepareRecordIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api });
+  assert.deepEqual(recovery.tree, [{ path, mode: '100644', type: 'blob', sha: original }]);
+  assert.equal(recovery.draft, true);
+  assert.equal(recovery.base, squash);
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'record_postflight_failed');
+  assert.equal(f.issue.state, 'open');
 });

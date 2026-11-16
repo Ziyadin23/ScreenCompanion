@@ -185,7 +185,7 @@ export async function runWorker(request: WorkerRequest, profile: CodexProfile,
   if (request.timeReservedByStage !== undefined && typeof request.timeReservedByStage !== 'boolean')
     throw new WorkflowError('invalid_worker_request', 'Stage time ownership must be explicit.');
   const stageOwnsTime = request.timeReservedByStage === true;
-  if (request.instructions.length > 8000 || !request.instructions.trim()) throw new WorkflowError('oversized_context', 'Worker instructions must be bounded.');
+  if (request.instructions.length > 16000 || !request.instructions.trim()) throw new WorkflowError('oversized_context', 'Worker instructions must be bounded.');
   const attempt = request.attempt ?? 0;
   if (!Number.isSafeInteger(attempt) || attempt < 0 || attempt > manifest.limits.repairs)
     throw new WorkflowError('invalid_worker_request', 'Worker attempt is outside its repair allowance.');

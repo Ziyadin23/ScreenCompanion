@@ -117,7 +117,8 @@ export function inspectCandidate(manifest: Manifest, options: CandidateOptions):
     changes.push({ path, before: validBytes(prior), after: validBytes(after), mode: present ? mode : '100644' });
   }
   const classification = classifyDiff(manifest, changes, options);
-  const denied = classification.reasons.filter(reason => ['outside_scope', 'unsafe_file', 'administrative_record_changed', 'empty_or_duplicate_diff'].includes(reason));
+  const denied = classification.reasons.filter(reason => ['outside_scope', 'unsafe_file', 'administrative_record_changed',
+    'version_record_changed', 'empty_or_duplicate_diff'].includes(reason));
   if (denied.length) throw new WorkflowError('scope_denied', `Candidate scope inspection denied: ${denied.join(', ')}.`);
   const sourceHash = digest({ base: manifest.base, changes });
   return { base: manifest.base, parent, branch, sourceHash, ignored, changes, classification,

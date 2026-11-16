@@ -9,7 +9,7 @@ import { decideMerge, classifyDiff } from '../src/policy.js';
 import { freezeCandidate, selectVerificationCommands, type VerificationReceipt } from '../src/candidate.js';
 import { RunStore } from '../src/store.js';
 import { integrateCandidate, observePostflight, publishIntegrationIncident, prepareFinalization,
-  prepareObservedFinalization,
+  prepareObservedFinalization, prepareIntegrationRecovery, prepareScopedRecovery,
   type IntegrationTransport, type MergeReceipt } from '../src/integration.js';
 
 const taskPath = 'openspec/changes/fix-confirmed-aaaaaaaaaaaa/tasks.md';
@@ -161,7 +161,8 @@ test('policy denies an ineligible parser despite positive model-like evidence', 
     verification: { ...binding, passed: true, environment: 'portable-application' },
     review: { ...binding, clean: true }, checks: { head: binding.head, ready: true }, protection: true,
     upToDate: true, integrationHold: false,
-    regression: { baselineFailed: true, candidatePassed: true, oracleHash: 'c'.repeat(64) },
+    regression: { base: manifest.base, head: binding.head, baselineFailed: true, candidatePassed: true,
+      oracleHash: 'c'.repeat(64), contractHash: 'e'.repeat(64) },
     handoff: { head: binding.head, qualified: true, receiptHash: 'd'.repeat(64) } });
   assert.equal(decision.eligible, false);
 });
@@ -370,4 +371,115 @@ test('synthetic API: lost incident acknowledgement reconciles one issue', async 
   assert.equal(f.incidentCount, 1);
   assert.equal(f.store.observedEffect(f.manifest.id,
     `integration-incident:${f.squash}:${postflight.checksHash}`)?.kind, 'github_integration_incident');
+});
+
+test('synthetic API: green main cannot replace missing exact-source beta proof, and the hold survives a second reader', async t => {
+  const f = await syntheticApi(t);
+  const merged = await integrateCandidate(f.request);
+  assert.equal(merged.state, 'merged');
+  if (merged.state !== 'merged') return;
+  f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
+    frozen: { ...f.frozen, checks: ['documentation', 'application'] },
+    beta: { required: true, qualified: true }, betaReceipt: { public: { head: f.frozen.head,
+      qualified: true, qualificationKind: 'windows', status: 'transferred' } } } });
+  const postflight = await observePostflight({ store: f.store, runId: f.manifest.id,
+    merge: merged.receipt, transport: f.request.transport });
+  assert.equal(postflight.state, 'pending');
+  assert.equal(postflight.reason, 'beta_handoff_unavailable');
+  const reader = new RunStore(f.store.directory, f.manifest, { readOnly: true });
+  try { assert.equal(reader.repositoryIntegrationHold()?.reason, 'beta_handoff_unavailable'); }
+  finally { reader.close(); }
+  assert.equal(f.puts, 1);
+});
+
+test('synthetic API: scoped recovery prepares only the exact inverse tree and refuses wider or stale recovery', async t => {
+  const f = await syntheticApi(t);
+  const merged = await integrateCandidate(f.request);
+  assert.equal(merged.state, 'merged');
+  if (merged.state !== 'merged') return;
+  f.setChecks('failure');
+  await observePostflight({ store: f.store, runId: f.manifest.id, merge: merged.receipt, transport: f.request.transport });
+  let extra = false, truncated = false, badParent = false, unsafeMode = false;
+  const beforeTree = '1'.repeat(40), originalBlob = '2'.repeat(40), mergedBlob = '3'.repeat(40);
+  const api: IntegrationTransport = async (method, endpoint, body) => {
+    assert.equal(method, 'GET');
+    if (endpoint === `/repos/example/sc/git/commits/${f.manifest.base}`) return { tree: { sha: beforeTree } };
+    if (endpoint === `/repos/example/sc/git/commits/${f.frozen.head}`) return { tree: { sha: f.frozen.tree } };
+    if (endpoint === `/repos/example/sc/git/commits/${f.squash}`) return { tree: { sha: f.frozen.tree },
+      parents: [{ sha: badParent ? '4'.repeat(40) : f.manifest.base }] };
+    if (endpoint === `/repos/example/sc/git/trees/${beforeTree}?recursive=1`) return { sha: beforeTree,
+      truncated: false, tree: [{ path: 'README.md', mode: '100644', type: 'blob', sha: originalBlob }] };
+    if (endpoint === `/repos/example/sc/git/trees/${f.frozen.tree}?recursive=1`) return { sha: f.frozen.tree,
+      truncated, tree: [{ path: 'README.md', mode: unsafeMode ? '120000' : '100644', type: 'blob', sha: mergedBlob },
+        ...(extra ? [{ path: 'unrelated.txt', mode: '100644', type: 'blob', sha: mergedBlob }] : [])] };
+    return f.request.transport(method, endpoint, body);
+  };
+  const prepared = await prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api });
+  assert.equal(prepared.draft, true);
+  assert.deepEqual(prepared.tree, [{ path: 'README.md', mode: '100644', type: 'blob', sha: originalBlob }]);
+  assert.equal(prepared.mergeHead, f.squash);
+  assert.match(prepared.body, /integration hold remains active/);
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'main_checks_failed');
+  extra = true;
+  await assert.rejects(prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api }), { code: 'recovery_scope_changed' });
+  extra = false; truncated = true;
+  await assert.rejects(prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api }), { code: 'recovery_tree_unavailable' });
+  truncated = false; badParent = true;
+  await assert.rejects(prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api }), { code: 'recovery_source_changed' });
+  badParent = false; unsafeMode = true;
+  await assert.rejects(prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api }), { code: 'recovery_scope_changed' });
+  unsafeMode = false; f.setMain('4'.repeat(40));
+  await assert.rejects(prepareIntegrationRecovery({ store: f.store, runId: f.manifest.id, transport: api }), { code: 'recovery_base_changed' });
+  assert.equal(f.puts, 1);
+});
+
+test('synthetic API: protection loss during final refresh blocks the merge PUT', async t => {
+  const f = await syntheticApi(t), original = f.request.transport;
+  let reads = 0;
+  f.request.transport = (method, endpoint, body) => {
+    if (endpoint.endsWith('/branches/main/protection') && ++reads > 1) f.setProtection(false);
+    return original(method, endpoint, body);
+  };
+  assert.deepEqual(await integrateCandidate(f.request), { state: 'wait', reason: 'integration_policy_changed' });
+  assert.equal(f.puts, 0);
+});
+
+test('recovery rejects malformed path values before inspecting any remote state', async () => {
+  const manifest = makeManifest({ repository: 'github.com/example/sc', root: '/synthetic/repo',
+    commonDir: '/synthetic/repo/.git', base: 'a'.repeat(40), scope: 'docs-links', delivery: 'merge-eligible' });
+  for (const paths of [[undefined], [null], [42], [false], null, undefined]) {
+    await assert.rejects(prepareScopedRecovery({ manifest, base: manifest.base, sourceHead: 'b'.repeat(40),
+      mergeHead: 'c'.repeat(40), checksHash: 'd'.repeat(64), paths: paths as unknown as string[],
+      transport: async () => { assert.fail('Malformed paths must not reach remote inspection'); } }),
+    { code: 'recovery_scope_changed' });
+  }
+});
+
+for (const latest of ['pending', 'success'] as const) test(`synthetic API: retained first failure reconciles an incident after latest ${latest} postflight`, async t => {
+  const f = await syntheticApi(t);
+  const merged = await integrateCandidate(f.request);
+  assert.equal(merged.state, 'merged');
+  if (merged.state !== 'merged') return;
+  f.setChecks('failure');
+  const failure = await observePostflight({ store: f.store, runId: f.manifest.id,
+    merge: merged.receipt, transport: f.request.transport });
+  assert.equal(failure.state, 'failed');
+  const original = f.request.transport;
+  await assert.rejects(publishIntegrationIncident({ store: f.store, runId: f.manifest.id,
+    merge: merged.receipt, postflight: failure, transport: async (method, endpoint, body) => {
+      const result = await original(method, endpoint, body);
+      if (method === 'POST' && endpoint.endsWith('/issues')) throw new Error('lost acknowledgement');
+      return result;
+    } }));
+  assert.equal(f.incidentCount, 1);
+  f.setChecks(latest);
+  const observed = await observePostflight({ store: f.store, runId: f.manifest.id,
+    merge: merged.receipt, transport: f.request.transport });
+  assert.equal(observed.state, latest === 'success' ? 'ready' : 'pending');
+  assert.deepEqual(f.store.get(f.manifest.id).data.postflightFailure, failure);
+  const incident = await publishIntegrationIncident({ store: f.store, runId: f.manifest.id,
+    merge: merged.receipt, postflight: failure, transport: original });
+  assert.equal('number' in incident && incident.number, 30);
+  assert.equal(f.incidentCount, 1);
+  assert.equal(f.store.repositoryIntegrationHold()?.reason, 'main_checks_failed');
 });

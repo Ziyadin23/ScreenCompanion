@@ -8,6 +8,7 @@ import { GithubClient, type PullRequestReceipt, type IssueReceipt, type ChecksRe
 import { baselineFile } from './intake.js';
 import type { PlanBundle } from './ownership.js';
 import type { RunStore } from './store.js';
+import { requireObservedBetaHandoff } from './delivery.js';
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH';
 export type IntegrationTransport = (method: Method, endpoint: string, body?: unknown) => Promise<unknown>;
@@ -152,8 +153,6 @@ function requireSavedEvidence(request: IntegrationRequest): void {
   const passed = checkOracle(candidate, frozen.head, request.inspection.workspace, 'passed', 0);
   if (failed.oracleHash !== passed.oracleHash || failed.contractHash !== passed.contractHash)
     throw new WorkflowError('stale_evidence', 'Baseline and candidate oracles differ.', 2);
-  if (snapshot.classification.category === 'portable-json-parser-fix')
-    throw new WorkflowError('parser_purity_policy_pending', 'Parser automatic merge policy is disabled.', 2);
 }
 function remotePull(row: Json, request: IntegrationRequest): boolean {
   const { frozen, pr } = request;
@@ -241,11 +240,20 @@ export async function integrateCandidate(request: IntegrationRequest): Promise<I
     const branch = object(await api('GET', `${base}/branches/${frozen.branch}`));
     if (object(branch.commit).sha !== frozen.head) return wait('head_changed');
     const checks = await client.checks(frozen.head, !frozen.checks.includes('application'));
+    let handoff;
+    if (frozen.checks.includes('application')) {
+      try { handoff = await requireObservedBetaHandoff(store, runId, frozen.head); }
+      catch { return wait('beta_handoff_unavailable'); }
+    }
+    const candidateOracle = object(store.get(runId).data.candidateOracle);
     const decision = decideMerge(manifest, snapshot.classification, {
       base: manifest.base, head: frozen.head, diffHash: frozen.diffHash, policyHash: frozen.policyHash,
       verification: request.verification, review: request.review,
       checks: { head: checks.head, ready: checks.ready }, protection: protection.protectedForMerge,
-      upToDate: remoteBase === manifest.base, integrationHold: Boolean(store.repositoryIntegrationHold())
+      upToDate: remoteBase === manifest.base, integrationHold: Boolean(store.repositoryIntegrationHold()),
+      regression: { base: manifest.base, head: frozen.head, baselineFailed: true, candidatePassed: true,
+        oracleHash: String(candidateOracle.oracleHash), contractHash: String(candidateOracle.contractHash) },
+      ...(handoff ? { handoff: { head: handoff.public.head, qualified: handoff.public.qualified, receiptHash: digest(handoff) } } : {})
     });
     if (!decision.eligible) return wait(decision.reasons[0] ?? 'policy_denied');
     evidenceHash = decision.evidenceHash;
@@ -259,6 +267,22 @@ export async function integrateCandidate(request: IntegrationRequest): Promise<I
       beforeExecute: async () => {
         if (store.usage(runId).issues >= manifest.limits.issues)
           throw new WorkflowError('incident_capacity_unavailable', 'No issue allowance remains for a required incident.', 2);
+        requireSavedEvidence(request);
+        const current = await client.selectedPull(request.pr.number);
+        const repository = object(await api('GET', base));
+        const protection = await client.protection();
+        const checks = await client.checks(frozen.head, !frozen.checks.includes('application'));
+        const hold = store.repositoryIntegrationHold();
+        let handoff;
+        if (frozen.checks.includes('application')) handoff = await requireObservedBetaHandoff(store, runId, frozen.head);
+        if (!remotePull(current, request) || object(current.base).sha !== manifest.base ||
+            await mainHead(api, base, manifest.branch) !== manifest.base ||
+            object(object(await api('GET', `${base}/branches/${frozen.branch}`)).commit).sha !== frozen.head ||
+            repository.default_branch !== manifest.branch || repository.allow_squash_merge !== true ||
+            !protection.protectedForMerge || !checks.ready ||
+            hold && !(hold.runId === runId && hold.reason === 'merge_outcome_unknown' && hold.head === frozen.head) ||
+            handoff && (handoff.public.head !== frozen.head || !handoff.public.qualified))
+          throw new WorkflowError('integration_policy_changed', 'Source, checks or protection changed before integration.', 2);
       },
       execute: async () => {
         if (await mergedReadback(request, api, client, base))
@@ -281,19 +305,22 @@ export async function integrateCandidate(request: IntegrationRequest): Promise<I
   } catch (error) {
     if (error instanceof WorkflowError && error.code === 'incident_capacity_unavailable')
       return wait('incident_capacity_unavailable');
+    if (error instanceof WorkflowError && error.code === 'integration_policy_changed') return wait(error.code);
     if (error instanceof WorkflowError && ['effect_unknown', 'integration_unknown', 'integration_unavailable', 'unjournaled_merge'].includes(error.code))
       return wait('merge_outcome_unknown');
     throw error;
   }
 }
 
-export type Postflight = { state: 'ready' | 'pending' | 'failed'; head: string; checksHash: string; reason?: string };
+export type Postflight = { state: 'ready' | 'pending' | 'failed'; head: string; checksHash: string; reason?: string; checks?: ChecksReceipt };
 export async function observePostflight(request: { store: RunStore; runId: string; merge: MergeReceipt;
   transport?: IntegrationTransport }): Promise<Postflight> {
   const { store, runId, merge } = request, manifest = store.get(runId).manifest;
   const api = request.transport ?? integrationApi, base = prefix(manifest);
   const observed = store.get(runId).data.integration as MergeReceipt | undefined;
+  const operation = store.observedEffect(runId, `merge:${merge.prNumber}:${merge.head}:${merge.base}`);
   if (!observed || digest(observed) !== digest(merge) || merge.repository !== manifest.repository ||
+      operation?.kind !== 'github_merge' || digest(operation.receipt) !== digest(merge) ||
       !store.ownsCoordinator(runId)) throw new WorkflowError('stale_integration', 'Observed integration and coordinator ownership are required.', 2);
   const frozen = store.get(runId).data.frozen as FrozenCandidate | undefined;
   if (!frozen || frozen.head !== merge.head || frozen.base !== merge.base)
@@ -304,17 +331,27 @@ export async function observePostflight(request: { store: RunStore; runId: strin
     const client = new GithubClient(store, runId, (method, endpoint, body) => api(method, endpoint, body));
     const checks: ChecksReceipt = await client.checks(merge.mergeHead,
       frozen.checks.length === 1 && frozen.checks[0] === 'documentation');
-    const failed = checks.gates.some(gate => ['failure', 'ambiguous'].includes(gate.state));
+    const failed = checks.gates.some(gate => gate.state === 'failure');
+    const ambiguous = checks.gates.some(gate => gate.state === 'ambiguous');
     result = { state: failed ? 'failed' : checks.ready ? 'ready' : 'pending', head: merge.mergeHead,
-      checksHash: digest(checks), ...(failed ? { reason: 'main_checks_failed' } : {}) };
+      checksHash: digest(checks), checks, ...(failed ? { reason: 'main_checks_failed' } :
+        ambiguous ? { reason: 'main_checks_ambiguous' } : {}) };
+    if (result.state === 'ready' && frozen.checks.includes('application')) {
+      try { await requireObservedBetaHandoff(store, runId, merge.head); }
+      catch { result = { ...result, state: 'pending', reason: 'beta_handoff_unavailable' }; }
+    }
   } catch {
     result = { state: 'pending', head: merge.mergeHead, checksHash: digest('unavailable'), reason: 'postflight_unavailable' };
   }
   const data: Record<string, unknown> = { ...store.get(runId).data, postflight: result };
-  if (result.state === 'failed' || result.reason === 'postflight_unavailable')
-    data.integrationHold = { active: true, head: merge.mergeHead, reason: result.reason ?? 'main_checks_failed' };
-  else if (result.state === 'ready' && object(data.integrationHold ?? {}).reason === 'postflight_unavailable')
-    data.integrationHold = { active: false };
+  const previous = object(data.integrationHold ?? {});
+  const temporary = ['postflight_pending', 'postflight_unavailable', 'main_checks_ambiguous', 'beta_handoff_unavailable'];
+  if (result.state === 'failed') data.postflightFailure ??= result;
+  if (!(previous.active === true && !temporary.includes(String(previous.reason)))) {
+    if (result.state !== 'ready') data.integrationHold = { active: true, head: merge.mergeHead,
+      reason: result.reason ?? 'postflight_pending' };
+    else if (temporary.includes(String(previous.reason))) data.integrationHold = { active: false };
+  }
   store.update(runId, { data });
   return result;
 }
@@ -412,8 +449,12 @@ export async function publishIntegrationIncident(request: { store: RunStore; run
   merge: MergeReceipt; postflight: Postflight; transport?: IntegrationTransport }): Promise<IssueReceipt | IntegrationWait> {
   const { store, runId, merge, postflight } = request;
   const run = store.get(runId), manifest = run.manifest;
-  if (digest(run.data.integration) !== digest(merge) || digest(run.data.postflight) !== digest(postflight) ||
-      store.repositoryIntegrationHold()?.runId !== runId || !store.ownsCoordinator(runId))
+  const failure = run.data.postflightFailure ?? run.data.postflight;
+  const hold = store.repositoryIntegrationHold();
+  if (!failure || digest(run.data.integration ?? null) !== digest(merge) || digest(failure) !== digest(postflight) ||
+      hold?.runId !== runId || hold.head !== merge.mergeHead || hold.reason !== 'main_checks_failed' ||
+      !postflight.checks || digest(postflight.checks) !== postflight.checksHash || postflight.checks.head !== merge.mergeHead ||
+      !postflight.checks.gates.some(gate => gate.state === 'failure') || !store.ownsCoordinator(runId))
     throw new WorkflowError('incident_wait', 'Observed failed integration and coordinator ownership are required.', 2);
   const incident = prepareIntegrationIncident(merge, postflight), api = request.transport ?? integrationApi;
   const base = prefix(manifest), client = new GithubClient(store, runId, (method, endpoint, body) => api(method, endpoint, body));
@@ -466,4 +507,84 @@ export async function publishIntegrationIncident(request: { store: RunStore; run
       return wait('incident_outcome_unknown');
     throw error;
   }
+}
+
+export interface RecoveryPreparation {
+  repository: string; base: string; mergeHead: string; sourceHead: string; checksHash: string; targetBranch: string; parent: string;
+  marker: string; branch: string; title: string; body: string; draft: true; baseTree: string;
+  tree: { path: string; mode: '100644'; type: 'blob'; sha: string | null }[]; hash: string;
+}
+
+/** Prepare an inverse of the observed merge only; recovery always remains a separately reviewed PR. */
+export async function prepareScopedRecovery(request: { manifest: Manifest; base: string; sourceHead: string;
+  mergeHead: string; checksHash: string; paths: string[]; expectedTree?: string;
+  transport: IntegrationTransport }): Promise<RecoveryPreparation> {
+  const { manifest, base, sourceHead, mergeHead, checksHash, paths, transport: api } = request;
+  const root = prefix(manifest);
+  if (![base, sourceHead, mergeHead].every(value => sha.test(value)) || !hash.test(checksHash) ||
+      !Array.isArray(paths) || !paths.length || paths.length > 21 || new Set(paths).size !== paths.length || paths.some(path =>
+        typeof path !== 'string' || !/^[A-Za-z0-9_./-]+$/.test(path) || path.startsWith('/') || path.split('/').some(part => !part || part === '.' || part === '..')))
+    throw new WorkflowError('recovery_scope_changed', 'Recovery identities or paths are invalid.', 2);
+  if (await mainHead(api, root, manifest.branch) !== mergeHead)
+    throw new WorkflowError('recovery_base_changed', 'Main advanced; prepare recovery against an independently reviewed current base.', 2);
+  const baseCommit = object(await api('GET', `${root}/git/commits/${base}`));
+  const sourceCommit = object(await api('GET', `${root}/git/commits/${sourceHead}`));
+  const mergeCommit = object(await api('GET', `${root}/git/commits/${mergeHead}`));
+  const beforeTree = identity(object(baseCommit.tree).sha), afterTree = identity(object(mergeCommit.tree).sha);
+  if (identity(object(sourceCommit.tree).sha) !== afterTree || request.expectedTree && request.expectedTree !== afterTree ||
+      !Array.isArray(mergeCommit.parents) || mergeCommit.parents.length !== 1 || object(mergeCommit.parents[0]).sha !== base)
+    throw new WorkflowError('recovery_source_changed', 'Merge tree or parent differs from the reviewed source.', 2);
+  const readTree = async (tree: string) => {
+    const row = object(await api('GET', `${root}/git/trees/${tree}?recursive=1`));
+    if (row.sha !== tree || row.truncated !== false || !Array.isArray(row.tree) || row.tree.length > 20_000)
+      throw new WorkflowError('recovery_tree_unavailable', 'A complete recovery tree is required.', 2);
+    const files = new Map<string, { sha: string; mode: string; type: string }>();
+    for (const raw of row.tree) {
+      const entry = object(raw);
+      if (entry.type === 'tree') continue;
+      if (typeof entry.path !== 'string' || files.has(entry.path) || typeof entry.mode !== 'string' || typeof entry.type !== 'string')
+        throw new WorkflowError('recovery_tree_unavailable', 'Recovery tree has invalid entries.', 2);
+      files.set(entry.path, { sha: identity(entry.sha), mode: entry.mode, type: entry.type });
+    }
+    return files;
+  };
+  const before = await readTree(beforeTree), after = await readTree(afterTree);
+  const changed = [...new Set([...before.keys(), ...after.keys()])].filter(path => digest(before.get(path) ?? null) !== digest(after.get(path) ?? null)).sort();
+  if (digest(changed) !== digest([...paths].sort()))
+    throw new WorkflowError('recovery_scope_changed', 'Recovery would include changes outside the frozen complete diff.', 2);
+  const tree = changed.map(path => {
+    const original = before.get(path), merged = after.get(path);
+    if ([original, merged].some(entry => entry && (entry.mode !== '100644' || entry.type !== 'blob')))
+      throw new WorkflowError('recovery_scope_changed', 'Recovery cannot alter executable, symlink or submodule entries.', 2);
+    return { path, mode: '100644' as const, type: 'blob' as const, sha: original?.sha ?? null };
+  });
+  const key = digest({ repository: manifest.repository, branch: manifest.branch, base, sourceHead, mergeHead, checksHash, afterTree, tree });
+  const marker = `<!-- sc-agent-recovery:${key} -->`;
+  return { repository: manifest.repository, base, sourceHead, mergeHead, checksHash, marker,
+    targetBranch: manifest.branch, parent: mergeHead,
+    branch: `sc-agent/recovery-${key.slice(0, 16)}`, title: `Review recovery for merged ${mergeHead.slice(0, 12)}`,
+    body: `${marker}\nSource head: ${sourceHead}\nMerged head: ${mergeHead}\nPrior base: ${base}\n` +
+      `Failed checks: ${checksHash}\nScope: restore only the ${tree.length} files in the observed merge.\n` +
+      'Acceptance: independent recovery review and required checks; the integration hold remains active.',
+    draft: true, baseTree: afterTree, tree, hash: key };
+}
+
+export async function prepareIntegrationRecovery(request: { store: RunStore; runId: string;
+  transport?: IntegrationTransport }): Promise<RecoveryPreparation> {
+  const { store, runId } = request, run = store.get(runId);
+  const merge = run.data.integration as MergeReceipt | undefined;
+  const postflight = run.data.postflightFailure as Postflight | undefined;
+  const frozen = run.data.frozen as FrozenCandidate | undefined;
+  const hold = store.repositoryIntegrationHold();
+  const operation = merge && store.observedEffect(runId, `merge:${merge.prNumber}:${merge.head}:${merge.base}`);
+  if (!store.ownsCoordinator(runId) || !merge || !frozen || !postflight ||
+      hold?.runId !== runId || hold.reason !== 'main_checks_failed' || hold.head !== merge.mergeHead ||
+      operation?.kind !== 'github_merge' || digest(operation.receipt) !== digest(merge) ||
+      frozen.head !== merge.head || frozen.base !== merge.base || postflight.state !== 'failed' ||
+      postflight.head !== merge.mergeHead || !postflight.checks || postflight.checks.head !== merge.mergeHead ||
+      digest(postflight.checks) !== postflight.checksHash || !postflight.checks.gates.some(gate => gate.state === 'failure'))
+    throw new WorkflowError('recovery_wait', 'Observed failed source integration is required.', 2);
+  return prepareScopedRecovery({ manifest: run.manifest, base: merge.base, sourceHead: merge.head,
+    mergeHead: merge.mergeHead, checksHash: postflight.checksHash, paths: frozen.paths,
+    expectedTree: frozen.tree, transport: request.transport ?? integrationApi });
 }
