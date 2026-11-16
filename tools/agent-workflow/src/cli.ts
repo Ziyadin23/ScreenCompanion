@@ -13,7 +13,7 @@ import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
-import { inspectBetaEnvironmentRetry, inspectRejectedBetaLaunch, selectBetaProfile } from './beta-profile.js';
+import { inspectBetaEnvironmentRetry, inspectBetaReportPathRetry, inspectRejectedBetaLaunch, selectBetaProfile } from './beta-profile.js';
 import { remainingOracleLimits, remainingOracleParent } from './oracle-recovery.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
@@ -141,6 +141,7 @@ function report(run: RunRecord, store: RunStore) {
     retryCount: usage.repairs,
     repairAllowance: store.repairAllowance(run.manifest.id),
     betaEnvironmentRetryCount: Array.isArray(run.data.betaEnvironmentRetryHistory) ? run.data.betaEnvironmentRetryHistory.length : 0,
+    betaReportPathRetryCount: Array.isArray(run.data.betaReportPathRetryHistory) ? run.data.betaReportPathRetryHistory.length : 0,
     oracleRetryCount: Array.isArray(run.data.oracleRetryHistory) ? run.data.oracleRetryHistory.length : 0,
     interventionCount: null,
     interventionRequired: run.status === 'awaiting_input' || run.status === 'quarantined',
@@ -168,12 +169,13 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     'retention-days': { type: 'string' }, workers: { type: 'string' },
     'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' },
     'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }, 'retry-oracle': { type: 'boolean' },
-    'retry-beta-environment': { type: 'boolean' }, 'preflight-evidence': { type: 'string' }
+    'retry-beta-environment': { type: 'boolean' }, 'preflight-evidence': { type: 'string' },
+    'retry-beta-report-path': { type: 'boolean' }, 'replacement-beta-profile': { type: 'string' }
   } });
   const command = positionals[0];
   if (values.help || !command) {
     console.log(JSON.stringify({ commands: ['doctor', 'runs', 'run', 'status <run-id>', 'report <run-id>',
-      'resume <run-id> [--retry-oracle | --retry-beta-environment --preflight-evidence <private-file>]', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
+      'resume <run-id> [--retry-oracle | --retry-beta-environment --preflight-evidence <private-file> | --retry-beta-report-path --preflight-evidence <private-file> --replacement-beta-profile <private-file>]', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
       deliveries: ['report', 'issues', 'pr', 'merge-eligible'] }));
     return 0;
   }
@@ -184,9 +186,11 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     throw new WorkflowError('invalid_arguments', 'Report format must be json or markdown.');
   if (values['retry-oracle'] && command !== 'resume')
     throw new WorkflowError('invalid_arguments', 'Oracle retry is an explicit same-run resume action.');
-  if ((values['retry-beta-environment'] || values['preflight-evidence']) &&
-      (command !== 'resume' || !values['retry-beta-environment'] || !values['preflight-evidence'] || values['retry-oracle']))
-    throw new WorkflowError('invalid_arguments', 'One separately authorized beta environment retry requires resume and private preflight evidence.');
+  const betaRetries = Number(!!values['retry-beta-environment']) + Number(!!values['retry-beta-report-path']);
+  if ((betaRetries || values['preflight-evidence'] || values['replacement-beta-profile']) &&
+      (command !== 'resume' || betaRetries !== 1 || !values['preflight-evidence'] || values['retry-oracle'] ||
+        !!values['replacement-beta-profile'] !== !!values['retry-beta-report-path']))
+    throw new WorkflowError('invalid_arguments', 'A separately authorized beta retry requires its explicit mode, private evidence and report-path replacement profile when applicable.');
   const retentionDays = Number(values['retention-days'] ?? 30);
   if ((values['retention-days'] && command !== 'prune') || !Number.isSafeInteger(retentionDays) ||
       retentionDays < 1 || retentionDays > 3650)
@@ -299,10 +303,13 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       console.log(JSON.stringify(report(run, store)));
       return run.status === 'quarantined' ? 4 : run.cancelRequested && run.status !== 'cancelled' && run.status !== 'completed' ? 2 : 0;
     }
-    if (command === 'resume' && !values['retry-beta-environment'] && run.status === 'failed' && run.stage === 'handoff' && run.error === 'invalid_process_request')
+    if (command === 'resume' && !betaRetries && run.status === 'failed' && run.stage === 'handoff' && run.error === 'invalid_process_request')
       run = store.prepareRejectedBetaLaunch(id, () => inspectRejectedBetaLaunch(store, id));
     if (values['retry-beta-environment'])
       run = store.authorizeBetaEnvironmentRetry(id, () => inspectBetaEnvironmentRetry(store, id, resolve(values['preflight-evidence']!)));
+    if (values['retry-beta-report-path'])
+      run = store.authorizeBetaReportPathRetry(id, () => inspectBetaReportPathRetry(store, id,
+        resolve(values['preflight-evidence']!), resolve(values['replacement-beta-profile']!)));
     const controller = new AbortController();
     const stop = () => controller.abort();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);

@@ -2,14 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, resolve, sep, win32 } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { handoffBeta, type BetaReceipt, type BetaResourceOwnership, type WindowsBetaQualification } from './delivery.js';
 import { requireFrozenSource } from './intake.js';
 import { digest, WorkflowError } from './manifest.js';
 import { durableJson, inspectOwnedProcess, MAX_PROCESS_TIMEOUT_MS, reconcileOwnedProcess, runOwnedProcess, validateOwnedProcessRequest } from './process.js';
-import type { BetaEnvironmentRetryBinding, BetaLaunchBinding, BetaPrelaunchBinding, RunStore } from './store.js';
+import type { BetaEnvironmentRetryBinding, BetaLaunchBinding, BetaPrelaunchBinding, BetaReportPathRetryBinding, RunStore } from './store.js';
 import { trustedBetaHelperEnvironment } from './beta-environment.js';
 
 const sha = (value: Buffer | string): string => createHash('sha256').update(value).digest('hex');
@@ -64,11 +64,13 @@ function privateFile(path: string, maximum: number): Buffer {
       process.getuid && info.uid !== process.getuid()) unavailable();
   return readFileSync(path);
 }
-function loadProfile(name: string, stateDirectory: string) {
+function loadProfile(name: string, stateDirectory: string, replacementPath?: string) {
   try {
     identifier.max(80).parse(name); privateDirectory(stateDirectory); outsideGit(stateDirectory);
     const directory = join(stateDirectory, 'profiles'); privateDirectory(directory);
-    const bytes = privateFile(join(directory, `${name}.json`), 64_000);
+    if (replacementPath && (replacementPath === stateDirectory || replacementPath.startsWith(`${stateDirectory}${sep}`) ||
+        (lstatSync(replacementPath).mode & 0o777) !== 0o600)) unavailable();
+    const bytes = privateFile(replacementPath ?? join(directory, `${name}.json`), 64_000);
     const profile = profileSchema.parse(JSON.parse(bytes.toString('utf8')));
     const helperHash = sha(privateFile(profile.helperPath, 1_000_000));
     const token = privateFile(profile.resourceTokenFile, 4096).toString('utf8');
@@ -92,17 +94,24 @@ export function selectBetaProfile(name: string, stateDirectory: string): { name:
 interface ConfiguredBetaRequest {
   store: RunStore; runId: string; workspace: string; head: string; version: string; signal?: AbortSignal;
 }
-function configuredBetaProcess(request: ConfiguredBetaRequest, environment: 'legacy' | 'effective-user-v1' = 'legacy') {
+function configuredBetaProcess(request: ConfiguredBetaRequest, environment: 'legacy' | 'effective-user-v1' = 'legacy', replacementPath?: string) {
   const { store, runId, workspace, head, version } = request;
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(head) || !/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) unavailable();
   const manifest = store.get(runId).manifest, selection = manifest.betaProfile;
   if (!selection) unavailable();
-  const current = () => {
+  const original = () => {
     const loaded = loadProfile(selection.name, store.directory);
     if (loaded.hash !== selection.hash) throw new WorkflowError('beta_profile_changed', 'The selected Windows beta profile changed; explicit revalidation is required.', 2);
     return loaded;
   };
-  const profile = current();
+  const profile = replacementPath ? loadProfile(selection.name, store.directory, replacementPath) : original();
+  const current = () => {
+    original();
+    const loaded = replacementPath ? loadProfile(selection.name, store.directory, replacementPath) : original();
+    if (loaded.hash !== profile.hash) unavailable();
+    return loaded;
+  };
+  current();
   requireFrozenSource(manifest, workspace, head);
   const git = (...args: string[]) => {
     try { return execFileSync('/usr/bin/git', ['-C', workspace, ...args], {
@@ -116,7 +125,8 @@ function configuredBetaProcess(request: ConfiguredBetaRequest, environment: 'leg
   const sourceManifestDigest = sha(git('ls-tree', '-r', '--full-tree', head));
   const env = environment === 'legacy' ? { PATH: '/usr/bin:/bin', HOME: homedir() } : trustedBetaHelperEnvironment();
   const identity = { repository: manifest.repository, runId, workspace: realpathSync(workspace), head, version,
-    profileHash: profile.hash, sourceManifestDigest, ...(environment === 'legacy' ? {} : {
+    profileHash: profile.hash, sourceManifestDigest, ...(replacementPath ? {
+      reportPathProfile: { path: replacementPath, hash: profile.identity.profileHash } } : {}), ...(environment === 'legacy' ? {} : {
       processEnvironment: { version: 'effective-user-v1' as const, principal: env.USER!, digest: digest(env) } }) };
   const key = `beta-process:${digest(identity)}`, runDirectory = join(store.directory, 'runs', runId);
   const processDirectory = join(runDirectory, 'processes'), receiptDirectory = join(runDirectory, 'beta', digest(identity));
@@ -139,8 +149,21 @@ function selectedBetaProcess(request: ConfiguredBetaRequest) {
     if (!binding || !isDeepStrictEqual(binding.legacy.identity, legacy.identity) ||
         !isDeepStrictEqual(binding.next.identity, next.identity) ||
         !isDeepStrictEqual(binding.next.processRequest, next.processRequest)) unavailable();
+    const reportHistory = run.data.betaReportPathRetryHistory as { binding?: BetaReportPathRetryBinding }[] | undefined;
+    if (reportHistory !== undefined) {
+      const saved = reportHistory.length === 1 && reportHistory[0]?.binding;
+      if (!saved || !isDeepStrictEqual(saved.legacy, binding.next)) unavailable();
+      const revalidate = () => {
+        const observed = inspectBetaReportPathRetry(request.store, request.runId, saved.evidencePath, saved.replacementProfile.path);
+        if (!isDeepStrictEqual(observed, saved)) unavailable();
+      };
+      revalidate();
+      const replacement = configuredBetaProcess(request, 'effective-user-v1', saved.replacementProfile.path);
+      return { ...replacement, current: () => { revalidate(); return replacement.current(); } };
+    }
     return next;
   }
+  if (run.data.betaReportPathRetryHistory !== undefined) unavailable();
   const known = request.store.ownedProcesses(request.runId).filter(entry => entry.key.startsWith('beta-process:'));
   if (known.some(entry => entry.key === legacy.key)) {
     if (known.some(entry => entry.key !== legacy.key)) unavailable();
@@ -249,6 +272,113 @@ export function inspectBetaEnvironmentRetry(store: RunStore, runId: string, evid
   } catch { throw denied(); }
 }
 
+const reportPathEvidence = preflightEvidence.omit({ reason: true, preflight: true, artifacts: true, oldProcess: true }).extend({
+  reason: z.literal('vitest-unc-report-path'),
+  oldProcess: preflightEvidence.shape.oldProcess.extend({ result: observedResult.extend({ elapsedMs: z.number().int().nonnegative().max(MAX_BETA_PROFILE_MS) }) }),
+  failure: z.object({ phase: z.literal('vault-report-read'), code: z.literal('ENOENT'),
+    requestedReportPath: z.string().max(4000), normalizedReportPath: z.string().max(4000),
+    uiStarted: z.literal(false), packagedLaunchStarted: z.literal(false), qualificationProofProduced: z.literal(false), transferStarted: z.literal(false) }).strict(),
+  artifacts: z.array(z.object({ kind: z.enum(['helper-failure', 'guest-result', 'vault-report', 'report-path', 'postflight']),
+    path: absolute, sha256: hash }).strict()).length(5)
+}).strict();
+
+/** Private failure facts remain separate from the explicit one-time resource grant. */
+export function inspectBetaReportPathRetry(store: RunStore, runId: string, evidencePath: string, replacementProfilePath: string): BetaReportPathRetryBinding {
+  const denied = () => new WorkflowError('beta_report_path_retry_denied', 'Exact report-path failure, cleanup and a separately bound replacement profile are required.', 2);
+  try {
+    const run = store.get(runId), data = run.data;
+    const allocation = data.allocation as { path?: unknown } | undefined;
+    const frozen = data.frozen as { head?: unknown } | undefined;
+    const reservation = (data.versionPreparation as { reservation?: { repository?: unknown; runId?: unknown; version?: unknown } } | undefined)?.reservation;
+    if (typeof allocation?.path !== 'string' || typeof frozen?.head !== 'string' || typeof reservation?.version !== 'string' ||
+        reservation.repository !== run.manifest.repository || reservation.runId !== runId) throw denied();
+    const request = { store, runId, workspace: allocation.path, head: frozen.head, version: reservation.version };
+    const legacy = configuredBetaProcess(request, 'effective-user-v1');
+    const next = configuredBetaProcess(request, 'effective-user-v1', replacementProfilePath);
+    requireFrozenSource(run.manifest, run.manifest.root, run.manifest.base);
+    const checks = z.array(z.object({ name: z.string(), passed: z.literal(true), exitCode: z.literal(0),
+      status: z.literal('exited'), outputTruncated: z.literal(false) }).passthrough()).parse(
+      (data.verification as { checks?: unknown } | undefined)?.checks);
+    if (!isDeepStrictEqual(checks.map(item => item.name).sort(), ['workflow-selftest', 'workflow-docs', 'openspec-strict', 'whitespace',
+      'desktop-typecheck', 'desktop-lint', 'desktop-tests', 'desktop-build'].sort())) throw denied();
+    const candidateProofDigest = digest({ frozen: data.frozen, verification: data.verification, review: data.reviewReceipt,
+      version: data.versionPreparation, oracle: data.candidateOracle ?? null });
+    const { helperPath: oldHelper, timeoutMs: oldTimeout, hash: oldHash, identity: oldIdentity, ...oldProfile } = legacy.profile;
+    const { helperPath: newHelper, timeoutMs: newTimeout, hash: newHash, identity: newIdentity, ...newProfile } = next.profile;
+    const prior = (data.betaReportPathRetryHistory as { previous?: { usage?: { activeMs?: number } } }[] | undefined)?.[0]?.previous?.usage;
+    const remaining = run.manifest.limits.activeMs - (prior?.activeMs ?? store.usage(runId).activeMs);
+    if (!isDeepStrictEqual(oldProfile, newProfile) || oldHelper === newHelper || oldHash === newHash ||
+        oldIdentity.helperHash === newIdentity.helperHash || oldIdentity.nodeHash !== newIdentity.nodeHash ||
+        oldIdentity.tokenHash !== newIdentity.tokenHash || newTimeout > oldTimeout || newTimeout > remaining) throw denied();
+    const bytes = privateFile(evidencePath, 131_072), evidence = reportPathEvidence.parse(JSON.parse(bytes.toString('utf8')));
+    if ((lstatSync(evidencePath).mode & 0o777) !== 0o600) throw denied();
+    const expectedProfile = { name: legacy.profile.name, hash: legacy.profile.hash, helperHash: oldIdentity.helperHash,
+      nodeHash: oldIdentity.nodeHash, tokenHash: oldIdentity.tokenHash };
+    const observed = store.observedEffect(runId, legacy.key), execution = inspectOwnedProcess(legacy.processDirectory, legacy.key);
+    if (evidence.repository !== run.manifest.repository || evidence.runId !== runId || evidence.manifestHash !== digest(run.manifest) ||
+        evidence.head !== frozen.head || evidence.candidateVersion !== reservation.version || !isDeepStrictEqual(evidence.profile, expectedProfile) ||
+        observed?.kind !== 'process' || observed.requestHash !== digest(legacy.identity) || evidence.oldProcess.key !== legacy.key ||
+        evidence.oldProcess.requestHash !== observed.requestHash || evidence.oldProcess.receiptDigest !== digest(observed.receipt) ||
+        !isDeepStrictEqual(evidence.oldProcess.result, observed.receipt) || execution.state !== 'exited' ||
+        !isDeepStrictEqual(execution.result, observed.receipt)) throw denied();
+    const saved = privateFile(join(legacy.processDirectory, digest(legacy.key), 'request.json'), 1_000_000);
+    const { key, command, args, cwd, env, timeoutMs } = legacy.processRequest;
+    if (sha(saved) !== evidence.oldProcess.requestFileHash || !isDeepStrictEqual(JSON.parse(saved.toString('utf8')),
+      { key, command, args, cwd, env, timeoutMs })) throw denied();
+    const artifacts = new Map<string, unknown>();
+    for (const artifact of evidence.artifacts) {
+      const value = privateFile(artifact.path, 2_000_000);
+      if (artifacts.has(artifact.kind) || sha(value) !== artifact.sha256 || (lstatSync(artifact.path).mode & 0o777) !== 0o600) throw denied();
+      artifacts.set(artifact.kind, JSON.parse(value.toString('utf8')));
+    }
+    const guest = z.object({ version: z.string(), head: z.string(), sourceManifestDigest: hash,
+      passed: z.literal(false), nativeChecks: z.literal(54), protectedUnchanged: z.literal(true),
+      steps: z.array(z.object({ name: z.string(), exitCode: z.literal(0), signal: z.null(), stopped: z.null(), args: z.array(z.string()) }).passthrough()),
+      failure: z.object({ code: z.literal('ENOENT'), message: z.string() }).passthrough() }).passthrough().parse(artifacts.get('guest-result'));
+    const steps = ['npm-ci', 'electron-runtime', 'typecheck', 'lint', 'portable-tests', 'build', 'package-win', 'astryx-doctor', 'native', 'vault'];
+    const failure = evidence.failure, normalized = win32.normalize(failure.normalizedReportPath);
+    if (guest.version !== reservation.version || guest.head !== frozen.head || guest.sourceManifestDigest !== legacy.sourceManifestDigest ||
+        !isDeepStrictEqual(guest.steps.map(step => step.name), steps) || !/^\\\\VBOXSVR\\.+\\vault-report\.json$/i.test(failure.requestedReportPath) ||
+        !/^[A-Za-z]:\\VBOXSVR\\/i.test(normalized) ||
+        normalized.slice(2).toLowerCase() !== win32.normalize(failure.requestedReportPath.slice(1)).toLowerCase() ||
+        !guest.steps.at(-1)!.args.includes(`--outputFile=${failure.requestedReportPath}`) ||
+        !guest.failure.message.includes(failure.requestedReportPath)) throw denied();
+    const counts = { success: z.literal(true), numTotalTests: z.literal(9), numPassedTests: z.literal(9),
+      numFailedTests: z.literal(0), numPendingTests: z.literal(0) };
+    z.object(counts).passthrough().parse(artifacts.get('vault-report'));
+    const pathProof = z.object({ noRerun: z.literal(true), noProofOrAcceptance: z.literal(true), originalExpectedVaultReportUntouched: z.literal(true),
+      diagnosticReport: z.object({ ...counts, path: z.string(), sha256: hash }).passthrough() }).passthrough().parse(artifacts.get('report-path'));
+    if (win32.normalize(pathProof.diagnosticReport.path) !== normalized ||
+        pathProof.diagnosticReport.sha256 !== evidence.artifacts.find(item => item.kind === 'vault-report')!.sha256) throw denied();
+    if (!isDeepStrictEqual(z.object(preflightEvidence.shape.postflight.shape).parse(artifacts.get('postflight')), evidence.postflight)) throw denied();
+    const retained = z.object({ source: absolute, sha256: hash, receipt: z.record(z.string(), z.unknown()) }).strict();
+    const cleanup = z.object({ originalProtected4Unchanged: z.literal(true), filterExactlyRestored: z.literal(true),
+      normalShutdown: z.literal(true), noTestsRerun: z.literal(true), uiStarted: z.literal(false), observersExited: z.literal(true),
+      guestPostflight: retained, physicalCleanup: retained }).passthrough().parse(artifacts.get('postflight'));
+    for (const item of [cleanup.guestPostflight, cleanup.physicalCleanup]) {
+      const value = privateFile(item.source, 2_000_000);
+      if ((lstatSync(item.source).mode & 0o777) !== 0o600 || sha(value) !== item.sha256 ||
+          !isDeepStrictEqual(JSON.parse(value.toString('utf8')), item.receipt)) throw denied();
+    }
+    z.object({ originalProtected4Unchanged: z.literal(true), baselineReplaced: z.literal(false), heldKeys: z.literal(0),
+      guestApplications: z.literal(0), guestTestJobs: z.literal(0), observersExited: z.literal(true), helperTerminal: z.literal(true),
+      qualificationState: z.literal('failed'), uiStarted: z.literal(false), noTestsRerun: z.literal(true) }).passthrough().parse(cleanup.guestPostflight.receipt);
+    z.object({ vmState: z.literal('poweroff'), normalShutdown: z.literal(true), forcedPoweroff: z.literal(false), additionalStart: z.literal(false),
+      filterExactlyRestored: z.literal(true), snapshotsUnchanged: z.literal(true), runningVmCount: z.literal(0),
+      allFailedSourceArtifactsRetained: z.literal(true) }).passthrough().parse(cleanup.physicalCleanup.receipt);
+    const helperFailure = z.object({ code: z.literal('ERR_ASSERTION'), message: z.string().includes('Windows verification failed') }).passthrough();
+    helperFailure.parse(artifacts.get('helper-failure'));
+    privateDirectory(legacy.receiptDirectory);
+    if (privateFile(legacy.requestPath, 64_000).toString('utf8') !== JSON.stringify(legacy.helperRequest)) throw denied();
+    validateOwnedProcessRequest(legacy.processRequest);
+    legacy.current(); next.current();
+    const bind = (context: ReturnType<typeof configuredBetaProcess>): BetaLaunchBinding => ({
+      identity: context.identity, processRequest: context.processRequest, helperRequest: context.helperRequest });
+    return { legacy: bind(legacy), next: bind(next), replacementProfile: next.identity.reportPathProfile!, candidateProofDigest,
+      evidencePath, evidenceDigest: sha(bytes), evidence };
+  } catch { throw denied(); }
+}
+
 export async function qualifyConfiguredBeta(request: ConfiguredBetaRequest): Promise<BetaReceipt> {
   const { store, runId, workspace, head, version, signal } = request;
   const { manifest, profile, current, sourceManifestDigest, identity, key, processDirectory,
@@ -261,6 +391,7 @@ export async function qualifyConfiguredBeta(request: ConfiguredBetaRequest): Pro
   const result = await store.effect(runId, key, 'process', identity, {
     beforeExecute: async () => {
       current(); requireFrozenSource(manifest, workspace, head); signal?.throwIfAborted();
+      if (identity.reportPathProfile) store.assertBetaReportPathExecution(runId, identity);
       if (identity.processEnvironment && !isDeepStrictEqual(processRequest.env, trustedBetaHelperEnvironment())) unavailable();
       validateOwnedProcessRequest(processRequest);
     },

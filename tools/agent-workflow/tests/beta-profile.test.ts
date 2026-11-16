@@ -6,7 +6,7 @@ import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, 
 import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { inspectBetaEnvironmentRetry, inspectRejectedBetaLaunch, MAX_BETA_PROFILE_MS, qualifyConfiguredBeta, selectBetaProfile } from '../src/beta-profile.js';
+import { inspectBetaEnvironmentRetry, inspectBetaReportPathRetry, inspectRejectedBetaLaunch, MAX_BETA_PROFILE_MS, qualifyConfiguredBeta, selectBetaProfile } from '../src/beta-profile.js';
 import { executeRun } from '../src/graph.js';
 import { trustedBetaHelperEnvironment } from '../src/beta-environment.js';
 import { digest, makeManifest, WorkflowError } from '../src/manifest.js';
@@ -109,8 +109,8 @@ async function betaGraphWait(f: ReturnType<typeof fixture>, store = f.store) {
   } });
 }
 
-async function environmentFailureFixture(t: { after(fn: () => void): void }) {
-  const f = await rejectedFixture(t, fakeVBoxBehavior);
+async function environmentFailureFixture(t: { after(fn: () => void): void }, behavior = fakeVBoxBehavior) {
+  const f = await rejectedFixture(t, behavior);
   f.store.prepareRejectedBetaLaunch(f.id, () => f.binding);
   const waited = await betaGraphWait(f);
   assert.equal(waited.status, 'awaiting_input'); assert.equal(waited.stage, 'handoff');
@@ -142,6 +142,233 @@ async function environmentFailureFixture(t: { after(fn: () => void): void }) {
   const inspect = () => inspectBetaEnvironmentRetry(f.store, f.id, evidencePath);
   return { ...f, evidence, evidencePath, saveEvidence, inspect };
 }
+
+// Real harmless owned processes, synthetic failure facts; no historical runtime or Windows acceptance attestation.
+async function reportPathFailureFixture(t: { after(fn: () => void): void }) {
+  const f = await environmentFailureFixture(t, fakeVBoxBehavior.replace('rows.length===1 ? 7 : 2', '2'));
+  const environmentBinding = f.inspect(); f.store.authorizeBetaEnvironmentRetry(f.id, f.inspect);
+  await betaGraphWait(f);
+  const saved = f.store.get(f.id);
+  f.store.update(f.id, { data: { ...saved.data, verification: { ...(saved.data.verification as Record<string, unknown>),
+    checks: ['workflow-selftest', 'workflow-docs', 'openspec-strict', 'whitespace', 'desktop-typecheck', 'desktop-lint', 'desktop-tests', 'desktop-build']
+      .map(name => ({ name, passed: true, exitCode: 0, status: 'exited', outputTruncated: false })) } } });
+  const old = environmentBinding.next, receipt = f.store.observedEffect(f.id, old.processRequest.key)!;
+  assert.equal((receipt.receipt as { exitCode: number }).exitCode, 2);
+  const replacementHelper = join(f.directory, 'report-helper.mjs');
+  writeFileSync(replacementHelper, readFileSync(f.helper, 'utf8').replace(fakeVBoxBehavior.replace('rows.length===1 ? 7 : 2', '2'),
+    'process.exitCode = 7;'), { mode: 0o600 });
+  const replacementProfilePath = join(f.directory, 'report-profile.json');
+  writeFileSync(replacementProfilePath, JSON.stringify({ ...f.profile, helperPath: replacementHelper, timeoutMs: 5000 }), { mode: 0o600 });
+  const requestedReportPath = '\\\\VBOXSVR\\Synthetic\\run\\vault-report.json';
+  const normalizedReportPath = 'C:\\VBOXSVR\\Synthetic\\run\\vault-report.json';
+  const result = { version, head: f.head, sourceManifestDigest: old.identity.sourceManifestDigest,
+    passed: false, nativeChecks: 54, protectedUnchanged: true,
+    steps: ['npm-ci', 'electron-runtime', 'typecheck', 'lint', 'portable-tests', 'build', 'package-win', 'astryx-doctor', 'native', 'vault']
+      .map(name => ({ name, exitCode: 0, signal: null, stopped: null, args: name === 'vault' ? [`--outputFile=${requestedReportPath}`] : [] })),
+    failure: { code: 'ENOENT', message: `ENOENT: open '${requestedReportPath}'` } };
+  const vault = { success: true, numTotalTests: 9, numPassedTests: 9, numFailedTests: 0, numPendingTests: 0 };
+  const writeArtifact = (name: string, value: unknown) => {
+    const path = join(f.directory, name); writeFileSync(path, JSON.stringify(value), { mode: 0o600 }); return path;
+  };
+  const vaultPath = writeArtifact('vault-report.json', vault);
+  const postflight = { protectedStateUnchanged: true, snapshotsUnchanged: true, resourceClean: true, vmState: 'poweroff',
+    guestApplications: 0, guestTestJobs: 0, heldKeys: 0 };
+  const retained = (name: string, receipt: Record<string, unknown>) => {
+    const source = writeArtifact(name, receipt); return { source, sha256: sha(readFileSync(source)), receipt };
+  };
+  const cleanup = { ...postflight, originalProtected4Unchanged: true, filterExactlyRestored: true, normalShutdown: true,
+    noTestsRerun: true, uiStarted: false, observersExited: true,
+    guestPostflight: retained('original-postflight.json', { originalProtected4Unchanged: true, baselineReplaced: false,
+      heldKeys: 0, guestApplications: 0, guestTestJobs: 0, observersExited: true, helperTerminal: true,
+      qualificationState: 'failed', uiStarted: false, noTestsRerun: true }),
+    physicalCleanup: retained('original-cleanup.json', { vmState: 'poweroff', normalShutdown: true, forcedPoweroff: false,
+      additionalStart: false, filterExactlyRestored: true, snapshotsUnchanged: true, runningVmCount: 0, allFailedSourceArtifactsRetained: true }) };
+  const artifacts = [
+    { kind: 'helper-failure', path: writeArtifact('report-helper-failure.json', { message: 'Windows verification failed', code: 'ERR_ASSERTION' }) },
+    { kind: 'guest-result', path: writeArtifact('guest-result.json', result) },
+    { kind: 'vault-report', path: vaultPath },
+    { kind: 'report-path', path: writeArtifact('report-path.json', { noRerun: true, noProofOrAcceptance: true,
+      originalExpectedVaultReportUntouched: true, diagnosticReport: { path: normalizedReportPath, sha256: sha(readFileSync(vaultPath)),
+        success: true, numTotalTests: 9, numPassedTests: 9, numFailedTests: 0, numPendingTests: 0 } }) },
+    { kind: 'postflight', path: writeArtifact('report-postflight.json', cleanup) }
+  ].map(item => ({ ...item, sha256: sha(readFileSync(item.path)) }));
+  const reportEvidence = { version: 1, reason: 'vitest-unc-report-path', repository: f.manifest.repository, runId: f.id,
+    manifestHash: digest(f.manifest), head: f.head, candidateVersion: version, profile: f.evidence.profile,
+    oldProcess: { key: old.processRequest.key, requestHash: receipt.requestHash,
+      requestFileHash: sha(readFileSync(join(f.processDirectory, digest(old.processRequest.key), 'request.json'))),
+      receiptDigest: digest(receipt.receipt), result: receipt.receipt },
+    failure: { phase: 'vault-report-read', code: 'ENOENT', requestedReportPath, normalizedReportPath,
+      uiStarted: false, packagedLaunchStarted: false, qualificationProofProduced: false, transferStarted: false }, postflight, artifacts };
+  const reportEvidencePath = join(f.directory, 'report-evidence.json');
+  const saveReportEvidence = () => writeFileSync(reportEvidencePath, JSON.stringify(reportEvidence), { mode: 0o600 }); saveReportEvidence();
+  const inspect = () => inspectBetaReportPathRetry(f.store, f.id, reportEvidencePath, replacementProfilePath);
+  const authorize = () => f.store.authorizeBetaReportPathRetry(f.id, inspect);
+  return { ...f, environmentBinding, old, reportEvidence, reportEvidencePath, saveReportEvidence,
+    replacementProfilePath, replacementHelper, inspectReport: inspect, authorizeReport: authorize };
+}
+
+function reportArtifact(f: Awaited<ReturnType<typeof reportPathFailureFixture>>, kind: string, change: (value: Record<string, unknown>) => void) {
+  const artifact = f.reportEvidence.artifacts.find(item => item.kind === kind)!;
+  const value = JSON.parse(readFileSync(artifact.path, 'utf8')); change(value);
+  writeFileSync(artifact.path, JSON.stringify(value)); artifact.sha256 = sha(readFileSync(artifact.path)); f.saveReportEvidence();
+}
+
+test('explicit report-path grant preserves old failures and normal graph resume selects the one bound replacement', async t => {
+  const f = await reportPathFailureFixture(t), initial = f.snapshot(), binding = f.inspectReport();
+  assert.deepEqual(f.snapshot(), initial); // Reading facts cannot grant another attempt.
+  await betaGraphWait(f); assert.equal(f.store.repairAllowance(f.id).used, 3);
+  const before = f.snapshot();
+  f.authorizeReport(); const admitted = f.snapshot();
+  assert.deepEqual(admitted.run.manifest, before.run.manifest);
+  assert.deepEqual(admitted.run.data.betaEnvironmentRetryHistory, before.run.data.betaEnvironmentRetryHistory);
+  assert.deepEqual(admitted.run.data.betaPrelaunchRetryHistory, before.run.data.betaPrelaunchRetryHistory);
+  assert.deepEqual(admitted.usage, { ...before.usage, repairs: 4 });
+  assert.deepEqual(admitted.operations, before.operations);
+  assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 2, used: 4 });
+  f.authorizeReport(); assert.deepEqual(f.snapshot(), admitted);
+  const reopened = new RunStore(f.state, f.manifest); t.after(() => reopened.close());
+  reopened.authorizeBetaReportPathRetry(f.id, () => inspectBetaReportPathRetry(reopened, f.id, f.reportEvidencePath, f.replacementProfilePath));
+  assert.deepEqual(f.snapshot(), admitted);
+  const waiting = await betaGraphWait(f);
+  assert.equal(waiting.status, 'awaiting_input'); assert.equal(waiting.error, null);
+  assert.equal((f.store.observedEffect(f.id, binding.next.processRequest.key)?.receipt as { exitCode: number }).exitCode, 7);
+  await betaGraphWait(f);
+  assert.equal(readFileSync(join(binding.next.processRequest.cwd, 'invoked.jsonl'), 'utf8').trim().split('\n').length, 1);
+  assert.throws(f.authorizeReport, { code: 'beta_report_path_retry_exhausted' });
+  assert.throws(() => f.store.update(f.id, { data: { ...f.store.get(f.id).data, betaReportPathRetryHistory: [] } }), { code: 'invalid_state' });
+  assert.throws(() => f.store.reserve(f.id, 'unapproved-fifth', 'repairs'), { code: 'budget_exhausted' }); noQualification(f);
+});
+
+test('report-path grant rejects incomplete checks, started acceptance and changed private evidence without spending', async t => {
+  const variants: { name: string; change(f: Awaited<ReturnType<typeof reportPathFailureFixture>>): void }[] = [
+    { name: 'missing checks', change: f => f.store.update(f.id, { data: { ...f.store.get(f.id).data,
+      verification: { ...(f.store.get(f.id).data.verification as Record<string, unknown>), checks: [] } } }) },
+    { name: 'manifest', change: f => { f.reportEvidence.manifestHash = 'f'.repeat(64); f.saveReportEvidence(); } },
+    { name: 'old request', change: f => { f.reportEvidence.oldProcess.requestFileHash = 'f'.repeat(64); f.saveReportEvidence(); } },
+    { name: 'UI started', change: f => { f.reportEvidence.failure.uiStarted = true; f.saveReportEvidence(); } },
+    { name: 'packaged launch started', change: f => { f.reportEvidence.failure.packagedLaunchStarted = true; f.saveReportEvidence(); } },
+    { name: 'qualification proof', change: f => { f.reportEvidence.failure.qualificationProofProduced = true; f.saveReportEvidence(); } },
+    { name: 'transfer started', change: f => { f.reportEvidence.failure.transferStarted = true; f.saveReportEvidence(); } },
+    { name: 'failed native', change: f => reportArtifact(f, 'guest-result', value => { value.nativeChecks = 53; }) },
+    { name: 'not report ENOENT', change: f => reportArtifact(f, 'guest-result', value => { value.failure = { code: 'OTHER' }; }) },
+    { name: 'failed vault', change: f => reportArtifact(f, 'vault-report', value => { value.numFailedTests = 1; }) },
+    { name: 'cleanup missing', change: f => reportArtifact(f, 'postflight', value => { value.filterExactlyRestored = false; }) },
+    { name: 'unsafe facts', change: f => chmodSync(f.reportEvidencePath, 0o644) },
+    { name: 'facts are not authorization', change: f => { Object.assign(f.reportEvidence, { authorization: true }); f.saveReportEvidence(); } }
+  ];
+  for (const variant of variants) {
+    const f = await reportPathFailureFixture(t); variant.change(f); const before = f.snapshot();
+    assert.throws(f.authorizeReport, { code: 'beta_report_path_retry_denied' }, variant.name);
+    assert.deepEqual(f.snapshot(), before, variant.name); assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 1, used: 3 });
+  }
+});
+
+test('a granted report-path retry rechecks an integration hold before its process becomes unknown', async t => {
+  const f = await reportPathFailureFixture(t), binding = f.inspectReport(); f.authorizeReport();
+  f.store.update(f.id, { data: { ...f.store.get(f.id).data,
+    integrationHold: { active: true, head: f.head, reason: 'synthetic_postgrant_hold' } } });
+  const result = await betaGraphWait(f);
+  assert.equal(result.status, 'awaiting_input');
+  assert.equal(f.store.observedEffect(f.id, binding.next.processRequest.key), null);
+  const operation = f.database.prepare('SELECT state FROM operations WHERE run_id=? AND key=?').get(f.id, binding.next.processRequest.key) as { state: string };
+  assert.equal(operation.state, 'prepared');
+  assert.equal(existsSync(join(f.processDirectory, digest(binding.next.processRequest.key))), false);
+  assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 2, used: 4 });
+});
+
+test('report-path grant binds a separate private profile and rejects changed or partial process resources', async t => {
+  const changeProfile = (f: Awaited<ReturnType<typeof reportPathFailureFixture>>, patch: Record<string, unknown>) =>
+    writeFileSync(f.replacementProfilePath, JSON.stringify({ ...JSON.parse(readFileSync(f.replacementProfilePath, 'utf8')), ...patch }));
+  const variants: { name: string; change(f: Awaited<ReturnType<typeof reportPathFailureFixture>>): void }[] = [
+    { name: 'public profile', change: f => chmodSync(f.replacementProfilePath, 0o644) },
+    { name: 'linked profile', change: f => linkSync(f.replacementProfilePath, join(f.directory, 'profile-alias')) },
+    { name: 'registered profile', change: f => {
+      const path = join(f.state, 'profiles/replacement.json'); writeFileSync(path, readFileSync(f.replacementProfilePath), { mode: 0o600 });
+      f.replacementProfilePath = path;
+    } },
+    { name: 'environment changed', change: f => changeProfile(f, { environmentId: 'other-environment' }) },
+    { name: 'target changed', change: f => changeProfile(f, { targetDirectory: join(f.directory, 'other-target') }) },
+    { name: 'token changed', change: f => writeFileSync(f.resourceTokenFile, 'changed-token') },
+    { name: 'original profile changed', change: f => writeFileSync(f.profilePath, readFileSync(f.profilePath, 'utf8') + '\n') },
+    { name: 'same helper', change: f => changeProfile(f, { helperPath: f.helper }) },
+    { name: 'timeout increase', change: f => changeProfile(f, { timeoutMs: f.profile.timeoutMs + 1 }) },
+    { name: 'remaining time', change: f => f.store.reserve(f.id, 'spent-before-retry', 'activeMs',
+      f.manifest.limits.activeMs - f.store.usage(f.id).activeMs - 1000) },
+    { name: 'old receipt partial', change: f => rmSync(join(f.processDirectory, digest(f.old.processRequest.key), 'exit.json')) },
+    { name: 'replacement process partial', change: f => {
+      const binding = f.inspectReport(); mkdirSync(join(f.processDirectory, digest(binding.next.processRequest.key)), { mode: 0o700 });
+    } }
+  ];
+  for (const variant of variants) {
+    const f = await reportPathFailureFixture(t); variant.change(f); const before = f.snapshot();
+    const inspect = () => inspectBetaReportPathRetry(f.store, f.id, f.reportEvidencePath, f.replacementProfilePath);
+    assert.throws(() => f.store.authorizeBetaReportPathRetry(f.id, inspect), { code: 'beta_report_path_retry_denied' }, variant.name);
+    assert.deepEqual(f.snapshot(), before, variant.name);
+  }
+});
+
+test('report-path authorization refuses changed ownership and downstream state, and rolls back its reservation with history', async t => {
+  const variants: { name: string; change(f: Awaited<ReturnType<typeof reportPathFailureFixture>>): void | Promise<void> }[] = [
+    { name: 'status', change: f => f.store.update(f.id, { status: 'failed' }) },
+    { name: 'stage', change: f => f.store.update(f.id, { stage: 'review' }) },
+    { name: 'error', change: f => f.store.update(f.id, { error: 'effect_unknown' }) },
+    { name: 'cancel', change: f => f.store.requestCancel(f.id) },
+    { name: 'live owner', change: f => f.store.claim(f.id) },
+    { name: 'hold', change: f => f.store.update(f.id, { data: { ...f.store.get(f.id).data,
+      integrationHold: { active: true, head: f.head, reason: 'synthetic_hold' } } }) },
+    { name: 'downstream', change: f => f.store.update(f.id, { data: { ...f.store.get(f.id).data, betaReceipt: {} } }) },
+    { name: 'foreign unknown', change: async f => {
+      const other = makeManifest({ repository: f.manifest.repository, root: f.root, commonDir: f.manifest.commonDir, base: f.head, scope: 'docs-links' });
+      f.store.admit(other);
+      await assert.rejects(f.store.effect(other.id, 'synthetic-unknown', 'process', {}, {
+        execute: async () => { throw new Error('Synthetic lost process'); }, reconcile: async () => null }));
+    } }
+  ];
+  for (const variant of variants) {
+    const f = await reportPathFailureFixture(t); await variant.change(f); const before = f.snapshot();
+    assert.throws(f.authorizeReport, { code: 'beta_report_path_retry_denied' }, variant.name); assert.deepEqual(f.snapshot(), before, variant.name);
+  }
+  const f = await reportPathFailureFixture(t), before = f.snapshot();
+  f.database.exec("CREATE TRIGGER reject_report_history BEFORE UPDATE ON runs WHEN json_type(NEW.data,'$.betaReportPathRetryHistory')='array' BEGIN SELECT RAISE(FAIL,'synthetic report history failure'); END");
+  assert.throws(f.authorizeReport, /synthetic report history failure/); assert.deepEqual(f.snapshot(), before);
+  assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 1, used: 3 });
+});
+
+test('report-path CLI requires the dedicated flag, evidence and replacement profile, and old flags cannot grant it', async t => {
+  const f = await reportPathFailureFixture(t), before = f.snapshot();
+  const flags = ['--retry-beta-report-path', '--preflight-evidence', f.reportEvidencePath, '--replacement-beta-profile', f.replacementProfilePath];
+  for (const options of [[flags[0]!], flags.slice(1), flags.slice(0, 3), [...flags, '--retry-oracle'],
+    [...flags, '--retry-beta-environment'], ['--retry-beta-environment', '--preflight-evidence', f.reportEvidencePath]]) {
+    const result = spawnSync(process.execPath, [new URL('../src/cli.js', import.meta.url).pathname,
+      'resume', f.id, '--repo', f.root, '--state-dir', f.state, ...options], { encoding: 'utf8', timeout: 10_000 });
+    assert.ok(result.status === 2 || result.status === 4, result.stderr);
+    assert.match(result.stderr, /invalid_arguments|beta_environment_retry_denied/); assert.deepEqual(f.snapshot(), before);
+  }
+  f.authorizeReport();
+  const status = spawnSync(process.execPath, [new URL('../src/cli.js', import.meta.url).pathname,
+    'status', f.id, '--repo', f.root, '--state-dir', f.state], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(status.status, 0, status.stderr);
+  assert.deepEqual(JSON.parse(status.stdout).repairAllowance, { original: 2, additional: 2, used: 4 });
+  assert.equal(JSON.parse(status.stdout).betaReportPathRetryCount, 1);
+});
+
+test('a report-path grant stops changed helper, proof or fact bytes before execution and can resume when exact facts return', async t => {
+  for (const kind of ['facts', 'proof', 'helper']) {
+    const f = await reportPathFailureFixture(t), binding = f.inspectReport(); f.authorizeReport();
+    const originalData = f.store.get(f.id).data;
+    const path = kind === 'helper' ? f.replacementHelper : f.reportEvidencePath, bytes = readFileSync(path);
+    if (kind === 'proof') f.store.update(f.id, { data: { ...originalData, verification: { ...(originalData.verification as Record<string, unknown>), sourceHash: 'f'.repeat(64) } } });
+    else writeFileSync(path, Buffer.concat([bytes, Buffer.from('\n')]));
+    await betaGraphWait(f);
+    assert.equal(f.store.observedEffect(f.id, binding.next.processRequest.key), null);
+    assert.equal(existsSync(join(f.processDirectory, digest(binding.next.processRequest.key))), false);
+    if (kind === 'proof') f.store.update(f.id, { error: null, data: { ...f.store.get(f.id).data, verification: originalData.verification } });
+    else { writeFileSync(path, bytes); f.store.update(f.id, { error: null }); }
+    await betaGraphWait(f);
+    assert.equal((f.store.observedEffect(f.id, binding.next.processRequest.key)?.receipt as { exitCode: number }).exitCode, 7);
+    assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 2, used: 4 }); noQualification(f);
+  }
+});
 
 test('private profile selection binds helper, Node, configuration and resource digest without serializing the token', t => {
   const f = fixture(t);
