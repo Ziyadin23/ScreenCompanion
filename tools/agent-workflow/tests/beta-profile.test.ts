@@ -2,16 +2,17 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
-import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { inspectRejectedBetaLaunch, MAX_BETA_PROFILE_MS, qualifyConfiguredBeta, selectBetaProfile } from '../src/beta-profile.js';
+import { inspectBetaEnvironmentRetry, inspectRejectedBetaLaunch, MAX_BETA_PROFILE_MS, qualifyConfiguredBeta, selectBetaProfile } from '../src/beta-profile.js';
+import { executeRun } from '../src/graph.js';
 import { digest, makeManifest, WorkflowError } from '../src/manifest.js';
 import { inspectOwnedProcess } from '../src/process.js';
 import { RunStore, type BetaPrelaunchBinding } from '../src/store.js';
 
-const sha = (value: string): string => createHash('sha256').update(value).digest('hex');
+const sha = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex');
 const version = '0.5.0-beta.12', token = 'synthetic-resource-identity-token';
 function fixture(t: { after(fn: () => void): void }, behavior = 'process.exitCode = 7;', timeoutMs = 10_000) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-beta-profile-')), root = join(directory, 'repo');
@@ -47,10 +48,16 @@ function noQualification(f: ReturnType<typeof fixture>): void {
     assert.equal(f.store.observedEffect(f.manifest.id, `${kind}:${f.head}:${version}`), null);
   assert.equal(existsSync(f.profile.targetDirectory), false);
 }
+function launchIdentity(f: ReturnType<typeof fixture>, effective = false) {
+  const env = { PATH: '/usr/bin:/bin', HOME: homedir(), USER: userInfo().username, LOGNAME: userInfo().username };
+  return { repository: f.manifest.repository, runId: f.manifest.id, workspace: f.root, head: f.head, version,
+    profileHash: f.selection.hash, sourceManifestDigest: sha(f.git('ls-tree', '-r', '--full-tree', f.head) + '\n'),
+    ...(effective ? { processEnvironment: { version: 'effective-user-v1' as const, principal: userInfo().username, digest: digest(env) } } : {}) };
+}
 
 // This transaction fixture supplies the trusted binding seam; it does not attest legacy source/runtime bytes.
-async function rejectedFixture(t: { after(fn: () => void): void }) {
-  const f = fixture(t, undefined, 7_500_000), id = f.manifest.id;
+async function rejectedFixture(t: { after(fn: () => void): void }, behavior?: string) {
+  const f = fixture(t, behavior, 7_500_000), id = f.manifest.id;
   const identity = { repository: f.manifest.repository, runId: id, workspace: f.root, head: f.head, version,
     profileHash: f.selection.hash, sourceManifestDigest: sha(f.git('ls-tree', '-r', '--full-tree', f.head) + '\n') };
   const key = `beta-process:${digest(identity)}`, processDirectory = join(f.state, 'runs', id, 'processes');
@@ -81,6 +88,58 @@ async function rejectedFixture(t: { after(fn: () => void): void }) {
   const snapshot = () => ({ run: f.store.get(id), usage: f.store.usage(id),
     operations: database.prepare('SELECT * FROM operations WHERE run_id=? ORDER BY key').all(id) });
   return { ...f, id, key, binding, database, operation, snapshot, processDirectory, receiptDirectory, requestPath };
+}
+
+const fakeVBoxBehavior = `const owner=${JSON.stringify(userInfo().username)};
+const rows=process.env.USER===owner&&process.env.LOGNAME===owner ? ['Synthetic VM'] :
+  ['WARNING: Environment variable LOGNAME or USER does not correspond to the effective uid.','Synthetic VM'];
+appendFileSync(join(request.receiptDirectory,'host-discovery.txt'),rows.join('\\n'),{mode:0o600});
+process.exitCode=rows.length===1 ? 7 : 2;`;
+
+async function betaGraphWait(f: ReturnType<typeof fixture>, store = f.store) {
+  return executeRun(store, f.manifest.id, { handoff: async context => {
+    try {
+      await qualifyConfiguredBeta({ ...f.request, store, signal: context.signal });
+      return { next: 'done' };
+    } catch (error) {
+      if (!(error instanceof WorkflowError) || error.code !== 'beta_capability_unavailable') throw error;
+      return { next: 'handoff', status: 'awaiting_input', data: { waitingFor: error.code } };
+    }
+  } });
+}
+
+async function environmentFailureFixture(t: { after(fn: () => void): void }) {
+  const f = await rejectedFixture(t, fakeVBoxBehavior);
+  f.store.prepareRejectedBetaLaunch(f.id, () => f.binding);
+  const waited = await betaGraphWait(f);
+  assert.equal(waited.status, 'awaiting_input'); assert.equal(waited.stage, 'handoff');
+  assert.equal(waited.error, null); assert.equal(waited.data.waitingFor, 'beta_capability_unavailable');
+  const old = f.store.observedEffect(f.id, f.key)!;
+  assert.equal((old.receipt as { exitCode: number }).exitCode, 2);
+  const requestFile = join(f.processDirectory, digest(f.key), 'request.json');
+  const failure = join(f.directory, 'helper-failure.json'), postflight = join(f.directory, 'postflight.json');
+  writeFileSync(failure, JSON.stringify({ syntheticFixture: true, phase: 'host-discovery',
+    output: readFileSync(join(f.receiptDirectory, 'host-discovery.txt'), 'utf8') }), { mode: 0o600 });
+  writeFileSync(postflight, JSON.stringify({ syntheticFixture: true, protectedStateUnchanged: true, resourceClean: true }), { mode: 0o600 });
+  const evidence = { version: 1, reason: 'vbox-user-environment-preflight', repository: f.manifest.repository,
+    runId: f.id, manifestHash: digest(f.manifest), head: f.head, candidateVersion: version,
+    profile: { name: f.selection.name, hash: f.selection.hash, helperHash: sha(readFileSync(f.helper)),
+      nodeHash: sha(readFileSync(realpathSync('/usr/bin/node'))), tokenHash: sha(readFileSync(f.resourceTokenFile)) },
+    oldProcess: { key: f.key, requestHash: old.requestHash, requestFileHash: sha(readFileSync(requestFile)),
+      receiptDigest: digest(old.receipt), result: old.receipt },
+    preflight: { phase: 'host-discovery', warning: 'vbox-effective-user-environment', rawOutputRows: 2, runningVmRows: 1,
+      credentialLookupReached: false, guestAuthenticationReached: false, guestReadinessReached: false, guestScriptReached: false,
+      guestStageCreated: false, applicationTestsStarted: false, qualificationStarted: false, claimStageSet: false },
+    postflight: { protectedStateUnchanged: true, snapshotsUnchanged: true, resourceClean: true, vmState: 'poweroff',
+      guestApplications: 0, guestTestJobs: 0, heldKeys: 0 },
+    artifacts: [
+      { kind: 'helper-failure', path: failure }, { kind: 'host-discovery', path: join(f.receiptDirectory, 'host-discovery.txt') },
+      { kind: 'process', path: requestFile }, { kind: 'postflight', path: postflight }
+    ].map(item => ({ ...item, sha256: sha(readFileSync(item.path)) })) };
+  const evidencePath = join(f.directory, 'preflight-evidence.json');
+  const saveEvidence = () => writeFileSync(evidencePath, JSON.stringify(evidence), { mode: 0o600 }); saveEvidence();
+  const inspect = () => inspectBetaEnvironmentRetry(f.store, f.id, evidencePath);
+  return { ...f, evidence, evidencePath, saveEvidence, inspect };
 }
 
 test('private profile selection binds helper, Node, configuration and resource digest without serializing the token', t => {
@@ -139,7 +198,8 @@ test('real harmless helper failure is observed and never becomes Windows qualifi
   const processRequest = JSON.parse(readFileSync(join(operation.stateDirectory, sha(JSON.stringify(operation.key)), 'request.json'), 'utf8')) as {
     args: string[]; env: Record<string, string>;
   };
-  assert.deepEqual(Object.keys(processRequest.env).sort(), ['HOME', 'PATH']);
+  assert.deepEqual(Object.keys(processRequest.env).sort(), ['HOME', 'LOGNAME', 'PATH', 'USER']);
+  assert.equal(processRequest.env.USER, userInfo().username); assert.equal(processRequest.env.LOGNAME, userInfo().username);
   assert.equal(processRequest.args[1], '--request');
   const helperRequest = JSON.parse(readFileSync(processRequest.args[2]!, 'utf8')) as { receiptDirectory: string; sourceManifestDigest: string };
   assert.equal(statSync(processRequest.args[2]!).mode & 0o777, 0o600); assert.match(helperRequest.sourceManifestDigest, /^[a-f0-9]{64}$/);
@@ -171,8 +231,7 @@ test('accepted long beta deadlines reach the real helper once and preserve obser
 
 test('future owned-request validation rejects before a prepared effect becomes unknown', async t => {
   const f = fixture(t), id = f.manifest.id;
-  const identity = { repository: f.manifest.repository, runId: id, workspace: f.root, head: f.head, version,
-    profileHash: f.selection.hash, sourceManifestDigest: sha(f.git('ls-tree', '-r', '--full-tree', f.head) + '\n') };
+  const identity = launchIdentity(f, true);
   const receiptDirectory = join(f.state, 'runs', id, 'beta', digest(identity));
   mkdirSync(receiptDirectory, { recursive: true, mode: 0o700 });
   symlinkSync(receiptDirectory, join(f.state, 'runs', id, 'processes'));
@@ -200,7 +259,8 @@ test('positively rejected prelaunch transaction preserves history and budgets, r
   reopened.prepareRejectedBetaLaunch(f.id, () => f.binding);
   assert.deepEqual(f.snapshot(), admitted);
   await reopened.reconcileOwnedExecutions(f.id);
-  await assert.rejects(qualifyConfiguredBeta({ ...f.request, store: reopened }), { code: 'beta_capability_unavailable' });
+  const waited = await betaGraphWait(f, reopened);
+  assert.equal(waited.error, null); assert.equal(waited.data.waitingFor, 'beta_capability_unavailable');
   assert.equal((reopened.observedEffect(f.id, f.key)?.receipt as { exitCode: number }).exitCode, 7);
   await assert.rejects(qualifyConfiguredBeta({ ...f.request, store: reopened }), { code: 'beta_capability_unavailable' });
   assert.equal(readFileSync(join(f.receiptDirectory, 'invoked.jsonl'), 'utf8').trim().split('\n').length, 1);
@@ -260,6 +320,116 @@ test('real source attestation and ordinary CLI resume refuse unrecognized legacy
   assert.equal(resumed.status, 2, resumed.stderr);
   assert.match(resumed.stderr, /beta_prelaunch_retry_denied/);
   assert.deepEqual(f.snapshot(), before); noQualification(f);
+});
+
+test('fresh beta helpers use only the trusted effective user instead of spoofed ambient identity', async t => {
+  const prior = { USER: process.env.USER, LOGNAME: process.env.LOGNAME, SC_BETA_TEST_SENTINEL: process.env.SC_BETA_TEST_SENTINEL };
+  try {
+    process.env.USER = process.env.LOGNAME = 'synthetic-wrong-owner'; process.env.SC_BETA_TEST_SENTINEL = 'must-not-be-projected';
+    const f = fixture(t, fakeVBoxBehavior);
+    await assert.rejects(qualifyConfiguredBeta(f.request), { code: 'beta_capability_unavailable' });
+    const operation = f.store.ownedProcesses(f.manifest.id)[0]!;
+    const result = f.store.observedEffect(f.manifest.id, operation.key)?.receipt as { exitCode: number };
+    assert.equal(result.exitCode, 7); // Host discovery passed; this synthetic helper deliberately never qualifies Windows.
+    assert.equal(operation.key, `beta-process:${digest(launchIdentity(f, true))}`);
+    const saved = JSON.parse(readFileSync(join(operation.stateDirectory, digest(operation.key), 'request.json'), 'utf8'));
+    assert.deepEqual(saved.env, { PATH: '/usr/bin:/bin', HOME: homedir(), USER: userInfo().username, LOGNAME: userInfo().username });
+    noQualification(f);
+  } finally {
+    for (const [name, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+  }
+});
+
+test('ordinary legacy replay cannot grant a new environment attempt and explicit fact evidence grants exactly one extra repair', async t => {
+  const f = await environmentFailureFixture(t), originalOperation = f.operation(), before = f.snapshot();
+  const invocations = join(f.receiptDirectory, 'invoked.jsonl');
+  assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 0, used: 2 });
+  await assert.rejects(qualifyConfiguredBeta(f.request), { code: 'beta_capability_unavailable' });
+  assert.equal(readFileSync(invocations, 'utf8').trim().split('\n').length, 1);
+  assert.deepEqual(f.snapshot(), before);
+  const binding = f.inspect(); assert.deepEqual(f.snapshot(), before); // Read-only evidence is not authorization.
+  f.store.authorizeBetaEnvironmentRetry(f.id, f.inspect);
+  const admitted = f.snapshot();
+  assert.deepEqual(f.operation(), originalOperation); assert.deepEqual(admitted.run.manifest, before.run.manifest);
+  assert.deepEqual(admitted.usage, { ...before.usage, repairs: 3 });
+  assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 1, used: 3 });
+  const status = spawnSync(process.execPath, [new URL('../src/cli.js', import.meta.url).pathname,
+    'status', f.id, '--repo', f.root, '--state-dir', f.state], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(status.status, 0, status.stderr);
+  assert.deepEqual(JSON.parse(status.stdout).repairAllowance, { original: 2, additional: 1, used: 3 });
+  assert.throws(() => f.store.reserve(f.id, 'ordinary-third-repair', 'repairs'), { code: 'budget_exhausted' });
+  const history = admitted.run.data.betaEnvironmentRetryHistory as { previous: { operation: unknown; usage: unknown } }[];
+  assert.equal(history.length, 1); assert.deepEqual(history[0]!.previous.operation, originalOperation);
+  assert.deepEqual(history[0]!.previous.usage, before.usage);
+  f.store.authorizeBetaEnvironmentRetry(f.id, f.inspect); assert.deepEqual(f.snapshot(), admitted);
+  const reopened = new RunStore(f.state, f.manifest); t.after(() => reopened.close());
+  reopened.authorizeBetaEnvironmentRetry(f.id, () => inspectBetaEnvironmentRetry(reopened, f.id, f.evidencePath));
+  assert.deepEqual(f.snapshot(), admitted);
+  await reopened.reconcileOwnedExecutions(f.id);
+  const waited = await betaGraphWait(f, reopened);
+  assert.equal(waited.error, null); assert.equal(waited.data.waitingFor, 'beta_capability_unavailable');
+  assert.equal((reopened.observedEffect(f.id, binding.next.processRequest.key)?.receipt as { exitCode: number }).exitCode, 7);
+  await assert.rejects(qualifyConfiguredBeta({ ...f.request, store: reopened }), { code: 'beta_capability_unavailable' });
+  assert.equal(readFileSync(join(binding.next.processRequest.cwd, 'invoked.jsonl'), 'utf8').trim().split('\n').length, 1);
+  assert.deepEqual(f.operation(), originalOperation);
+  assert.throws(() => reopened.authorizeBetaEnvironmentRetry(f.id,
+    () => inspectBetaEnvironmentRetry(reopened, f.id, f.evidencePath)), { code: 'beta_environment_retry_exhausted' });
+  assert.throws(() => reopened.update(f.id, { data: { unrelated: true } }), { code: 'invalid_state' });
+  assert.deepEqual(reopened.get(f.id).data.betaEnvironmentRetryHistory, history); noQualification(f);
+});
+
+test('environment retry refuses changed, incomplete, started or unowned preflight evidence without spending or replacing failure', async t => {
+  const variants: { name: string; change(f: Awaited<ReturnType<typeof environmentFailureFixture>>): void }[] = [
+    { name: 'stage', change: f => f.store.update(f.id, { stage: 'review' }) },
+    { name: 'status', change: f => f.store.update(f.id, { status: 'failed' }) },
+    { name: 'error instead of graph wait', change: f => f.store.update(f.id, { error: 'beta_capability_unavailable' }) },
+    { name: 'wrong graph wait', change: f => f.store.update(f.id, { data: { ...f.store.get(f.id).data, waitingFor: 'other_capability' } }) },
+    { name: 'cancel', change: f => f.store.requestCancel(f.id) },
+    { name: 'held lease', change: f => f.store.claim(f.id) },
+    { name: 'hold', change: f => f.store.update(f.id, { data: { ...f.store.get(f.id).data,
+      integrationHold: { active: true, head: f.head, reason: 'synthetic_hold' } } }) },
+    { name: 'manifest', change: f => { f.evidence.manifestHash = 'c'.repeat(64); f.saveEvidence(); } },
+    { name: 'token', change: f => { f.evidence.profile.tokenHash = 'c'.repeat(64); f.saveEvidence(); } },
+    { name: 'receipt', change: f => { f.evidence.oldProcess.receiptDigest = 'c'.repeat(64); f.saveEvidence(); } },
+    { name: 'request', change: f => { f.evidence.oldProcess.requestFileHash = 'c'.repeat(64); f.saveEvidence(); } },
+    { name: 'guest started', change: f => { f.evidence.preflight.guestScriptReached = true; f.saveEvidence(); } },
+    { name: 'acceptance started', change: f => { f.evidence.preflight.applicationTestsStarted = true; f.saveEvidence(); } },
+    { name: 'cleanup missing', change: f => { f.evidence.postflight.resourceClean = false; f.saveEvidence(); } },
+    { name: 'artifact changed', change: f => { f.evidence.artifacts[0]!.sha256 = 'c'.repeat(64); f.saveEvidence(); } },
+    { name: 'unsafe evidence', change: f => chmodSync(f.evidencePath, 0o644) },
+    { name: 'authorization in facts', change: f => { Object.assign(f.evidence, { authorization: true }); f.saveEvidence(); } },
+    { name: 'old partial receipt', change: f => rmSync(join(f.processDirectory, digest(f.key), 'exit.json')) },
+    { name: 'new partial launch', change: f => {
+      const binding = f.inspect(); mkdirSync(join(f.processDirectory, digest(binding.next.processRequest.key)), { recursive: true, mode: 0o700 });
+    } }
+  ];
+  for (const variant of variants) {
+    const f = await environmentFailureFixture(t); variant.change(f); const before = f.snapshot();
+    assert.throws(() => f.store.authorizeBetaEnvironmentRetry(f.id, f.inspect), { code: 'beta_environment_retry_denied' }, variant.name);
+    assert.deepEqual(f.snapshot(), before, variant.name); assert.deepEqual(f.store.repairAllowance(f.id), { original: 2, additional: 0, used: 2 }); noQualification(f);
+  }
+});
+
+test('extra environment authorization rolls back atomically and CLI requires both explicit options', async t => {
+  const f = await environmentFailureFixture(t), before = f.snapshot();
+  f.database.exec("CREATE TRIGGER reject_extra BEFORE INSERT ON reservations WHEN NEW.key LIKE '%beta-environment-once' BEGIN SELECT RAISE(FAIL,'synthetic extra-repair failure'); END");
+  assert.throws(() => f.store.authorizeBetaEnvironmentRetry(f.id, f.inspect), /synthetic extra-repair failure/);
+  assert.deepEqual(f.snapshot(), before);
+  for (const flags of [['--retry-beta-environment'], ['--preflight-evidence', f.evidencePath],
+    ['--retry-beta-environment', '--preflight-evidence', f.evidencePath, '--retry-oracle']]) {
+    const result = spawnSync(process.execPath, [new URL('../src/cli.js', import.meta.url).pathname,
+      'resume', f.id, '--repo', f.root, '--state-dir', f.state, ...flags], { encoding: 'utf8', timeout: 10_000 });
+    assert.equal(result.status, 4, result.stderr); assert.match(result.stderr, /invalid_arguments/);
+    assert.deepEqual(f.snapshot(), before);
+  }
+  const legacy = await rejectedFixture(t), untouched = legacy.snapshot();
+  const wrongPhase = spawnSync(process.execPath, [new URL('../src/cli.js', import.meta.url).pathname,
+    'resume', legacy.id, '--repo', legacy.root, '--state-dir', legacy.state,
+    '--retry-beta-environment', '--preflight-evidence', f.evidencePath], { encoding: 'utf8', timeout: 10_000 });
+  assert.equal(wrongPhase.status, 2, wrongPhase.stderr); assert.match(wrongPhase.stderr, /beta_environment_retry_denied/);
+  assert.deepEqual(legacy.snapshot(), untouched); // The environment flag cannot consume the older prelaunch repair.
 });
 
 test('successful helper exit still rejects malformed, foreign or incomplete qualification', async t => {

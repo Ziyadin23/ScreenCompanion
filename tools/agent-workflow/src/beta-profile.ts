@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
@@ -9,7 +9,7 @@ import { handoffBeta, type BetaReceipt, type BetaResourceOwnership, type Windows
 import { requireFrozenSource } from './intake.js';
 import { digest, WorkflowError } from './manifest.js';
 import { durableJson, inspectOwnedProcess, MAX_PROCESS_TIMEOUT_MS, reconcileOwnedProcess, runOwnedProcess, validateOwnedProcessRequest } from './process.js';
-import type { BetaPrelaunchBinding, RunStore } from './store.js';
+import type { BetaEnvironmentRetryBinding, BetaLaunchBinding, BetaPrelaunchBinding, RunStore } from './store.js';
 
 const sha = (value: Buffer | string): string => createHash('sha256').update(value).digest('hex');
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
@@ -77,7 +77,7 @@ function loadProfile(name: string, stateDirectory: string) {
     const node = realpathSync('/usr/bin/node'), info = lstatSync(node);
     if (!info.isFile() || info.mode & 0o022 || !(info.mode & 0o111) || info.size > 500_000_000) unavailable();
     const identity = { profileHash: sha(bytes), helperHash, node, nodeHash: sha(readFileSync(node)), tokenHash: sha(token) };
-    return { ...profile, name, hash: digest(identity), token };
+    return { ...profile, name, hash: digest(identity), token, identity };
   } catch (error) {
     if (error instanceof WorkflowError) throw error;
     return unavailable();
@@ -91,7 +91,7 @@ export function selectBetaProfile(name: string, stateDirectory: string): { name:
 interface ConfiguredBetaRequest {
   store: RunStore; runId: string; workspace: string; head: string; version: string; signal?: AbortSignal;
 }
-function configuredBetaProcess(request: ConfiguredBetaRequest) {
+function configuredBetaProcess(request: ConfiguredBetaRequest, environment: 'legacy' | 'effective-user-v1' = 'legacy') {
   const { store, runId, workspace, head, version } = request;
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(head) || !/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) unavailable();
   const manifest = store.get(runId).manifest, selection = manifest.betaProfile;
@@ -113,8 +113,14 @@ function configuredBetaProcess(request: ConfiguredBetaRequest) {
   try { if ((JSON.parse(git('show', `${head}:desktop/package.json`)) as { version?: unknown }).version !== version) unavailable(); }
   catch { unavailable(); }
   const sourceManifestDigest = sha(git('ls-tree', '-r', '--full-tree', head));
+  const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: homedir() };
+  if (environment === 'effective-user-v1') {
+    const principal = userInfo().username;
+    env.USER = principal; env.LOGNAME = principal;
+  }
   const identity = { repository: manifest.repository, runId, workspace: realpathSync(workspace), head, version,
-    profileHash: profile.hash, sourceManifestDigest };
+    profileHash: profile.hash, sourceManifestDigest, ...(environment === 'legacy' ? {} : {
+      processEnvironment: { version: 'effective-user-v1' as const, principal: env.USER!, digest: digest(env) } }) };
   const key = `beta-process:${digest(identity)}`, runDirectory = join(store.directory, 'runs', runId);
   const processDirectory = join(runDirectory, 'processes'), receiptDirectory = join(runDirectory, 'beta', digest(identity));
   const helperRequest = { version: 1, repository: manifest.repository, runId, workspace: identity.workspace, head,
@@ -122,9 +128,30 @@ function configuredBetaProcess(request: ConfiguredBetaRequest) {
   const requestPath = join(receiptDirectory, 'request.json');
   const processRequest = { stateDirectory: processDirectory, key, command: '/usr/bin/node',
     args: [profile.helperPath, '--request', requestPath], cwd: receiptDirectory,
-    env: { PATH: '/usr/bin:/bin', HOME: homedir() }, timeoutMs: profile.timeoutMs };
+    env, timeoutMs: profile.timeoutMs };
   return { manifest, profile, current, sourceManifestDigest, identity, key, processDirectory,
     receiptDirectory, helperRequest, requestPath, processRequest };
+}
+
+function selectedBetaProcess(request: ConfiguredBetaRequest) {
+  const legacy = configuredBetaProcess(request), run = request.store.get(request.runId);
+  const history = run.data.betaEnvironmentRetryHistory as { binding?: BetaEnvironmentRetryBinding }[] | undefined;
+  if (history !== undefined) {
+    const next = configuredBetaProcess(request, 'effective-user-v1');
+    const binding = history.length === 1 && history[0]?.binding;
+    if (!binding || !isDeepStrictEqual(binding.legacy.identity, legacy.identity) ||
+        !isDeepStrictEqual(binding.next.identity, next.identity) ||
+        !isDeepStrictEqual(binding.next.processRequest, next.processRequest)) unavailable();
+    return next;
+  }
+  const known = request.store.ownedProcesses(request.runId).filter(entry => entry.key.startsWith('beta-process:'));
+  if (known.some(entry => entry.key === legacy.key)) {
+    if (known.some(entry => entry.key !== legacy.key)) unavailable();
+    return legacy;
+  }
+  const next = configuredBetaProcess(request, 'effective-user-v1');
+  if (known.some(entry => entry.key !== next.key)) unavailable();
+  return next;
 }
 
 const legacyPrelaunchPolicy = '484f45673e1c96edaadf73bf0b5651565db5e5e06e9ccb9c09e1e01a7654d391';
@@ -165,10 +192,70 @@ export function inspectRejectedBetaLaunch(store: RunStore, runId: string): BetaP
     legacySourceBlobs: { ...legacyPrelaunchSources }, historicalRuntimeIdentity: 'not-attested-by-source-blobs' };
 }
 
+const observedResult = z.object({ status: z.literal('exited'), exitCode: z.literal(2), signal: z.null(),
+  stdout: z.string().max(64_000), stderr: z.string().max(64_000), outputTruncated: z.literal(false),
+  elapsedMs: z.number().int().nonnegative().max(5000) }).strict();
+const preflightEvidence = z.object({ version: z.literal(1), reason: z.literal('vbox-user-environment-preflight'),
+  repository: z.string().max(300), runId: z.uuid(), manifestHash: hash, head: z.string().regex(/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/),
+  candidateVersion: z.string().max(100), profile: z.object({ name: identifier.max(80), hash, helperHash: hash, nodeHash: hash, tokenHash: hash }).strict(),
+  oldProcess: z.object({ key: z.string().max(200), requestHash: hash, requestFileHash: hash, receiptDigest: hash, result: observedResult }).strict(),
+  preflight: z.object({ phase: z.literal('host-discovery'), warning: z.literal('vbox-effective-user-environment'),
+    rawOutputRows: z.literal(2), runningVmRows: z.literal(1), credentialLookupReached: z.literal(false),
+    guestAuthenticationReached: z.literal(false), guestReadinessReached: z.literal(false), guestScriptReached: z.literal(false),
+    guestStageCreated: z.literal(false), applicationTestsStarted: z.literal(false), qualificationStarted: z.literal(false), claimStageSet: z.literal(false) }).strict(),
+  postflight: z.object({ protectedStateUnchanged: z.literal(true), snapshotsUnchanged: z.literal(true), resourceClean: z.literal(true),
+    vmState: z.literal('poweroff'), guestApplications: z.literal(0), guestTestJobs: z.literal(0), heldKeys: z.literal(0) }).strict(),
+  artifacts: z.array(z.object({ kind: z.enum(['helper-failure', 'host-discovery', 'process', 'postflight']), path: absolute, sha256: hash }).strict()).min(4).max(20)
+}).strict();
+
+/** Facts grant no resources; only the explicit retry CLI action admits one separately authorized repair. */
+export function inspectBetaEnvironmentRetry(store: RunStore, runId: string, evidencePath: string): BetaEnvironmentRetryBinding {
+  const denied = () => new WorkflowError('beta_environment_retry_denied', 'Exact private evidence of the host-only effective-user preflight failure is required.', 2);
+  try {
+    const run = store.get(runId), data = run.data;
+    const allocation = data.allocation as { path?: unknown } | undefined;
+    const frozen = data.frozen as { head?: unknown } | undefined;
+    const reservation = (data.versionPreparation as { reservation?: { version?: unknown } } | undefined)?.reservation;
+    if (typeof allocation?.path !== 'string' || typeof frozen?.head !== 'string' || typeof reservation?.version !== 'string') throw denied();
+    const request = { store, runId, workspace: allocation.path, head: frozen.head, version: reservation.version };
+    const legacy = configuredBetaProcess(request), next = configuredBetaProcess(request, 'effective-user-v1');
+    requireFrozenSource(run.manifest, run.manifest.root, run.manifest.base);
+    const bytes = privateFile(evidencePath, 131_072), evidence = preflightEvidence.parse(JSON.parse(bytes.toString('utf8')));
+    const expectedProfile = { name: legacy.profile.name, hash: legacy.profile.hash, helperHash: legacy.profile.identity.helperHash,
+      nodeHash: legacy.profile.identity.nodeHash, tokenHash: legacy.profile.identity.tokenHash };
+    const observed = store.observedEffect(runId, legacy.key), execution = inspectOwnedProcess(legacy.processDirectory, legacy.key);
+    if (evidence.repository !== run.manifest.repository || evidence.runId !== runId || evidence.manifestHash !== digest(run.manifest) ||
+        evidence.head !== frozen.head || evidence.candidateVersion !== reservation.version || !isDeepStrictEqual(evidence.profile, expectedProfile) ||
+        observed?.kind !== 'process' || observed.requestHash !== digest(legacy.identity) || evidence.oldProcess.key !== legacy.key ||
+        evidence.oldProcess.requestHash !== observed.requestHash || evidence.oldProcess.receiptDigest !== digest(observed.receipt) ||
+        !isDeepStrictEqual(evidence.oldProcess.result, observed.receipt) || execution.state !== 'exited' ||
+        !isDeepStrictEqual(execution.result, observed.receipt)) throw denied();
+    const saved = privateFile(join(legacy.processDirectory, digest(legacy.key), 'request.json'), 1_000_000);
+    const { key, command, args, cwd, env, timeoutMs } = legacy.processRequest;
+    if (sha(saved) !== evidence.oldProcess.requestFileHash || !isDeepStrictEqual(JSON.parse(saved.toString('utf8')),
+      { key, command, args, cwd, env, timeoutMs })) throw denied();
+    const texts: string[] = [];
+    for (const artifact of evidence.artifacts) {
+      const value = privateFile(artifact.path, 2_000_000);
+      if (sha(value) !== artifact.sha256) throw denied();
+      if (['helper-failure', 'host-discovery'].includes(artifact.kind)) texts.push(value.toString('utf8'));
+    }
+    if (new Set(evidence.artifacts.map(item => item.kind)).size !== 4 ||
+        !texts.some(text => text.includes('LOGNAME') && text.includes('USER') && /effective (?:user )?(?:id|uid)/i.test(text))) throw denied();
+    privateDirectory(legacy.receiptDirectory);
+    if (privateFile(legacy.requestPath, 64_000).toString('utf8') !== JSON.stringify(legacy.helperRequest)) throw denied();
+    validateOwnedProcessRequest(legacy.processRequest);
+    legacy.current(); next.current();
+    const bind = (context: ReturnType<typeof configuredBetaProcess>): BetaLaunchBinding => ({
+      identity: context.identity, processRequest: context.processRequest, helperRequest: context.helperRequest });
+    return { legacy: bind(legacy), next: bind(next), evidencePath, evidenceDigest: sha(bytes), evidence };
+  } catch { throw denied(); }
+}
+
 export async function qualifyConfiguredBeta(request: ConfiguredBetaRequest): Promise<BetaReceipt> {
   const { store, runId, workspace, head, version, signal } = request;
   const { manifest, profile, current, sourceManifestDigest, identity, key, processDirectory,
-    receiptDirectory, helperRequest, requestPath, processRequest } = configuredBetaProcess(request);
+    receiptDirectory, helperRequest, requestPath, processRequest } = selectedBetaProcess(request);
   signal?.throwIfAborted(); privateDirectory(receiptDirectory, true);
   if (existsSync(requestPath)) {
     if (privateFile(requestPath, 64_000).toString('utf8') !== JSON.stringify(helperRequest)) unavailable();

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { userInfo } from 'node:os';
 import { z } from 'zod';
 import { digest, readManifest, ORACLE_RUNTIME, WorkflowError, type Manifest, type Limits } from './manifest.js';
 import { requireFrozenSource } from './intake.js';
@@ -18,13 +19,20 @@ export interface RunRecord {
   manifest: Manifest; status: RunStatus; stage: string;
   data: Record<string, unknown>; cancelRequested: boolean; error: string | null;
 }
-export interface BetaPrelaunchBinding {
+export interface BetaLaunchBinding {
   identity: { repository: string; runId: string; workspace: string; head: string; version: string;
-    profileHash: string; sourceManifestDigest: string };
+    profileHash: string; sourceManifestDigest: string;
+    processEnvironment?: { version: 'effective-user-v1'; principal: string; digest: string } };
   processRequest: OwnedProcessRequest;
   helperRequest: Record<string, unknown>;
+}
+export interface BetaPrelaunchBinding extends BetaLaunchBinding {
   legacySourceBlobs: Record<string, string>;
   historicalRuntimeIdentity: 'not-attested-by-source-blobs';
+}
+export interface BetaEnvironmentRetryBinding {
+  legacy: BetaLaunchBinding; next: BetaLaunchBinding;
+  evidencePath: string; evidenceDigest: string; evidence: Record<string, unknown>;
 }
 const statuses = z.enum(['ready', 'running', 'awaiting_external', 'awaiting_input',
   'budget_exhausted', 'completed', 'cancelled', 'failed', 'quarantined']);
@@ -386,6 +394,99 @@ export class RunStore {
       return this.get(id);
     });
   }
+  authorizeBetaEnvironmentRetry(id: string, inspectBinding: () => BetaEnvironmentRetryBinding): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('beta_environment_retry_denied', 'One explicit additional repair requires the exact attested host-only beta preflight failure.', 2);
+      if (run.status !== 'awaiting_input' || run.stage !== 'handoff' || run.error !== null || data.waitingFor !== 'beta_capability_unavailable' || run.cancelRequested ||
+          manifest.mode !== 'issue' || !['pr', 'merge-eligible'].includes(manifest.delivery) || !manifest.betaProfile ||
+          manifest.root !== this.repository.root || manifest.commonDir !== this.repository.commonDir || manifest.base !== this.repository.base ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          ['beta', 'betaReceipt', 'pull', 'push', 'integration', 'recordPublication', 'recordIntegration', 'finalization']
+            .some(key => Object.hasOwn(data, key))) throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity) throw denied();
+      }
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND id!=? AND
+        (status='quarantined' OR EXISTS(SELECT 1 FROM operations WHERE operations.run_id=runs.id
+        AND kind IN ('worker','process','setup','verification') AND state!='observed')) LIMIT 1`).get(manifest.repository, id)) throw denied();
+      const binding = inspectBinding(), { legacy, next } = binding;
+      const frozen = data.frozen as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; checks?: string[] } | undefined;
+      const verification = data.verification as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; passed?: boolean } | undefined;
+      const review = data.reviewReceipt as { base?: string; head?: string; diffHash?: string; policyHash?: string; clean?: boolean; findings?: unknown[] } | undefined;
+      if (legacy.identity.repository !== manifest.repository || legacy.identity.runId !== id || legacy.identity.profileHash !== manifest.betaProfile.hash ||
+          legacy.identity.processEnvironment !== undefined || legacy.identity.head !== frozen?.head || frozen.base !== manifest.base ||
+          frozen.policyHash !== manifest.policyHash || !frozen.checks?.includes('application') ||
+          !/^[a-f0-9]{64}$/.test(frozen.sourceHash ?? '') || !/^[a-f0-9]{64}$/.test(frozen.diffHash ?? '') ||
+          !verification?.passed || verification.base !== manifest.base || verification.head !== legacy.identity.head ||
+          verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash || verification.policyHash !== manifest.policyHash ||
+          !review?.clean || review.base !== manifest.base || review.head !== legacy.identity.head || review.diffHash !== frozen.diffHash ||
+          review.policyHash !== manifest.policyHash || !Array.isArray(review.findings) || review.findings.length) throw denied();
+      const { processEnvironment, ...nextBase } = next.identity, principal = userInfo().username;
+      const directory = join(this.directory, 'runs', id, 'processes');
+      if (digest(nextBase) !== digest(legacy.identity) || processEnvironment?.version !== 'effective-user-v1' ||
+          processEnvironment.principal !== principal || processEnvironment.digest !== digest(next.processRequest.env) ||
+          Object.keys(legacy.processRequest.env).sort().join('|') !== 'HOME|PATH' ||
+          Object.keys(next.processRequest.env).sort().join('|') !== 'HOME|LOGNAME|PATH|USER' ||
+          next.processRequest.env.USER !== principal || next.processRequest.env.LOGNAME !== principal ||
+          next.processRequest.env.PATH !== legacy.processRequest.env.PATH || next.processRequest.env.HOME !== legacy.processRequest.env.HOME ||
+          next.processRequest.timeoutMs !== legacy.processRequest.timeoutMs || next.processRequest.command !== legacy.processRequest.command ||
+          next.processRequest.args[0] !== legacy.processRequest.args[0] || next.processRequest.args[1] !== '--request') throw denied();
+      for (const item of [legacy, next]) {
+        if (item.processRequest.key !== `beta-process:${digest(item.identity)}` || item.processRequest.stateDirectory !== directory ||
+            item.processRequest.cwd !== join(this.directory, 'runs', id, 'beta', digest(item.identity)) ||
+            item.processRequest.args[2] !== join(item.processRequest.cwd, 'request.json')) throw denied();
+      }
+      const entries = this.checkedOwnedProcesses(run);
+      if (entries.filter(entry => entry.key === legacy.processRequest.key && entry.stateDirectory === directory).length !== 1 ||
+          entries.some(entry => ![legacy.processRequest.key, next.processRequest.key].includes(entry.key) &&
+            inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited')) throw denied();
+      const operation = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?')
+        .get(id, legacy.processRequest.key) as { state?: string; kind?: string; request_hash?: string; receipt?: string } | undefined;
+      const receipt = this.readObservedEffect(id, legacy.processRequest.key);
+      const observed = inspectOwnedProcess(directory, legacy.processRequest.key);
+      if (!operation || operation.state !== 'observed' || receipt?.kind !== 'process' || receipt.requestHash !== digest(legacy.identity) ||
+          observed.state !== 'exited' || !observed.result || observed.result.status !== 'exited' || observed.result.exitCode !== 2 ||
+          digest(receipt.receipt) !== digest(observed.result)) throw denied();
+      if (this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND key NOT IN (?,?) AND (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1")
+        .get(id, legacy.processRequest.key, next.processRequest.key)) throw denied();
+      const key = `repair:${id}:beta-environment-once`, history = data.betaEnvironmentRetryHistory;
+      const bindingHash = digest({ manifest, binding });
+      if (history !== undefined) {
+        if (!Array.isArray(history) || history.length !== 1 || history[0]?.bindingHash !== bindingHash) throw denied();
+        const reservation = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?').get(id, key) as { counter?: string; amount?: number } | undefined;
+        if (reservation?.counter !== 'repairs' || reservation.amount !== 1) throw denied();
+        const nextOperation = this.db.prepare('SELECT state FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) as { state?: string } | undefined;
+        if (nextOperation?.state === 'observed') throw new WorkflowError('beta_environment_retry_exhausted', 'The one separately authorized beta attempt already has an observed result.', 2);
+        return run;
+      }
+      const usage = this.readUsage(id);
+      if (usage.repairs !== manifest.limits.repairs || usage.activeMs >= manifest.limits.activeMs ||
+          this.db.prepare('SELECT 1 FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) ||
+          entries.some(entry => entry.key === next.processRequest.key)) throw denied();
+      try { lstatSync(join(directory, digest(next.processRequest.key))); throw denied(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw denied(); }
+      const entry = { bindingHash, manifestHash: digest(manifest), binding, authorization: {
+        kind: 'explicit-beta-environment-once', additionalRepairs: 1, reservationKey: key }, previous: {
+        status: run.status, stage: run.stage, error: run.error, waitingFor: data.waitingFor, operation, usage } };
+      this.db.prepare("INSERT INTO reservations(run_id,key,counter,amount) VALUES (?,?,'repairs',1)").run(id, key);
+      this.update(id, { data: { ...data, betaEnvironmentRetryHistory: [entry] } });
+      return this.get(id);
+    });
+  }
+  repairAllowance(id: string): { original: number; additional: number; used: number } {
+    const run = this.get(id), key = `repair:${id}:beta-environment-once`;
+    const reservation = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?').get(id, key) as { counter?: string; amount?: number } | undefined;
+    const history = run.data.betaEnvironmentRetryHistory;
+    if (reservation || history !== undefined) {
+      if (reservation?.counter !== 'repairs' || reservation.amount !== 1 || !Array.isArray(history) || history.length !== 1 ||
+          history[0]?.authorization?.kind !== 'explicit-beta-environment-once' || history[0]?.authorization?.additionalRepairs !== 1 ||
+          history[0]?.authorization?.reservationKey !== key) throw new WorkflowError('invalid_state', 'Additional beta repair authorization is inconsistent.');
+    }
+    return { original: run.manifest.limits.repairs, additional: reservation ? 1 : 0, used: this.readUsage(id).repairs };
+  }
   private readRun(id: string, inspectionOnly: boolean): RunRecord {
     const raw = this.db.prepare('SELECT * FROM runs WHERE id=? AND repository=?').get(id, this.repository.repository);
     if (!raw) throw new WorkflowError('run_not_found', 'No saved run with this identity in this repository.');
@@ -731,6 +832,10 @@ export class RunStore {
           (!Array.isArray(value.data.betaPrelaunchRetryHistory) || !Array.isArray(previous.data.betaPrelaunchRetryHistory) ||
             digest(value.data.betaPrelaunchRetryHistory) !== digest(previous.data.betaPrelaunchRetryHistory)))
         throw new WorkflowError('invalid_state', 'Prior beta prelaunch rejection evidence is immutable.');
+      if (previous.data.betaEnvironmentRetryHistory !== undefined &&
+          (!Array.isArray(value.data.betaEnvironmentRetryHistory) || !Array.isArray(previous.data.betaEnvironmentRetryHistory) ||
+            digest(value.data.betaEnvironmentRetryHistory) !== digest(previous.data.betaEnvironmentRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior beta environment authorization and failure evidence are immutable.');
       const data = JSON.stringify(value.data);
       if (Buffer.byteLength(data) > 2_000_000) throw new WorkflowError('oversized_state', 'Run state exceeds its bound.');
       this.db.prepare(`UPDATE runs SET status=?,stage=?,data=?,

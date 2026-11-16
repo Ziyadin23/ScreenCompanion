@@ -283,6 +283,25 @@ returns only that proved unstarted operation to preparation. Any partial process
 state, changed identity or other unknown outcome still blocks execution. This
 recovery produces no qualification receipt; the real Windows job must pass.
 
+A terminal host-discovery failure needs separate authorization before another
+beta attempt. Fresh helper launches use explicit `PATH`/`HOME` and `USER`/`LOGNAME`
+from the effective OS account. Existing legacy operations keep their original
+environment and receipts. After explicit approval for one additional environment
+repair, the operator can use:
+
+```sh
+sc-dev resume <run-id> --retry-beta-environment --preflight-evidence /private/preflight-evidence.json
+```
+
+The private resource-owner evidence must bind the exact failed operation and
+unchanged candidate/profile, and establish that no guest or acceptance job
+started. A generic nonzero exit is insufficient. Admission records one separate
+repair grant and one new environment-bound operation without rewriting the
+original manifest or failure. Reports show the original allowance and the extra
+grant separately. Time, model-call and provider allowances do not increase;
+replay reuses that operation, and another failure cannot acquire a second grant.
+This command cannot authorize a repeated failed acceptance matrix.
+
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain
