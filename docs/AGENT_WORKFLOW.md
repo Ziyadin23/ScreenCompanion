@@ -285,7 +285,11 @@ recovery produces no qualification receipt; the real Windows job must pass.
 
 A terminal host-discovery failure needs separate authorization before another
 beta attempt. Fresh helper launches use explicit `PATH`/`HOME` and `USER`/`LOGNAME`
-from the effective OS account. Existing legacy operations keep their original
+from the effective OS account. A safely available canonical user-session bus can
+supply the already authorized credential lookup; it must be a current-user Unix
+socket below a private owned runtime directory. Ambient bus addresses, display
+variables and the rest of the environment are not inherited. Model workers do
+not receive this transport. Existing legacy operations keep their original
 environment and receipts. After explicit approval for one additional environment
 repair, the operator can use:
 
@@ -295,7 +299,9 @@ sc-dev resume <run-id> --retry-beta-environment --preflight-evidence /private/pr
 
 The private resource-owner evidence must bind the exact failed operation and
 unchanged candidate/profile, and establish that no guest or acceptance job
-started. A generic nonzero exit is insufficient. Admission records one separate
+started. Its request-file hash identifies the owned process launch request,
+which differs from the helper's input request. A generic nonzero exit is
+insufficient. Admission records one separate
 repair grant and one new environment-bound operation without rewriting the
 original manifest or failure. Reports show the original allowance and the extra
 grant separately. Time, model-call and provider allowances do not increase;

@@ -3,11 +3,12 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
 import { chmodSync, existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir, userInfo } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { inspectBetaEnvironmentRetry, inspectRejectedBetaLaunch, MAX_BETA_PROFILE_MS, qualifyConfiguredBeta, selectBetaProfile } from '../src/beta-profile.js';
 import { executeRun } from '../src/graph.js';
+import { trustedBetaHelperEnvironment } from '../src/beta-environment.js';
 import { digest, makeManifest, WorkflowError } from '../src/manifest.js';
 import { inspectOwnedProcess } from '../src/process.js';
 import { RunStore, type BetaPrelaunchBinding } from '../src/store.js';
@@ -49,7 +50,7 @@ function noQualification(f: ReturnType<typeof fixture>): void {
   assert.equal(existsSync(f.profile.targetDirectory), false);
 }
 function launchIdentity(f: ReturnType<typeof fixture>, effective = false) {
-  const env = { PATH: '/usr/bin:/bin', HOME: homedir(), USER: userInfo().username, LOGNAME: userInfo().username };
+  const env = trustedBetaHelperEnvironment();
   return { repository: f.manifest.repository, runId: f.manifest.id, workspace: f.root, head: f.head, version,
     profileHash: f.selection.hash, sourceManifestDigest: sha(f.git('ls-tree', '-r', '--full-tree', f.head) + '\n'),
     ...(effective ? { processEnvironment: { version: 'effective-user-v1' as const, principal: userInfo().username, digest: digest(env) } } : {}) };
@@ -198,7 +199,7 @@ test('real harmless helper failure is observed and never becomes Windows qualifi
   const processRequest = JSON.parse(readFileSync(join(operation.stateDirectory, sha(JSON.stringify(operation.key)), 'request.json'), 'utf8')) as {
     args: string[]; env: Record<string, string>;
   };
-  assert.deepEqual(Object.keys(processRequest.env).sort(), ['HOME', 'LOGNAME', 'PATH', 'USER']);
+  assert.deepEqual(processRequest.env, trustedBetaHelperEnvironment());
   assert.equal(processRequest.env.USER, userInfo().username); assert.equal(processRequest.env.LOGNAME, userInfo().username);
   assert.equal(processRequest.args[1], '--request');
   const helperRequest = JSON.parse(readFileSync(processRequest.args[2]!, 'utf8')) as { receiptDirectory: string; sourceManifestDigest: string };
@@ -333,7 +334,7 @@ test('fresh beta helpers use only the trusted effective user instead of spoofed 
     assert.equal(result.exitCode, 7); // Host discovery passed; this synthetic helper deliberately never qualifies Windows.
     assert.equal(operation.key, `beta-process:${digest(launchIdentity(f, true))}`);
     const saved = JSON.parse(readFileSync(join(operation.stateDirectory, digest(operation.key), 'request.json'), 'utf8'));
-    assert.deepEqual(saved.env, { PATH: '/usr/bin:/bin', HOME: homedir(), USER: userInfo().username, LOGNAME: userInfo().username });
+    assert.deepEqual(saved.env, trustedBetaHelperEnvironment());
     noQualification(f);
   } finally {
     for (const [name, value] of Object.entries(prior)) {

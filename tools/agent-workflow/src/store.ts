@@ -3,13 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
 import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { userInfo } from 'node:os';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { digest, readManifest, ORACLE_RUNTIME, WorkflowError, type Manifest, type Limits } from './manifest.js';
 import { requireFrozenSource } from './intake.js';
 import { inspectOwnedProcess, type OwnedProcessRequest } from './process.js';
 import { currentOracleRetry, oracleRetryKey, retryableOracleFinding, remainingOracleLimits, remainingOracleParent, type OracleRetryEntry } from './oracle-recovery.js';
 import { processIdentity } from './process-identity.js';
+import { trustedBetaHelperEnvironment } from './beta-environment.js';
 export { processIdentity } from './process-identity.js';
 
 export type RunStatus = 'ready' | 'running' | 'awaiting_external' | 'awaiting_input' |
@@ -424,13 +425,12 @@ export class RunStore {
           verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash || verification.policyHash !== manifest.policyHash ||
           !review?.clean || review.base !== manifest.base || review.head !== legacy.identity.head || review.diffHash !== frozen.diffHash ||
           review.policyHash !== manifest.policyHash || !Array.isArray(review.findings) || review.findings.length) throw denied();
-      const { processEnvironment, ...nextBase } = next.identity, principal = userInfo().username;
+      const { processEnvironment, ...nextBase } = next.identity, expectedEnvironment = trustedBetaHelperEnvironment();
       const directory = join(this.directory, 'runs', id, 'processes');
       if (digest(nextBase) !== digest(legacy.identity) || processEnvironment?.version !== 'effective-user-v1' ||
-          processEnvironment.principal !== principal || processEnvironment.digest !== digest(next.processRequest.env) ||
+          processEnvironment.principal !== expectedEnvironment.USER || processEnvironment.digest !== digest(next.processRequest.env) ||
           Object.keys(legacy.processRequest.env).sort().join('|') !== 'HOME|PATH' ||
-          Object.keys(next.processRequest.env).sort().join('|') !== 'HOME|LOGNAME|PATH|USER' ||
-          next.processRequest.env.USER !== principal || next.processRequest.env.LOGNAME !== principal ||
+          !isDeepStrictEqual(next.processRequest.env, expectedEnvironment) ||
           next.processRequest.env.PATH !== legacy.processRequest.env.PATH || next.processRequest.env.HOME !== legacy.processRequest.env.HOME ||
           next.processRequest.timeoutMs !== legacy.processRequest.timeoutMs || next.processRequest.command !== legacy.processRequest.command ||
           next.processRequest.args[0] !== legacy.processRequest.args[0] || next.processRequest.args[1] !== '--request') throw denied();

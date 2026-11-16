@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
-import { homedir, userInfo } from 'node:os';
+import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
@@ -10,6 +10,7 @@ import { requireFrozenSource } from './intake.js';
 import { digest, WorkflowError } from './manifest.js';
 import { durableJson, inspectOwnedProcess, MAX_PROCESS_TIMEOUT_MS, reconcileOwnedProcess, runOwnedProcess, validateOwnedProcessRequest } from './process.js';
 import type { BetaEnvironmentRetryBinding, BetaLaunchBinding, BetaPrelaunchBinding, RunStore } from './store.js';
+import { trustedBetaHelperEnvironment } from './beta-environment.js';
 
 const sha = (value: Buffer | string): string => createHash('sha256').update(value).digest('hex');
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
@@ -113,11 +114,7 @@ function configuredBetaProcess(request: ConfiguredBetaRequest, environment: 'leg
   try { if ((JSON.parse(git('show', `${head}:desktop/package.json`)) as { version?: unknown }).version !== version) unavailable(); }
   catch { unavailable(); }
   const sourceManifestDigest = sha(git('ls-tree', '-r', '--full-tree', head));
-  const env: Record<string, string> = { PATH: '/usr/bin:/bin', HOME: homedir() };
-  if (environment === 'effective-user-v1') {
-    const principal = userInfo().username;
-    env.USER = principal; env.LOGNAME = principal;
-  }
+  const env = environment === 'legacy' ? { PATH: '/usr/bin:/bin', HOME: homedir() } : trustedBetaHelperEnvironment();
   const identity = { repository: manifest.repository, runId, workspace: realpathSync(workspace), head, version,
     profileHash: profile.hash, sourceManifestDigest, ...(environment === 'legacy' ? {} : {
       processEnvironment: { version: 'effective-user-v1' as const, principal: env.USER!, digest: digest(env) } }) };
@@ -263,7 +260,9 @@ export async function qualifyConfiguredBeta(request: ConfiguredBetaRequest): Pro
   store.registerOwnedProcess(runId, key, processDirectory);
   const result = await store.effect(runId, key, 'process', identity, {
     beforeExecute: async () => {
-      current(); requireFrozenSource(manifest, workspace, head); signal?.throwIfAborted(); validateOwnedProcessRequest(processRequest);
+      current(); requireFrozenSource(manifest, workspace, head); signal?.throwIfAborted();
+      if (identity.processEnvironment && !isDeepStrictEqual(processRequest.env, trustedBetaHelperEnvironment())) unavailable();
+      validateOwnedProcessRequest(processRequest);
     },
     execute: () => runOwnedProcess({ ...processRequest, signal }),
     reconcile: async () => {
