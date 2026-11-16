@@ -11,6 +11,7 @@ import { processIdentity } from './process-identity.js';
 const OUTPUT_LIMIT = 2_000_000;
 const REQUEST_LIMIT = 1_000_000;
 const POLL_MS = 25;
+export const MAX_PROCESS_TIMEOUT_MS = 9_000_000;
 export interface OwnedProcessRequest {
   stateDirectory: string; key: string; command: string; args: string[]; cwd: string;
   env: Record<string, string>; stdin?: string; timeoutMs?: number; signal?: AbortSignal;
@@ -182,13 +183,16 @@ function checkedRequest(request: OwnedProcessRequest): SavedRequest {
       Object.entries(request.env).some(([name, value]) => !name || name.includes('=') || typeof value !== 'string'))
     throw new WorkflowError('invalid_process_request', 'Process command, arguments and environment must be explicit.');
   const timeoutMs = request.timeoutMs ?? 1_200_000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 7_200_000)
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_PROCESS_TIMEOUT_MS)
     throw new WorkflowError('invalid_process_request', 'Process timeout must be finite and bounded.');
   const saved = { key: request.key, command: request.command, args: request.args, cwd,
     env: request.env, stdin: request.stdin, timeoutMs };
   if (Buffer.byteLength(JSON.stringify(saved)) > REQUEST_LIMIT)
     throw new WorkflowError('oversized_process_request', 'Process request exceeds its bound.');
   return saved;
+}
+export function validateOwnedProcessRequest(request: OwnedProcessRequest): void {
+  checkedRequest(request);
 }
 async function waitForExit(stateDirectory: string, key: string, signal?: AbortSignal): Promise<OwnedProcessResult> {
   const pendingDeadline = Date.now() + 2000;

@@ -13,7 +13,7 @@ import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
-import { selectBetaProfile } from './beta-profile.js';
+import { inspectRejectedBetaLaunch, selectBetaProfile } from './beta-profile.js';
 import { remainingOracleLimits, remainingOracleParent } from './oracle-recovery.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
@@ -293,6 +293,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       console.log(JSON.stringify(report(run, store)));
       return run.status === 'quarantined' ? 4 : run.cancelRequested && run.status !== 'cancelled' && run.status !== 'completed' ? 2 : 0;
     }
+    if (command === 'resume' && run.status === 'failed' && run.stage === 'handoff' && run.error === 'invalid_process_request')
+      run = store.prepareRejectedBetaLaunch(id, () => inspectRejectedBetaLaunch(store, id));
     const controller = new AbortController();
     const stop = () => controller.abort();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);

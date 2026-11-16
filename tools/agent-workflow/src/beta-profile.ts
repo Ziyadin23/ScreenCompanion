@@ -8,14 +8,14 @@ import { z } from 'zod';
 import { handoffBeta, type BetaReceipt, type BetaResourceOwnership, type WindowsBetaQualification } from './delivery.js';
 import { requireFrozenSource } from './intake.js';
 import { digest, WorkflowError } from './manifest.js';
-import { durableJson, inspectOwnedProcess, reconcileOwnedProcess, runOwnedProcess } from './process.js';
-import type { RunStore } from './store.js';
+import { durableJson, inspectOwnedProcess, MAX_PROCESS_TIMEOUT_MS, reconcileOwnedProcess, runOwnedProcess, validateOwnedProcessRequest } from './process.js';
+import type { BetaPrelaunchBinding, RunStore } from './store.js';
 
 const sha = (value: Buffer | string): string => createHash('sha256').update(value).digest('hex');
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
 const hash = z.string().regex(/^[a-f0-9]{64}$/);
 const absolute = z.string().max(4000).refine(isAbsolute);
-export const MAX_BETA_PROFILE_MS = 9_000_000;
+export const MAX_BETA_PROFILE_MS = MAX_PROCESS_TIMEOUT_MS;
 const profileSchema = z.object({ version: z.literal(1), environmentId: identifier,
   targetDirectory: absolute, helperPath: absolute.refine(path => path.endsWith('.mjs')),
   timeoutMs: z.number().int().positive().max(MAX_BETA_PROFILE_MS), resourceTokenFile: absolute }).strict();
@@ -88,10 +88,11 @@ export function selectBetaProfile(name: string, stateDirectory: string): { name:
   return { name: profile.name, hash: profile.hash };
 }
 
-export async function qualifyConfiguredBeta(request: {
+interface ConfiguredBetaRequest {
   store: RunStore; runId: string; workspace: string; head: string; version: string; signal?: AbortSignal;
-}): Promise<BetaReceipt> {
-  const { store, runId, workspace, head, version, signal } = request;
+}
+function configuredBetaProcess(request: ConfiguredBetaRequest) {
+  const { store, runId, workspace, head, version } = request;
   if (!/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/.test(head) || !/^\d+\.\d+\.\d+-beta\.\d+$/.test(version)) unavailable();
   const manifest = store.get(runId).manifest, selection = manifest.betaProfile;
   if (!selection) unavailable();
@@ -116,19 +117,68 @@ export async function qualifyConfiguredBeta(request: {
     profileHash: profile.hash, sourceManifestDigest };
   const key = `beta-process:${digest(identity)}`, runDirectory = join(store.directory, 'runs', runId);
   const processDirectory = join(runDirectory, 'processes'), receiptDirectory = join(runDirectory, 'beta', digest(identity));
-  signal?.throwIfAborted(); privateDirectory(receiptDirectory, true);
   const helperRequest = { version: 1, repository: manifest.repository, runId, workspace: identity.workspace, head,
     candidateVersion: version, environmentId: profile.environmentId, sourceManifestDigest, receiptDirectory };
   const requestPath = join(receiptDirectory, 'request.json');
+  const processRequest = { stateDirectory: processDirectory, key, command: '/usr/bin/node',
+    args: [profile.helperPath, '--request', requestPath], cwd: receiptDirectory,
+    env: { PATH: '/usr/bin:/bin', HOME: homedir() }, timeoutMs: profile.timeoutMs };
+  return { manifest, profile, current, sourceManifestDigest, identity, key, processDirectory,
+    receiptDirectory, helperRequest, requestPath, processRequest };
+}
+
+const legacyPrelaunchPolicy = '484f45673e1c96edaadf73bf0b5651565db5e5e06e9ccb9c09e1e01a7654d391';
+const legacyPrelaunchSources = {
+  'tools/agent-workflow/src/process.ts': '988ceace868529569cee8856b58574300e981a4c',
+  'tools/agent-workflow/src/beta-profile.ts': '6a05c37e6a4ea2004731e18dba53b27dec792c86',
+  'tools/agent-workflow/src/store.ts': '0ae175a6cb346d32d2fe6c352cf32f7c9352de56'
+};
+
+/** Read-only binding inspection; baseline bytes explain rejection, not the historical runtime's execution identity. */
+export function inspectRejectedBetaLaunch(store: RunStore, runId: string): BetaPrelaunchBinding {
+  const run = store.get(runId), data = run.data;
+  const allocation = data.allocation as { path?: unknown } | undefined;
+  const frozen = data.frozen as { head?: unknown } | undefined;
+  const reservation = (data.versionPreparation as { reservation?: { repository?: unknown; runId?: unknown; version?: unknown } } | undefined)?.reservation;
+  const denied = () => new WorkflowError('beta_prelaunch_retry_denied', 'Only the retained, source-bound beta prelaunch rejection can be prepared again.', 2);
+  if (run.manifest.policyHash !== legacyPrelaunchPolicy || typeof allocation?.path !== 'string' ||
+      typeof frozen?.head !== 'string' || reservation?.repository !== run.manifest.repository ||
+      reservation.runId !== runId || typeof reservation.version !== 'string') throw denied();
+  const context = configuredBetaProcess({ store, runId, workspace: allocation.path, head: frozen.head, version: reservation.version });
+  if (context.profile.timeoutMs <= 7_200_000 || context.profile.timeoutMs > 9_000_000) throw denied();
+  requireFrozenSource(run.manifest, run.manifest.root, run.manifest.base);
+  try {
+    for (const [path, expected] of Object.entries(legacyPrelaunchSources)) {
+      const observed = execFileSync('/usr/bin/git', ['--no-replace-objects', '-C', run.manifest.root,
+        'rev-parse', `${run.manifest.base}:${path}`], { encoding: 'utf8', timeout: 10_000, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { PATH: '/usr/bin:/bin', HOME: '/dev/null', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } }).trim();
+      if (observed !== expected) throw denied();
+      execFileSync('/usr/bin/git', ['--no-replace-objects', '-C', run.manifest.root, 'cat-file', '-e', `${observed}^{blob}`],
+        { timeout: 10_000, stdio: 'ignore', env: { PATH: '/usr/bin:/bin', HOME: '/dev/null', GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
+    }
+    privateDirectory(context.receiptDirectory);
+    if (privateFile(context.requestPath, 64_000).toString('utf8') !== JSON.stringify(context.helperRequest)) throw denied();
+    validateOwnedProcessRequest(context.processRequest);
+    context.current();
+  } catch { throw denied(); }
+  return { identity: context.identity, processRequest: context.processRequest, helperRequest: context.helperRequest,
+    legacySourceBlobs: { ...legacyPrelaunchSources }, historicalRuntimeIdentity: 'not-attested-by-source-blobs' };
+}
+
+export async function qualifyConfiguredBeta(request: ConfiguredBetaRequest): Promise<BetaReceipt> {
+  const { store, runId, workspace, head, version, signal } = request;
+  const { manifest, profile, current, sourceManifestDigest, identity, key, processDirectory,
+    receiptDirectory, helperRequest, requestPath, processRequest } = configuredBetaProcess(request);
+  signal?.throwIfAborted(); privateDirectory(receiptDirectory, true);
   if (existsSync(requestPath)) {
     if (privateFile(requestPath, 64_000).toString('utf8') !== JSON.stringify(helperRequest)) unavailable();
   } else durableJson(requestPath, helperRequest);
   store.registerOwnedProcess(runId, key, processDirectory);
   const result = await store.effect(runId, key, 'process', identity, {
-    beforeExecute: async () => { current(); requireFrozenSource(manifest, workspace, head); signal?.throwIfAborted(); },
-    execute: () => runOwnedProcess({ stateDirectory: processDirectory, key, command: '/usr/bin/node',
-      args: [profile.helperPath, '--request', requestPath], cwd: receiptDirectory,
-      env: { PATH: '/usr/bin:/bin', HOME: homedir() }, timeoutMs: profile.timeoutMs, signal }),
+    beforeExecute: async () => {
+      current(); requireFrozenSource(manifest, workspace, head); signal?.throwIfAborted(); validateOwnedProcessRequest(processRequest);
+    },
+    execute: () => runOwnedProcess({ ...processRequest, signal }),
     reconcile: async () => {
       try { return await reconcileOwnedProcess(processDirectory, key); }
       catch (error) { if (error instanceof WorkflowError && error.code === 'operation_not_found') return null; throw error; }

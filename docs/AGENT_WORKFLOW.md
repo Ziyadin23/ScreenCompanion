@@ -273,6 +273,16 @@ worker allowance. A changed interpretation retains the original result in
 private history; current reports count each execution once. Worker JSONL stays
 bounded to 1,000,000 bytes and 1,000 events, with separate final-message/schema
 limits. A single source-read event can occupy that existing total-byte bound.
+
+Ordinary resume also recognizes the known legacy Windows handoff rejection in
+which a valid long beta deadline was refused before process intent or launch.
+Recovery requires the retained failure, known baseline code and unchanged
+candidate, profile and request identities. It preserves the original unknown
+operation and failure in private history, consumes one existing repair and
+returns only that proved unstarted operation to preparation. Any partial process
+state, changed identity or other unknown outcome still blocks execution. This
+recovery produces no qualification receipt; the real Windows job must pass.
+
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain

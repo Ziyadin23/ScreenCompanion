@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { z } from 'zod';
 import { digest, readManifest, ORACLE_RUNTIME, WorkflowError, type Manifest, type Limits } from './manifest.js';
 import { requireFrozenSource } from './intake.js';
-import { inspectOwnedProcess } from './process.js';
+import { inspectOwnedProcess, type OwnedProcessRequest } from './process.js';
 import { currentOracleRetry, oracleRetryKey, retryableOracleFinding, remainingOracleLimits, remainingOracleParent, type OracleRetryEntry } from './oracle-recovery.js';
 import { processIdentity } from './process-identity.js';
 export { processIdentity } from './process-identity.js';
@@ -17,6 +17,14 @@ export type Counter = 'findings' | 'issues' | 'writingTasks' | 'workerInvocation
 export interface RunRecord {
   manifest: Manifest; status: RunStatus; stage: string;
   data: Record<string, unknown>; cancelRequested: boolean; error: string | null;
+}
+export interface BetaPrelaunchBinding {
+  identity: { repository: string; runId: string; workspace: string; head: string; version: string;
+    profileHash: string; sourceManifestDigest: string };
+  processRequest: OwnedProcessRequest;
+  helperRequest: Record<string, unknown>;
+  legacySourceBlobs: Record<string, string>;
+  historicalRuntimeIdentity: 'not-attested-by-source-blobs';
 }
 const statuses = z.enum(['ready', 'running', 'awaiting_external', 'awaiting_input',
   'budget_exhausted', 'completed', 'cancelled', 'failed', 'quarantined']);
@@ -308,6 +316,73 @@ export class RunStore {
       this.update(id, { status: 'ready', stage: 'reproduce', error: null, data: { ...data,
         oracleRetryHistory: [...history, entry], oracleRetry: { number, key: entry.key }, waitingFor: null,
         findings: [{ id: finding.id, path: finding.path, description: finding.description, state: 'candidate' }] } });
+      return this.get(id);
+    });
+  }
+  prepareRejectedBetaLaunch(id: string, inspectBinding: () => BetaPrelaunchBinding): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('beta_prelaunch_retry_denied', 'Only the retained beta timeout rejection before launch may be prepared again.', 2);
+      if (run.status !== 'failed' || run.stage !== 'handoff' || run.error !== 'invalid_process_request' || run.cancelRequested ||
+          manifest.mode !== 'issue' || !['pr', 'merge-eligible'].includes(manifest.delivery) || !manifest.betaProfile ||
+          manifest.root !== this.repository.root || manifest.commonDir !== this.repository.commonDir || manifest.base !== this.repository.base ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          ['beta', 'betaReceipt', 'pull', 'push', 'integration', 'recordPublication', 'recordIntegration', 'finalization']
+            .some(key => Object.hasOwn(data, key))) throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity) throw denied();
+      }
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND id!=? AND
+        (status='quarantined' OR EXISTS(SELECT 1 FROM operations WHERE operations.run_id=runs.id
+        AND kind IN ('worker','process','setup','verification') AND state!='observed')) LIMIT 1`).get(manifest.repository, id)) throw denied();
+      const binding = inspectBinding(), { identity, processRequest } = binding;
+      const frozen = data.frozen as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; checks?: string[] } | undefined;
+      const verification = data.verification as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; passed?: boolean } | undefined;
+      const review = data.reviewReceipt as { base?: string; head?: string; diffHash?: string; policyHash?: string; clean?: boolean; findings?: unknown[] } | undefined;
+      if (identity.repository !== manifest.repository || identity.runId !== id || identity.profileHash !== manifest.betaProfile.hash ||
+          identity.head !== frozen?.head || frozen.base !== manifest.base || frozen.policyHash !== manifest.policyHash ||
+          !frozen.checks?.includes('application') || !/^[a-f0-9]{64}$/.test(frozen.sourceHash ?? '') || !/^[a-f0-9]{64}$/.test(frozen.diffHash ?? '') ||
+          !verification?.passed || verification.base !== manifest.base || verification.head !== identity.head ||
+          verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash || verification.policyHash !== manifest.policyHash ||
+          !review?.clean || review.base !== manifest.base || review.head !== identity.head || review.diffHash !== frozen.diffHash ||
+          review.policyHash !== manifest.policyHash || !Array.isArray(review.findings) || review.findings.length ||
+          processRequest.timeoutMs === undefined || processRequest.timeoutMs <= 7_200_000 || processRequest.timeoutMs > 9_000_000) throw denied();
+      const key = `beta-process:${digest(identity)}`, stateDirectory = join(this.directory, 'runs', id, 'processes');
+      if (processRequest.key !== key || processRequest.stateDirectory !== stateDirectory ||
+          processRequest.cwd !== join(this.directory, 'runs', id, 'beta', digest(identity))) throw denied();
+      const entries = this.checkedOwnedProcesses(run);
+      if (entries.filter(entry => entry.key === key && entry.stateDirectory === stateDirectory).length !== 1 ||
+          entries.some(entry => entry.key !== key && inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited') ||
+          inspectOwnedProcess(stateDirectory, key).state !== 'absent') throw denied();
+      try { lstatSync(join(stateDirectory, digest(key))); throw denied(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw denied(); }
+      const operation = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?').get(id, key) as {
+        run_id: string; key: string; kind: string; request_hash: string; state: string; receipt: string | null;
+      } | undefined;
+      if (!operation || operation.kind !== 'process' || operation.request_hash !== digest(identity) || operation.receipt !== null ||
+          this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND key!=? AND (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1")
+            .get(id, key)) throw denied();
+      const bindingHash = digest({ manifest, binding }), history = data.betaPrelaunchRetryHistory;
+      if (history !== undefined) {
+        if (!Array.isArray(history) || history.length !== 1 || history[0]?.bindingHash !== bindingHash || operation.state !== 'prepared') throw denied();
+        const reserved = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?')
+          .get(id, `repair:${id}:${history[0].number}`) as { counter?: string; amount?: number } | undefined;
+        if (reserved?.counter !== 'repairs' || reserved.amount !== 1) throw denied();
+        return run;
+      }
+      if (operation.state !== 'unknown') throw denied();
+      const usage = this.readUsage(id);
+      if (usage.repairs >= manifest.limits.repairs || usage.activeMs >= manifest.limits.activeMs)
+        throw new WorkflowError('budget_exhausted', 'Original beta repair or active-time allowance is exhausted.', 3);
+      const number = usage.repairs + 1;
+      const entry = { number, bindingHash, manifestHash: digest(manifest), binding, previous: {
+        status: run.status, stage: run.stage, error: run.error, operation, usage } };
+      this.reserve(id, `repair:${id}:${number}`, 'repairs');
+      this.update(id, { data: { ...data, betaPrelaunchRetryHistory: [entry] } });
+      if (this.db.prepare("UPDATE operations SET state='prepared' WHERE run_id=? AND key=? AND state='unknown' AND receipt IS NULL")
+        .run(id, key).changes !== 1) throw denied();
       return this.get(id);
     });
   }
@@ -652,6 +727,10 @@ export class RunStore {
           (!Array.isArray(value.data.oracleRetryHistory) || !Array.isArray(previous.data.oracleRetryHistory) ||
             digest(value.data.oracleRetryHistory.slice(0, previous.data.oracleRetryHistory.length)) !== digest(previous.data.oracleRetryHistory)))
         throw new WorkflowError('invalid_state', 'Prior oracle retry evidence is immutable.');
+      if (previous.data.betaPrelaunchRetryHistory !== undefined &&
+          (!Array.isArray(value.data.betaPrelaunchRetryHistory) || !Array.isArray(previous.data.betaPrelaunchRetryHistory) ||
+            digest(value.data.betaPrelaunchRetryHistory) !== digest(previous.data.betaPrelaunchRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior beta prelaunch rejection evidence is immutable.');
       const data = JSON.stringify(value.data);
       if (Buffer.byteLength(data) > 2_000_000) throw new WorkflowError('oversized_state', 'Run state exceeds its bound.');
       this.db.prepare(`UPDATE runs SET status=?,stage=?,data=?,
