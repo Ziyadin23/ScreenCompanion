@@ -172,6 +172,7 @@ Keep private context, credentials, vaults, bundles, lab identifiers and recordin
 | --- | --- |
 | [README](../README.md), [package manifest](../desktop/package.json) | User introduction/publication status; current source version and commands |
 | [Contributing](../CONTRIBUTING.md) | Public contribution entry point, checkout, checks and PR guidance |
+| [Security policy](../SECURITY.md) | Security maintenance scope, private vulnerability reports and coordinated disclosure |
 | [Agent routing](../AGENTS.md), [standards](../CODING_STANDARDS.md) | Entry points; shared and affected-area engineering rules |
 | This guide, [status](STATUS.md) | Contributor navigation/workflow; dated overview pointing to task/evidence owners |
 | [User guide](USER_GUIDE.md), [pipeline](PIPELINE.md) | User behavior/privacy; request/configuration contracts |

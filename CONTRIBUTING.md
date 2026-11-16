@@ -6,6 +6,9 @@ owns the full workflow and source map.
 
 ## Choose or report a task
 
+For a suspected vulnerability, follow the [security policy](SECURITY.md) and
+report it privately. Do not include vulnerability details in public issues or PRs.
+
 Search [open and closed issues](https://github.com/Ziyadin23/ScreenCompanion/issues)
 before starting. Check [project status](docs/STATUS.md) for current work and its
 existing plan, then comment on the issue you want to take so work is not duplicated.
