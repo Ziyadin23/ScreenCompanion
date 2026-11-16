@@ -19,6 +19,31 @@ async function until(predicate: () => boolean, ms = 3000) {
   while (!predicate()) { if (Date.now() > end) throw new Error('Timed out waiting for child'); await delay(20); }
 }
 
+test('wrapper starts and records an owned exit without coordinator database or compiler dependencies', async t => {
+  const f = fixture(t), op = join(f.root, 'lean-wrapper'); mkdirSync(op, { mode: 0o700 });
+  const preload = join(f.root, 'wrapper-capabilities.mjs');
+  const loader = `export async function resolve(specifier, context, next) {
+    if (specifier === 'typescript' || specifier === 'better-sqlite3' || specifier.startsWith('@langchain/'))
+      throw new Error('Coordinator-only dependency in wrapper bootstrap: ' + specifier);
+    return next(specifier, context);
+  }`;
+  writeFileSync(preload, `import {register} from 'node:module';register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(loader)}`)},import.meta.url);\n`);
+  writeFileSync(join(op, 'request.json'), JSON.stringify({ command: process.execPath,
+    args: ['-e', 'process.stdout.write("owned-wrapper-ready")'], cwd: f.cwd, env: {}, timeoutMs: 3000 }));
+  const wrapper = spawn(process.execPath, ['--import', preload,
+    new URL('../src/process-entry.js', import.meta.url).pathname, op],
+  { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: {} });
+  let stderr = '';
+  wrapper.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+  await new Promise<void>((resolve, reject) => { wrapper.once('error', reject); wrapper.once('close', () => resolve()); });
+  assert.equal(wrapper.exitCode, 0, stderr);
+  assert.equal(existsSync(join(op, 'start.json')), true);
+  const exit = JSON.parse(readFileSync(join(op, 'exit.json'), 'utf8'));
+  assert.equal(exit.status, 'exited'); assert.equal(exit.exitCode, 0);
+  assert.equal(readFileSync(join(op, 'stdout'), 'utf8'), 'owned-wrapper-ready');
+  assert.equal(existsSync(join(op, 'failure.json')), false);
+});
+
 for (const code of ['ENOENT', 'ESRCH']) {
   test(`wrapper and coordinator tolerate a proc entry disappearing with ${code}`, async t => {
     const f = fixture(t);

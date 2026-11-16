@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { makeManifest, type Scope } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
-import { normalizeFindings, planningOwner, runOracle } from '../src/intake.js';
+import { normalizeFindings, oracleSchema, planningOwner, runOracle } from '../src/intake.js';
 
 function fixture(t: { after(fn: () => void): void }, scope: Scope = 'providers-json') {
   const directory = mkdtempSync(join(tmpdir(), 'sc-intake-'));
@@ -99,4 +99,44 @@ test('a proposed exit code or unrelated assertion cannot forge confirmed baselin
   const unusedImport = await runOracle({ ...request, oracle: { kind: 'portable-node', contractPaths: ['docs/contract.md'],
     script: "import assert from 'node:assert/strict';import {parseJson} from '/workspace/desktop/src/providers/json.ts';assert.equal(1,2);" } });
   assert.equal(unusedImport.outcome, 'unavailable');
+});
+
+const oracleImports = "import assert from 'node:assert/strict'; import {parseJson} from '/workspace/desktop/src/providers/json.ts'; assert.deepEqual(parseJson('{}'), {});\n";
+function boundaryOracle(tail: string): string {
+  const prefix = oracleImports + '/* — */\n';
+  return prefix + ' '.repeat(8000 - prefix.length - tail.length) + tail;
+}
+
+test('oracle syntax errors are rejected before source validation or process launch, including the exact character limit', async t => {
+  const { manifest, store, root } = fixture(t);
+  const boundary = boundaryOracle('const c = {}; assert.ok(c');
+  assert.equal(boundary.length, 8000); assert.equal(Buffer.byteLength(boundary), 8002);
+  const malformed = [boundary, ...[
+    'assert.ok(parseJson(', "const c = 'unterminated", 'const c = `unterminated',
+    '/* unterminated', 'if (true) {', 'const c = { answer:', 'const c = ;'
+  ].map(tail => oracleImports + tail)];
+  for (const script of malformed) {
+    const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script };
+    assert.equal(oracleSchema.safeParse(oracle).success, true);
+    // The sentinel prevents even the unfixed runner from executing a malformed payload.
+    await assert.rejects(runOracle({ store, runId: manifest.id, workspace: root, revision: 'invalid-source-sentinel', oracle }), {
+      code: 'invalid_oracle', message: 'Oracle script has invalid JavaScript syntax; return one complete program within the existing limit.'
+    });
+  }
+  assert.deepEqual(store.ownedProcesses(manifest.id), []); assert.equal(store.usage(manifest.id).activeMs, 0);
+});
+
+test('complete direct-production oracle programs preserve the existing syntax and character authority', async t => {
+  const { manifest, store, root } = fixture(t);
+  const scripts = [oracleImports, boundaryOracle('const c = {}; assert.ok(c);'),
+    "import assert from 'node:assert/strict'; const {parseJson} = await import('/workspace/desktop/src/providers/json.ts'); assert.equal(parseJson('42'), 42);",
+    "import assert from 'node:assert/strict'; import * as parser from '/workspace/desktop/src/providers/json.ts'; assert.deepEqual(parser.parseJson('[1,2]'), [1,2]);"
+  ];
+  for (const script of scripts) {
+    const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script };
+    assert.equal(oracleSchema.safeParse(oracle).success, true);
+    await assert.rejects(runOracle({ store, runId: manifest.id, workspace: root, revision: 'invalid-source-sentinel', oracle }), { code: 'invalid_source' });
+  }
+  assert.equal(oracleSchema.safeParse({ kind: 'portable-node', contractPaths: ['docs/contract.md'], script: scripts[1]! + ' ' }).success, false);
+  assert.deepEqual(store.ownedProcesses(manifest.id), []); assert.equal(store.usage(manifest.id).activeMs, 0);
 });

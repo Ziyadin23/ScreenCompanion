@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, readdirSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { durableJson } from './process.js';
-import { processIdentity } from './store.js';
+import { processIdentity } from './process-identity.js';
 
 interface Request {
   command: string; args: string[]; cwd: string; env: Record<string, string>;

@@ -137,13 +137,14 @@ function report(run: RunRecord, store: RunStore) {
       findings: Array.isArray(review.findings) ? review.findings.length : 0, verification: 'not_executed' } : null,
     postflight: ['ready', 'pending', 'failed'].includes(postflight?.state ?? '') ? postflight!.state : null,
     integrationHold: hold?.active === true ? { active: true, reason: safeCode(hold.reason) } : null,
-    retryCount: Array.isArray(run.data.roundHistory) ? run.data.roundHistory.length : 0,
+    retryCount: usage.repairs,
+    oracleRetryCount: Array.isArray(run.data.oracleRetryHistory) ? run.data.oracleRetryHistory.length : 0,
     interventionCount: null,
     interventionRequired: run.status === 'awaiting_input' || run.status === 'quarantined',
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
-    costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ?
+    costUsd: null, costStatus: 'unknown', nextAction: run.data.waitingFor === 'oracle_retry_required' ? 'resume_with_retry_oracle' : run.status === 'quarantined' ?
       run.error === 'invalid_checkpoint' ? 'inspect_saved_state' : 'inspect_owned_execution' :
       run.status === 'budget_exhausted' ? 'inspect_findings_and_authorize_linked_continuation' :
         run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
@@ -163,12 +164,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     'dry-run': { type: 'boolean' }, help: { type: 'boolean' }, format: { type: 'string' },
     'retention-days': { type: 'string' }, workers: { type: 'string' },
     'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' },
-    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }
+    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }, 'retry-oracle': { type: 'boolean' }
   } });
   const command = positionals[0];
   if (values.help || !command) {
     console.log(JSON.stringify({ commands: ['doctor', 'runs', 'run', 'status <run-id>', 'report <run-id>',
-      'resume <run-id>', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
+      'resume <run-id> [--retry-oracle]', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
       deliveries: ['report', 'issues', 'pr', 'merge-eligible'] }));
     return 0;
   }
@@ -177,6 +178,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     throw new WorkflowError('invalid_arguments', 'Unknown command or missing run identity.');
   if (values.format && !['json', 'markdown'].includes(values.format))
     throw new WorkflowError('invalid_arguments', 'Report format must be json or markdown.');
+  if (values['retry-oracle'] && command !== 'resume')
+    throw new WorkflowError('invalid_arguments', 'Oracle retry is an explicit same-run resume action.');
   const retentionDays = Number(values['retention-days'] ?? 30);
   if ((values['retention-days'] && command !== 'prune') || !Number.isSafeInteger(retentionDays) ||
       retentionDays < 1 || retentionDays > 3650)
@@ -255,6 +258,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     }
     let run = command === 'run' ? store.admit(manifest) : store.get(positionals[1]!);
     const id = run.manifest.id;
+    if (values['retry-oracle']) run = store.retryUnavailableOracle(id);
     if (inspection) {
       const value = report(run, store);
       console.log(values.format === 'markdown' ?

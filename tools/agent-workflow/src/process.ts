@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { constants } from 'node:os';
 import { z } from 'zod';
 import { WorkflowError } from './manifest.js';
-import { processIdentity } from './store.js';
+import { processIdentity } from './process-identity.js';
 
 const OUTPUT_LIMIT = 2_000_000;
 const REQUEST_LIMIT = 1_000_000;

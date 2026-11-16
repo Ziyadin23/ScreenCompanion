@@ -1,10 +1,15 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { z } from 'zod';
-import { digest, readManifest, WorkflowError, type Manifest } from './manifest.js';
+import { digest, readManifest, ORACLE_RUNTIME, WorkflowError, type Manifest } from './manifest.js';
+import { requireFrozenSource } from './intake.js';
+import { inspectOwnedProcess } from './process.js';
+import { currentOracleRetry, oracleRetryKey, retryableOracleFinding, type OracleRetryEntry } from './oracle-recovery.js';
+import { processIdentity } from './process-identity.js';
+export { processIdentity } from './process-identity.js';
 
 export type RunStatus = 'ready' | 'running' | 'awaiting_external' | 'awaiting_input' |
   'budget_exhausted' | 'completed' | 'cancelled' | 'failed' | 'quarantined';
@@ -55,19 +60,6 @@ function canonical(path: string): string {
   while (!existsSync(parent)) { parts.unshift(basename(parent)); parent = dirname(parent); }
   return resolve(realpathSync(parent), ...parts);
 }
-export function processIdentity(pid = process.pid): string | null {
-  if (process.platform !== 'linux') throw new WorkflowError('unsupported_host', 'Live execution requires Linux process identity.');
-  try {
-    const value = readFileSync(`/proc/${pid}/stat`, 'utf8');
-    const start = value.slice(value.lastIndexOf(')') + 2).split(' ')[19];
-    if (!start) throw new Error('Missing start identity');
-    return `${readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${start}`;
-  } catch (error) {
-    if (['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) return null;
-    throw new WorkflowError('owner_unverifiable', 'Execution ownership cannot be verified.');
-  }
-}
-
 export class RunStore {
   private readonly db: Database.Database;
   private readonly inspectionOnly: boolean;
@@ -206,6 +198,74 @@ export class RunStore {
     return this.readRun(id, this.inspectionOnly);
   }
   inspect(id: string): RunRecord { return this.readRun(id, true); }
+  retryUnavailableOracle(id: string): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('oracle_retry_denied',
+        'Oracle retry requires one unresolved portable oracle in the unchanged selected issue, with no owned delivery or uncertain effects.', 2);
+      if (manifest.mode !== 'issue' || manifest.delivery === 'report' || run.cancelRequested ||
+          !data.selectedIssue || (data.selectedIssue as { number?: unknown }).number !== manifest.issue ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND (state!='observed' OR kind NOT IN ('worker','verification')) LIMIT 1").get(id))
+        throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity) throw denied();
+      }
+      if (this.ownedProcesses(id).some(entry => inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited')) throw denied();
+      const usage = this.usage(id);
+      if (usage.issues || usage.writingTasks || ['allocation', 'plan', 'taskAuthority', 'trustedPlan', 'pull', 'selectedPull',
+        'integration', 'push', 'frozen', 'verification', 'reviewReceipt', 'beta', 'betaReceipt', 'recordPublication',
+        'recordIntegration', 'recordFinalization', 'candidateOracle', 'issueOutcome', 'finalization', 'setup'].some(key => data[key]) ||
+        (data.issueReceipts !== undefined && (!Array.isArray(data.issueReceipts) || data.issueReceipts.length))) throw denied();
+      requireFrozenSource(manifest, manifest.root, manifest.base);
+      const active = currentOracleRetry(run);
+      const candidates = Array.isArray(data.findings) ? data.findings : [];
+      if (active && run.stage === 'reproduce' && ['ready', 'running', 'awaiting_input', 'failed'].includes(run.status) &&
+          candidates.length === 1 && candidates[0]?.state === 'candidate' && candidates[0]?.id === active.diagnostics.findingId) {
+        const reserved = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?')
+          .get(id, `repair:${id}:${active.number}`) as { counter?: string; amount?: number } | undefined;
+        if (reserved?.counter !== 'repairs' || reserved.amount !== 1) throw denied();
+        return run;
+      }
+      const legacy = run.status === 'completed' && run.stage === 'done';
+      const waiting = run.status === 'awaiting_input' && run.stage === 'reproduce' && data.waitingFor === 'oracle_retry_required';
+      const finding = retryableOracleFinding(run);
+      if ((!legacy && !waiting) || !finding) throw denied();
+      const workers = z.array(z.object({ role: z.enum(['investigator', 'reproducer']), operationKey: z.string(),
+        status: z.literal('complete'), response: z.record(z.string(), z.unknown()) }).passthrough())
+        .max(manifest.limits.workerInvocations).safeParse(data.workerResults);
+      const proposer = workers.success && workers.data.filter(worker => worker.role === 'reproducer').at(-1);
+      if (!proposer || digest(proposer.response.oracle ?? null) !== digest(finding.oracle) ||
+          this.observedEffect(id, proposer.operationKey)?.kind !== 'worker') throw denied();
+      if (finding.evidence) {
+        const evidence = finding.evidence, operation = this.observedEffect(id, evidence.operationKey);
+        const result = z.object({ status: z.literal('exited'), exitCode: z.number(), stdout: z.string(), stderr: z.string(),
+          outputTruncated: z.literal(false) }).passthrough().safeParse(operation?.receipt);
+        const identity = { runId: id, source: manifest.base, workspace: manifest.root,
+          oracleHash: evidence.oracleHash, contractHash: evidence.contractHash, runtime: ORACLE_RUNTIME };
+        if (!result.success || [0, 42].includes(result.data.exitCode) || result.data.exitCode !== evidence.exitCode ||
+            operation?.kind !== 'verification' || operation.requestHash !== digest(identity) ||
+            evidence.operationKey !== `oracle:${digest(identity)}` || evidence.outputHash !== digest([result.data.stdout, result.data.stderr])) throw denied();
+      }
+      if (usage.workerInvocations + 2 > manifest.limits.workerInvocations || usage.activeMs >= manifest.limits.activeMs ||
+          usage.repairs >= manifest.limits.repairs)
+        throw new WorkflowError('budget_exhausted', 'Original oracle repair or worker/time allowance is exhausted.', 3);
+      const number = usage.repairs + 1;
+      const entry: OracleRetryEntry = { number, key: oracleRetryKey(manifest, number, finding), manifestHash: digest(manifest),
+        previous: { status: run.status, stage: run.stage, error: run.error, waitingFor: data.waitingFor ?? null, finding },
+        diagnostics: { findingId: finding.id, oracleHash: digest(finding.oracle), scriptLength: finding.oracle.script.length,
+          outcome: finding.evidence ? 'unavailable' : 'invalid', exitCode: finding.evidence?.exitCode ?? null } };
+      const history = Array.isArray(data.oracleRetryHistory) ? data.oracleRetryHistory : [];
+      if (history.length >= manifest.limits.repairs) throw denied();
+      this.reserve(id, `repair:${id}:${number}`, 'repairs');
+      this.update(id, { status: 'ready', stage: 'reproduce', error: null, data: { ...data,
+        oracleRetryHistory: [...history, entry], oracleRetry: { number, key: entry.key }, waitingFor: null,
+        findings: [{ id: finding.id, path: finding.path, description: finding.description, state: 'candidate' }] } });
+      return this.get(id);
+    });
+  }
   private readRun(id: string, inspectionOnly: boolean): RunRecord {
     const raw = this.db.prepare('SELECT * FROM runs WHERE id=? AND repository=?').get(id, this.repository.repository);
     if (!raw) throw new WorkflowError('run_not_found', 'No saved run with this identity in this repository.');
@@ -539,7 +599,11 @@ export class RunStore {
       data: z.record(z.string(), z.unknown()).optional(), cancelRequested: z.boolean().optional(),
       error: z.string().regex(/^[a-z0-9_]+$/).nullable().optional() }).strict().parse(patch);
     this.guardedWrite(() => {
-      const value = { ...this.get(id), ...validated };
+      const previous = this.get(id), value = { ...previous, ...validated };
+      if (previous.data.oracleRetryHistory !== undefined &&
+          (!Array.isArray(value.data.oracleRetryHistory) || !Array.isArray(previous.data.oracleRetryHistory) ||
+            digest(value.data.oracleRetryHistory.slice(0, previous.data.oracleRetryHistory.length)) !== digest(previous.data.oracleRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior oracle retry evidence is immutable.');
       const data = JSON.stringify(value.data);
       if (Buffer.byteLength(data) > 2_000_000) throw new WorkflowError('oversized_state', 'Run state exceeds its bound.');
       this.db.prepare(`UPDATE runs SET status=?,stage=?,data=?,
