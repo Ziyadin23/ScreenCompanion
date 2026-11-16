@@ -156,8 +156,9 @@ export class RunStore {
         AND json_extract(manifest,'$.mode')='issue' AND json_extract(manifest,'$.issue')=?
         ORDER BY created_at DESC,rowid DESC LIMIT 1`).get(manifest.repository, manifest.issue) as
           { id: string; status: RunStatus } | undefined : undefined;
-      if (!manifest.continuationOf && latestTask && latestTask.id !== manifest.id &&
-          (latestTask.status === 'budget_exhausted' || remainingOracleParent(this.inspect(latestTask.id))))
+      const latestUnlinked = !manifest.continuationOf && latestTask && latestTask.id !== manifest.id ? this.inspect(latestTask.id) : undefined;
+      if (latestUnlinked && (latestUnlinked.status === 'budget_exhausted' ||
+          latestUnlinked.manifest.continuationBudget === 'remaining' || remainingOracleParent(latestUnlinked)))
         throw new WorkflowError('continuation_required', 'The unfinished issue has preserved history; use an explicit linked continuation.');
       let refreshed: RunRecord | undefined;
       if (manifest.continuationOf) {

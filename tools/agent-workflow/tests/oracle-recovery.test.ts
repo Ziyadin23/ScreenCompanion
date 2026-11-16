@@ -352,3 +352,40 @@ test('CLI current-source continuation infers exact remaining milliseconds and se
   assert.equal(JSON.parse(smaller.stdout).limits.activeMs, 60_000);
   assert.equal(f.store.listRuns().length, 1); assert.deepEqual(f.store.get(f.manifest.id), parent);
 });
+
+test('an admitted funded task cannot gain an unlinked budget at any later lifecycle stage', async t => {
+  const f = fixture(t); await legacy(f); const source = refreshedSource(f), funded = fundedManifest(f, source);
+  const child = f.store.admit(funded), db = new Database(join(f.store.directory, 'journal.sqlite'));
+  t.after(() => db.close());
+  const input = { repository: funded.repository, commonDir: funded.commonDir, ...source, scope: funded.scope,
+    mode: 'issue', issue: 7, delivery: 'pr', modelProfile: 'fixture' };
+  const snapshots = () => ({ rows: db.prepare('SELECT * FROM runs ORDER BY id').all(),
+    reservations: db.prepare('SELECT * FROM reservations ORDER BY run_id,key').all(), cumulative: f.store.cumulativeUsage(child.manifest.id) });
+  const stages = [
+    ['ready', 'preflight'], ['running', 'intake'], ['awaiting_input', 'intake'], ['awaiting_external', 'investigate'],
+    ['failed', 'intake'], ['completed', 'done']
+  ] as const;
+  for (const [status, stage] of stages) {
+    const data = f.store.get(child.manifest.id).data;
+    f.store.update(child.manifest.id, { status, stage, data: { ...data,
+      ...(status === 'completed' ? { findings: [{ id: 'c'.repeat(64), path: production,
+        description: 'Unconfirmed follow-up', state: 'unconfirmed', reason: 'target_or_contract_unavailable' }] } : {}) } });
+    const before = snapshots();
+    assert.throws(() => f.store.admit(makeManifest({ ...input, limits: { activeMs: 10_800_000 } })),
+      { code: 'continuation_required' }, `${status}/${stage} must not admit another default 12-worker budget`);
+    assert.deepEqual(snapshots(), before);
+    assert.equal(f.store.admit(funded).manifest.id, child.manifest.id);
+    assert.deepEqual(snapshots(), before);
+  }
+  const cli = resolve(process.env.SC_WORKFLOW_CLI_DIST ?? 'dist', 'src/cli.js'), before = snapshots();
+  const rejected = spawnSync(process.execPath, [cli, 'run', '--issue', '7', '--scope', funded.scope,
+    '--delivery', 'pr', '--model-profile', 'fixture', '--repo', source.root, '--state-dir', f.store.directory],
+  { cwd: source.root, encoding: 'utf8', timeout: 10_000, env: { PATH: process.env.PATH, HOME: source.root } });
+  assert.equal(rejected.status, 4, rejected.stderr);
+  assert.equal(JSON.parse(rejected.stderr).error, 'continuation_required');
+  assert.deepEqual(snapshots(), before);
+  f.store.update(child.manifest.id, { status: 'budget_exhausted' });
+  const authorized = f.store.admit(makeManifest({ ...input, continuationOf: child.manifest.id }));
+  assert.equal(authorized.manifest.continuationOf, child.manifest.id);
+  assert.equal(authorized.manifest.continuationBudget, undefined);
+});
