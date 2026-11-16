@@ -58,3 +58,11 @@ Owner: [issue #78](https://github.com/Ziyadin23/ScreenCompanion/issues/78), assi
 - The user explicitly requested publication after reviewing the local completion summary. This authorizes committing the owned documentation, pushing `Ziyadin23/Security-Policy` and opening its focused PR against `main`; no application release or unrelated change is included.
 - Resumed from the archived 3/3 checkpoint and actual Git status. The nine owned files and reporting toggle were reviewed again; GitHub still reports `enabled: true`. Dependency installation remains explicitly skipped for Markdown-only work.
 - Next: run the publication checks, commit/push the reviewed files, create/read back the PR, link it to issue #78 and Orca, and record actual source/CI state. Source integration remains a separate state.
+
+### Published source and review handoff
+
+- Source commit `f35d445579de3a2e9932f37ab3ea3fb1efbc76cf` was pushed to `Ziyadin23/Security-Policy`, based on current main `94d21b1f28e129c1aa1e7a77026a1fd076571592`. Fetch and divergence check confirmed that base was current before publication. Only the nine reviewed documentation/planning files were committed.
+- [PR #79](https://github.com/Ziyadin23/ScreenCompanion/pull/79) is open against `main`, with `Closes #78` and an immutable published plan link. PR title/body/base/head/state were read back after creation. The user authorized source publication; no merge or application release is claimed.
+- Publication checks all exited 0: workflow selftest; documentation links (104 Markdown files, 476 local links/anchors); strict OpenSpec (9/9); `git diff --check` and `git diff --cached --check`. The reporting API still returned `enabled: true`.
+- This follow-up changes only the status pointer and archived publication checkpoint; it is being committed/pushed as the publication receipt. GitHub owns the resulting final head and hosted check results. Local implementation remains 3/3 complete and archived; integration is separate.
+- Next: verify the final pushed head and hosted CI, link the existing issue and Orca card, and hand off the published PR for review/integration. Keep issue #78 open until integration satisfies its scope.
