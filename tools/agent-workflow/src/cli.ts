@@ -14,6 +14,7 @@ import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
 import { selectBetaProfile } from './beta-profile.js';
+import { remainingOracleLimits, remainingOracleParent } from './oracle-recovery.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
 export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirectory: string,
@@ -119,7 +120,7 @@ function report(run: RunRecord, store: RunStore) {
   return { runId: run.manifest.id, repository: run.manifest.repository, scope: run.manifest.scope,
     delivery: run.manifest.delivery, base: run.manifest.base, status: run.status, stage: run.stage,
     cancelRequested: run.cancelRequested, error: run.error, usage,
-    continuationOf: run.manifest.continuationOf ?? null, cumulative,
+    continuationOf: run.manifest.continuationOf ?? null, continuationBudget: run.manifest.continuationBudget ?? null, cumulative,
     candidateReview: run.data.reviewReceipt ? { head: sha((run.data.reviewReceipt as { head?: unknown }).head),
       clean: (run.data.reviewReceipt as { clean?: unknown }).clean === true,
       findings: Array.isArray((run.data.reviewReceipt as { findings?: unknown }).findings) ?
@@ -137,13 +138,14 @@ function report(run: RunRecord, store: RunStore) {
       findings: Array.isArray(review.findings) ? review.findings.length : 0, verification: 'not_executed' } : null,
     postflight: ['ready', 'pending', 'failed'].includes(postflight?.state ?? '') ? postflight!.state : null,
     integrationHold: hold?.active === true ? { active: true, reason: safeCode(hold.reason) } : null,
-    retryCount: Array.isArray(run.data.roundHistory) ? run.data.roundHistory.length : 0,
+    retryCount: usage.repairs,
+    oracleRetryCount: Array.isArray(run.data.oracleRetryHistory) ? run.data.oracleRetryHistory.length : 0,
     interventionCount: null,
     interventionRequired: run.status === 'awaiting_input' || run.status === 'quarantined',
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
-    costUsd: null, costStatus: 'unknown', nextAction: run.status === 'quarantined' ?
+    costUsd: null, costStatus: 'unknown', nextAction: run.data.waitingFor === 'oracle_retry_required' ? 'resume_with_retry_oracle' : run.status === 'quarantined' ?
       run.error === 'invalid_checkpoint' ? 'inspect_saved_state' : 'inspect_owned_execution' :
       run.status === 'budget_exhausted' ? 'inspect_findings_and_authorize_linked_continuation' :
         run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
@@ -163,12 +165,12 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     'dry-run': { type: 'boolean' }, help: { type: 'boolean' }, format: { type: 'string' },
     'retention-days': { type: 'string' }, workers: { type: 'string' },
     'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' },
-    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }
+    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }, 'retry-oracle': { type: 'boolean' }
   } });
   const command = positionals[0];
   if (values.help || !command) {
     console.log(JSON.stringify({ commands: ['doctor', 'runs', 'run', 'status <run-id>', 'report <run-id>',
-      'resume <run-id>', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
+      'resume <run-id> [--retry-oracle]', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
       deliveries: ['report', 'issues', 'pr', 'merge-eligible'] }));
     return 0;
   }
@@ -177,6 +179,8 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     throw new WorkflowError('invalid_arguments', 'Unknown command or missing run identity.');
   if (values.format && !['json', 'markdown'].includes(values.format))
     throw new WorkflowError('invalid_arguments', 'Report format must be json or markdown.');
+  if (values['retry-oracle'] && command !== 'resume')
+    throw new WorkflowError('invalid_arguments', 'Oracle retry is an explicit same-run resume action.');
   const retentionDays = Number(values['retention-days'] ?? 30);
   if ((values['retention-days'] && command !== 'prune') || !Number.isSafeInteger(retentionDays) ||
       retentionDays < 1 || retentionDays > 3650)
@@ -186,12 +190,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
       'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
   let parent: RunRecord | undefined;
+  let parentUsage: ReturnType<RunStore['usage']> | undefined;
   if (values['continue-from']) {
     if (command !== 'run') throw new WorkflowError('invalid_arguments', 'A continuation is a new explicit run admission.');
     const reader = new RunStore(stateDirectory, makeManifest({ ...repository, scope: 'providers-json' }), { readOnly: true });
-    try { parent = reader.get(values['continue-from']); } finally { reader.close(); }
+    try { parent = reader.get(values['continue-from']); parentUsage = reader.usage(parent.manifest.id); } finally { reader.close(); }
   }
-  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) : undefined;
+  const remaining = parent && remainingOracleParent(parent) ? remainingOracleLimits(parent, parentUsage!) : undefined;
+  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) :
+    remaining ? parent!.manifest.betaProfile : undefined;
   function ceiling(value: string | undefined, maximum: number, fallback = maximum): number {
     const parsed = Number(value ?? fallback);
     if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum)
@@ -204,9 +211,17 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       parent?.manifest.issue ? { issue: parent.manifest.issue } : {}),
     ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } :
       parent?.manifest.pr ? { pr: parent.manifest.pr } : {}),
-    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(betaProfile ? { betaProfile } : {}),
+    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(remaining ? { continuationBudget: 'remaining' } : {}),
+    ...(betaProfile ? { betaProfile } : {}),
     delivery: values.delivery ?? parent?.manifest.delivery ?? 'report',
-    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: {
+    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: remaining ? {
+      ...remaining,
+      workerInvocations: values.workers === undefined ? remaining.workerInvocations : ceiling(values.workers, remaining.workerInvocations),
+      workerMs: values['worker-seconds'] === undefined ? remaining.workerMs :
+        ceiling(values['worker-seconds'], Math.floor(remaining.workerMs / 1000)) * 1000,
+      activeMs: values['active-minutes'] === undefined ? remaining.activeMs :
+        ceiling(values['active-minutes'], Math.floor(remaining.activeMs / 60_000)) * 60_000
+    } : {
       workerInvocations: ceiling(values.workers, DEFAULT_LIMITS.workerInvocations),
       workerMs: ceiling(values['worker-seconds'], DEFAULT_LIMITS.workerMs / 1000) * 1000,
       activeMs: ceiling(values['active-minutes'], (betaProfile ? WINDOWS_ACTIVE_MS : DEFAULT_LIMITS.activeMs) / 60_000,
@@ -225,6 +240,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     console.log(JSON.stringify({ dryRun: true, repository: manifest.repository, scope: manifest.scope,
       delivery: manifest.delivery, mode: manifest.mode, limits: manifest.limits,
       continuationOf: manifest.continuationOf ?? null, betaProfile: manifest.betaProfile?.name ?? null,
+      continuationBudget: manifest.continuationBudget ?? null,
       policyHash: manifest.policyHash, workerCalls: 0, remoteMutations: 0 }));
     return 0;
   }
@@ -255,6 +271,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     }
     let run = command === 'run' ? store.admit(manifest) : store.get(positionals[1]!);
     const id = run.manifest.id;
+    if (values['retry-oracle']) run = store.retryUnavailableOracle(id);
     if (inspection) {
       const value = report(run, store);
       console.log(values.format === 'markdown' ?

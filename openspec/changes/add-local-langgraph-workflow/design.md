@@ -279,3 +279,17 @@ The user requested completing the remaining blocks with subagents after the exha
 Normal model limits remain12 calls/two repairs,20 minutes per worker and120 active minutes. A selected private Windows profile can explicitly request180 active minutes for the documented up-to-two-hour UI verification plus installation/build/native/package work. The helper timeout is separately fixed in the private profile (125 minutes for this qualification, maximum150), bounded again by the run's remaining active allowance. This is declared at fresh admission, never added during resume.
 
 Real capability selection binds private profile/helper/Node/resource-token identities. A credential-free coordinator launch invokes only that pinned private helper; machine credentials stay in existing private handles and unnamed-memory files, never in graph state or durable arguments. Actual exact-source Windows verify/native/vault/fullUI/package/key-free/protected-state/cleanup proof must be observed before a qualified transfer. Synthetic evidence remains unqualified. Pipeline PR delivery is separate from the narrower proven JSON-parser automatic-merge category.
+
+### Remaining resources after an unresolved oracle and source change
+
+An explicit current-source continuation of a selected issue whose portable oracle
+was invalid or unavailable can carry only the preserved parent allowance still
+remaining. The parent must have no downstream writer/delivery, unknown effects,
+active owner, integration hold or competing child, and its original source stays
+frozen. A changed source or trusted policy requires fresh evidence under a new
+manifest linked to that parent. Every aggregate counter is bounded by the
+parent limit minus its observed usage; the worker timeout stays at most the old
+ceiling. Source refresh atomically consumes one of those existing repairs. Exact
+retries reuse the same child and reservation; task/profile authority and prior
+outcomes remain immutable. An unlinked admission cannot replenish this unfinished
+task. This is bounded source revalidation within the prior authorization.

@@ -18,6 +18,7 @@ import { qualifyConfiguredBeta } from './beta-profile.js';
 import { integrateCandidate, observePostflight, prepareObservedFinalization, prepareIntegrationIncident,
   publishIntegrationIncident, prepareIntegrationRecovery, type IntegrationTransport, type MergeReceipt, type Postflight } from './integration.js';
 import { prepareRecordIntegrationIncident, prepareRecordIntegrationRecovery, publishAndFinalizeRecords, publishRecordIntegrationIncident } from './finalization.js';
+import { currentOracleRetry, oracleRetryInstructions, retryableOracleFinding } from './oracle-recovery.js';
 
 export interface RuntimeDependencies {
   executeWorker?: (request: WorkerRequest) => Promise<WorkerResult>;
@@ -265,6 +266,9 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
       for (let index = 0; index < findings.length; index++) {
         const finding = findings[index]!;
         if (finding.state !== 'candidate') continue;
+        const retry = currentOracleRetry(store.get(run.manifest.id));
+        if (retry && retry.diagnostics.findingId !== finding.id)
+          throw new WorkflowError('invalid_state', 'Oracle retry belongs to another finding.');
         if (['pr', 'merge-eligible'].includes(run.manifest.delivery) &&
             (findings.some(value => value.state === 'confirmed') ||
               store.usage(run.manifest.id).workerInvocations + 5 > run.manifest.limits.workerInvocations)) {
@@ -284,11 +288,15 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
           'Cover each affected schema/task variant in the full selected issue, not only a representative happy path. ' +
           'Return oracle=null when native/GUI/packaged/live evidence is needed or the contract cannot be established.\n' +
           JSON.stringify({ issue: run.data.selectedIssue ?? null, priorRejectedReview: priorReview(context) }) + '\n' +
-          'Your reproduced boolean is advisory; do not claim external qualification.');
+          'Return one complete valid JavaScript program of at most 8000 characters; never truncate a program. ' +
+          'Your reproduced boolean is advisory; do not claim external qualification.' + (retry ? oracleRetryInstructions(retry) : ''),
+          retry ? { attempt: retry.number } : {});
         const parsed = z.object({ oracle: oracleSchema.nullable() }).passthrough().parse(proposed);
         if (!parsed.oracle) findings[index] = { ...finding, state: 'unconfirmed', reason: 'target_or_contract_unavailable' };
         else {
           try {
+            if (retry && digest(parsed.oracle) === retry.diagnostics.oracleHash)
+              throw new WorkflowError('invalid_oracle', 'The previous unavailable oracle cannot establish fresh evidence.');
             const evidence = await runOracle({ store, runId: run.manifest.id, workspace: run.manifest.root,
               revision: run.manifest.base, oracle: parsed.oracle, signal: context.signal, timeReservedByStage: true });
             let state: 'confirmed' | 'disproved' | 'unconfirmed' = evidence.outcome === 'failed' ? 'confirmed' :
@@ -302,7 +310,8 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
                 'claimed behavior under those contracts. Return baselineContract.valid and concerns about the oracle; ' +
                 'the expected baseline defect is not an oracle concern. Do not use investigator prose as proof. ' +
                 `Return baseRevision=${run.manifest.base} and headRevision=${run.manifest.base}. Do not edit files or contact GitHub.`,
-                { revision: run.manifest.base, reviewHead: run.manifest.base, baselineContractReview: true });
+                { revision: run.manifest.base, reviewHead: run.manifest.base, baselineContractReview: true,
+                  ...(retry ? { attempt: retry.number } : {}) });
               const review = z.object({ baseRevision: z.literal(run.manifest.base), headRevision: z.literal(run.manifest.base),
                 baselineContract: z.object({ valid: z.boolean(), concerns: z.array(z.string()).max(12) }).strict() }).passthrough().parse(response);
               baselineReview = { base: run.manifest.base, oracleHash: evidence.oracleHash, contractHash: evidence.contractHash,
@@ -315,12 +324,16 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
                 oracle: evidence.oracleHash, contract: evidence.contractHash }) };
           } catch (error) {
             if (!(error instanceof WorkflowError) || error.code !== 'invalid_oracle') throw error;
-            findings[index] = { ...finding, state: 'unconfirmed', reason: 'invalid_proposed_oracle' };
+            findings[index] = { ...finding, state: 'unconfirmed', reason: 'invalid_proposed_oracle', oracle: parsed.oracle };
           }
         }
         store.update(run.manifest.id, { data: { ...store.get(run.manifest.id).data, findings } });
       }
-      return { next: run.manifest.delivery !== 'report' && findings.some(finding => finding.state === 'confirmed') ? 'issues' : 'done' };
+      const current = store.get(run.manifest.id);
+      if (run.manifest.mode === 'issue' && run.manifest.delivery !== 'report' && retryableOracleFinding(current))
+        return { next: 'reproduce', status: 'awaiting_input', data: { waitingFor: 'oracle_retry_required' } };
+      return { next: run.manifest.delivery !== 'report' && findings.some(finding => finding.state === 'confirmed') ? 'issues' : 'done',
+        data: { waitingFor: null } };
     },
     issues: async context => {
       const { run, store } = context;
@@ -459,7 +472,7 @@ export function createActions(dependencies: RuntimeDependencies = {}): Actions {
         remember(context, { trustedDependencies: attestVerificationDependencies(allocation.path, ['application']) });
       } else remember(context, { setup: { ok: true, skipped: 'documentation_requires_no_package_dependencies' } });
       await client.setCard(allocation, 'in-progress', `setup verified; next: scoped apply #${issue.number}`);
-      return { next: 'implement', data: { round: { number: 0, revision: run.manifest.base } } };
+      return { next: 'implement', data: { round: { number: context.store.usage(run.manifest.id).repairs, revision: run.manifest.base } } };
     },
     implement: async context => {
       const { run, issue, finding, failure } = task(context); const allocation = run.data.allocation as WorkspaceReceipt;

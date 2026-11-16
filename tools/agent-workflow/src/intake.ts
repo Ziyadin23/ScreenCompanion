@@ -71,6 +71,10 @@ const oracleResolver = `export async function resolve(specifier, context, next) 
 }`;
 function inspectOracle(manifest: Manifest, script: string): boolean {
   const source = ts.createSourceFile('oracle.mjs', script, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  // The parser can recover an AST from truncated input; never inspect a recovered program.
+  const diagnostics = (source as ts.SourceFile & { parseDiagnostics?: readonly ts.Diagnostic[] }).parseDiagnostics;
+  if (!Array.isArray(diagnostics) || diagnostics.length !== 0)
+    throw new WorkflowError('invalid_oracle', 'Oracle script has invalid JavaScript syntax; return one complete program within the existing limit.');
   let importsSource = false, importsAssert = false;
   const scopedNames = new Set<string>();
   const forbidden = new Set(['process', 'global', 'globalThis', 'eval', 'Function', 'Date', 'performance',

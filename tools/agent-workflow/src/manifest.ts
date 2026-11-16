@@ -41,6 +41,7 @@ export function digest(value: unknown): string {
 export const POLICY_HASH = digest({
   version: 1, scopes: SCOPES, defaults: DEFAULT_LIMITS,
   mergePolicy: POLICY_CONFIG, windowsActiveMs: WINDOWS_ACTIVE_MS,
+  oracleSourceContinuation: 'remaining-parent-allowance-with-charged-refresh-v1',
   delivery: 'immediate-protected-head-match', modelAuth: 'temporary-file-projection'
 });
 
@@ -62,6 +63,7 @@ const inputSchema = z.object({
   issue: z.number().int().positive().optional(),
   pr: z.number().int().positive().optional(),
   continuationOf: z.uuid().optional(),
+  continuationBudget: z.literal('remaining').optional(),
   betaProfile: z.object({ name: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
     hash: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
   delivery: deliverySchema.default('report'),
@@ -74,6 +76,8 @@ const inputSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Review requires a PR and report delivery.' });
   if ((value.mode !== 'issue' && value.issue) || (value.mode !== 'review' && value.pr))
     ctx.addIssue({ code: 'custom', message: 'Reference does not match mode.' });
+  if (value.continuationBudget && (!value.continuationOf || value.mode !== 'issue' || value.delivery === 'report'))
+    ctx.addIssue({ code: 'custom', message: 'Remaining allowance requires an explicit selected-issue continuation.' });
 });
 
 export function makeManifest(input: unknown) {
@@ -87,6 +91,7 @@ export function makeManifest(input: unknown) {
     root: value.root, commonDir: value.commonDir, base: value.base,
     branch: value.branch, scope: value.scope, mode: value.mode,
     issue: value.issue, pr: value.pr, delivery: value.delivery, continuationOf: value.continuationOf,
+    continuationBudget: value.continuationBudget,
     betaProfile: value.betaProfile ? Object.freeze(value.betaProfile) : undefined,
     paths: Object.freeze([...SCOPES[value.scope]]),
     modelProfile: value.modelProfile, limits: Object.freeze(limits),
