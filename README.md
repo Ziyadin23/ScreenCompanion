@@ -10,6 +10,7 @@ own API key. Provider usage charges apply.
 [Website](https://ziyadin23.github.io/screencompanion-website/) ·
 [Downloads](#release-status) · [Quick start](#quick-start) ·
 [User guide](docs/USER_GUIDE.md) · [Contribute](CONTRIBUTING.md) ·
+[Security policy](SECURITY.md) ·
 [Build from source](#build-and-further-documentation)
 
 ## Release status
