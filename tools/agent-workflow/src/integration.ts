@@ -391,6 +391,28 @@ export function readFrozenTask(manifest: Manifest, merge: MergeReceipt, path: st
   catch { throw new WorkflowError('finalization_wait', 'Frozen task record is unavailable.', 2); }
 }
 
+export function ownsBetaFinalizationHold(store: RunStore, runId: string, merge: MergeReceipt): boolean {
+  const data = store.get(runId).data, hold = store.repositoryIntegrationHold();
+  const prepared = data.finalization as FinalizationPreparation | undefined;
+  const publication = data.recordPublication as { marker?: string; base?: string } | undefined;
+  if (hold?.runId !== runId || hold.reason !== 'beta_handoff_unavailable' ||
+      digest(data.integration ?? null) !== digest(merge) || prepared?.sourceHead !== merge.head ||
+      prepared.mergeHead !== merge.mergeHead) return false;
+  if (hold.head === merge.mergeHead)
+    return publication === undefined || publication?.base === merge.mergeHead && publication.marker === prepared.marker;
+  const record = data.recordIntegration as { marker?: string; sourceHead?: string; sourceMerge?: string;
+    recordHead?: string; recordMerge?: string; recordPr?: number } | undefined;
+  const decision = data.recordMergeDecision as { head?: string; base?: string; checks?: string } | undefined;
+  if (!record || publication?.base !== merge.mergeHead || publication.marker !== prepared.marker ||
+      record.marker !== prepared.marker || record.sourceHead !== merge.head || record.sourceMerge !== merge.mergeHead ||
+      record.recordMerge !== hold.head || !Number.isSafeInteger(record.recordPr) ||
+      typeof record.recordHead !== 'string' || !sha.test(record.recordHead) ||
+      decision?.head !== record.recordHead || decision.base !== merge.mergeHead) return false;
+  const operation = store.observedEffect(runId, `record-merge:${record.recordPr}:${record.recordHead}`);
+  return operation?.kind === 'github_record_merge' && operation.receipt === record.recordMerge &&
+    operation.requestHash === digest({ pr: record.recordPr, head: record.recordHead, base: merge.mergeHead, checks: decision.checks });
+}
+
 export function prepareObservedFinalization(request: { store: RunStore; runId: string; merge: MergeReceipt;
   postflight: Postflight; plan: PlanBundle }): FinalizationPreparation {
   const { store, runId, merge, postflight, plan } = request;
@@ -402,6 +424,7 @@ export function prepareObservedFinalization(request: { store: RunStore; runId: s
     hold.reason === 'record_finalization_pending' && hold.head === merge.mergeHead ||
     hold.reason === 'record_postflight_pending' && hold.head === record?.recordMerge &&
       record?.sourceMerge === merge.mergeHead && publication.marker === record.marker);
+  const ownBetaHold = ownsBetaFinalizationHold(store, runId, merge);
   if (digest(run.data.integration) !== digest(merge) || digest(run.data.postflight) !== digest(postflight) ||
       digest(run.data.plan) !== digest(plan) || !['local', 'baseline'].includes(plan.provenance.kind) ||
       plan.provenance.source !== manifest.base ||
@@ -418,7 +441,7 @@ export function prepareObservedFinalization(request: { store: RunStore; runId: s
         digest(plan.owner.taskIds) !== digest(['1.1', '1.2', '1.3'])) ||
       (plan.provenance.kind === 'baseline' && digest(plan.owner.taskIds) !==
         digest(object(run.data.existingOwner ?? {}).taskIds)) ||
-      (hold && !ownRecordHold))
+      (hold && !ownRecordHold && !ownBetaHold))
     throw new WorkflowError('finalization_wait', 'Saved plan, merge and postflight do not authorize finalization.', 2);
   const template = plan.provenance.kind === 'baseline' ? baselineFile(manifest, plan.owner.path) :
     plan.files.find(file => file.path === plan.owner.path)?.content;
@@ -427,7 +450,8 @@ export function prepareObservedFinalization(request: { store: RunStore; runId: s
   const frozenTask = readFrozenTask(manifest, merge, plan.owner.path);
   const prepared = prepareFinalization({ manifest, taskPath: plan.owner.path, template,
     frozenTask, merge, postflight, taskIds: plan.owner.taskIds });
-  if (hold && (digest(run.data.finalization) !== digest(prepared) || publication?.marker !== prepared.marker))
+  if (hold && (digest(run.data.finalization ?? null) !== digest(prepared) ||
+      (publication ? publication.marker !== prepared.marker : !ownBetaHold)))
     throw new WorkflowError('finalization_wait', 'Pending record does not match the observed source.', 2);
   return prepared;
 }

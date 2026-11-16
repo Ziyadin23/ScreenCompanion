@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { digest, makeManifest } from '../src/manifest.js';
 import { classifyDiff, decideMerge, requiredChecks, labFidelityFixtureCorrection } from '../src/policy.js';
+import { prepareVersionRecords, reserveCandidateVersion } from '../src/delivery.js';
+import { inspectCandidate } from '../src/candidate.js';
+import { RunStore } from '../src/store.js';
 
 const base = 'a'.repeat(40), head = 'b'.repeat(40);
 const manifest = makeManifest({ repository: 'github.com/example/sc', root: '/synthetic/repo',
@@ -70,6 +76,13 @@ test('parser category permits only primitive input normalization and preserves t
     "it('tagged effect', parseJson.constructor`return process.exit(0)`);",
     "it('nested tagged effect',()=>expect(parseJson.constructor`return process.exit(0)`).toBeTruthy());",
     "it('nested tag value',()=>expect(parseJson`${parseJson.constructor`return process.exit(0)`}`).toBeTruthy());"
+  ]) assert.notEqual(classifyDiff(parser, [source, { ...assertions, after: assertions.after + appended }]).category,
+    'portable-json-parser-fix');
+  for (const appended of [
+    "describe('suite', function(it = parseJson.constructor) { test('side effect', it('return process.exit(0)')); });",
+    "describe('suite', async function(expect = parseJson.constructor) { test('side effect', expect('return process.exit(0)')); });",
+    "test('generator', function*(it = parseJson.constructor) { it('return process.exit(0)'); });",
+    "it('ordinary callback', function() { expect(parseJson('{}')).toEqual({}); });"
   ]) assert.notEqual(classifyDiff(parser, [source, { ...assertions, after: assertions.after + appended }]).category,
     'portable-json-parser-fix');
   const classification = classifyDiff(parser, [source, assertions]);
@@ -152,6 +165,52 @@ test('version exceptions validate the entire five-file delta and reservation rat
   assert.equal(complete.category, 'portable-json-parser-fix');
   assert.deepEqual(complete.reasons, []);
   assert.notEqual(complete.diffHash, classifyDiff(application, [product, focused]).diffHash);
+  for (const invalidVersion of [previousVersion, '0.5.0-beta.9', '0.5.1-beta.12', '0.5.0-beta.9007199254740992']) {
+    const invalidRecords = records.map(file => ({ ...file, after: file.after.replaceAll(version, invalidVersion) }));
+    assert.ok(classifyDiff(application, invalidRecords, {
+      versionReservation: { ...reservation, version: invalidVersion },
+      versionRecords: Object.fromEntries(invalidRecords.map(file => [file.path, digest(file.after)]))
+    }).reasons.includes('version_record_changed'));
+  }
+});
+
+test('a continuation keeps its predecessor beta reservation and inspects the next available exact version records', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'sc-policy-version-')), root = join(directory, 'repo');
+  mkdirSync(root);
+  const files: Record<string, string> = {
+    'desktop/package.json': '{"name":"sc","version":"0.5.0-beta.10"}',
+    'desktop/package-lock.json': '{"version":"0.5.0-beta.10","packages":{"":{"version":"0.5.0-beta.10"}}}',
+    'README.md': '| Current source, unpublished | **0.5.0-beta.10** |',
+    'docs/PUBLISHING.md': 'The current source version is 0.5.0-beta.10 and is unpublished.',
+    'docs/STATUS.md': 'Source remains unpublished **0.5.0-beta.10**;',
+    'desktop/src/providers/json.ts': readFileSync(new URL('../../../../desktop/src/providers/json.ts', import.meta.url), 'utf8')
+  };
+  for (const [path, text] of Object.entries(files)) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text); }
+  const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8' }).trim();
+  git('init', '-b', 'main'); git('add', '.'); git('commit', '-m', 'baseline');
+  const input = { repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
+    base: git('rev-parse', 'HEAD'), scope: 'providers-json', mode: 'issue', issue: 60, delivery: 'merge-eligible' };
+  const parent = makeManifest(input), store = new RunStore(join(directory, 'state'), parent);
+  t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
+  store.admit(parent);
+  const inventory = { releaseInventory: { repository: parent.repository, complete: true as const, versions: [] } };
+  assert.equal(reserveCandidateVersion(store, parent.id, inventory).version, '0.5.0-beta.11');
+  store.update(parent.id, { status: 'budget_exhausted' });
+  const continuation = makeManifest({ ...input, continuationOf: parent.id }); store.admit(continuation);
+  const reservation = reserveCandidateVersion(store, continuation.id, inventory);
+  assert.equal(reservation.version, '0.5.0-beta.12');
+  const prepared = prepareVersionRecords(root, reservation);
+  for (const file of prepared.changes) writeFileSync(join(root, file.path), file.after);
+  writeFileSync(join(root, 'desktop/src/providers/json.ts'), files['desktop/src/providers/json.ts']!.replace('JSON.parse(text);', 'JSON.parse(text.trim());'));
+  mkdirSync(join(root, 'desktop/tests/providers'), { recursive: true });
+  writeFileSync(join(root, 'desktop/tests/providers/json.agent.test.ts'),
+    "import {it,expect} from 'vitest';import{parseJson}from'../../src/providers/json';it('contract',()=>expect(parseJson('{}')).toEqual({}));\n");
+  const inspected = inspectCandidate(continuation, { workspace: root, versionRecords: prepared.versionRecords, versionReservation: reservation });
+  assert.equal(inspected.classification.category, 'portable-json-parser-fix');
+  assert.deepEqual(inspected.classification.reasons, []);
+  assert.deepEqual(store.reserveCandidateVersion(parent.id, '0.5.0-beta.10'),
+    { previousVersion: '0.5.0-beta.10', version: '0.5.0-beta.11' });
 });
 
 test('merge decision rejects stale evidence, missing protection/beta and all nonpassing checks', () => {

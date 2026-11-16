@@ -1,6 +1,6 @@
 import { digest, WorkflowError } from './manifest.js';
 import { GithubClient, type ChecksReceipt, type IssueReceipt } from './github.js';
-import { integrationApi, prepareFinalization, prepareScopedRecovery, type RecoveryPreparation,
+import { integrationApi, prepareFinalization, prepareScopedRecovery, ownsBetaFinalizationHold, type RecoveryPreparation,
   type FinalizationPreparation, type IntegrationTransport, type MergeReceipt, type Postflight } from './integration.js';
 import type { PlanBundle } from './ownership.js';
 import { baselineFile } from './intake.js';
@@ -107,7 +107,8 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
     return wait('issue_scope_review');
   const existingHold = store.repositoryIntegrationHold();
   if (existingHold && (existingHold.runId !== runId ||
-      !['record_finalization_pending', 'record_postflight_pending', 'beta_handoff_unavailable'].includes(existingHold.reason)))
+      !['record_finalization_pending', 'record_postflight_pending', 'beta_handoff_unavailable'].includes(existingHold.reason) ||
+      existingHold.reason === 'beta_handoff_unavailable' && !ownsBetaFinalizationHold(store, runId, merge)))
     return wait('repository_integration_hold');
   const application = manifest.scope !== 'docs-links' ||
     (data.frozen as { checks?: string[] } | undefined)?.checks?.includes('application');
@@ -119,7 +120,7 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
       return wait('beta_handoff_unavailable');
     }
     const previous = store.repositoryIntegrationHold();
-    if (previous?.runId === runId && previous.reason === 'beta_handoff_unavailable')
+    if (previous?.runId === runId && ownsBetaFinalizationHold(store, runId, merge))
       store.update(runId, { data: { ...store.get(runId).data, integrationHold: { active: false } } });
   }
   const hold = store.repositoryIntegrationHold();

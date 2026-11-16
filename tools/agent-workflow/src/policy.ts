@@ -111,7 +111,7 @@ function additiveTests(change: Change): boolean {
     if (ts.isIdentifier(node) && !names.has(node.text) &&
         !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
         !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) valid = false;
-    if (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) ||
+    if (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isMethodDeclaration(node) ||
         ts.isGetAccessor(node) || ts.isSetAccessor(node) || ts.isNewExpression(node) || ts.isDeleteExpression(node) ||
         ts.isElementAccessExpression(node) || ts.isTaggedTemplateExpression(node) || ts.isAwaitExpression(node) || ts.isYieldExpression(node) ||
         ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node) &&
@@ -169,7 +169,8 @@ export function classifyDiff(manifest: Manifest, changes: Change[], options: Ins
       if (manifest.scope === 'docs-links' || !options.versionReservation ||
           options.versionReservation.repository !== manifest.repository || options.versionReservation.runId !== manifest.id ||
           !previousVersion || !version || previousVersion[1] !== version[1] ||
-          !Number.isSafeInteger(Number(version[2])) || Number(version[2]) !== Number(previousVersion[2]) + 1 ||
+          !Number.isSafeInteger(Number(previousVersion[2])) || !Number.isSafeInteger(Number(version[2])) ||
+          Number(version[2]) <= Number(previousVersion[2]) ||
           digest(Object.keys(options.versionRecords!).sort()) !== digest([...versionPaths].sort())) throw new Error('Invalid version authority');
       validateVersionChanges(versionPaths.map(path => {
         const change = versionChanges.find(file => file.path === path);

@@ -56,8 +56,9 @@ integration hold. Inspect `runs` before dispatching new work.
 
 The hosted `agent-workflow` check uses a fresh Ubuntu 24.04 runner. Its setup
 copies the selected `actions/setup-node` Node/npm installation into `/usr`,
-which the fixed sandbox profile mounts read-only, and verifies the copied bytes,
-npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
+which the fixed sandbox profile mounts read-only, normalizes that copy to root
+ownership without group/world write access, and verifies the copied bytes,
+Node metadata, npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
 `1.16.0`, then checks both ordinary and nested user, PID and network namespaces
 with a fresh `/proc` mount for each. Ubuntu
 24.04's [AppArmor user namespace restriction](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)

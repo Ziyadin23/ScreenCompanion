@@ -1,27 +1,38 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { digest, makeManifest } from '../src/manifest.js';
-import { prepareFinalization, type IntegrationTransport, type MergeReceipt, type Postflight } from '../src/integration.js';
+import { prepareFinalization, prepareObservedFinalization, type IntegrationTransport, type MergeReceipt, type Postflight } from '../src/integration.js';
 import { publishAndFinalizeRecords, prepareRecordIntegrationIncident,
   publishRecordIntegrationIncident, prepareRecordIntegrationRecovery } from '../src/finalization.js';
 import { RunStore } from '../src/store.js';
+import { handoffBeta, type WindowsBetaQualification } from '../src/delivery.js';
+import type { PlanBundle } from '../src/ownership.js';
 
 const source = 'a'.repeat(40), squash = 'b'.repeat(40), record = 'c'.repeat(40), recordMerge = 'd'.repeat(40);
 const path = 'openspec/changes/fix-confirmed-eeeeeeeeeeee/tasks.md';
 const template = '# Tasks\n\n- [ ] 1.1 Reproduce failure.\n- [ ] 1.2 Correct source.\n- [ ] 1.3 Verify and review.\n';
 const checks = ['changes', 'documentation', 'portable', 'windows-build', 'agent-workflow'];
 
-async function fixture(t: { after(fn: () => void): void }, reviewCount = 0) {
+async function fixture(t: { after(fn: () => void): void }, reviewCount = 0, realGitSource = false) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-record-'));
   const rootDir = join(directory, 'repo'); mkdirSync(rootDir);
   const manifest = makeManifest({ repository: 'github.com/example/sc', root: rootDir, commonDir: join(rootDir, '.git'),
     base: 'f'.repeat(40), scope: 'docs-links', mode: 'investigate', delivery: 'merge-eligible' });
+  let sourceHead = source;
+  if (realGitSource) {
+    mkdirSync(dirname(join(rootDir, path)), { recursive: true }); writeFileSync(join(rootDir, path), template);
+    const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', rootDir, '-c', 'user.name=Fixture',
+      '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8' }).trim();
+    git('init', '-b', 'main'); git('add', '.'); git('commit', '-m', 'frozen task'); sourceHead = git('rev-parse', 'HEAD');
+  }
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest); store.claim(manifest.id);
   t.after(() => { store.release(manifest.id); store.close(); rmSync(directory, { recursive: true, force: true }); });
-  const merge: MergeReceipt = { repository: manifest.repository, base: manifest.base, head: source,
+  const merge: MergeReceipt = { repository: manifest.repository, base: manifest.base, head: sourceHead,
     mergeHead: squash, prNumber: 31, prUrl: 'https://github.com/example/sc/pull/31' };
   const postflight: Postflight = { state: 'ready', head: squash, checksHash: '1'.repeat(64) };
   const preparation = prepareFinalization({ manifest, taskPath: path, template, frozenTask: template, merge, postflight });
@@ -69,7 +80,7 @@ async function fixture(t: { after(fn: () => void): void }, reviewCount = 0) {
       if (loseCloseAck) throw new Error('lost acknowledgement');
       return issue;
     }
-    if (endpoint === `${root}/contents/${path}?ref=${source}`) return content(template);
+    if (endpoint === `${root}/contents/${path}?ref=${sourceHead}`) return content(template);
     if (endpoint === `${root}/contents/${path}?ref=${squash}`) return content(template);
     if (endpoint === `${root}/contents/${path}?ref=${record}` || endpoint === `${root}/contents/${path}?ref=${recordMerge}`)
       return content(preparation.content);
@@ -133,6 +144,64 @@ async function fixture(t: { after(fn: () => void): void }, reviewCount = 0) {
     changePolicyBeforePut() { losePolicy = true; }, restorePolicy() { losePolicy = false; },
     loseIncident() { loseIncidentAck = true; },
     counts: () => ({ refPosts, prPosts, merges, closes }), incidentPosts: () => incidentPosts };
+}
+
+function prepareSavedRecord(f: Awaited<ReturnType<typeof fixture>>) {
+  const data = f.store.get(f.manifest.id).data;
+  return prepareObservedFinalization({ store: f.store, runId: f.manifest.id,
+    merge: data.integration as MergeReceipt, postflight: data.postflight as Postflight, plan: data.plan as PlanBundle });
+}
+
+async function simulatedTransferredBeta(f: Awaited<ReturnType<typeof fixture>>) {
+  const runId = f.manifest.id, head = (f.store.get(runId).data.integration as MergeReceipt).head;
+  const version = '0.5.0-beta.11', directory = dirname(f.store.directory);
+  const sourceDirectory = join(directory, 'simulated-beta-source'), targetDirectory = join(directory, 'simulated-beta-target');
+  mkdirSync(sourceDirectory); mkdirSync(targetDirectory);
+  const names = [`SC-v${version}.exe`, `SC-v${version}.zip`, `SC-Setup-v${version}.exe`, 'README.txt'];
+  const exe = Buffer.from('simulated portable'), readme = Buffer.from('simulated readme');
+  writeFileSync(join(sourceDirectory, names[0]!), exe); writeFileSync(join(sourceDirectory, names[2]!), 'simulated installer');
+  writeFileSync(join(sourceDirectory, 'README.txt'), readme);
+  writeFileSync(join(sourceDirectory, names[1]!), betaArchive([[names[0]!, exe], ['README.txt', readme]]));
+  const sha = (value: Buffer | string) => createHash('sha256').update(value).digest('hex');
+  const digests = Object.fromEntries(names.map(name => [name, sha(readFileSync(join(sourceDirectory, name)))]));
+  const ownership = { repository: f.manifest.repository, runId, head, version, profile: 'real' as const,
+    id: 'simulated-resource', targetDirectory, tokenHash: sha('simulated-token'), state: 'owned' as const };
+  // Synthetic journal evidence exercises the production gate; it establishes no Windows qualification.
+  const proof: WindowsBetaQualification = { repository: f.manifest.repository, runId, head, version,
+    environmentId: ownership.id, sourceDirectory, sourceManifestDigest: sha('simulated manifest'), digests,
+    checks: { verify: { exitCode: 0, evidenceDigest: sha('simulated verify') }, native: { exitCode: 0, evidenceDigest: sha('simulated native') },
+      vault: { exitCode: 0, evidenceDigest: sha('simulated vault') }, ui: { exitCode: 0, evidenceDigest: sha('simulated UI') },
+      packaged: { exitCode: 0, evidenceDigest: sha('simulated packaged') } },
+    keyFree: true, protectedStateUnchanged: true, cleanup: true, state: 'qualified' };
+  await f.store.effect(runId, `beta-resource:${head}:${version}`, 'beta-resource', ownership,
+    { execute: async () => ownership, reconcile: async () => null });
+  await f.store.effect(runId, `beta-qualification:${head}:${version}`, 'beta-qualification', proof,
+    { execute: async () => proof, reconcile: async () => null });
+  const receipt = await handoffBeta(f.store, runId, { profile: 'real', head, version, sourceDirectory,
+    source: { head, version, digests, qualification: { kind: 'windows', keyFree: true, packagedCheck: true } },
+    windowsQualification: proof, resource: { id: ownership.id, token: 'simulated-token', targetDirectory, ownership } });
+  f.store.update(runId, { data: { ...f.store.get(runId).data, betaReceipt: receipt, frozen: { checks: ['documentation', 'application'] } } });
+  const artifact = join(targetDirectory, names[0]!);
+  return { remove() { rmSync(artifact); }, restore() { writeFileSync(artifact, exe); } };
+}
+
+function betaArchive(entries: [string, Buffer][]): Buffer {
+  const locals: Buffer[] = [], centrals: Buffer[] = []; let offset = 0;
+  for (const [name, bytes] of entries) {
+    let checksum = -1;
+    for (const byte of bytes) { checksum ^= byte; for (let bit = 0; bit < 8; bit++) checksum = (checksum >>> 1) ^ (checksum & 1 ? 0xedb88320 : 0); }
+    const crc = (checksum ^ -1) >>> 0, filename = Buffer.from(name);
+    const local = Buffer.alloc(30); local.writeUInt32LE(0x04034b50); local.writeUInt16LE(20, 4); local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(bytes.length, 18); local.writeUInt32LE(bytes.length, 22); local.writeUInt16LE(filename.length, 26);
+    locals.push(local, filename, bytes);
+    const central = Buffer.alloc(46); central.writeUInt32LE(0x02014b50); central.writeUInt16LE(20, 4); central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(crc, 16); central.writeUInt32LE(bytes.length, 20); central.writeUInt32LE(bytes.length, 24);
+    central.writeUInt16LE(filename.length, 28); central.writeUInt32LE(offset, 42);
+    centrals.push(central, filename); offset += local.length + filename.length + bytes.length;
+  }
+  const central = Buffer.concat(centrals), end = Buffer.alloc(22); end.writeUInt32LE(0x06054b50);
+  end.writeUInt16LE(entries.length, 8); end.writeUInt16LE(entries.length, 10); end.writeUInt32LE(central.length, 12); end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, central, end]);
 }
 
 test('publishes one exact owner record with server approval count zero and no conversation rule', async t => {
@@ -406,4 +475,65 @@ test('record recovery prepares an inverse of only the selected owner file and pr
   assert.equal(recovery.base, squash);
   assert.equal(f.store.repositoryIntegrationHold()?.reason, 'record_postflight_failed');
   assert.equal(f.issue.state, 'open');
+});
+
+test('prepare and publish resume an owned beta hold after the exact pre-publication artifact is restored', async t => {
+  const f = await fixture(t, 0, true), beta = await simulatedTransferredBeta(f);
+  assert.deepEqual(prepareSavedRecord(f), f.preparation);
+  beta.remove();
+  assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: prepareSavedRecord(f), transport: f.transport }), { state: 'wait', reason: 'beta_handoff_unavailable' });
+  assert.equal(f.store.get(f.manifest.id).data.recordPublication, undefined);
+  assert.deepEqual(prepareSavedRecord(f), f.preparation);
+  beta.restore();
+  const result = await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: prepareSavedRecord(f), transport: f.transport });
+  assert.equal(result.state, 'done');
+  assert.deepEqual(f.counts(), { refPosts: 1, prPosts: 1, merges: 1, closes: 1 });
+  assert.equal(f.store.repositoryIntegrationHold(), null);
+});
+
+test('prepare and publish resume a beta hold on the observed record merge without repeating effects', async t => {
+  const f = await fixture(t, 0, true), beta = await simulatedTransferredBeta(f);
+  const first = await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: prepareSavedRecord(f), transport: async (method, endpoint, body) => {
+      if (endpoint.includes(`/commits/${recordMerge}/check-runs`)) beta.remove();
+      return f.transport(method, endpoint, body);
+    } });
+  assert.deepEqual(first, { state: 'wait', reason: 'beta_handoff_unavailable', pr: 32 });
+  assert.equal(f.store.repositoryIntegrationHold()?.head, recordMerge);
+  const saved = f.store.get(f.manifest.id).data;
+  f.store.update(f.manifest.id, { data: { ...saved,
+    recordIntegration: { ...(saved.recordIntegration as object), recordMerge: '9'.repeat(40) },
+    integrationHold: { active: true, head: '9'.repeat(40), reason: 'beta_handoff_unavailable' } } });
+  assert.throws(() => prepareSavedRecord(f), { code: 'finalization_wait' });
+  f.store.update(f.manifest.id, { data: saved });
+  assert.deepEqual(prepareSavedRecord(f), f.preparation);
+  beta.restore();
+  assert.equal((await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: prepareSavedRecord(f), transport: f.transport })).state, 'done');
+  assert.deepEqual(f.counts(), { refPosts: 1, prPosts: 1, merges: 1, closes: 1 });
+});
+
+test('beta recovery cannot clear foreign, unrelated or confirmed postflight holds', async t => {
+  const f = await fixture(t, 0, true); await simulatedTransferredBeta(f);
+  for (const [reason, head] of [['main_checks_failed', squash], ['record_postflight_failed', recordMerge],
+    ['beta_handoff_unavailable', '9'.repeat(40)]]) {
+    f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
+      integrationHold: { active: true, head, reason } } });
+    assert.throws(() => prepareSavedRecord(f), { code: 'finalization_wait' });
+    assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+      preparation: f.preparation, transport: f.transport }), { state: 'wait', reason: 'repository_integration_hold' });
+    assert.equal(f.store.repositoryIntegrationHold()?.reason, reason);
+  }
+  f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data, integrationHold: { active: false } } });
+  const foreign = makeManifest({ repository: f.manifest.repository, root: f.manifest.root,
+    commonDir: f.manifest.commonDir, base: f.manifest.base, scope: 'docs-links', delivery: 'merge-eligible' });
+  f.store.admit(foreign);
+  f.store.update(foreign.id, { data: { integrationHold: { active: true, head: squash, reason: 'beta_handoff_unavailable' } } });
+  assert.throws(() => prepareSavedRecord(f), { code: 'finalization_wait' });
+  assert.deepEqual(await publishAndFinalizeRecords({ store: f.store, runId: f.manifest.id,
+    preparation: f.preparation, transport: f.transport }), { state: 'wait', reason: 'repository_integration_hold' });
+  assert.equal(f.store.repositoryIntegrationHold()?.runId, foreign.id);
+  assert.equal(f.counts().closes, 0);
 });
