@@ -10,7 +10,7 @@ import { normalizeFindings, oracleSchema } from '../src/intake.js';
 import { executeRun } from '../src/graph.js';
 import { createActions } from '../src/runtime.js';
 import { RunStore } from '../src/store.js';
-import { currentOracleRetry } from '../src/oracle-recovery.js';
+import { currentOracleRetry, remainingOracleLimits } from '../src/oracle-recovery.js';
 import type { WorkerRequest, WorkerResponse, WorkerResult } from '../src/worker.js';
 
 const production = 'desktop/src/providers/json.ts';
@@ -19,7 +19,8 @@ const prefix = `import assert from 'node:assert/strict';const {parseJson}=await 
 const truncatedScript = prefix + ' '.repeat(8000 - prefix.length - 'assert.ok(c'.length) + 'assert.ok(c';
 const oracle = oracleSchema.parse({ kind: 'portable-node', contractPaths: ['docs/contract.md'], script: truncatedScript });
 
-function fixture(t: { after(fn: () => void): void }, limits: Partial<Limits> = {}) {
+function fixture(t: { after(fn: () => void): void }, limits: Partial<Limits> = {},
+  options: { betaProfile?: { name: string; hash: string } } = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'sc-oracle-recovery-')), root = join(directory, 'repo'); mkdirSync(root);
   const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
     '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
@@ -30,7 +31,7 @@ function fixture(t: { after(fn: () => void): void }, limits: Partial<Limits> = {
   git('add', '.'); git('commit', '-m', 'baseline');
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
     base: git('rev-parse', 'HEAD'), scope: 'providers-json', mode: 'issue', issue: 7,
-    delivery: 'pr', modelProfile: 'fixture', limits: { activeMs: 10_800_000, ...limits } });
+    delivery: 'pr', modelProfile: 'fixture', ...options, limits: { activeMs: 10_800_000, ...limits } });
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.release(manifest.id); store.close(); rmSync(directory, { recursive: true, force: true }); });
   const issue = { number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open', title: 'Reject duplicate JSON fields',
@@ -50,6 +51,7 @@ async function observedWorker(f: ReturnType<typeof fixture>, role: WorkerRequest
 
 async function legacy(f: ReturnType<typeof fixture>) {
   const finding = normalizeFindings(f.manifest, [{ path: production, description: 'Duplicate fields are accepted.' }])[0]!;
+  f.store.reserve(f.manifest.id, `finding:${finding.id}`, 'findings');
   const common = { status: 'complete' as const, summary: 'Synthetic oracle proposal', notes: [] };
   const workers = [await observedWorker(f, 'investigator', { ...common, findings: [{ path: production, description: finding.description }] }),
     await observedWorker(f, 'reproducer', { ...common, reproduced: true, evidence: [], oracle })];
@@ -205,4 +207,148 @@ test('CLI oracle retry is explicit, same-run and cannot receive authority option
   assert.equal(f.store.get(f.manifest.id).error, 'unsupported_profile');
   assert.equal(f.store.usage(f.manifest.id).workerInvocations, 2); assert.equal(f.store.usage(f.manifest.id).repairs, 1);
   assert.equal(f.store.listRuns().length, 1);
+});
+
+function refreshedSource(f: ReturnType<typeof fixture>) {
+  const root = join(f.directory, 'current-source');
+  f.git('worktree', 'add', '--detach', root, f.manifest.base);
+  const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
+  writeFileSync(join(root, 'SECURITY.md'), 'Synthetic current repository policy.\n');
+  git('add', '.'); git('commit', '-m', 'current source documentation');
+  return { root, base: git('rev-parse', 'HEAD') };
+}
+
+function fundedManifest(f: ReturnType<typeof fixture>, source: ReturnType<typeof refreshedSource>, limits?: Partial<Limits>) {
+  const parent = f.store.inspect(f.manifest.id);
+  const reader = new RunStore(f.store.directory, f.manifest, { readOnly: true });
+  let remaining: Limits;
+  try { remaining = remainingOracleLimits(parent, reader.usage(parent.manifest.id)); } finally { reader.close(); }
+  return makeManifest({ repository: parent.manifest.repository, commonDir: parent.manifest.commonDir,
+    ...source, branch: parent.manifest.branch, scope: parent.manifest.scope, mode: parent.manifest.mode,
+    issue: parent.manifest.issue, delivery: parent.manifest.delivery, modelProfile: parent.manifest.modelProfile,
+    betaProfile: parent.manifest.betaProfile, continuationOf: parent.manifest.id, continuationBudget: 'remaining',
+    limits: { ...remaining, ...limits } });
+}
+
+test('current-source continuation preserves the historical parent and spends only its remaining allowance once', async t => {
+  const f = fixture(t, {}, { betaProfile: { name: 'frozen-windows', hash: 'b'.repeat(64) } }); await legacy(f);
+  const source = refreshedSource(f);
+  const db = new Database(join(f.store.directory, 'journal.sqlite')); t.after(() => db.close());
+  // Only this temporary fixture simulates a parent written by the previous trusted policy.
+  db.prepare('UPDATE runs SET manifest=? WHERE id=?').run(JSON.stringify({ ...f.manifest, policyHash: 'a'.repeat(64) }), f.manifest.id);
+  const parent = db.prepare('SELECT * FROM runs WHERE id=?').get(f.manifest.id);
+  const childManifest = fundedManifest(f, source);
+  const child = f.store.admit(childManifest);
+  assert.equal(child.manifest.limits.workerInvocations, 10); assert.equal(child.manifest.limits.findings, 4);
+  assert.equal(child.manifest.limits.activeMs, 10_071_990); assert.equal(child.manifest.limits.repairs, 2);
+  assert.equal(child.manifest.limits.issues, f.manifest.limits.issues);
+  assert.equal(child.manifest.limits.writingTasks, f.manifest.limits.writingTasks);
+  assert.equal(child.manifest.limits.workerMs, f.manifest.limits.workerMs);
+  assert.deepEqual(child.manifest.betaProfile, f.manifest.betaProfile);
+  assert.equal(child.data.findings, undefined); assert.equal(child.data.workerResults, undefined);
+  assert.equal(child.data.verification, undefined); assert.equal(child.stage, 'preflight');
+  assert.equal(f.store.usage(child.manifest.id).repairs, 1); assert.equal(f.store.usage(child.manifest.id).workerInvocations, 0);
+  assert.equal(f.store.cumulativeUsage(child.manifest.id).usage.workerInvocations, 2);
+  assert.equal(f.store.cumulativeUsage(child.manifest.id).usage.repairs, 1);
+  assert.equal(f.store.cumulativeUsage(child.manifest.id).usage.activeMs, 728_010);
+  assert.deepEqual(db.prepare('SELECT * FROM runs WHERE id=?').get(f.manifest.id), parent);
+  assert.throws(() => f.store.get(f.manifest.id), { code: 'incompatible_state' });
+  assert.equal(f.store.admit(fundedManifest(f, source)).manifest.id, child.manifest.id);
+  assert.equal(f.store.usage(child.manifest.id).repairs, 1);
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM runs').get() as { n: number }).n, 2);
+});
+
+test('remaining continuation insertion and its source-refresh reservation are atomic', async t => {
+  const f = fixture(t); const parent = await legacy(f), source = refreshedSource(f), manifest = fundedManifest(f, source);
+  const db = new Database(join(f.store.directory, 'journal.sqlite')); t.after(() => db.close());
+  db.exec(`CREATE TRIGGER fail_source_refresh BEFORE INSERT ON reservations WHEN NEW.counter='repairs'
+    BEGIN SELECT RAISE(ABORT,'synthetic source refresh interruption'); END`);
+  assert.throws(() => f.store.admit(manifest), /synthetic source refresh interruption/);
+  assert.equal((db.prepare('SELECT COUNT(*) AS n FROM runs').get() as { n: number }).n, 1);
+  assert.deepEqual(f.store.get(f.manifest.id), parent);
+  db.exec('DROP TRIGGER fail_source_refresh');
+  const child = f.store.admit(manifest);
+  assert.equal(f.store.admit(manifest).manifest.id, child.manifest.id);
+  assert.equal(f.store.usage(child.manifest.id).repairs, 1);
+  assert.throws(() => f.store.claim(f.manifest.id), { code: 'continuation_superseded' });
+});
+
+test('funded refresh accepts an explicit oracle wait or a policy-only change without copying proof', async t => {
+  const waiting = fixture(t); await legacy(waiting);
+  waiting.store.update(waiting.manifest.id, { status: 'awaiting_input', stage: 'reproduce',
+    data: { ...waiting.store.get(waiting.manifest.id).data, waitingFor: 'oracle_retry_required' } });
+  const child = waiting.store.admit(fundedManifest(waiting, refreshedSource(waiting)));
+  assert.equal(child.data.findings, undefined); assert.equal(waiting.store.usage(child.manifest.id).repairs, 1);
+  const historical = fixture(t); await legacy(historical);
+  const db = new Database(join(historical.store.directory, 'journal.sqlite')); t.after(() => db.close());
+  db.prepare('UPDATE runs SET manifest=? WHERE id=?').run(JSON.stringify({ ...historical.manifest, policyHash: 'a'.repeat(64) }), historical.manifest.id);
+  const policyChild = historical.store.admit(fundedManifest(historical,
+    { root: historical.root, base: historical.manifest.base }));
+  assert.equal(policyChild.manifest.base, historical.manifest.base);
+  assert.notEqual(policyChild.manifest.policyHash, historical.store.inspect(historical.manifest.id).manifest.policyHash);
+  assert.equal(policyChild.data.findings, undefined);
+});
+
+test('remaining continuation rejects unchanged source, changed authority, expanded limits and a fresh-budget bypass', async t => {
+  const f = fixture(t); await legacy(f); const source = refreshedSource(f), valid = fundedManifest(f, source);
+  const input = { repository: valid.repository, root: valid.root, commonDir: valid.commonDir, base: valid.base,
+    branch: valid.branch, scope: valid.scope, mode: valid.mode, issue: valid.issue, delivery: valid.delivery,
+    modelProfile: valid.modelProfile, betaProfile: valid.betaProfile, continuationOf: valid.continuationOf,
+    continuationBudget: 'remaining', limits: valid.limits };
+  assert.throws(() => f.store.admit(makeManifest({ ...input, root: f.root, base: f.manifest.base })), { code: 'continuation_denied' });
+  for (const patch of [{ scope: 'pipeline' }, { delivery: 'merge-eligible' }, { modelProfile: 'different' },
+    { betaProfile: { name: 'different', hash: 'b'.repeat(64) } }, { branch: 'other' }, { issue: 8 }])
+    assert.throws(() => f.store.admit(makeManifest({ ...input, ...patch })), { code: 'continuation_denied' });
+  for (const key of Object.keys(valid.limits) as (keyof Limits)[]) {
+    const altered = { ...input, limits: { ...valid.limits, [key]: valid.limits[key] + 1 } };
+    assert.throws(() => f.store.admit(makeManifest(altered)), error =>
+      ['continuation_denied', 'invalid_manifest'].includes((error as { code: string }).code), key);
+  }
+  assert.throws(() => f.store.admit(makeManifest({ ...input, continuationOf: undefined, continuationBudget: undefined })),
+    { code: 'continuation_required' });
+  const smaller = f.store.admit(fundedManifest(f, source, { workerInvocations: 8, repairs: 1, activeMs: 60_000,
+    findings: 2, workerMs: 30_000, ciWaitMs: 30_000 }));
+  assert.equal(smaller.manifest.limits.workerInvocations, 8); assert.equal(f.store.usage(smaller.manifest.id).repairs, 1);
+  assert.throws(() => f.store.admit(valid), { code: 'continuation_conflict' });
+});
+
+test('remaining continuation refuses reviewed, qualified, uncertain, owned or exhausted parents', async t => {
+  const changes: ((f: ReturnType<typeof fixture>) => void | Promise<void>)[] = [
+    f => { const data = f.store.get(f.manifest.id).data; f.store.update(f.manifest.id, { data: { ...data,
+      findings: (data.findings as object[]).map(value => ({ ...value, baselineReview: { clean: false } })) } }); },
+    f => f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data, betaReceipt: { qualified: true } } }),
+    f => f.store.claim(f.manifest.id),
+    f => f.store.requestCancel(f.manifest.id),
+    f => f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
+      integrationHold: { active: true, head: f.manifest.base, reason: 'main_checks_failed' } } }),
+    async f => { await assert.rejects(f.store.effect(f.manifest.id, 'unknown-source-operation', 'worker', {},
+      { execute: async () => { throw new Error('unknown'); }, reconcile: async () => null })); }
+  ];
+  for (const change of changes) {
+    const f = fixture(t); await legacy(f); const source = refreshedSource(f), manifest = fundedManifest(f, source); await change(f);
+    assert.throws(() => f.store.admit(manifest), error =>
+      ['continuation_denied', 'repository_owned'].includes((error as { code: string }).code));
+  }
+  for (const limits of [{ workerInvocations: 3 }, { findings: 1 }, { repairs: 0 }, { activeMs: 728_010 }]) {
+    const f = fixture(t, limits); await legacy(f); const source = refreshedSource(f);
+    assert.throws(() => fundedManifest(f, source), { code: 'budget_exhausted' });
+  }
+});
+
+test('CLI current-source continuation infers exact remaining milliseconds and sealed profile without admitting a dry run', async t => {
+  const f = fixture(t, {}, { betaProfile: { name: 'frozen-windows', hash: 'b'.repeat(64) } }); const parent = await legacy(f);
+  const source = refreshedSource(f), cli = resolve(process.env.SC_WORKFLOW_CLI_DIST ?? 'dist', 'src/cli.js');
+  const preview = (...args: string[]) => spawnSync(process.execPath, [cli, 'run', '--continue-from', f.manifest.id,
+    '--repo', source.root, '--state-dir', f.store.directory, '--dry-run', ...args],
+  { cwd: source.root, encoding: 'utf8', timeout: 10_000, env: { PATH: process.env.PATH, HOME: source.root } });
+  const result = preview(); assert.equal(result.status, 0, result.stderr);
+  const value = JSON.parse(result.stdout);
+  assert.equal(value.continuationBudget, 'remaining'); assert.equal(value.limits.workerInvocations, 10);
+  assert.equal(value.limits.activeMs, 10_071_990); assert.equal(value.limits.findings, 4);
+  assert.equal(value.betaProfile, 'frozen-windows'); assert.equal(value.workerCalls, 0);
+  for (const args of [['--workers', '11'], ['--worker-seconds', '1201'], ['--active-minutes', '168']]) assert.equal(preview(...args).status, 4);
+  const smaller = preview('--workers', '8', '--worker-seconds', '30', '--active-minutes', '1'); assert.equal(smaller.status, 0, smaller.stderr);
+  assert.equal(JSON.parse(smaller.stdout).limits.activeMs, 60_000);
+  assert.equal(f.store.listRuns().length, 1); assert.deepEqual(f.store.get(f.manifest.id), parent);
 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { digest, WorkflowError, type Manifest } from './manifest.js';
+import { digest, WorkflowError, type Manifest, type Limits } from './manifest.js';
 import { inScope, oracleSchema } from './intake.js';
 import type { RunRecord } from './store.js';
 
@@ -20,6 +20,22 @@ export function retryableOracleFinding(run: RunRecord) {
       !(value.evidence ? value.evidence.source === run.manifest.base && value.evidence.oracleHash === digest(value.oracle) :
         value.reason === 'invalid_proposed_oracle')) return null;
   return value;
+}
+
+export function remainingOracleParent(run: RunRecord): boolean {
+  return run.manifest.mode === 'issue' && run.manifest.delivery !== 'report' && !run.cancelRequested &&
+    (run.status === 'completed' && run.stage === 'done' || run.status === 'awaiting_input' &&
+      run.stage === 'reproduce' && run.data.waitingFor === 'oracle_retry_required') && retryableOracleFinding(run) !== null;
+}
+
+export function remainingOracleLimits(parent: RunRecord, usage: Pick<Limits,
+  'findings' | 'issues' | 'writingTasks' | 'workerInvocations' | 'repairs' | 'activeMs'>): Limits {
+  const limits = { ...parent.manifest.limits };
+  for (const counter of ['findings', 'issues', 'writingTasks', 'workerInvocations', 'repairs', 'activeMs'] as const)
+    limits[counter] -= usage[counter];
+  if (limits.findings < 1 || limits.writingTasks < 1 || limits.workerInvocations < 2 || limits.repairs < 1 || limits.activeMs < 1 || limits.issues < 0)
+    throw new WorkflowError('budget_exhausted', 'Original source-continuation allowance is exhausted.', 3);
+  return limits;
 }
 
 export const oracleRetryEntrySchema = z.object({

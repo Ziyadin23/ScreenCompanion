@@ -369,6 +369,14 @@ reuse the admitted attempt. The new oracle and its baseline contract review run
 fresh before implementation. A target-only finding or unresolved effect requires
 its own recorded recovery action.
 
+If the trusted source or policy changes before implementation of that unresolved
+selected issue, select a new clean source with `run --continue-from <run-id>`.
+The remaining-budget continuation preserves the original run and derives its
+aggregate allowances from the resources still available there. Source refresh
+consumes one existing repair; smaller requested limits are allowed. The task,
+model and beta profile authority stay bound, retries reuse one child, and the
+new source receives fresh reproduction, review and checks.
+
 Take an SQLite snapshot while coordinators are stopped, using a new private
 directory outside source and Git metadata:
 

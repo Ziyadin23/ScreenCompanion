@@ -14,6 +14,7 @@ import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
 import { selectBetaProfile } from './beta-profile.js';
+import { remainingOracleLimits, remainingOracleParent } from './oracle-recovery.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
 export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirectory: string,
@@ -119,7 +120,7 @@ function report(run: RunRecord, store: RunStore) {
   return { runId: run.manifest.id, repository: run.manifest.repository, scope: run.manifest.scope,
     delivery: run.manifest.delivery, base: run.manifest.base, status: run.status, stage: run.stage,
     cancelRequested: run.cancelRequested, error: run.error, usage,
-    continuationOf: run.manifest.continuationOf ?? null, cumulative,
+    continuationOf: run.manifest.continuationOf ?? null, continuationBudget: run.manifest.continuationBudget ?? null, cumulative,
     candidateReview: run.data.reviewReceipt ? { head: sha((run.data.reviewReceipt as { head?: unknown }).head),
       clean: (run.data.reviewReceipt as { clean?: unknown }).clean === true,
       findings: Array.isArray((run.data.reviewReceipt as { findings?: unknown }).findings) ?
@@ -189,12 +190,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
       'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
   let parent: RunRecord | undefined;
+  let parentUsage: ReturnType<RunStore['usage']> | undefined;
   if (values['continue-from']) {
     if (command !== 'run') throw new WorkflowError('invalid_arguments', 'A continuation is a new explicit run admission.');
     const reader = new RunStore(stateDirectory, makeManifest({ ...repository, scope: 'providers-json' }), { readOnly: true });
-    try { parent = reader.get(values['continue-from']); } finally { reader.close(); }
+    try { parent = reader.get(values['continue-from']); parentUsage = reader.usage(parent.manifest.id); } finally { reader.close(); }
   }
-  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) : undefined;
+  const remaining = parent && remainingOracleParent(parent) ? remainingOracleLimits(parent, parentUsage!) : undefined;
+  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) :
+    remaining ? parent!.manifest.betaProfile : undefined;
   function ceiling(value: string | undefined, maximum: number, fallback = maximum): number {
     const parsed = Number(value ?? fallback);
     if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum)
@@ -207,9 +211,17 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       parent?.manifest.issue ? { issue: parent.manifest.issue } : {}),
     ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } :
       parent?.manifest.pr ? { pr: parent.manifest.pr } : {}),
-    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(betaProfile ? { betaProfile } : {}),
+    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(remaining ? { continuationBudget: 'remaining' } : {}),
+    ...(betaProfile ? { betaProfile } : {}),
     delivery: values.delivery ?? parent?.manifest.delivery ?? 'report',
-    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: {
+    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: remaining ? {
+      ...remaining,
+      workerInvocations: values.workers === undefined ? remaining.workerInvocations : ceiling(values.workers, remaining.workerInvocations),
+      workerMs: values['worker-seconds'] === undefined ? remaining.workerMs :
+        ceiling(values['worker-seconds'], Math.floor(remaining.workerMs / 1000)) * 1000,
+      activeMs: values['active-minutes'] === undefined ? remaining.activeMs :
+        ceiling(values['active-minutes'], Math.floor(remaining.activeMs / 60_000)) * 60_000
+    } : {
       workerInvocations: ceiling(values.workers, DEFAULT_LIMITS.workerInvocations),
       workerMs: ceiling(values['worker-seconds'], DEFAULT_LIMITS.workerMs / 1000) * 1000,
       activeMs: ceiling(values['active-minutes'], (betaProfile ? WINDOWS_ACTIVE_MS : DEFAULT_LIMITS.activeMs) / 60_000,
@@ -228,6 +240,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     console.log(JSON.stringify({ dryRun: true, repository: manifest.repository, scope: manifest.scope,
       delivery: manifest.delivery, mode: manifest.mode, limits: manifest.limits,
       continuationOf: manifest.continuationOf ?? null, betaProfile: manifest.betaProfile?.name ?? null,
+      continuationBudget: manifest.continuationBudget ?? null,
       policyHash: manifest.policyHash, workerCalls: 0, remoteMutations: 0 }));
     return 0;
   }
