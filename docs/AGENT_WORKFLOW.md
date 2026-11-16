@@ -3,17 +3,31 @@
 The development tool under `tools/agent-workflow/` uses TypeScript, LangGraph and
 local SQLite state. Start it when needed; it does not install a resident service.
 The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-records implementation progress and qualification. The current runner implements bounded investigation, independent executable
-reproduction, owned plan/apply workspaces, frozen checks, separate review and
-report/issues/PR delivery. A real report-only discovery completed with no
-findings. A genuine pipeline candidate passed its oracle and 1,333 portable tests,
-but final independent review found an uncovered acceptance gap; the run stopped
-at its original resource bound without publishing a PR. The
-[current checkpoint and metrics](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-retain the failed attempts and interventions. The PR/CI-wait/resume path has a
-synthetic end-to-end test; genuine PR delivery, protected automatic merge and
-Windows beta delivery retain their separate qualification gates. An unavailable
-capability produces a saved wait; an exhausted run retains its original limits.
+records implementation progress, qualification, metrics and retained failures.
+The runner implements bounded investigation, independent executable reproduction,
+owned plan/apply workspaces, frozen checks, separate review and report/issues/PR
+delivery. A real report-only discovery completed with no findings. The earlier
+issue #60 candidate passed its oracle and 1,333 portable tests, but final review
+found an uncovered acceptance gap; it exhausted its original allowance without
+publishing an application PR.
+
+Previously qualified tool source `314f160` passed types, lint, build, 309/309 tests, both
+independent reviews and all ten exact-head PR/push checks. It remains unmerged in
+[PR #81](https://github.com/Ziyadin23/ScreenCompanion/pull/81); main `efc0b44` and
+the installed stable tool `69cba12` remain unchanged. Application candidate
+`51540df` (unpublished beta.12) passed its frozen oracle, eight fixed checks with
+1,539 portable tests, and 270 independent synthetic-input probes of production
+code. Its one approved environment retry is consumed: the original two-repair
+manifest is unchanged, one additional repair is recorded and three are consumed.
+The Windows helper completed packaging and 54 native checks, then stopped before
+UI because its vault JSON report was written to a different path. A separate
+read-only recovery found the original report with all nine cases passed; it does
+not replace the failed helper receipt. GUI qualification, application PR delivery
+and beta transfer remain pending. Protected automatic merge retains
+its separate, undemonstrated pilot gate. The report-path continuation below has
+316/316 local tests; final source review and hosted qualification are pending.
+An unavailable capability produces a
+saved wait; an exhausted run retains its original limits.
 
 ## Install and verify
 
@@ -273,6 +287,73 @@ worker allowance. A changed interpretation retains the original result in
 private history; current reports count each execution once. Worker JSONL stays
 bounded to 1,000,000 bytes and 1,000 events, with separate final-message/schema
 limits. A single source-read event can occupy that existing total-byte bound.
+
+Recovery commands require the qualified runtime that implements them. The
+installed `sc-dev` can lag the qualified source while an application candidate
+keeps its frozen base. Use the exact runtime and command recorded in the private
+handoff for the approved recovery; keep the admitted source and stable command
+unchanged until their recorded integration and postflight steps complete.
+Baseline Git blobs explain code behavior; historical executor identity requires
+separately retained runtime evidence.
+
+Ordinary resume also recognizes the known legacy Windows handoff rejection in
+which a valid long beta deadline was refused before process intent or launch.
+Recovery requires the retained failure, known baseline code and unchanged
+candidate, profile and request identities. It preserves the original unknown
+operation and failure in private history, consumes one existing repair and
+returns only that proved unstarted operation to preparation. Any partial process
+state, changed identity or other unknown outcome still blocks execution. This
+recovery produces no qualification receipt; the real Windows job must pass.
+
+A terminal host-discovery failure needs separate authorization before another
+beta attempt. Fresh helper launches use explicit `PATH`/`HOME` and `USER`/`LOGNAME`
+from the effective OS account. A safely available canonical user-session bus can
+supply the already authorized credential lookup; it must be a current-user Unix
+socket below a private owned runtime directory. Ambient bus addresses, display
+variables and the rest of the environment are not inherited. Model workers do
+not receive this transport. Existing legacy operations keep their original
+environment and receipts. After explicit approval for one additional environment
+repair, the operator can use:
+
+```sh
+sc-dev resume <run-id> --retry-beta-environment --preflight-evidence /private/preflight-evidence.json
+```
+
+The private resource-owner evidence must bind the exact failed operation and
+unchanged candidate/profile, and establish that no guest or acceptance job
+started. Its request-file hash identifies the owned process launch request,
+which differs from the helper's input request. A generic nonzero exit is
+insufficient. Admission records one separate
+repair grant and one new environment-bound operation without rewriting the
+original manifest or failure. Reports show the original allowance and the extra
+grant separately. Time, model-call and provider allowances do not increase;
+after admission, use ordinary `resume <run-id>` to reconcile the existing
+operation. A terminal failure consumes that environment grant. This flag cannot
+authorize another attempt or a repeated failed acceptance matrix.
+
+A different, separately approved recovery covers the known Vitest UNC JSON-report
+lookup failure after successful setup, package, native and vault commands, before
+UI or packaged startup. It requires the exact failed owned-process receipt,
+unchanged source/check/review identities, the original nine-case vault report,
+and independent protected-state/input/process and normal-shutdown cleanup
+receipts. A separately prepared private profile may change only the helper and
+shorten its deadline within the original remaining active allowance:
+
+```sh
+sc-dev resume <run-id> --retry-beta-report-path \
+  --preflight-evidence <private-report-path-facts.json> \
+  --replacement-beta-profile <private-unregistered-profile.json>
+```
+
+The explicit command records one distinct additional repair and binds the new
+profile, helper, environment and process identity. It leaves the original
+manifest, selected profile, failed results and prior usage intact. Its helper
+uses fresh task directories and local reporter paths; ordinary resume reconciles
+that same operation. No time, worker or provider allowance increases, and a
+terminal result exhausts this grant. A failed UI matrix or an arbitrary missing
+file does not qualify. Facts and a prepared profile alone grant no authority;
+obtain separate approval before invoking the command.
+
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain
@@ -428,9 +509,13 @@ limits. Initial defaults allow 5 candidate findings, 3 new issues, one writing
 task, one concurrent writer, 12 worker invocations and two repair rounds.
 Worker duration is bounded to 20 minutes, active run duration to 120 minutes and
 one CI observation period to 30 minutes. Failed/interrupted attempts count.
-The worker-duration ceiling also bounds each non-CI graph stage, which can
+The worker-duration ceiling also bounds ordinary non-CI graph stages, which can
 contain several sequential roles. Lowering `--worker-seconds` therefore shortens
-that complete stage; it is suitable for a smoke, not proof of full delivery.
+those complete stages; it is suitable for a smoke, not proof of full delivery.
+For a configured beta handoff, the graph stage is bounded by the remaining active
+allowance and the helper has its separate profile timeout; see
+[Windows capability](#explicit-continuation-and-windows-capability). Resume adds
+no time to either limit.
 Unavailable model-cost data is reported as unknown; these limits do not pretend
 to enforce a monetary ceiling. SC live-provider campaigns retain separate scope
 and budgets, with zero such calls in ordinary workflow runs.

@@ -95,6 +95,27 @@ test('executes with direct arguments, explicit environment and private durable r
   for (const name of readdirSync(op)) assert.equal(statSync(join(op, name)).mode & 0o077, 0);
 });
 
+test('retains the default owned-process deadline when none is supplied', async t => {
+  const f = fixture(t);
+  const result = await runOwnedProcess({ ...f, key: 'default-timeout', command: process.execPath,
+    args: ['-e', 'process.exit(0)'], env: {} });
+  assert.equal(result.status, 'exited'); assert.equal(result.exitCode, 0);
+  const op = join(f.stateDirectory, readdirSync(f.stateDirectory)[0]!);
+  assert.equal(JSON.parse(readFileSync(join(op, 'request.json'), 'utf8')).timeoutMs, 1_200_000);
+});
+
+test('rejects non-finite, non-integer and excessive deadlines before launch or durable receipts', async t => {
+  const f = fixture(t), marker = join(f.root, 'unexpected-launch');
+  for (const [index, timeoutMs] of [0, -1, 1.5, NaN, Infinity, 9_000_001].entries()) {
+    const key = `invalid-timeout-${index}`;
+    await assert.rejects(runOwnedProcess({ ...f, key, command: process.execPath,
+      args: ['-e', "require('fs').writeFileSync(process.argv[1],'unexpected')", marker], env: {}, timeoutMs }),
+    { code: 'invalid_process_request' });
+    assert.equal(inspectOwnedProcess(f.stateDirectory, key).state, 'absent');
+  }
+  assert.equal(existsSync(marker), false); assert.equal(existsSync(f.stateDirectory), false);
+});
+
 test('wrapper records a bounded cause when its process-group scan fails without claiming exit', async t => {
   const f = fixture(t); const op = join(f.root, 'op'); mkdirSync(op, { mode: 0o700 });
   const preload = join(f.root, 'fail-proc.mjs');
