@@ -1,6 +1,6 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.10 is unpublished and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
+Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.13 is an unpublished, undelivered qualification candidate and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
 
 ## Linux setup and controls
 
