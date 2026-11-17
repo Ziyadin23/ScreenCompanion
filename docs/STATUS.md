@@ -58,7 +58,7 @@ All rows refer to merged beta.7 source. Existing portable/headless/container che
 
 ### Focused audit fixes
 
-The 2026-11-02 local audit findings were checked against current main and published on **2026-11-15**, each assigned to `Ziyadin23`. Their issue bodies contain the reproduction and immutable source links; no fix or new runtime reproduction is claimed by this intake. Each begins with OpenSpec planning in its own writing worktree.
+The 2026-11-02 audit findings were checked against main and filed on **2026-11-15**, each assigned to `Ziyadin23`. Their issues contain the reproduction and source links. Use the [contributor workflow](DEVELOPMENT.md#contributor-workflow) to choose the route for each fix.
 
 | Outcome | Priority | Intake |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ Of the original 17 inventory issues, 12 remain open at the **2026-11-11** readba
 
 ## Refresh and provenance
 
-Refresh this overview after merge, candidate/evidence changes, workstream start or completion. Read the existing OpenSpec owner and Git/GitHub state, update the snapshot date/revision and affected row, and move completed items to recent completions. Current source, source merge, qualification and publication are separate facts.
+Refresh the affected row and snapshot when a workstream, candidate or release changes. Check Git/GitHub and any linked OpenSpec owner. Move completed workstreams to recent completions. Current source, source merge, qualification and publication are separate facts.
 
 Workflow source and runtime observations were refreshed on **2026-11-16 UTC**: [PR #80](https://github.com/Ziyadin23/ScreenCompanion/pull/80) integrated at `efc0b44` with 294/294 local tests and [all five main jobs](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43850411639). The unmerged repair `314f160` passed 309/309 plus independent reviews and all ten [push](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43879138496) / [PR](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43879147694) jobs. Its exact prepared runtime ran the one approved Windows invocation while the installed stable command and frozen application baseline remained unchanged. Packaging and 54 native checks passed, but an observed report-path failure stopped qualification before UI; a separately recovered vault report has 9 passing cases. GUI, beta-copy and PR outcomes remain pending; hosted packaging and recovered diagnostics do not replace them. The task owner retains exact source, accounting, approval and failure history.
 

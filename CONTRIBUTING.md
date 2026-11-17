@@ -37,22 +37,16 @@ source is under `desktop/`; development requires **Node.js 22.13 or later** and 
 A public checkout is enough for portable and documentation work. Maintainers
 coordinate checks that need private lab access.
 
-## Follow the existing plan
+## Choose a workflow
 
-Read the [rules for your task](CODING_STANDARDS.md#choose-the-rules-for-your-task)
-and the issue's OpenSpec change before editing. OpenSpec owns planning and
-progress: read its proposal, design, relevant specs and `tasks.md`, then keep the
-task checkboxes and handoff current. Reuse an existing change for matching work;
-new scope gets a plan before implementation, including documentation tasks.
+Read the [rules for your task](CODING_STANDARDS.md#choose-the-rules-for-your-task).
+For a small bug with clear expected behavior, write a regression test that fails
+on the original code, fix it, and show that the test passes. Link the issue and
+test results in the PR and have someone independently review the fix.
 
-To find current changes with the CLI version pinned by CI:
-
-```sh
-npx --yes @fission-ai/openspec@1.16.0 list --json
-```
-
-The [OpenSpec workflow](docs/DEVELOPMENT.md#openspec-lifecycle) covers planning,
-implementation and closure. If you use a coding agent, start with [AGENTS.md](AGENTS.md).
+For larger or multi-session work, create or reuse an [OpenSpec change](docs/DEVELOPMENT.md#openspec-lifecycle).
+Continue an active change if it already covers the issue. If a small fix grows,
+keep the same issue and link the change there. Codex users start with [AGENTS.md](AGENTS.md).
 
 ## Check your change
 
@@ -86,7 +80,7 @@ and private lab checks with a maintainer before running them.
 
 Open the PR against `main` and include:
 
-- The linked issue and OpenSpec change.
+- The linked issue and any OpenSpec change that owns the work.
 - The problem and resulting behavior, with a short example when useful.
 - Verification commands, results and the platform tested, including unrun checks.
 - Synthetic screenshots for visible UI changes, without real credentials or content.

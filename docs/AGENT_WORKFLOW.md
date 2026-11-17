@@ -1,33 +1,12 @@
-# Local development workflow
+# Optional LangGraph runner
 
-The development tool under `tools/agent-workflow/` uses TypeScript, LangGraph and
-local SQLite state. Start it when needed; it does not install a resident service.
-The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-records implementation progress, qualification, metrics and retained failures.
-The runner implements bounded investigation, independent executable reproduction,
-owned plan/apply workspaces, frozen checks, separate review and report/issues/PR
-delivery. A real report-only discovery completed with no findings. The earlier
-issue #60 candidate passed its oracle and 1,333 portable tests, but final review
-found an uncovered acceptance gap; it exhausted its original allowance without
-publishing an application PR.
-
-Previously qualified tool source `314f160` passed types, lint, build, 309/309 tests, both
-independent reviews and all ten exact-head PR/push checks. It remains unmerged in
-[PR #81](https://github.com/Ziyadin23/ScreenCompanion/pull/81); main `efc0b44` and
-the installed stable tool `69cba12` remain unchanged. Application candidate
-`51540df` (unpublished beta.12) passed its frozen oracle, eight fixed checks with
-1,539 portable tests, and 270 independent synthetic-input probes of production
-code. Its one approved environment retry is consumed: the original two-repair
-manifest is unchanged, one additional repair is recorded and three are consumed.
-The Windows helper completed packaging and 54 native checks, then stopped before
-UI because its vault JSON report was written to a different path. A separate
-read-only recovery found the original report with all nine cases passed; it does
-not replace the failed helper receipt. GUI qualification, application PR delivery
-and beta transfer remain pending. Protected automatic merge retains
-its separate, undemonstrated pilot gate. The report-path continuation below has
-316/316 local tests; final source review and hosted qualification are pending.
-An unavailable capability produces a
-saved wait; an exhausted run retains its original limits.
+For everyday issue work in Codex, follow the [contributor workflow](DEVELOPMENT.md#contributor-workflow).
+When a LangGraph run is requested, the tool under `tools/agent-workflow/` starts on demand and uses local SQLite state.
+The runner investigates within an agreed scope, verifies a reproduction, and can
+deliver a report, issue or reviewed PR within the selected permissions. The
+[OpenSpec task record](../openspec/changes/add-local-langgraph-workflow/tasks.md)
+tracks the tested revisions, issue #60 pilot results, failed attempts and pending
+qualification. Consult it before resuming a run or approving another attempt.
 
 ## Install and verify
 
@@ -500,9 +479,9 @@ way to reset limits or resolve a lost publication.
 
 ## Ownership and limits
 
-GitHub issues identify independently deliverable outcomes; OpenSpec owns plans,
-progress and checkpoints; Orca owns worktree allocation/cards. LangGraph state
-records execution and effect receipts rather than a second implementation list.
+For delegated corrections, the GitHub issue owns the outcome, OpenSpec owns the
+plan and checkpoints, and Orca allocates the worktree. LangGraph records its
+executions and their effects.
 
 Admission freezes the repository/baseline, scope, delivery, policy identity and
 limits. Initial defaults allow 5 candidate findings, 3 new issues, one writing

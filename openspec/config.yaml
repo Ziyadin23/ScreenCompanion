@@ -1,15 +1,17 @@
 schema: spec-driven
 
 context: |
-  OpenSpec is the sole planning and continuation workflow for SC. The active
-  change's tasks.md owns implementation progress. Read AGENTS.md and the
-  task-relevant CODING_STANDARDS.md sections; docs/DEVELOPMENT.md owns setup,
-  worktree ownership and checkpoint guidance. docs/STATUS.md is a dated overview,
+  SC uses OpenSpec for larger or multi-session work. Continue a matching active
+  change through its tasks.md. A small bug with clear expected behavior uses
+  its GitHub issue, a failing then passing regression test and an independently
+  reviewed PR. Read AGENTS.md and the relevant CODING_STANDARDS.md sections.
+  docs/DEVELOPMENT.md owns setup, worktree ownership and checkpoint guidance.
+  docs/STATUS.md is a dated overview,
   not a second checklist. Verify current Git state before resuming; preserve
   unrelated uncommitted work. Imported evidence retains its candidate and limits.
   Source merge, target qualification and release publication are separate states.
-  GitHub Issues is the task entry point for Orca Tasks; follow the issue-intake
-  section of docs/DEVELOPMENT.md while keeping OpenSpec as the planning owner.
+  GitHub Issues is the task entry point for Orca Tasks. Follow the issue-intake
+  section of docs/DEVELOPMENT.md.
 
 rules:
   tasks:

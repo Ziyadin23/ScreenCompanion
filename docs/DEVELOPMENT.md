@@ -1,14 +1,17 @@
 # Developing SC
 
-New contributors can start with [Contributing to SC](../CONTRIBUTING.md) for the public issue-to-PR path. This guide owns the detailed workflow below. The [document ownership table](#document-ownership) identifies where each policy or reference lives; the application manifest owns executable commands and versions, and the active OpenSpec change owns implementation progress.
+New contributors can start with [Contributing to SC](../CONTRIBUTING.md). The [document ownership table](#document-ownership) identifies where each policy or reference lives.
 
 ## Contributor workflow
 
-1. **Orient.** Read [project status](STATUS.md) and the existing [handoff/checkpoint](#checkpoints-and-fresh-sessions); run `git status` before edits. Locate the [primary workspace guidance](#private-workspace-discovery) and read its task-relevant context.
-2. **Agree and plan.** Settle the outcome and acceptance conditions, then [publish or reuse the task issue](#github-issues-and-orca-tasks). Create or resume its [OpenSpec change](#openspec-lifecycle) and read the proposal, design, relevant specs and `tasks.md` before implementation.
-3. **Prepare.** Follow [worktree ownership](#worktree-ownership), complete [setup](#setup-and-checks) or record an allowed dependency skip, and read [the rules for your task](../CODING_STANDARDS.md#choose-the-rules-for-your-task). Use the [source layout](#source-layout) to find the affected code and nearby checks.
-4. **Implement and verify.** Apply pending OpenSpec tasks and run their specified [checks](#setup-and-checks), including the affected platform or behavior. Update each task's checkbox only after its checks pass; preserve evidence limits between synthetic, native, GUI, recorder and live-model results.
-5. **Review, close and hand off.** Review the actual final diff and evidence, complete [OpenSpec closure](#closing-a-change), update the [checkpoint](#checkpoints-and-fresh-sessions), reconcile [project status](STATUS.md#refresh-and-provenance) and refresh the [Orca card](#orca-cards). Use the completion checklist below before reporting the result.
+Start from [one GitHub issue](#github-issues-and-orca-tasks) with an agreed outcome. Read the [handoff](#checkpoints-and-fresh-sessions), check `git status`, and use the issue's [worktree](#worktree-ownership). Complete [setup](#setup-and-checks) and read the [rules for the affected area](../CODING_STANDARDS.md#choose-the-rules-for-your-task).
+
+- **Small bug with clear expected behavior.** Write a regression test that fails on the original code. Fix the bug, run the test and affected checks, and link the results and issue in the PR. An independent reviewer checks the final diff against the issue.
+- **Larger or multi-session work.** Create or resume an [OpenSpec change](#openspec-lifecycle) and track implementation in its `tasks.md`. Continue the plan when it already owns the issue. If a small fix grows or needs a second session, link the plan to the same issue and carry forward the reproduction and verification already done.
+
+An older issue that only proposes a plan can use the small-fix route when it meets those conditions. Its acceptance criteria still apply.
+
+In Orca, start Codex directly in the issue worktree. The [LangGraph runner](AGENT_WORKFLOW.md) is available for explicitly requested runs.
 
 ### Completion checklist
 
@@ -17,8 +20,7 @@ Before reporting a task complete:
 - Its agreed acceptance conditions are met and the actual final diff has been reviewed.
 - Required [checks](#setup-and-checks) passed for the claimed scope; recorded results identify the candidate/environment and limits.
 - Affected behavior and development documentation are current in their [owning references](#document-ownership).
-- The OpenSpec task owner has a current [checkpoint](#checkpoints-and-fresh-sessions), including verification results, remaining work and next action; the status overview and card reflect that scope.
-- [OpenSpec closure](#closing-a-change) is recorded: the archive location for a finished change, or the concrete reason, responsible owner and next action for keeping it active.
+- For a small fix, the issue and reviewed PR record the outcome and verification. For planned work, update the [checkpoint](#checkpoints-and-fresh-sessions) and record [closure](#closing-a-change) or the owner and next action for unfinished tasks.
 - Beta application changes have completed the [local beta handoff](PUBLISHING.md#local-beta-handoff). Distribution and publication follow [publishing](PUBLISHING.md).
 
 For a partial handoff, name unfinished work and keep its tasks open. A source merge, target qualification and published release are separate states. Keep unfinished qualification open after a source merge.
@@ -84,13 +86,7 @@ The documentation checker resolves local files and Markdown anchors; external UR
 
 ## OpenSpec lifecycle
 
-The [local agent workflow](AGENT_WORKFLOW.md) documents the on-demand LangGraph
-development tool and its current capabilities. Its active OpenSpec owner tracks
-implementation; GitHub/Orca/OpenSpec keep their existing responsibilities below.
-
-The chat skills and shell CLI are different entry points. In chat, use `$openspec-explore`, `$openspec-propose`, `$openspec-apply-change <name>` and `$openspec-archive-change <name>`; other agents expose the corresponding slash commands. In a shell, use `openspec list --json`, `openspec status --change <name> --json` and `openspec instructions apply --change <name> --json`. Consult installed skill instructions for artifact creation and archive behavior.
-
-Follow the [contributor workflow](#contributor-workflow) for intake, planning, implementation and handoff, including closure below.
+Read the proposal, design, relevant specs and `tasks.md` before resuming a change. The repository ships its Codex skills under [`.agents/skills`](../.agents/skills). Use `$openspec-propose` to plan, `$openspec-apply-change <name>` to implement, and `$openspec-archive-change <name>` to close. From a shell, use `openspec list --json`, `openspec status --change <name> --json` and `openspec instructions apply --change <name> --json`.
 
 `openspec status` reports planning artifacts; completed planning is not completed implementation. Read apply progress from the change's task owner. The [completion checklist](#completion-checklist) distinguishes task completion, handoff and publication.
 
@@ -107,15 +103,15 @@ Keep a change active while requirements, tasks, review, sync or an explicit scop
 
 ### GitHub Issues and Orca Tasks
 
-GitHub Issues is the default entry point for agreed independent work. The user selected this flow so an assigned issue can be opened in Orca Tasks and used to start its worktree. OpenSpec remains the planning owner: an issue describes the desired outcome and acceptance conditions; `tasks.md` owns detailed steps and completion checkboxes.
+GitHub Issues is the entry point for agreed independent work. The issue describes the outcome and acceptance conditions and opens its worktree in Orca Tasks. When a change needs a plan, OpenSpec's `tasks.md` owns its detailed steps.
 
 After scope is settled, the agent publishes or reuses the issue and assigns it to the verified `Ziyadin23` account as part of the requested workflow. This standing instruction covers scoped task publication/assignment. The issue does not authorize additional implementation, paid model usage, lab changes or releases; those retain their existing scope and approvals. Exploration and unaccepted audit recommendations remain discussion/evidence until selected as work.
 
-**Choose the issue boundary:** one independently deliverable outcome normally gets one issue and one worktree. Keep internal coding/testing/documentation steps together in that issue's OpenSpec task group. An existing change can have several independent issues, as Linux tasks #14–#20 already do. Reuse an issue/worktree with matching scope; avoid publishing every checkbox as a separate issue.
+**Choose the issue boundary.** Use one issue and worktree per independently deliverable outcome. An OpenSpec change may span several such issues, as Linux tasks #14–#20 do.
 
-**Prepare a usable task:** give the issue a clear outcome title, short problem/scope, candidate or affected platform when relevant, concise acceptance conditions, dependencies and the OpenSpec change/task IDs. Link the plan and evidence from a published revision/branch. If the plan exists only locally, name that provenance and mark publication as the next step; do not present a nonexistent link as ready for a fresh checkout. If there is no plan yet, state that the first worktree action is OpenSpec planning.
+**Prepare the issue.** Describe the expected and observed behavior, affected platform, acceptance conditions and relevant dependencies. For planned work, link the published change and task IDs, or identify planning or publication as the next step.
 
-**Publish and verify:** search both open and closed issues by outcome and owner/task IDs first. Reuse the matching issue when possible; a closed issue needs evidence of distinct remaining work before a follow-up is created. Use a stable marker such as `<!-- sc-task:change-name:task-group -->` for new issues, read back the exact body/assignee/state and record the number/link in the OpenSpec owner. Inspect ambiguous create responses before retrying. Preserve unrelated assignees, labels and issue content. Use the connected GitHub tools, or `gh issue create --body-file <file> --assignee Ziyadin23` when the connector cannot perform the action. Keep private lab data and credentials out of issues.
+**Publish and verify.** Search open and closed issues by outcome first. Reuse the matching issue when possible. A follow-up to a closed issue needs distinct remaining work. Read back the body, assignee and state before retrying an ambiguous creation. For planned work, include a stable marker such as `<!-- sc-task:change-name:task-group -->` and record the issue in its OpenSpec owner. Preserve unrelated assignees, labels and issue content. Use the GitHub connector or `gh issue create --body-file <file> --assignee Ziyadin23`. Keep private lab data and credentials out of issues.
 
 **Start from Orca:** open Tasks, select the GitHub source/repository and the assigned/open issues filter, refresh if necessary, then select the issue and create/start its worktree. Use the account that has repository access. An issue successfully read back on GitHub is publication proof; visible appearance in Tasks requires observing the installed UI. UI labels and active filters may differ. Reuse an already linked worktree before creating a second one.
 
@@ -125,19 +121,19 @@ A CLI alternative is available when the UI is inconvenient. Replace the placehol
 orca-ide worktree create --repo name:ScreenCompanion --name issue-N-short-name --no-parent --reference https://github.com/Ziyadin23/ScreenCompanion/issues/N --json
 ```
 
-The issue reference is attached during workspace creation. Starting an agent is a separate action unless requested in that launch; the issue and current checkpoint tell it which OpenSpec change/task group to continue. Existing pending Linux work, for example [issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14), resumes the matching task in `linux-platform-support` instead of creating a second feature plan.
+The issue reference is attached during workspace creation. Start Codex when requested and follow the [contributor workflow](#contributor-workflow). An issue with an existing owner, such as [#14](https://github.com/Ziyadin23/ScreenCompanion/issues/14), resumes its matching OpenSpec task.
 
-When the issue's outcome is verified, link its PR and use `Closes #N` only when that PR satisfies the entire issue scope. A partial delivery uses a reference and keeps the issue open. Refresh the task owner and Orca card at handoff/integration; there is no second independently maintained issue implementation checklist or additional sync service.
+Link the PR and use `Closes #N` only when it satisfies the entire issue. For a partial delivery, reference the issue and record the remaining acceptance conditions. The Orca card points to the issue or PR.
 
 ### Worktree ownership
 
 Start from the matching GitHub task issue and use one writing task per worktree. Base independent work on the repository default branch; use parent/stacked branches only when that dependency is intended. Keep the primary checkout available for coordination and read-only inspection. Before edits, run `git status` and read the existing handoff. If required planning is uncommitted elsewhere, carry those specific files explicitly and record their origin; preserve the original checkout. New worktrees contain committed source, not another checkout's dirty files.
 
-When work must share a checkout, agree on the owner and touched paths before writing. Preserve unrelated changes and include only task-owned paths in any authorized commit. Existing issues/PRs link to the OpenSpec owner rather than keeping independent implementation checklists. Parallel lab/VM work must first inspect the shared private context for resource ownership.
+When work must share a checkout, agree on the owner and touched paths before writing. Preserve unrelated changes and include only task-owned paths in any authorized commit. Link an existing OpenSpec plan from the issue or PR. Parallel lab/VM work must first inspect the shared private context for resource ownership.
 
 ### Checkpoints and fresh sessions
 
-At each completed task boundary and before transferring/restarting work, update the existing change's `tasks.md` with:
+A small fix records its test results and review in the PR. For planned work, update the change's `tasks.md` at task boundaries and before transferring or restarting work. Record the following information.
 
 - Accepted scope and decisions, including what the user authorized.
 - Changed paths, branch/base revision and current dirty/committed state.
@@ -146,13 +142,13 @@ At each completed task boundary and before transferring/restarting work, update 
 
 When no task record exists, use the handoff message for this contract. Resume by reading that record, current rules and actual Git status; treat unrecorded decisions and approvals as unknown. Use the Orca session history to recover missing context; persist the recovered decision in the task owner before relying on it later. Start a fresh session at a recorded task boundary when a new task or stale conversation context warrants it.
 
-After a merge, new candidate, evidence update or task completion, reconcile the current checkpoint and [status overview](STATUS.md) against Git/GitHub. Preserve dated history as history. Record a missing source as unconfirmed; avoid copying an older candidate's result into the current one.
+Update the [status overview](STATUS.md) when a result changes a listed workstream, candidate or release. Preserve the source and environment of earlier evidence.
 
 ### Orca cards
 
 Use `todo` for queued work, `in-progress` for execution, `in-review` for a reviewable result and `completed` only for the card's verified scope. Agent inactivity describes process state; inspect the task owner before choosing task status.
 
-Keep a short card comment with the current task and next action or blocker. Update it after setup failure, a meaningful result, validation, handoff or merge. Link the existing issue/PR. For example: `source merged; next: installed capture checks (#14)` or `workflow checks passed; review pending`. The card is navigation; detailed progress stays in OpenSpec.
+Link the issue or PR from the card. Update its status or blocker when the next action changes. Detailed checks live in the PR for a small fix and in `tasks.md` for planned work.
 
 ## Private workspace discovery
 
@@ -180,4 +176,4 @@ Keep private context, credentials, vaults, bundles, lab identifiers and recordin
 | [Publishing](PUBLISHING.md), [releases](releases), [history](history) | Distribution; version notes; dated technical history |
 | [OpenSpec changes](../openspec/changes), [specs](../openspec/specs) | Accepted decisions, implementation tasks/checkpoints; lasting behavior after sync/archive |
 
-Track OpenSpec configuration, change artifacts, specs and generated agent integrations together with their work. Existing ignored outputs (`bin/`, `obj/`, `publish/`, `node_modules/`, desktop bundles/packages/native build outputs) stay local. Inspect ownership before cleanup; workflow organization does not authorize deleting local artifacts. Historical C# application source and release assets remain in existing tags; only the frozen test vault oracle remains in the current tree.
+Track OpenSpec configuration, change artifacts, specs and the generated Codex integration together with their work. Existing ignored outputs (`bin/`, `obj/`, `publish/`, `node_modules/`, desktop bundles/packages/native build outputs) stay local. Inspect ownership before cleanup; workflow organization does not authorize deleting local artifacts. Historical C# application source and release assets remain in existing tags; only the frozen test vault oracle remains in the current tree.
