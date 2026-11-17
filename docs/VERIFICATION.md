@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.10**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.13**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,10 +14,11 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-This source carries beta.10 with the Astryx Settings/setup integration on top of shared-main `3b29e41`. Earlier built beta.10 artifacts and their Windows checks below predate Astryx; changed application bytes need a new version and candidate-specific qualification before distribution. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+This branch reserves beta.13 for the integrated Astryx application from main `545223d`. Its [host and isolated Linux checks](#astryx-beta13-qualification-checkpoint-2026-11-17) passed; Windows qualification and local runnable delivery are pending. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
+| Astryx beta.13 qualification | [Host and Linux checkpoint](#astryx-beta13-qualification-checkpoint-2026-11-17): 1,227/34 portable, built doctor, RPM payload comparison and 19 scoped isolated checks passed. | Windows stage queued behind retained lab ownership; native/vault/full UI, packaged startup, named recorder and local beta delivery remain open in #63. |
 | Astryx interface integration | [Combined source checks](#astryx-interface-integration-2026-11-15): host 1,227/34, types/lint/bundles, built doctor and eight synthetic browser views passed. | Windows/native/full UI, packaged startup, recorder and a new runnable beta remain open in issue #63. Earlier pipeline beta.10 results do not qualify the changed interface. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
@@ -26,6 +27,26 @@ This source carries beta.10 with the Astryx Settings/setup integration on top of
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
+
+## Astryx beta.13 qualification checkpoint (2026-11-17)
+
+[Issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63) continues the [integration owner](../openspec/changes/integrate-astryx-interface/tasks.md), tasks 3.1–3.2, from shared main `545223d`. Candidate **0.5.0-beta.13** is reserved, unpublished and undelivered. Application logic, native code and tests match that baseline; only the manifest and two root lockfile version fields change. The private 165-file non-Markdown source/build/test/licensing manifest has SHA-256 `19feb82a5a91366ec341bbd63f2a6fdac6704f8eb3a4e56660b4c25e9d441855`.
+
+`npm --prefix desktop ci` and `npm --prefix desktop run verify` exited 0 on Node 22.23.1/npm 10.9.8: **1,227 tests / 34 files**, types, lint and production bundles. Installation reported 14 moderate advisories; no dependencies were upgraded. `npx astryx doctor --built out/renderer` from `desktop/` exited 0 with **20 passes / 2 related system-font advisories / 0 failures**. An earlier invocation from the repository root checked the bundle only and is retained separately; neither built-output scan inspects JSX purity.
+
+`npm --prefix desktop run package:rpm`, using privately extracted cached Fedora build prerequisites, exited 0. The x86-64 RPM is **95,747,381 bytes**, SHA-256 `569c5dab5ec0174d60f3cccbe092a5171752b0f84fb62233f51e362a144206b9`. Metadata, dependencies, desktop identity and licensing resources were inspected. All **76** unpacked application files match the actual RPM payload byte for byte. No RPM was installed or delivered.
+
+A separate network namespace, session bus, temporary profile and headless Hyprland nested in virtual KWin established these narrower results, each script exit 0:
+
+- **8 pipeline/composer checks:** text-only makes no capture and one synthetic answer call; Ctrl+Enter makes one capture and three Thorough calls; cancelled synthetic capture retains draft/answer with no provider-boundary calls; text-only remains usable when capture fails; Direct uses one capture/answer; Linux input actions remain distinct; composer controls fit at **420×240** and **180×128**.
+- **3 production key-free packaged-preview checks:** packaged identity/version, both composer actions and keyboard hint, and keyboard Settings entry with the two-mode selector.
+- **8 Astryx checks:** keyboard tab/focus behavior; all five Settings pages and fixed footer at **760×680** and **420×480**; appearance Save/Back; exact-model pipeline drafts and disabled screen reading in Direct; all six service selectors; injected setup validation/focus, disabled pending controls, one synthetic save and key clearing. Setup uses the packaged renderer with an injected in-memory bridge, not production keyring storage.
+
+Seven synthetic captures were visually inspected. The final reports contain no page errors; application processes exited 0, synthetic profiles and runtime directories were removed, and a separate process scan found no surviving processes from any isolated session. Both compositor processes were observed exited. The prior lab claim and latest-build record were rehashed unchanged.
+
+Failed attempts remain retained: first, the test runtime's lazy download failed inside the blocked network namespace before any application check; explicit pinned-runtime installation then succeeded outside it. Next, the extended setup harness expected an exact sentence fragment instead of the full Linux notice; seven checks passed before that private selector failed. Correcting the selector completed all eight, without source or assertion-policy changes. Earlier passing pipeline/package checks were retained rather than rerun after the selector-only change.
+
+The shared Windows lab still has an unreleased workflow recovery hold. #63 is queued pending confirmed ownership release/restoration and fresh readiness. **No new Windows native/vault/full UI, packaged-startup or recorder result exists for beta.13, and no runnable EXE/installer/ZIP handoff occurred.** The latest verified local delivery remains beta.9. #57's earlier beta.10 37/38 attempt and interrupted corrected matrix stay unresolved; these host/Linux results do not complete them. Broader recorder #7, installed Linux #14–#20, clean-machine, mixed-DPI and live-model requirements retain their separate owners. The integration change remains active at **6/8** until actual runtime and delivery acceptance pass.
 
 ## Astryx interface integration (2026-11-15)
 

@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current source version is 0.5.0-beta.10 and is unpublished. Version 0.5.0-beta.6 was published as a
+[README](../README.md#release-status). The current source candidate is 0.5.0-beta.13, reserved for [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63), and is unpublished and undelivered. Earlier beta.10–beta.12 candidates retain their original source and evidence. Version 0.5.0-beta.6 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
 Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
