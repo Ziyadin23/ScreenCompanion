@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.13**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.14**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,10 +14,11 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-Main carries the reserved beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`. Its [host and isolated Linux checks](#astryx-beta13-qualification-checkpoint-2026-11-17) passed; Windows qualification and local runnable delivery are pending. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+The current beta.14 working candidate applies Windows-only package optimization to main `e7a844f`; its [host composition benchmark](#windows-package-size-benchmark-2026-11-17) and portable checks passed, while final Windows qualification and local runnable delivery remain open. Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and unfinished Windows gates. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains their candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
+| Windows package size beta.14 | [Host benchmark](#windows-package-size-benchmark-2026-11-17): 1,227/34 portable, retained packaged module resolution and archive inspection passed; matched fixtures save 108.41 MiB unpacked. | Both private fixtures omit the native Windows bridge and disable executable metadata editing. Final Windows-built candidate, native/vault/UI/locale/startup checks and local handoff remain open in #84. |
 | Astryx beta.13 qualification | [Host and Linux checkpoint](#astryx-beta13-qualification-checkpoint-2026-11-17): 1,227/34 portable, built doctor, RPM payload comparison and 19 scoped isolated checks passed. | Windows stage queued behind retained lab ownership; native/vault/full UI, packaged startup, named recorder and local beta delivery remain open in #63. |
 | Astryx interface integration | [Combined source checks](#astryx-interface-integration-2026-11-15): host 1,227/34, types/lint/bundles, built doctor and eight synthetic browser views passed. | Windows/native/full UI, packaged startup, recorder and a new runnable beta remain open in issue #63. Earlier pipeline beta.10 results do not qualify the changed interface. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
@@ -27,6 +28,30 @@ Main carries the reserved beta.13 qualification checkpoint integrated through [P
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
+
+## Windows package size benchmark (2026-11-17)
+
+[Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and its [OpenSpec owner](../openspec/changes/reduce-windows-package-size/tasks.md) track Windows-only package pruning on main `e7a844f`, reserved source **0.5.0-beta.14**. Dependency versions, application/native logic and bundler configuration are unchanged. Windows retains `en-US` and `ru` Chromium locales and omits separate renderer-library copies; Linux composition settings retain their original inputs.
+
+`npm --prefix desktop ci` and `npm --prefix desktop run verify` exited 0 on Node 22.23.1/npm 10.9.8: **1,227 tests / 34 files**, types, lint and production bundles. The pinned electron-builder filter/graph audit passed. The existing 11-case workflow delivery suite passed after building the tool, including its checked-in version-document compatibility case; no test source changed.
+
+The Fedora host built two **private, non-deliverable composition fixtures** with electron-builder 26.18.0 and the pinned official Electron 45.0.0 Windows x64 archive. Both use the same beta.14 compiled application, dependency installation, licensing, compression and benchmark overrides. Both deliberately **omit the unavailable native Windows bridge and disable executable metadata editing**. Only the new Windows locale and dependency filters differ. These are packaging measurements, not runnable-candidate or installed-footprint qualification.
+
+| Measured bytes | Control fixture | Optimized fixture |
+| --- | ---: | ---: |
+| Unpacked payload | 448,721,900 | 335,049,510 |
+| Application ASAR | 74,519,149 | 10,237,588 |
+| Portable EXE | 115,549,124 | 103,546,784 |
+| Exact EXE/README ZIP | 115,569,243 | 103,562,783 |
+| NSIS installer | 129,885,082 | 114,078,630 |
+
+This saves **113,672,390 bytes / 108.41 MiB / 25.33%** of unpacked fixture bytes; portable EXE and ZIP save **11.45 MiB**, and the installer saves **15.07 MiB**. These directory sizes were measured after both packaging targets finished adding their resources. Actual final Windows-native artifact sizes remain to be measured. Default packaging already omits the two type-only packages in the 14-name frontend closure; all 14 names are absent from the optimized archive. The largest redundant copies were Astryx core (26,900,114 bytes), Lucide React (26,003,420) and React DOM (8,066,435).
+
+Archive integrity, exact ZIP entries/EXE/README bytes and installer-feed sizes/SHA-512 passed. The optimized package retains exactly two locale packs; unchanged runtime files and licensing match the control byte for byte, except the ASAR integrity field in the equal-sized application executable. All compiled application files and retained dependency files inside ASAR match the control. All 17 main dependency names remain present; an extracted-archive resolver checked 16 declared dependency edges without falling back to the development installation, and executed packaged Zod/YAML successfully. This establishes composition and module availability, not Electron/Windows runtime behavior or Unicode rendering.
+
+Retained private fixture failures: an initial symlinked dependency installation produced an incomplete control graph and was excluded; real isolated dependency copies corrected it. The first inspection also incorrectly expected two type-only packages in the control; correcting that diagnostic assumption passed the complete inspection without changing application code. Earlier measurements remain preserved separately.
+
+**No beta.14 native/vault/full UI, real Windows locale/fallback, installed/portable startup or runnable handoff has passed.** Shared Windows qualification waits for the prior owner's recorded release/restoration and fresh readiness. Tasks 2.2, 3.1 and 3.2 remain open; the latest verified local transfer remains beta.9. Private artifacts, prefixes, logs and hashes stay outside the repository and transfer root. No VM, paid provider request or public release was performed.
 
 ## Astryx beta.13 qualification checkpoint (2026-11-17)
 
