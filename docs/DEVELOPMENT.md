@@ -4,7 +4,7 @@ New contributors can start with [Contributing to SC](../CONTRIBUTING.md). The [d
 
 ## Contributor workflow
 
-Start from [one GitHub issue](#github-issues-and-orca-tasks) with an agreed outcome. Read the [handoff](#checkpoints-and-fresh-sessions), check `git status`, and use the issue's [worktree](#worktree-ownership). Complete [setup](#setup-and-checks) and read the [rules for the affected area](../CODING_STANDARDS.md#choose-the-rules-for-your-task).
+Report suspected vulnerabilities through the [private security process](../SECURITY.md#report-a-vulnerability-privately). For ordinary work, start from [one GitHub issue](#github-issues-and-orca-tasks) with an agreed outcome. Read the [handoff](#checkpoints-and-fresh-sessions), check `git status`, and use the issue's [worktree](#worktree-ownership). Complete [setup](#setup-and-checks) and read the [rules for the affected area](../CODING_STANDARDS.md#choose-the-rules-for-your-task).
 
 - **Small bug with clear expected behavior.** Write a regression test that fails on the original code. Fix the bug, run the test and affected checks, and link the results and issue in the PR. An independent reviewer checks the final diff against the issue.
 - **Larger or multi-session work.** Create or resume an [OpenSpec change](#openspec-lifecycle) and track implementation in its `tasks.md`. Continue the plan when it already owns the issue. If a small fix grows or needs a second session, link the plan to the same issue and carry forward the reproduction and verification already done.
@@ -103,7 +103,7 @@ Keep a change active while requirements, tasks, review, sync or an explicit scop
 
 ### GitHub Issues and Orca Tasks
 
-GitHub Issues is the entry point for agreed independent work. The issue describes the outcome and acceptance conditions and opens its worktree in Orca Tasks. When a change needs a plan, OpenSpec's `tasks.md` owns its detailed steps.
+GitHub Issues is the entry point for agreed independent work suitable for public reporting. Follow the [security policy](../SECURITY.md#report-a-vulnerability-privately) for suspected vulnerabilities. The issue describes the outcome and acceptance conditions and opens its worktree in Orca Tasks. When a change needs a plan, OpenSpec's `tasks.md` owns its detailed steps.
 
 After scope is settled, the agent publishes or reuses the issue and assigns it to the verified `Ziyadin23` account as part of the requested workflow. This standing instruction covers scoped task publication/assignment. The issue does not authorize additional implementation, paid model usage, lab changes or releases; those retain their existing scope and approvals. Exploration and unaccepted audit recommendations remain discussion/evidence until selected as work.
 
@@ -111,7 +111,7 @@ After scope is settled, the agent publishes or reuses the issue and assigns it t
 
 **Prepare the issue.** Describe the expected and observed behavior, affected platform, acceptance conditions and relevant dependencies. For planned work, link the published change and task IDs, or identify planning or publication as the next step.
 
-**Publish and verify.** Search open and closed issues by outcome first. Reuse the matching issue when possible. A follow-up to a closed issue needs distinct remaining work. Read back the body, assignee and state before retrying an ambiguous creation. For planned work, include a stable marker such as `<!-- sc-task:change-name:task-group -->` and record the issue in its OpenSpec owner. Preserve unrelated assignees, labels and issue content. Use the GitHub connector or `gh issue create --body-file <file> --assignee Ziyadin23`. Keep private lab data and credentials out of issues.
+**Publish and verify.** Search open and closed issues by outcome first. Reuse the matching issue when possible. A follow-up to a closed issue needs distinct remaining work. Read back the body, assignee and state after publication. If the create response is ambiguous, check GitHub before retrying. For planned work, include a stable marker such as `<!-- sc-task:change-name:task-group -->` and record the issue in its OpenSpec owner. Preserve unrelated assignees, labels and issue content. Use the GitHub connector or `gh issue create --body-file <file> --assignee Ziyadin23`. Keep private lab data and credentials out of issues.
 
 **Start from Orca:** open Tasks, select the GitHub source/repository and the assigned/open issues filter, refresh if necessary, then select the issue and create/start its worktree. Use the account that has repository access. An issue successfully read back on GitHub is publication proof; visible appearance in Tasks requires observing the installed UI. UI labels and active filters may differ. Reuse an already linked worktree before creating a second one.
 
