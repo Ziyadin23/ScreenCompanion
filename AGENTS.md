@@ -2,7 +2,7 @@
 
 1. Read [contributor guidance](docs/DEVELOPMENT.md) and [current status](docs/STATUS.md).
 2. Before edits, run `git status` and read the existing [handoff](docs/DEVELOPMENT.md#checkpoints-and-fresh-sessions). Follow [worktree ownership](docs/DEVELOPMENT.md#worktree-ownership) for writing tasks.
-3. Use [OpenSpec](docs/DEVELOPMENT.md#openspec-lifecycle) as the sole planning and continuation workflow; the active change's `tasks.md` owns progress. Follow [issue intake](docs/DEVELOPMENT.md#github-issues-and-orca-tasks) for agreed independent work. Resume application work with the OpenSpec apply workflow.
+3. Follow the [contributor workflow](docs/DEVELOPMENT.md#contributor-workflow). For a small bug with clear expected behavior, use its GitHub issue, a failing then passing regression test and an independently reviewed PR. For larger or multi-session work, or work already in an OpenSpec change, use that change's `tasks.md` and the [apply workflow](docs/DEVELOPMENT.md#openspec-lifecycle).
 4. Before code, test or build edits or regression runs, read [the rules for your task](CODING_STANDARDS.md#choose-the-rules-for-your-task), including shared/verification prerequisites and every affected area. For documentation-only, naming, version or publication changes, read [documentation and status](CODING_STANDARDS.md#documentation-and-status).
 
 Before desktop UI work, read the generated [Astryx guidance](desktop/AGENTS.md).
