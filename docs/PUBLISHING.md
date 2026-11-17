@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current source version is 0.5.0-beta.13 and is unpublished. This candidate is reserved for [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63) and remains undelivered. Earlier beta.10–beta.12 candidates retain their original source and evidence. Version 0.5.0-beta.6 was published as a
+[README](../README.md#release-status). The current source version is 0.5.0-beta.14 and is unpublished. This candidate is reserved for [Windows package size optimization (#84)](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and remains undelivered. Earlier beta.10–beta.13 candidates retain their original source and evidence, including the separate [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63). Version 0.5.0-beta.6 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
 Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
@@ -53,6 +53,14 @@ use SC; historical URLs and asset names retain their actual identifiers.
 5. Complete the applicable [verification gates](VERIFICATION.md), including
    packaged startup, standalone activation, clean-account/machine and named-recorder
    output checks before making corresponding compatibility claims.
+
+Windows packages retain English (`en-US`) and Russian (`ru`) Chromium locale
+resources. Question and answer text can use other languages. Renderer libraries
+are included in Vite's production bundles; Windows-specific file exclusions omit
+their redundant `node_modules` copies while retaining the main-process dependency
+graph, native bridge, Electron runtime and licensing. Keep these exclusions under
+`build.win` so Linux package composition retains its existing inputs. Validate
+changes against the actual ASAR and matched control/optimized package sizes.
 
 ## Local beta handoff
 
