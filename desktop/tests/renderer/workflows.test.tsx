@@ -215,36 +215,6 @@ describe('answer and temporary input', () => {
 });
 
 describe('service and key setup', () => {
-  it('defaults to OpenAI, shows migration notice and requires a key before local Save', async () => {
-    const driver = fixture({ surface: 'setup', setupLegacyNotice: true }); render(<App />);
-    const input = await screen.findByTestId('setup-key');
-    expect(screen.getByRole('note').textContent).toContain('old file will be left unchanged');
-    expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe('OpenAI');
-    expect((input as HTMLInputElement).type).toBe('password');
-    expect(screen.getByText(/without contacting the service or checking access/)).toBeTruthy();
-    fireEvent.submit(input.closest('form')!); expect(await screen.findByRole('alert')).toBeTruthy();
-    expect(driver.api.setup).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } }); fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(driver.api.setup).toHaveBeenCalledWith({ provider: 'OpenAI', apiKey: 'synthetic-setup-key' }));
-    expect(driver.api.command).not.toHaveBeenCalled(); expect(driver.api.getSettingsDraft).not.toHaveBeenCalled();
-  });
-  it.each(PROVIDERS)('saves the selected %s service and its key without requesting Settings or updates', async (provider) => {
-    const driver = fixture({ surface: 'setup' }); render(<App />); const key = await screen.findByTestId('setup-key');
-    choose('API service', provider === 'Gemini' ? 'Google Gemini' : provider);
-    fireEvent.change(key, { target: { value: '  synthetic-service-key  ' } });
-    fireEvent.submit(key.closest('form')!);
-    await waitFor(() => expect(driver.api.setup).toHaveBeenCalledExactlyOnceWith({ provider, apiKey: 'synthetic-service-key' }));
-    expect(driver.api.getSettingsDraft).not.toHaveBeenCalled(); expect(driver.api.update).not.toHaveBeenCalled();
-    expect(driver.api.command).not.toHaveBeenCalled();
-  });
-  it('supports keyboard service selection, then focuses the matching API key', async () => {
-    fixture({ surface: 'setup' }); render(<App />);
-    const service = await screen.findByRole('combobox', { name: 'API service' });
-    await waitFor(() => expect(document.activeElement).toBe(service));
-    fireEvent.keyDown(service, { key: 'ArrowDown' }); fireEvent.keyDown(service, { key: 'ArrowDown' }); fireEvent.keyDown(service, { key: 'Enter' });
-    const key = screen.getByLabelText('Groq API key'); expect(document.activeElement).toBe(key);
-    expect(screen.queryByRole('listbox')).toBeNull();
-  });
   it('closes the service menu before idle Escape exits setup', async () => {
     const driver = fixture({ surface: 'setup' });
     const user = userEvent.setup();
@@ -284,12 +254,46 @@ describe('service and key setup', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(driver.api.command).not.toHaveBeenCalled();
-    expect(screen.getByRole('region', { name: 'Set up SC' }).getAttribute('aria-busy')).toBe('true');
+    const setup = screen.getByRole('region', { name: 'Set up SC' });
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    const busyRegion = key.closest('[aria-busy="true"]');
+    expect(setup.contains(busyRegion)).toBe(true);
+    expect(busyRegion?.contains(screen.getByRole('combobox', { name: 'API service' }))).toBe(true);
 
     await act(async () => resolve());
     await screen.findByTestId('answer-text');
     expect(screen.queryByRole('region', { name: 'Set up SC' })).toBeNull();
     expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('defaults to OpenAI, shows migration notice and requires a key before local Save', async () => {
+    const driver = fixture({ surface: 'setup', setupLegacyNotice: true }); render(<App />);
+    const input = await screen.findByTestId('setup-key');
+    expect(screen.getByRole('note').textContent).toContain('old file will be left unchanged');
+    expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe('OpenAI');
+    expect((input as HTMLInputElement).type).toBe('password');
+    expect(screen.getByText(/without contacting the service or checking access/)).toBeTruthy();
+    fireEvent.submit(input.closest('form')!); expect(await screen.findByRole('alert')).toBeTruthy();
+    expect(driver.api.setup).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } }); fireEvent.submit(input.closest('form')!);
+    await waitFor(() => expect(driver.api.setup).toHaveBeenCalledWith({ provider: 'OpenAI', apiKey: 'synthetic-setup-key' }));
+    expect(driver.api.command).not.toHaveBeenCalled(); expect(driver.api.getSettingsDraft).not.toHaveBeenCalled();
+  });
+  it.each(PROVIDERS)('saves the selected %s service and its key without requesting Settings or updates', async (provider) => {
+    const driver = fixture({ surface: 'setup' }); render(<App />); const key = await screen.findByTestId('setup-key');
+    choose('API service', provider === 'Gemini' ? 'Google Gemini' : provider);
+    fireEvent.change(key, { target: { value: '  synthetic-service-key  ' } });
+    fireEvent.submit(key.closest('form')!);
+    await waitFor(() => expect(driver.api.setup).toHaveBeenCalledExactlyOnceWith({ provider, apiKey: 'synthetic-service-key' }));
+    expect(driver.api.getSettingsDraft).not.toHaveBeenCalled(); expect(driver.api.update).not.toHaveBeenCalled();
+    expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('supports keyboard service selection, then focuses the matching API key', async () => {
+    fixture({ surface: 'setup' }); render(<App />);
+    const service = await screen.findByRole('combobox', { name: 'API service' });
+    await waitFor(() => expect(document.activeElement).toBe(service));
+    fireEvent.keyDown(service, { key: 'ArrowDown' }); fireEvent.keyDown(service, { key: 'ArrowDown' }); fireEvent.keyDown(service, { key: 'Enter' });
+    const key = screen.getByLabelText('Groq API key'); expect(document.activeElement).toBe(key);
+    expect(screen.queryByRole('listbox')).toBeNull();
   });
   it('serializes pending setup saves and retains an editable key after a safe failure', async () => {
     const driver = fixture({ surface: 'setup' }); let reject!: (reason: Error) => void;
