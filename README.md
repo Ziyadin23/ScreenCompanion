@@ -112,7 +112,9 @@ the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
 edges and corners. Hiding it ends the current drag. SC remembers its size.
 Linux uses native window controls for moving and resizing.
 
-Setup and Settings use a consistent opaque dark interface. The five Settings
+Setup and Settings use a consistent opaque dark interface. In the current source,
+Escape closes the setup service menu first and cancels idle setup when the menu is
+closed. Setup stays open while Save is pending. The five Settings
 categories adapt to a narrow window, with Save and Back kept visible at the
 bottom. Panel appearance changes affect the answer panel and its preview while
 Settings keeps its readable palette.

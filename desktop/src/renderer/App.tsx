@@ -145,12 +145,12 @@ export function App() {
     catch { return false; }
   }
   useEffect(() => {
+    // Setup and Settings handle Escape with their own Cancel and Back actions.
+    if (state?.surface === 'setup' || state?.surface === 'settings') return;
     function keyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
-      // Settings owns Escape so that native Back/discard semantics run first.
-      if (state?.surface === 'settings') return;
       event.preventDefault();
-      void command({ type: state?.surface === 'setup' ? 'exit' : 'escape' });
+      void command({ type: 'escape' });
     }
     document.addEventListener('keydown', keyDown);
     return () => document.removeEventListener('keydown', keyDown);

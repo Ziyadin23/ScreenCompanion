@@ -245,6 +245,52 @@ describe('service and key setup', () => {
     const key = screen.getByLabelText('Groq API key'); expect(document.activeElement).toBe(key);
     expect(screen.queryByRole('listbox')).toBeNull();
   });
+  it('closes the service menu before idle Escape exits setup', async () => {
+    const driver = fixture({ surface: 'setup' });
+    const user = userEvent.setup();
+    render(<App />);
+    const service = await screen.findByRole('combobox', { name: 'API service' });
+    service.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('listbox', { name: 'API service' })).toBeTruthy();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.activeElement).toBe(service);
+    expect(driver.api.command).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('exits setup when Cancel is pressed while idle', async () => {
+    const driver = fixture({ surface: 'setup' });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('ignores document Escape until a pending setup save succeeds', async () => {
+    const driver = fixture({ surface: 'setup' });
+    let resolve!: () => void;
+    driver.api.setup.mockImplementationOnce(async () => {
+      await new Promise<void>((done) => { resolve = done; });
+      driver.emit({ surface: 'answer' });
+    });
+    render(<App />);
+    const key = await screen.findByTestId('setup-key');
+    fireEvent.change(key, { target: { value: 'synthetic-setup-key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Cancel' }).getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
+    expect(screen.getByRole('region', { name: 'Set up SC' }).getAttribute('aria-busy')).toBe('true');
+
+    await act(async () => resolve());
+    await screen.findByTestId('answer-text');
+    expect(screen.queryByRole('region', { name: 'Set up SC' })).toBeNull();
+    expect(driver.api.command).not.toHaveBeenCalled();
+  });
   it('serializes pending setup saves and retains an editable key after a safe failure', async () => {
     const driver = fixture({ surface: 'setup' }); let reject!: (reason: Error) => void;
     driver.api.setup.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
@@ -255,6 +301,8 @@ describe('service and key setup', () => {
     expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Saving…' }));
     expect(driver.api.setup).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
     await act(async () => reject(new Error('private setup path and credentials')));
     expect(screen.getByRole('alert').textContent).toContain('could not be saved');
     expect(document.body.textContent).not.toContain('private setup path and credentials');

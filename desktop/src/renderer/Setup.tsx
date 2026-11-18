@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
 import { Text, Heading } from '@astryxdesign/core/Text';
 import { TextInput } from '@astryxdesign/core/TextInput';
@@ -18,6 +18,18 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
   const alive = useRef(true);
   const keyInput = useRef<HTMLInputElement>(null);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const cancel = useCallback(() => {
+    if (!pending.current) onCommand({ type: 'exit' });
+  }, [onCommand]);
+  useEffect(() => {
+    function keyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
+      event.preventDefault();
+      cancel();
+    }
+    document.addEventListener('keydown', keyDown);
+    return () => document.removeEventListener('keydown', keyDown);
+  }, [cancel]);
   const service = provider === 'Gemini' ? 'Google Gemini' : provider;
   async function save() {
     if (pending.current) return;
@@ -61,7 +73,7 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
       <HStack as="footer" className="dialog-footer">
         <Text type="supporting" className="footer-status" role="status">{saving ? 'Saving setup…' : ''}</Text>
         <Button label={saving ? 'Saving…' : 'Save'} variant="primary" type="submit" isDisabled={saving} />
-        <Button label="Cancel" variant="ghost" isDisabled={saving} onClick={() => onCommand({ type: 'exit' })} />
+        <Button label="Cancel" variant="ghost" isDisabled={saving} onClick={cancel} />
       </HStack>
     </form>
   </VStack>;
