@@ -215,6 +215,14 @@ describe('answer and temporary input', () => {
 });
 
 describe('service and key setup', () => {
+  it('describes the Linux key field with the keyring prerequisite', async () => {
+    fixture({ surface: 'setup', platform: 'linux' }); render(<App />);
+    const key = await screen.findByLabelText('OpenAI API key');
+    const descriptions = key.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent);
+
+    expect(descriptions).toContain('Unlock your desktop keyring before saving.');
+    expect(screen.getByText(/SC windows can appear in recordings and screen shares/)).toBeTruthy();
+  });
   it('defaults to OpenAI, shows migration notice and requires a key before local Save', async () => {
     const driver = fixture({ surface: 'setup', setupLegacyNotice: true }); render(<App />);
     const input = await screen.findByTestId('setup-key');

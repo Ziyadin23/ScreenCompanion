@@ -74,7 +74,8 @@ The verification guide retains the candidate-specific results and earlier failur
 ### Linux (unpublished port)
 
 The Linux port requires Fedora 44 x86-64, Hyprland Wayland, PipeWire,
-`xdg-desktop-portal-hyprland` and an unlocked Secret Service keyring. Use
+`xdg-desktop-portal-hyprland` and an unlocked Secret Service keyring. SC shows
+the unlock instruction next to the API key during setup. Use
 **Question** for text-only input without opening the screen-sharing prompt. For a
 screenshot, use **Capture screen**, or **Ctrl+Enter / Send with screenshot** while
 typing, then select a monitor in the system prompt. Reopen SC to restore a hidden

@@ -14,7 +14,8 @@ portal from a trusted repository before installing SC. The test used the
 third-party sdegler/hyprland COPR already configured on the development machine.
 Other Linux desktops and package formats are not qualified. An
 unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
-storage. Unlock the keyring and restart SC if saved settings cannot be opened;
+storage. Setup shows the unlock instruction with the API key field. Unlock the
+keyring and restart SC if saved settings cannot be opened;
 if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
 `$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
 does not migrate Windows DPAPI files.

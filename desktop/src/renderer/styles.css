@@ -164,10 +164,10 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .setup { height: 100%; overflow-y: auto; }
 .setup .dialog-header { padding-block-start: var(--spacing-6); }
 .setup form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; }
+.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; scroll-padding-block: var(--spacing-2); }
 .setup-content > * { flex-shrink: 0; }
 .privacy-notice { background: var(--color-background-muted); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); }
-.setup .dialog-error { margin: 0 !important; }
+.setup-content .dialog-error { margin: 0 !important; }
 .startup-error { padding: 24px; height: 100%; background: var(--ui-bg); color: var(--ui-text); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 599px) {
