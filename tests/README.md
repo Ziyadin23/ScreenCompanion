@@ -78,6 +78,16 @@ preview does not store keys, capture a screen, call a provider or run an updater
 Save/Back operate on its in-memory draft; reload restores the fixture. The review
 toolbar opens Settings and setup. Stop the server with Ctrl+C.
 
+With the preview running and Google Chrome installed, verify setup font scaling
+from `desktop/`:
+
+```sh
+npx playwright test --config tests/preview/playwright.config.ts
+```
+
+The tests use isolated, key-free Chrome profiles. Set `SC_PREVIEW_PORT` to the
+port passed to Vite if you run the preview on a different port.
+
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme
 artifacts together. The browser preview is excluded from Electron production

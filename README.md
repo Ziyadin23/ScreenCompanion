@@ -112,10 +112,11 @@ the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
 edges and corners. Hiding it ends the current drag. SC remembers its size.
 Linux uses native window controls for moving and resizing.
 
-Setup and Settings use a consistent opaque dark interface. The five Settings
-categories adapt to a narrow window, with Save and Back kept visible at the
-bottom. Panel appearance changes affect the answer panel and its preview while
-Settings keeps its readable palette.
+Setup and Settings use a consistent opaque dark interface. Setup headings and
+guidance scale with the renderer's default font size. The five Settings categories
+adapt to a narrow window, with Save and Back kept visible at the bottom. Panel
+appearance changes affect the answer panel and its preview while Settings keeps
+its readable palette.
 
 In Settings:
 

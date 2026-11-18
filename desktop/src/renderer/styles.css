@@ -161,7 +161,13 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .choice-list [role="option"] { padding: var(--spacing-2); border-radius: var(--radius-inner); cursor: pointer; overflow-wrap: anywhere; }
 .choice-list [role="option"].active { background: var(--color-overlay-hover); }
 .choice-list [aria-selected="true"] { color: var(--color-text-accent); font-weight: 600; }
-.setup { height: 100%; overflow-y: auto; }
+.setup {
+  --text-heading-1-size: 0.9375rem;
+  --text-heading-2-size: 1.25rem;
+  --text-supporting-size: 0.75rem;
+  height: 100%;
+  overflow-y: auto;
+}
 .setup .dialog-header { padding-block-start: var(--spacing-6); }
 .setup form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; }

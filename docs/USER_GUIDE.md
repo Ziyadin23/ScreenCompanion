@@ -62,6 +62,10 @@ Linux uses the [controls above](#linux-setup-and-controls).
 
 The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
 
+Setup headings and guidance follow the renderer's default font size. Scroll the
+setup form to read all guidance in a short window. Save and Cancel sit below
+the scrollable content.
+
 SC keeps one running instance per Windows user/session. Opening another copy restores the selected answer, input, or Settings surface, including hidden Settings. If there is no answer yet, it opens question input. The second process exits without re-registering shortcuts. Close the previous version before upgrading so the new EXE becomes the running instance.
 
 The following shortcuts and panel controls apply to the TypeScript beta:
