@@ -54,6 +54,24 @@ for (const { rootSize, expectedSizes } of [
         expect(fitsWidth).toBe(true);
       }
 
+      if (rootSize === 24) {
+        const content = setup.locator('.setup-content');
+        const finalPrivacyLineVisible = () => privacy.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const line = Array.from(range.getClientRects()).at(-1)!;
+          const scrollport = element.closest('.setup-content')!.getBoundingClientRect();
+          const footer = element.closest('form')!.querySelector('footer')!.getBoundingClientRect();
+          return line.top >= scrollport.top && line.bottom <= Math.min(scrollport.bottom, footer.top);
+        });
+        await content.hover();
+        await page.mouse.wheel(0, -1000);
+        await expect.poll(() => content.evaluate((element) => element.scrollTop)).toBe(0);
+        expect(await finalPrivacyLineVisible()).toBe(false);
+        await page.mouse.wheel(0, 1000);
+        await expect.poll(finalPrivacyLineVisible).toBe(true);
+      }
+
       const save = setup.getByRole('button', { name: 'Save', exact: true });
       const cancel = setup.getByRole('button', { name: 'Cancel', exact: true });
       await setup.getByRole('checkbox', { name: 'Show API key' }).press('Tab');
@@ -62,6 +80,10 @@ for (const { rootSize, expectedSizes } of [
       await page.keyboard.press('Tab');
       await expect(cancel).toBeFocused();
       await expect(cancel).toBeInViewport({ ratio: 1 });
+      await save.click();
+      await expect(setup.getByRole('alert')).toHaveText('Enter your OpenAI API key without line breaks or control characters.');
+      await cancel.click();
+      await expect(setup).toHaveCount(0);
     } finally {
       try { await context.close(); } finally { await rm(profile, { recursive: true, force: true }); }
     }

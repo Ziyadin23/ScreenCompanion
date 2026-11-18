@@ -254,6 +254,12 @@ The retained `ui-*` documentation names map to SC Compact's `--color-*` roles: c
 - **Panel answer:** the fresh default only. Answer size remains user-adjustable from 8–28 points; preserve line height, selection, whitespace and wrapping.
 - **Panel composer:** readable question entry independent of the answer's chosen size. Panel status is smaller (11px) and truncates rather than pushing controls out.
 
+Setup's title, connection heading and supporting text use setup-scoped
+`rem` sizes of `0.9375rem`, `1.25rem` and `0.75rem`. They render at
+15px, 20px and 12px with a 16px root and scale with the renderer's default
+font size. Instructions and privacy copy wrap in the scrolling form above
+Save and Cancel.
+
 ## Layout
 
 The panel is a full-window vertical flex surface. Reserve the toolbar row (36px) at all times: status fills the available width and five compact tools align at the end. The answer consumes remaining space, scrolls vertically, wraps long strings and keeps outer margins (8px). Reveal changes opacity and pointer access, never layout.
