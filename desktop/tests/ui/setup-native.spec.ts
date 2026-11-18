@@ -29,7 +29,40 @@ test('first-launch service selection persists with real Windows encryption and s
     });
     const nativeWindow = await windowsEvent<NativeWindow>({ type: 'inspect', handle });
     expect(nativeWindow.affinityRead).toBe(true); expect([1, 0x11]).toContain(nativeWindow.affinity);
-    await page.getByRole('combobox', { name: 'API service', exact: true }).click();
+    const service = page.getByRole('combobox', { name: 'API service', exact: true });
+    async function resizeSetup(width: number, height: number, zoom: number) {
+      await app!.evaluate(({ BrowserWindow }, size) => {
+        const setup = BrowserWindow.getAllWindows()[0]!;
+        setup.setContentSize(size.width, size.height);
+        setup.webContents.setZoomFactor(size.zoom);
+      }, { width, height, zoom });
+      await expect.poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([width / zoom, height / zoom]);
+    }
+    async function expectActiveOption(name?: string) {
+      await expect(service).toBeFocused();
+      await expect(service).toBeInViewport({ ratio: 0.99 });
+      const activeId = await service.getAttribute('aria-activedescendant');
+      const option = page.locator(`[role="option"][id="${activeId}"]`);
+      if (name) await expect(option).toHaveText(name);
+      await expect(option).toBeInViewport({ ratio: 0.99 });
+    }
+    for (const [width, height, zoom] of [[320, 420, 1], [560, 480, 2]] as const) {
+      await resizeSetup(width, height, zoom);
+      await service.press('ArrowDown');
+      await expectActiveOption('OpenAI');
+      await page.keyboard.press('End');
+      await expectActiveOption('DeepSeek');
+      await page.keyboard.press('Home');
+      await expectActiveOption('OpenAI');
+      await page.keyboard.press('Escape');
+      await service.click();
+      await expectActiveOption();
+      await page.keyboard.press('Home');
+      await expectActiveOption('OpenAI');
+      await page.keyboard.press('Escape');
+    }
+    await resizeSetup(560, 480, 1);
+    await service.click();
     await page.getByRole('option', { name: 'DeepSeek', exact: true }).click();
     await page.getByLabel('DeepSeek API key', { exact: true }).fill(key);
     await page.getByRole('button', { name: 'Save', exact: true }).click();

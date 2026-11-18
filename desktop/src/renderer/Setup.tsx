@@ -40,7 +40,7 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
           <Text as="p" type="supporting">Choose your service and enter its API key to get started.</Text>
         </VStack>
         <VStack gap={4}>
-          <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus
+          <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus inlineList
             display={(value) => value === 'Gemini' ? 'Google Gemini' : value} onChange={(value) => {
               setProvider(value as ApiProvider); setError(''); setShowKey(false); keyInput.current?.focus();
             }} />

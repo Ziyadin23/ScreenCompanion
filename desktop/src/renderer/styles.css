@@ -164,8 +164,15 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .setup { height: 100%; overflow-y: auto; }
 .setup .dialog-header { padding-block-start: var(--spacing-6); }
 .setup form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; }
+.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; container-type: size; }
 .setup-content > * { flex-shrink: 0; }
+.setup-content .choice-inline:has(> .choice-list) {
+  /* Use the form's visible height, including its padding, with room for the focus outline. */
+  max-block-size: calc(100cqb + var(--spacing-4) + var(--spacing-6) - var(--spacing-2));
+  scroll-margin-block: var(--spacing-1);
+}
+.choice-inline > :is(label, .choice-control) { flex-shrink: 0; }
+.choice-inline > .choice-list { position: static; margin-block-start: var(--spacing-1); }
 .privacy-notice { background: var(--color-background-muted); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); }
 .setup .dialog-error { margin: 0 !important; }
 .startup-error { padding: 24px; height: 100%; background: var(--ui-bg); color: var(--ui-text); }

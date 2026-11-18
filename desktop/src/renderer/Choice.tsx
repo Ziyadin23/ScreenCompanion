@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Icon } from './Icon';
 import { VStack } from '@astryxdesign/core/Layout';
@@ -7,12 +7,14 @@ import { Text } from '@astryxdesign/core/Text';
 interface ChoiceProps {
   label: string; value: string; options: readonly string[]; onChange: (value: string) => void;
   editable?: boolean; disabled?: boolean; display?: (value: string) => string;
-  id?: string; describedBy?: string; invalid?: boolean; autoFocus?: boolean;
+  id?: string; describedBy?: string; invalid?: boolean; autoFocus?: boolean; inlineList?: boolean;
 }
+
+const nearestScrollContainer = { block: 'nearest', container: 'nearest' } as const;
 
 /** DOM-only popup: all options remain inside the protected Electron window. */
 export function Choice({ label, value, options, onChange, editable = false, disabled = false, display = (v) => v,
-  id: suppliedId, describedBy, invalid = false, autoFocus = false }: ChoiceProps) {
+  id: suppliedId, describedBy, invalid = false, autoFocus = false, inlineList = false }: ChoiceProps) {
   const generatedId = useId();
   const id = suppliedId ?? generatedId;
   const root = useRef<HTMLDivElement>(null);
@@ -21,13 +23,23 @@ export function Choice({ label, value, options, onChange, editable = false, disa
   const [above, setAbove] = useState(false);
   const shown = (editable ? options.filter((option) => !value || option.toLowerCase().includes(value.toLowerCase())) : options);
   const choices = shown.length ? shown : options;
+  useLayoutEffect(() => {
+    if (!open || !inlineList) return;
+    const reveal = () => {
+      root.current?.scrollIntoView?.(nearestScrollContainer);
+      root.current?.querySelector('[role="option"].active')?.scrollIntoView?.(nearestScrollContainer);
+    };
+    reveal();
+    window.addEventListener('resize', reveal);
+    return () => window.removeEventListener('resize', reveal);
+  }, [open, inlineList]);
   useEffect(() => {
-    if (open) document.getElementById(`${id}-${active}`)?.scrollIntoView?.({ block: 'nearest' });
-  }, [id, active, open]);
+    if (open) document.getElementById(`${id}-${active}`)?.scrollIntoView?.(inlineList ? nearestScrollContainer : { block: 'nearest' });
+  }, [id, active, open, inlineList]);
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   function show() {
     if (disabled) return;
-    setAbove((root.current?.getBoundingClientRect().bottom ?? 0) + 210 > window.innerHeight);
+    if (!inlineList) setAbove((root.current?.getBoundingClientRect().bottom ?? 0) + 210 > window.innerHeight);
     setActive(Math.max(0, choices.indexOf(value)));
     setOpen(true);
   }
@@ -53,7 +65,7 @@ export function Choice({ label, value, options, onChange, editable = false, disa
   const aria = { 'aria-label': label, 'aria-expanded': open && !disabled, 'aria-controls': open && !disabled ? `${id}-list` : undefined,
     'aria-activedescendant': open && !disabled && choices[active] ? `${id}-${active}` : undefined,
     'aria-autocomplete': editable ? 'list' as const : 'none' as const, 'aria-describedby': describedBy, 'aria-invalid': invalid };
-  return <VStack className={`choice ${above ? 'choice-above' : ''}`} ref={root} onKeyDown={keyDown}
+  return <VStack className={`choice ${inlineList ? 'choice-inline' : above ? 'choice-above' : ''}`} ref={root} onKeyDown={keyDown}
     onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}>
     <label id={`${id}-label`} htmlFor={id}>{label}</label>
     <VStack className="choice-control">
