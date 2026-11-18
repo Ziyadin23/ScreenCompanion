@@ -13,7 +13,7 @@ colors:
   ui-neutral: "light-dark(#0000000F, #ffffff1A)"
   ui-overlay-hover: "light-dark(#0000000D, #ffffff0D)"
   ui-overlay-pressed: "light-dark(#0000001A, #ffffff1A)"
-  ui-interactive-border: "#51545f"
+  ui-interactive-border: "#6f727d"
   ui-selected-bg: "#2b303b"
   ui-selected-text: "#d9e6fb"
   ui-white: "#fff"
@@ -228,7 +228,8 @@ The palette is neutral and low-chroma; blue identifies actions, focus and select
 - **Neutral action layer** (`ui-neutral`): the inherited translucent secondary-button fill over the dialog canvas.
 - **Interaction overlays** (`ui-overlay-hover`, `ui-overlay-pressed`): inherited Astryx button states; the hover overlay also marks the active choice row. Their canonical values retain Astryx's light/dark form; dialogs explicitly use dark mode.
 - **Off-white** (`ui-text`) and **muted gray** (`ui-muted`): primary content and supporting copy. White (`ui-white`) is reserved for blue primary actions.
-- **Fine border** (`ui-border`) and **interactive border** (`ui-interactive-border`): section/control separation and hovered controls or popup edges.
+- **Fine border** (`ui-border`): section and control separation.
+- **Interactive border** (`ui-interactive-border`): emphasized field boundaries, unchecked checkbox indicators, hovered choice controls and popup edges. The default field and checkbox borders exceed 3:1 contrast against both the dialog canvas and the control fill.
 - **Default panel surface** (`panel-default-bg`) and **default panel control** (`panel-default-input`): resolved fresh appearance, including quantized background alpha and the input color mixed toward the foreground.
 
 Validation uses warm, readable error text (`ui-error-text`) on a dark warm surface (`ui-error-bg`), with a separate invalid-field border (`ui-invalid-border`). Keep the written error and field association alongside the color.
@@ -254,6 +255,12 @@ The retained `ui-*` documentation names map to SC Compact's `--color-*` roles: c
 - **Panel answer:** the fresh default only. Answer size remains user-adjustable from 8–28 points; preserve line height, selection, whitespace and wrapping.
 - **Panel composer:** readable question entry independent of the answer's chosen size. Panel status is smaller (11px) and truncates rather than pushing controls out.
 
+Setup's title, connection heading and supporting text use setup-scoped
+`rem` sizes of `0.9375rem`, `1.25rem` and `0.75rem`. They render at
+15px, 20px and 12px with a 16px root and scale with the renderer's default
+font size. Instructions and privacy copy wrap in the scrolling form above
+Save and Cancel.
+
 ## Layout
 
 The panel is a full-window vertical flex surface. Reserve the toolbar row (36px) at all times: status fills the available width and five compact tools align at the end. The answer consumes remaining space, scrolls vertically, wraps long strings and keeps outer margins (8px). Reveal changes opacity and pointer access, never layout.
@@ -268,9 +275,9 @@ The recurring spacing steps in frontmatter are resolved sizes at the default roo
 
 ## Elevation & Depth
 
-Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. The choice popup uses Astryx's inherited medium shadow (`--shadow-med`), with layered dark ambient shadows and an inset edge. Fields use inherited inset hover/focus feedback. These token values are recorded in the sidecar. The popup sits 4px below its control, can open upward near the window bottom, and scrolls at a maximum height (200px).
+Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. Choice lists use Astryx's inherited medium shadow (`--shadow-med`), with layered dark ambient shadows and an inset edge. Fields use inherited inset hover/focus feedback. These token values are recorded in the sidecar.
 
-**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve ambient shadow for the choice overlay; use tonal changes, borders and Astryx's inset feedback for control states.
+**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve ambient shadow for open choice lists. Use tonal changes, borders and Astryx's inset feedback for control states.
 
 ## Shapes
 
@@ -284,7 +291,7 @@ Icons are inline outline SVGs: current text color, rounded caps and joins, a con
 
 Compact Astryx buttons use the control radius, medium-weight labels, no border and the medium element height (36px). Ordinary secondary actions use the inherited neutral layer; Back and Cancel use transparent ghost buttons. Save uses the primary action color. Footer actions have a minimum width (80px). Disabled controls halve opacity and use the default cursor; retain Astryx's disabled behavior, including its `aria-disabled` form.
 
-Astryx buttons retain the library's accent keyboard outline (2px, 3px offset), inherited hover/press overlays and slight press scale (0.98). Their state transition uses the fast theme duration (125ms) and standard easing. Native dialog controls, disclosures and focusable page content use the pale focus outline (2px, 2px offset); the legacy panel focus rule is scoped to the answer panel. Reduced-motion preference disables transitions and animations, and Astryx suppresses press scaling.
+Astryx buttons retain the library's keyboard outline (2px, 3px offset), inherited hover/press overlays and slight press scale (0.98). In setup, Save, Cancel and Show API key use the same pale focus color as the key field. Button state transitions use the fast theme duration (125ms) and standard easing. Native dialog controls, disclosures and focusable page content use the pale focus outline (2px, 2px offset). The legacy panel focus rule is scoped to the answer panel. Reduced-motion preference disables transitions and animations, and Astryx suppresses press scaling.
 
 ### Inputs / Fields
 
@@ -296,7 +303,9 @@ Show API key uses Astryx CheckboxInput with a small indicator and muted field-la
 
 ### Choices
 
-Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay; the saved option receives selected text and stronger weight. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay. In the setup API service list, a 2px pale blue inset outline follows the active option. The current selection keeps its accent text and stronger weight while the outline moves to another row. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+
+In Setup, the service list opens 4px below **API service** in the form's normal flow. The control and list fit within the scrolling content, and the list scrolls independently to reveal the active option. In Settings, choice popups overlay the form 4px below the control and can open upward near the window bottom. Choice lists have a maximum height of 200px at the default text size.
 
 ### Navigation
 

@@ -22,7 +22,7 @@ export const scCompactTheme = defineTheme({
     '--color-icon-primary': '#f2f3f5',
     '--color-icon-secondary': '#a9acb5',
     '--color-border': '#36383f',
-    '--color-border-emphasized': '#51545f',
+    '--color-border-emphasized': '#6f727d',
     '--color-accent': '#385785',
     '--color-accent-muted': '#2b303b',
     '--color-on-accent': '#ffffff',

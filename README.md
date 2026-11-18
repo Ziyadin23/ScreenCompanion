@@ -23,7 +23,8 @@ own API key. Provider usage charges apply.
 
 **Current source includes the new setup and Settings interface**, separate
 text-only and text-with-screenshot sends, and Thorough/Direct pipeline preferences
-for each answer model. A new runnable beta with this combined interface still
+for each answer model. The first-launch service list keeps wheel scrolling inside
+the open menu. A new runnable beta with this combined interface still
 needs its final Windows UI, packaged-startup and recorder checks. See the
 [current verification gates](docs/VERIFICATION.md#current-candidate-and-open-gates).
 
@@ -51,7 +52,8 @@ setup without installed developer tools remains unqualified; see the
    the ZIP and run its EXE. Both editions include their runtime.
 2. **Connect a service.** Choose your API service, enter its key and click **Save**.
    Saving makes no model request. Your account needs access to the selected models
-   and any required credits.
+   and any required credits. In current source, you can scroll the service list
+   beneath **API service** when setup space is limited. An outline marks the option **Enter** will choose.
 3. **Ask a question.** Press **Ctrl+Alt+Space** to capture the foreground app's
    monitor, or **Ctrl+Enter** to open question input. In the downloaded beta.6,
    **Enter** or **Send** submits your text with a fresh screenshot. Current source
@@ -74,7 +76,8 @@ The verification guide retains the candidate-specific results and earlier failur
 ### Linux (unpublished port)
 
 The Linux port requires Fedora 44 x86-64, Hyprland Wayland, PipeWire,
-`xdg-desktop-portal-hyprland` and an unlocked Secret Service keyring. Use
+`xdg-desktop-portal-hyprland` and an unlocked Secret Service keyring. SC shows
+the unlock instruction next to the API key during setup. Use
 **Question** for text-only input without opening the screen-sharing prompt. For a
 screenshot, use **Capture screen**, or **Ctrl+Enter / Send with screenshot** while
 typing, then select a monitor in the system prompt. Reopen SC to restore a hidden
@@ -112,10 +115,15 @@ the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
 edges and corners. Hiding it ends the current drag. SC remembers its size.
 Linux uses native window controls for moving and resizing.
 
-Setup and Settings use a consistent opaque dark interface. The five Settings
-categories adapt to a narrow window, with Save and Back kept visible at the
-bottom. Panel appearance changes affect the answer panel and its preview while
-Settings keeps its readable palette.
+Setup and Settings use a consistent opaque dark interface. Setup keeps the API
+key available for retry when secure storage fails. Setup headings and guidance
+scale with the renderer's default font size. A pale outline marks keyboard focus as you press **Tab** or
+**Shift+Tab**. The five Settings categories adapt to a narrow window, with Save
+and Back kept visible at the bottom. Panel appearance changes affect the answer
+panel and its preview while Settings keeps its readable palette.
+
+In the current source, Escape closes the setup service menu first and cancels
+idle setup when the menu is closed. Setup stays open while Save is pending.
 
 In Settings:
 

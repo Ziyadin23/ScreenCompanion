@@ -14,7 +14,8 @@ portal from a trusted repository before installing SC. The test used the
 third-party sdegler/hyprland COPR already configured on the development machine.
 Other Linux desktops and package formats are not qualified. An
 unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
-storage. Unlock the keyring and restart SC if saved settings cannot be opened;
+storage. Setup shows the unlock instruction with the API key field. Unlock the
+keyring and restart SC if saved settings cannot be opened;
 if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
 `$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
 does not migrate Windows DPAPI files.
@@ -55,12 +56,28 @@ installed developer tools remains unqualified; existing development-VM checks
 have the narrower scope in the [support matrix](VERIFICATION.md#platform-support).
 Linux uses the [controls above](#linux-setup-and-controls).
 
+In the current source, Escape closes an open service menu first. With the menu
+closed, Escape and Cancel exit setup while it is idle. Setup stays open during
+Save so it can finish or show an error.
+
 1. Use the [published TypeScript beta](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The portable `SC-v0.5.0-beta.6.exe` is also available in a matching ZIP containing that EXE and `README.txt`. Both editions include their Electron runtime; the application does not use .NET. This packaging does not establish clean-machine operation without developer tools. The v0.4.14 download linked in the README contains the previous C# application.
 2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. Commands appear after setup. Older settings without the help marker show them on startup until an explicit Settings Save persists the marker; loading alone never rewrites the vault. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to send text only. While the question field has focus, **Ctrl+Enter** or **Send with screenshot** captures the monitor containing the panel once at send time and includes it with your text. Esc returns to the answer. The typed question determines the task; no screen is captured for a text-only send.
 
+In current source, the setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
+
+Press **Tab** or **Shift+Tab** to move through setup. A
+pale outline marks keyboard focus on **Show API key**, **Save**, and **Cancel**.
+Press **Space** on **Show API key** to toggle key visibility.
+
 The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
+
+Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, unlock your secure keyring before retrying.
+
+Setup headings and guidance follow the renderer's default font size. Scroll the
+setup form to read all guidance in a short window. Save and Cancel sit below
+the scrollable content.
 
 SC keeps one running instance per Windows user/session. Opening another copy restores the selected answer, input, or Settings surface, including hidden Settings. If there is no answer yet, it opens question input. The second process exits without re-registering shortcuts. Close the previous version before upgrading so the new EXE becomes the running instance.
 
