@@ -152,10 +152,10 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .choice-control { position: relative; }
 .choice button { display: inline-flex; align-items: center; gap: var(--spacing-2); color: var(--dialog-text); background: var(--dialog-header); border: var(--border-width) solid var(--dialog-border); border-radius: var(--radius-element); padding: var(--spacing-2) var(--spacing-3); min-height: var(--size-element-md); }
 .choice button:hover:not(:disabled) { border-color: var(--color-border-emphasized); }
-.choice-control > button[role="combobox"] { width: 100%; justify-content: flex-start; text-align: left; padding-inline-end: var(--spacing-8); }
+.choice-control > button[role="combobox"] { width: 100%; justify-content: flex-start; text-align: start; padding-inline-end: var(--spacing-8); }
 .choice-control input { padding-inline-end: var(--spacing-8); }
 .choice-control .choice-toggle { position: absolute; top: 0; right: 0; height: 100%; width: var(--spacing-8); min-height: 0; padding: 0; justify-content: center; border-left: 0; border-radius: 0 var(--radius-element) var(--radius-element) 0; }
-.choice-arrow { position: absolute; right: var(--spacing-3); top: var(--spacing-2); pointer-events: none; color: var(--dialog-muted); }
+.choice-arrow { position: absolute; inset-inline-end: var(--spacing-3); top: var(--spacing-2); pointer-events: none; color: var(--dialog-muted); }
 .choice-list { position: absolute; z-index: 20; top: calc(100% + var(--spacing-1)); left: 0; right: 0; max-height: calc(var(--spacing-10) * 5); overflow-y: auto; background: var(--color-background-popover); border: var(--border-width) solid var(--color-border-emphasized); border-radius: var(--radius-element); padding: var(--spacing-1); box-shadow: var(--shadow-med); scrollbar-color: var(--color-border-emphasized) transparent; }
 .choice-above .choice-list { top: auto; bottom: var(--spacing-10); }
 .choice-list [role="option"] { padding: var(--spacing-2); border-radius: var(--radius-inner); cursor: pointer; overflow-wrap: anywhere; }

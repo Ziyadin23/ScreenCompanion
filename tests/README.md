@@ -76,7 +76,19 @@ Open `http://127.0.0.1:43155/` for Settings or add `?surface=setup` for setup.
 Add `&platform=linux` to inspect Linux notices. Use only synthetic input: this
 preview does not store keys, capture a screen, call a provider or run an updater.
 Save/Back operate on its in-memory draft; reload restores the fixture. The review
-toolbar opens Settings and setup. Stop the server with Ctrl+C.
+toolbar opens Settings and setup.
+
+With the preview running, use these commands from the repository root to check
+the setup service control at 320px in LTR and RTL. Install the Playwright browser
+once if needed.
+
+```sh
+npm --prefix desktop exec -- playwright install chromium
+node --test desktop/tests/preview/setup-service.mjs
+```
+
+Set `SC_PREVIEW_PORT` if the preview is running on a different port. Stop the
+server with Ctrl+C when finished.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme
