@@ -152,22 +152,41 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .choice-control { position: relative; }
 .choice button { display: inline-flex; align-items: center; gap: var(--spacing-2); color: var(--dialog-text); background: var(--dialog-header); border: var(--border-width) solid var(--dialog-border); border-radius: var(--radius-element); padding: var(--spacing-2) var(--spacing-3); min-height: var(--size-element-md); }
 .choice button:hover:not(:disabled) { border-color: var(--color-border-emphasized); }
-.choice-control > button[role="combobox"] { width: 100%; justify-content: flex-start; text-align: left; padding-inline-end: var(--spacing-8); }
+.choice-control > button[role="combobox"] { width: 100%; justify-content: flex-start; text-align: start; padding-inline-end: var(--spacing-8); }
 .choice-control input { padding-inline-end: var(--spacing-8); }
 .choice-control .choice-toggle { position: absolute; top: 0; right: 0; height: 100%; width: var(--spacing-8); min-height: 0; padding: 0; justify-content: center; border-left: 0; border-radius: 0 var(--radius-element) var(--radius-element) 0; }
-.choice-arrow { position: absolute; right: var(--spacing-3); top: var(--spacing-2); pointer-events: none; color: var(--dialog-muted); }
+.choice-arrow { position: absolute; inset-inline-end: var(--spacing-3); top: var(--spacing-2); pointer-events: none; color: var(--dialog-muted); }
 .choice-list { position: absolute; z-index: 20; top: calc(100% + var(--spacing-1)); left: 0; right: 0; max-height: calc(var(--spacing-10) * 5); overflow-y: auto; background: var(--color-background-popover); border: var(--border-width) solid var(--color-border-emphasized); border-radius: var(--radius-element); padding: var(--spacing-1); box-shadow: var(--shadow-med); scrollbar-color: var(--color-border-emphasized) transparent; }
 .choice-above .choice-list { top: auto; bottom: var(--spacing-10); }
 .choice-list [role="option"] { padding: var(--spacing-2); border-radius: var(--radius-inner); cursor: pointer; overflow-wrap: anywhere; }
 .choice-list [role="option"].active { background: var(--color-overlay-hover); }
+.setup .choice-list [role="option"].active {
+  outline: var(--focus-outline-width) solid var(--color-icon-accent);
+  outline-offset: calc(-1 * var(--focus-outline-width));
+}
 .choice-list [aria-selected="true"] { color: var(--color-text-accent); font-weight: 600; }
-.setup { height: 100%; overflow-y: auto; }
+.setup {
+  --focus-outline-color: var(--color-icon-accent);
+  --text-heading-1-size: 0.9375rem;
+  --text-heading-2-size: 1.25rem;
+  --text-supporting-size: 0.75rem;
+  height: 100%;
+  overflow-y: auto;
+}
 .setup .dialog-header { padding-block-start: var(--spacing-6); }
 .setup form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; }
+.setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; scroll-padding-block: var(--spacing-2); container-type: size; }
 .setup-content > * { flex-shrink: 0; }
+.setup-content .choice-inline:has(> .choice-list) {
+  /* Use the form's visible height, including its padding, with room for the focus outline. */
+  max-block-size: calc(100cqb + var(--spacing-4) + var(--spacing-6) - var(--spacing-2));
+  scroll-margin-block: var(--spacing-1);
+}
+.choice-inline > :is(label, .choice-control) { flex-shrink: 0; }
+.choice-inline > .choice-list { position: static; margin-block-start: var(--spacing-1); }
+.setup .choice-list { overscroll-behavior-y: contain; }
 .privacy-notice { background: var(--color-background-muted); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); }
-.setup .dialog-error { margin: 0 !important; }
+.setup-content .dialog-error { margin: 0 !important; }
 .startup-error { padding: 24px; height: 100%; background: var(--ui-bg); color: var(--ui-text); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 599px) {

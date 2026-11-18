@@ -215,6 +215,64 @@ describe('answer and temporary input', () => {
 });
 
 describe('service and key setup', () => {
+  it('closes the service menu before idle Escape exits setup', async () => {
+    const driver = fixture({ surface: 'setup' });
+    const user = userEvent.setup();
+    render(<App />);
+    const service = await screen.findByRole('combobox', { name: 'API service' });
+    service.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('listbox', { name: 'API service' })).toBeTruthy();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.activeElement).toBe(service);
+    expect(driver.api.command).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('exits setup when Cancel is pressed while idle', async () => {
+    const driver = fixture({ surface: 'setup' });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('ignores document Escape until a pending setup save succeeds', async () => {
+    const driver = fixture({ surface: 'setup' });
+    let resolve!: () => void;
+    driver.api.setup.mockImplementationOnce(async () => {
+      await new Promise<void>((done) => { resolve = done; });
+      driver.emit({ surface: 'answer' });
+    });
+    render(<App />);
+    const key = await screen.findByTestId('setup-key');
+    fireEvent.change(key, { target: { value: 'synthetic-setup-key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Cancel' }).getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
+    const setup = screen.getByRole('region', { name: 'Set up SC' });
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    const busyRegion = key.closest('[aria-busy="true"]');
+    expect(setup.contains(busyRegion)).toBe(true);
+    expect(busyRegion?.contains(screen.getByRole('combobox', { name: 'API service' }))).toBe(true);
+
+    await act(async () => resolve());
+    await screen.findByTestId('answer-text');
+    expect(screen.queryByRole('region', { name: 'Set up SC' })).toBeNull();
+    expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('describes the Linux key field with the keyring prerequisite', async () => {
+    fixture({ surface: 'setup', platform: 'linux' }); render(<App />);
+    const key = await screen.findByLabelText('OpenAI API key');
+    const descriptions = key.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent);
+
+    expect(descriptions).toContain('Unlock your desktop keyring before saving.');
+    expect(screen.getByText(/SC windows can appear in recordings and screen shares/)).toBeTruthy();
+  });
   it('defaults to OpenAI, shows migration notice and requires a key before local Save', async () => {
     const driver = fixture({ surface: 'setup', setupLegacyNotice: true }); render(<App />);
     const input = await screen.findByTestId('setup-key');
@@ -222,11 +280,28 @@ describe('service and key setup', () => {
     expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe('OpenAI');
     expect((input as HTMLInputElement).type).toBe('password');
     expect(screen.getByText(/without contacting the service or checking access/)).toBeTruthy();
-    fireEvent.submit(input.closest('form')!); expect(await screen.findByRole('alert')).toBeTruthy();
+    fireEvent.submit(input.closest('form')!);
+    const error = screen.getByText('Enter your OpenAI API key without line breaks or control characters.');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
+    expect(document.activeElement).toBe(input);
     expect(driver.api.setup).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } }); fireEvent.submit(input.closest('form')!);
+    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } });
+    expect(input.getAttribute('aria-invalid')).not.toBe('true');
+    expect(error.isConnected).toBe(false);
+    fireEvent.submit(input.closest('form')!);
     await waitFor(() => expect(driver.api.setup).toHaveBeenCalledWith({ provider: 'OpenAI', apiKey: 'synthetic-setup-key' }));
     expect(driver.api.command).not.toHaveBeenCalled(); expect(driver.api.getSettingsDraft).not.toHaveBeenCalled();
+  });
+  it('marks a key with control characters invalid without attempting storage', async () => {
+    const driver = fixture({ surface: 'setup' }); render(<App />);
+    const key = await screen.findByTestId('setup-key');
+    fireEvent.change(key, { target: { value: 'synthetic\u007fkey' } });
+    fireEvent.submit(key.closest('form')!);
+    expect(key.getAttribute('aria-invalid')).toBe('true');
+    const error = screen.getByText(/without line breaks or control characters/);
+    expect(key.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
+    expect(driver.api.setup).not.toHaveBeenCalled();
   });
   it.each(PROVIDERS)('saves the selected %s service and its key without requesting Settings or updates', async (provider) => {
     const driver = fixture({ surface: 'setup' }); render(<App />); const key = await screen.findByTestId('setup-key');
@@ -245,21 +320,41 @@ describe('service and key setup', () => {
     const key = screen.getByLabelText('Groq API key'); expect(document.activeElement).toBe(key);
     expect(screen.queryByRole('listbox')).toBeNull();
   });
-  it('serializes pending setup saves and retains an editable key after a safe failure', async () => {
-    const driver = fixture({ surface: 'setup' }); let reject!: (reason: Error) => void;
+  it.each([
+    ['windows', 'The key could not be saved. Try again.'],
+    ['linux', 'The key could not be saved. Unlock your secure Linux keyring and try again.']
+  ] as const)('announces a %s storage failure at the form and retries the same key', async (platform, message) => {
+    const driver = fixture({ surface: 'setup', platform }); let reject!: (reason: Error) => void;
     driver.api.setup.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
     render(<App />); const key = await screen.findByTestId('setup-key');
-    fireEvent.change(key, { target: { value: 'synthetic-secret' } }); fireEvent.submit(key.closest('form')!); fireEvent.submit(key.closest('form')!);
+    const form = key.closest('form')!;
+    const liveRegion = form.querySelector('[role="alert"]');
+    fireEvent.change(key, { target: { value: 'synthetic-secret' } }); fireEvent.submit(form); fireEvent.submit(form);
     expect(driver.api.setup).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('combobox', { name: 'API service' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
     expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Saving…' }));
     expect(driver.api.setup).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
     await act(async () => reject(new Error('private setup path and credentials')));
-    expect(screen.getByRole('alert').textContent).toContain('could not be saved');
+    expect(key.getAttribute('aria-invalid')).not.toBe('true');
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe(message);
+    expect(alert).toBe(liveRegion);
+    expect(alert.parentElement).toBe(form);
+    expect(alert.closest('[aria-busy="true"]')).toBeNull();
+    const descriptions = key.getAttribute('aria-describedby')?.split(' ');
+    expect(descriptions).toContain('setup-privacy');
+    expect(descriptions).not.toContain(alert.id);
     expect(document.body.textContent).not.toContain('private setup path and credentials');
+    expect(document.body.textContent).not.toContain('synthetic-secret');
     expect((key as HTMLInputElement).value).toBe('synthetic-secret'); expect((key as HTMLInputElement).disabled).toBe(false);
-    fireEvent.submit(key.closest('form')!); await screen.findByTestId('answer-text');
+    fireEvent.submit(form); await screen.findByTestId('answer-text');
+    expect(driver.api.setup.mock.calls).toEqual([
+      [{ provider: 'OpenAI', apiKey: 'synthetic-secret' }],
+      [{ provider: 'OpenAI', apiKey: 'synthetic-secret' }]
+    ]);
   });
 });
 

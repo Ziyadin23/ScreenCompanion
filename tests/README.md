@@ -22,6 +22,12 @@ Injected crop fixtures do not establish real JPEG/monitor behavior.
 
 Historical suite counts and failed attempts are preserved in [test-run history](../docs/history/test-runs.md#portable-suite-history). Current-candidate results and their limits are owned by [verification](../docs/VERIFICATION.md).
 
+With the [Astryx preview](#electron-workflows-and-preview) running and Playwright
+Chromium installed, run `node --test desktop/tests/preview/setup-menu-fit.test.mjs`
+from the repository root. Set `SC_PREVIEW_PORT` if the preview uses a different
+port. These checks exercise setup scroll padding and keyboard navigation while
+the pointer rests on the service list.
+
 ## Windows native and legacy vault checks
 
 Build tools: Windows x64, Visual Studio C++ Build Tools and the Windows SDK.
@@ -76,12 +82,49 @@ Open `http://127.0.0.1:43155/` for Settings or add `?surface=setup` for setup.
 Add `&platform=linux` to inspect Linux notices. Use only synthetic input: this
 preview does not store keys, capture a screen, call a provider or run an updater.
 Save/Back operate on its in-memory draft; reload restores the fixture. The review
-toolbar opens Settings and setup. Stop the server with Ctrl+C.
+toolbar opens Settings and setup.
+
+With the preview running, use these commands from the repository root to check
+the setup service control at 320px in LTR and RTL. Install the Playwright browser
+once if needed.
+
+```sh
+npm --prefix desktop exec -- playwright install chromium
+node --test desktop/tests/preview/setup-service.mjs
+```
+
+Set `SC_PREVIEW_PORT` if the preview is running on a different port. Stop the
+server with Ctrl+C when finished.
+
+With the preview running and Google Chrome installed, verify setup font scaling
+from `desktop/`:
+
+```sh
+npx playwright test --config tests/preview/playwright.config.ts
+```
+
+The tests use isolated, key-free Chrome profiles. Set `SC_PREVIEW_PORT` to the
+port passed to Vite if you run the preview on a different port.
+
+From `desktop/`, run `npx playwright install chromium` once, then run
+`npx playwright test --config playwright.preview.config.ts` for the compact setup
+regression. It starts the synthetic preview on port 43290 and uses isolated
+Chromium sessions for keyboard focus, error visibility and Save retry.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme
 artifacts together. The browser preview is excluded from Electron production
 entry points; it cannot establish native, secure-storage or recorder evidence.
+
+With the Astryx preview running, check wheel containment and keyboard navigation
+in the setup service menu with headless Playwright Chromium. From `desktop/`:
+
+```sh
+npx playwright install chromium --only-shell
+node --test tests/preview/setup-menu-wheel.test.mjs
+```
+
+Set `SC_PREVIEW_PORT` to the Vite port if it differs from 43155.
 
 Run Windows GUI checks/previews only inside the Windows VM with its headless frontend:
 

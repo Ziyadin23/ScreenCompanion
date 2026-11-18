@@ -22,15 +22,94 @@ test('first-launch service selection persists with real Windows encryption and s
   }
   try {
     let page = await launch();
-    await expect(page.getByRole('combobox', { name: 'API service', exact: true })).toBeVisible();
+    const service = page.getByRole('combobox', { name: 'API service', exact: true });
+    await expect(service).toBeVisible();
     const handle = await app!.evaluate(({ BrowserWindow }) => {
       const value = BrowserWindow.getAllWindows()[0]!.getNativeWindowHandle();
       return value.length === 8 ? value.readBigUInt64LE().toString() : value.readUInt32LE().toString();
     });
     const nativeWindow = await windowsEvent<NativeWindow>({ type: 'inspect', handle });
     expect(nativeWindow.affinityRead).toBe(true); expect([1, 0x11]).toContain(nativeWindow.affinity);
-    await page.getByRole('combobox', { name: 'API service', exact: true }).click();
-    await page.getByRole('option', { name: 'DeepSeek', exact: true }).click();
+    const list = page.getByRole('listbox', { name: 'API service', exact: true });
+    const providers = ['OpenAI', 'Groq', 'Google Gemini', 'Mistral', 'OpenRouter', 'DeepSeek'];
+    let selected = 'OpenAI';
+    const minimumSize = await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getMinimumSize());
+    async function resizeSetup(width: number, height: number, zoom: number) {
+      await app!.evaluate(({ BrowserWindow }, size) => {
+        const setup = BrowserWindow.getAllWindows()[0]!;
+        setup.setMinimumSize(size.minimumWidth, size.minimumHeight);
+        setup.setContentSize(size.width, size.height);
+        setup.webContents.setZoomFactor(size.zoom);
+      }, { width, height, zoom, minimumWidth: Math.min(width, minimumSize[0]!), minimumHeight: Math.min(height, minimumSize[1]!) });
+      await expect.poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([width / zoom, height / zoom]);
+    }
+    async function expectActiveOption(name?: string) {
+      await expect(service).toBeFocused();
+      await expect(service).toBeInViewport({ ratio: 0.99 });
+      const activeId = await service.getAttribute('aria-activedescendant');
+      const option = list.locator(`[role="option"][id="${activeId}"]`);
+      await expect(option).toBeInViewport({ ratio: 0.99 });
+      await expect(option).toHaveCSS('outline-style', 'solid');
+      const selectedOption = list.getByRole('option', { selected: true });
+      await expect(selectedOption).toHaveText(selected);
+      if (name) {
+        await expect(option).toHaveText(name);
+        await expect(option).toHaveAttribute('aria-selected', String(name === selected));
+        if (name !== selected) await expect(selectedOption).toHaveCSS('outline-style', 'none');
+      }
+    }
+    async function expectSelection(name: string) {
+      await expect(list).toBeHidden();
+      await expect(service).toHaveText(name);
+      await expect(page.getByLabel(`${name} API key`, { exact: true })).toBeFocused();
+      selected = name;
+    }
+    for (const [width, height, zoom] of [[320, 420, 1], [560, 480, 2]] as const) {
+      await resizeSetup(width, height, zoom);
+      await service.press('ArrowDown');
+      await expectActiveOption(selected);
+      await page.keyboard.press('End');
+      await expectActiveOption('DeepSeek');
+      await page.keyboard.press('ArrowUp');
+      await expectActiveOption('OpenRouter');
+      await page.keyboard.press('Home');
+      await expectActiveOption('OpenAI');
+      for (const [index, name] of providers.entries()) {
+        if (index > 0) {
+          await page.keyboard.press('Shift+Tab');
+          await expect(service).toBeFocused();
+          await page.keyboard.press('ArrowDown');
+          await page.keyboard.press('ArrowDown');
+        }
+        await expectActiveOption(name);
+        await page.keyboard.press('Enter');
+        await expectSelection(name);
+      }
+      await service.click();
+      await expectActiveOption();
+      await page.keyboard.press('Home');
+      await expectActiveOption('OpenAI');
+      await page.keyboard.press('Escape');
+      for (const name of providers) {
+        await service.click();
+        await expectActiveOption();
+        const option = list.getByRole('option', { name, exact: true });
+        await list.hover({ position: { x: 2, y: 2 } });
+        const delta = await option.evaluate((row) => {
+          const scroller = row.parentElement!;
+          const top = scroller.getBoundingClientRect().top + scroller.clientTop;
+          const bounds = row.getBoundingClientRect();
+          if (bounds.top < top) return Math.floor(bounds.top - top);
+          return Math.max(0, Math.ceil(bounds.bottom - top - scroller.clientHeight));
+        });
+        if (delta) await page.mouse.wheel(0, delta * zoom);
+        await expect(option).toBeInViewport({ ratio: 0.99 });
+        await expect(service).toBeInViewport({ ratio: 0.99 });
+        await option.click();
+        await expectSelection(name);
+      }
+    }
+    await resizeSetup(560, 480, 1);
     await page.getByLabel('DeepSeek API key', { exact: true }).fill(key);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect.poll(() => page.evaluate(async () => (await window.sc.getState()).ready)).toBe(true);
