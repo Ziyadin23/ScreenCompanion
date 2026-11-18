@@ -160,6 +160,10 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .choice-above .choice-list { top: auto; bottom: var(--spacing-10); }
 .choice-list [role="option"] { padding: var(--spacing-2); border-radius: var(--radius-inner); cursor: pointer; overflow-wrap: anywhere; }
 .choice-list [role="option"].active { background: var(--color-overlay-hover); }
+.setup .choice-list [role="option"].active {
+  outline: var(--focus-outline-width) solid var(--color-icon-accent);
+  outline-offset: calc(-1 * var(--focus-outline-width));
+}
 .choice-list [aria-selected="true"] { color: var(--color-text-accent); font-weight: 600; }
 .setup { height: 100%; overflow-y: auto; }
 .setup .dialog-header { padding-block-start: var(--spacing-6); }

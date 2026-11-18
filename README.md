@@ -51,7 +51,8 @@ setup without installed developer tools remains unqualified; see the
    the ZIP and run its EXE. Both editions include their runtime.
 2. **Connect a service.** Choose your API service, enter its key and click **Save**.
    Saving makes no model request. Your account needs access to the selected models
-   and any required credits.
+   and any required credits. In current source, the open service list outlines the
+   option that **Enter** will choose.
 3. **Ask a question.** Press **Ctrl+Alt+Space** to capture the foreground app's
    monitor, or **Ctrl+Enter** to open question input. In the downloaded beta.6,
    **Enter** or **Send** submits your text with a fresh screenshot. Current source

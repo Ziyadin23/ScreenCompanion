@@ -22,14 +22,34 @@ test('first-launch service selection persists with real Windows encryption and s
   }
   try {
     let page = await launch();
-    await expect(page.getByRole('combobox', { name: 'API service', exact: true })).toBeVisible();
+    const service = page.getByRole('combobox', { name: 'API service', exact: true });
+    await expect(service).toBeVisible();
     const handle = await app!.evaluate(({ BrowserWindow }) => {
       const value = BrowserWindow.getAllWindows()[0]!.getNativeWindowHandle();
       return value.length === 8 ? value.readBigUInt64LE().toString() : value.readUInt32LE().toString();
     });
     const nativeWindow = await windowsEvent<NativeWindow>({ type: 'inspect', handle });
     expect(nativeWindow.affinityRead).toBe(true); expect([1, 0x11]).toContain(nativeWindow.affinity);
-    await page.getByRole('combobox', { name: 'API service', exact: true }).click();
+    const options = page.getByRole('listbox', { name: 'API service', exact: true });
+    const selected = options.getByRole('option', { selected: true });
+    const navigation = [
+      ['ArrowDown', 'OpenAI'], ['ArrowDown', 'Groq'], ['End', 'DeepSeek'],
+      ['ArrowUp', 'OpenRouter'], ['Home', 'OpenAI'], ['ArrowDown', 'Groq']
+    ] as const;
+    for (const [key, name] of navigation) {
+      await service.press(key);
+      const active = options.getByRole('option', { name, exact: true });
+      await expect(service).toBeFocused();
+      await expect(service).toHaveAttribute('aria-activedescendant', await active.evaluate((option) => option.id));
+      await expect(active).toHaveCSS('outline-style', 'solid');
+      await expect(selected).toHaveText('OpenAI');
+      if (name !== 'OpenAI') await expect(selected).toHaveCSS('outline-style', 'none');
+    }
+    await service.press('Enter');
+    await expect(options).toBeHidden();
+    await expect(service).toHaveText('Groq');
+    await expect(page.getByLabel('Groq API key', { exact: true })).toBeFocused();
+    await service.click();
     await page.getByRole('option', { name: 'DeepSeek', exact: true }).click();
     await page.getByLabel('DeepSeek API key', { exact: true }).fill(key);
     await page.getByRole('button', { name: 'Save', exact: true }).click();
