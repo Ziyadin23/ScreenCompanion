@@ -56,6 +56,7 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
             type={showKey ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false}
             aria-invalid={!!error} aria-describedby={`setup-privacy${error ? ' setup-error' : ''}`}
             status={error ? { type: 'error' } : undefined} value={key} isDisabled={saving}
+            onFocus={revealKeyGroup}
             onChange={(value) => { setKey(value.slice(0, 8192)); setError(''); }} />
           <CheckboxInput label="Show API key" size="sm" value={showKey} isDisabled={saving} onChange={setShowKey} />
         </VStack>
