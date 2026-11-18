@@ -22,6 +22,12 @@ Injected crop fixtures do not establish real JPEG/monitor behavior.
 
 Historical suite counts and failed attempts are preserved in [test-run history](../docs/history/test-runs.md#portable-suite-history). Current-candidate results and their limits are owned by [verification](../docs/VERIFICATION.md).
 
+With the [Astryx preview](#electron-workflows-and-preview) running and Playwright
+Chromium installed, run `node --test desktop/tests/preview/setup-menu-fit.test.mjs`
+from the repository root. Set `SC_PREVIEW_PORT` if the preview uses a different
+port. These checks exercise setup scroll padding and keyboard navigation while
+the pointer rests on the service list.
+
 ## Windows native and legacy vault checks
 
 Build tools: Windows x64, Visual Studio C++ Build Tools and the Windows SDK.

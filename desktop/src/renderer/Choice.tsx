@@ -27,7 +27,10 @@ export function Choice({ label, value, options, onChange, editable = false, disa
     if (!open || !inlineList) return;
     const reveal = () => {
       root.current?.scrollIntoView?.(nearestScrollContainer);
-      root.current?.querySelector('[role="option"].active')?.scrollIntoView?.(nearestScrollContainer);
+      const list = root.current?.querySelector('[role="listbox"]');
+      // The setup form's scroll padding can leave the bottom of the larger choice group clipped.
+      list?.scrollIntoView?.(nearestScrollContainer);
+      list?.querySelector('[role="option"].active')?.scrollIntoView?.(nearestScrollContainer);
     };
     reveal();
     window.addEventListener('resize', reveal);
@@ -82,7 +85,9 @@ export function Choice({ label, value, options, onChange, editable = false, disa
     {open && !disabled && <VStack id={`${id}-list`} role="listbox" aria-label={label} className="choice-list">
       {choices.map((option, index) => <VStack key={option} id={`${id}-${index}`} role="option" aria-selected={option === value}
         className={active === index ? 'active' : ''} onMouseDown={(event) => event.preventDefault()}
-        onMouseEnter={() => setActive(index)} onClick={() => select(option)}>{display(option)}</VStack>)}
+        onMouseEnter={inlineList ? undefined : () => setActive(index)}
+        onMouseMove={inlineList ? () => setActive(index) : undefined}
+        onClick={() => select(option)}>{display(option)}</VStack>)}
     </VStack>}
   </VStack>;
 }
