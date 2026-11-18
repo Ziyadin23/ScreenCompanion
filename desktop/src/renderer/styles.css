@@ -166,6 +166,7 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .setup form { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .setup-content { padding: var(--spacing-4) var(--spacing-6) var(--spacing-6); flex: 1; overflow-y: auto; }
 .setup-content > * { flex-shrink: 0; }
+.setup .choice-list { overscroll-behavior-y: contain; }
 .privacy-notice { background: var(--color-background-muted); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); }
 .setup .dialog-error { margin: 0 !important; }
 .startup-error { padding: 24px; height: 100%; background: var(--ui-bg); color: var(--ui-text); }

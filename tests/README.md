@@ -83,6 +83,16 @@ source, run `npm --prefix desktop run theme:build` and retain the generated them
 artifacts together. The browser preview is excluded from Electron production
 entry points; it cannot establish native, secure-storage or recorder evidence.
 
+With the Astryx preview running, check wheel containment and keyboard navigation
+in the setup service menu with headless Playwright Chromium. From `desktop/`:
+
+```sh
+npx playwright install chromium --only-shell
+node --test tests/preview/setup-menu-wheel.test.mjs
+```
+
+Set `SC_PREVIEW_PORT` to the Vite port if it differs from 43155.
+
 Run Windows GUI checks/previews only inside the Windows VM with its headless frontend:
 
 ```powershell
