@@ -30,12 +30,14 @@ test('first-launch service selection persists with real Windows encryption and s
     const nativeWindow = await windowsEvent<NativeWindow>({ type: 'inspect', handle });
     expect(nativeWindow.affinityRead).toBe(true); expect([1, 0x11]).toContain(nativeWindow.affinity);
     const service = page.getByRole('combobox', { name: 'API service', exact: true });
+    const minimumSize = await app!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getMinimumSize());
     async function resizeSetup(width: number, height: number, zoom: number) {
       await app!.evaluate(({ BrowserWindow }, size) => {
         const setup = BrowserWindow.getAllWindows()[0]!;
+        setup.setMinimumSize(size.minimumWidth, size.minimumHeight);
         setup.setContentSize(size.width, size.height);
         setup.webContents.setZoomFactor(size.zoom);
-      }, { width, height, zoom });
+      }, { width, height, zoom, minimumWidth: Math.min(width, minimumSize[0]!), minimumHeight: Math.min(height, minimumSize[1]!) });
       await expect.poll(() => page.evaluate(() => [window.innerWidth, window.innerHeight])).toEqual([width / zoom, height / zoom]);
     }
     async function expectActiveOption(name?: string) {
