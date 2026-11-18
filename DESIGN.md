@@ -13,7 +13,7 @@ colors:
   ui-neutral: "light-dark(#0000000F, #ffffff1A)"
   ui-overlay-hover: "light-dark(#0000000D, #ffffff0D)"
   ui-overlay-pressed: "light-dark(#0000001A, #ffffff1A)"
-  ui-interactive-border: "#51545f"
+  ui-interactive-border: "#6f727d"
   ui-selected-bg: "#2b303b"
   ui-selected-text: "#d9e6fb"
   ui-white: "#fff"
@@ -228,7 +228,8 @@ The palette is neutral and low-chroma; blue identifies actions, focus and select
 - **Neutral action layer** (`ui-neutral`): the inherited translucent secondary-button fill over the dialog canvas.
 - **Interaction overlays** (`ui-overlay-hover`, `ui-overlay-pressed`): inherited Astryx button states; the hover overlay also marks the active choice row. Their canonical values retain Astryx's light/dark form; dialogs explicitly use dark mode.
 - **Off-white** (`ui-text`) and **muted gray** (`ui-muted`): primary content and supporting copy. White (`ui-white`) is reserved for blue primary actions.
-- **Fine border** (`ui-border`) and **interactive border** (`ui-interactive-border`): section/control separation and hovered controls or popup edges.
+- **Fine border** (`ui-border`): section and control separation.
+- **Interactive border** (`ui-interactive-border`): emphasized field boundaries, unchecked checkbox indicators, hovered choice controls and popup edges. The default field and checkbox borders exceed 3:1 contrast against both the dialog canvas and the control fill.
 - **Default panel surface** (`panel-default-bg`) and **default panel control** (`panel-default-input`): resolved fresh appearance, including quantized background alpha and the input color mixed toward the foreground.
 
 Validation uses warm, readable error text (`ui-error-text`) on a dark warm surface (`ui-error-bg`), with a separate invalid-field border (`ui-invalid-border`). Keep the written error and field association alongside the color.
