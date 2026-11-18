@@ -284,7 +284,7 @@ Icons are inline outline SVGs: current text color, rounded caps and joins, a con
 
 Compact Astryx buttons use the control radius, medium-weight labels, no border and the medium element height (36px). Ordinary secondary actions use the inherited neutral layer; Back and Cancel use transparent ghost buttons. Save uses the primary action color. Footer actions have a minimum width (80px). Disabled controls halve opacity and use the default cursor; retain Astryx's disabled behavior, including its `aria-disabled` form.
 
-Astryx buttons retain the library's accent keyboard outline (2px, 3px offset), inherited hover/press overlays and slight press scale (0.98). Their state transition uses the fast theme duration (125ms) and standard easing. Native dialog controls, disclosures and focusable page content use the pale focus outline (2px, 2px offset); the legacy panel focus rule is scoped to the answer panel. Reduced-motion preference disables transitions and animations, and Astryx suppresses press scaling.
+Astryx buttons retain the library's keyboard outline (2px, 3px offset), inherited hover/press overlays and slight press scale (0.98). In setup, Save, Cancel and Show API key use the same pale focus color as the key field. Button state transitions use the fast theme duration (125ms) and standard easing. Native dialog controls, disclosures and focusable page content use the pale focus outline (2px, 2px offset). The legacy panel focus rule is scoped to the answer panel. Reduced-motion preference disables transitions and animations, and Astryx suppresses press scaling.
 
 ### Inputs / Fields
 
