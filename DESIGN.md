@@ -296,7 +296,7 @@ Show API key uses Astryx CheckboxInput with a small indicator and muted field-la
 
 ### Choices
 
-Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay; the saved option receives selected text and stronger weight. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay. In the setup API service list, a 2px pale blue inset outline follows the active option. The current selection keeps its accent text and stronger weight while the outline moves to another row. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
 
 ### Navigation
 
