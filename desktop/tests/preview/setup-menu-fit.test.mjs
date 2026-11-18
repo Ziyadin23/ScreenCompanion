@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
-import { chromium } from 'playwright';
+import { chromium } from '@playwright/test';
 
 const previewPort = process.env.SC_PREVIEW_PORT ?? '43155';
 let browser;
