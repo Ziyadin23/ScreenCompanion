@@ -81,7 +81,8 @@ for (const { rootSize, expectedSizes } of [
       await expect(cancel).toBeFocused();
       await expect(cancel).toBeInViewport({ ratio: 1 });
       await save.click();
-      await expect(setup.getByRole('alert')).toHaveText('Enter your OpenAI API key without line breaks or control characters.');
+      await expect(setup.locator('#setup-error')).toHaveText('Enter your OpenAI API key without line breaks or control characters.');
+      await expect(setup.getByLabel('OpenAI API key', { exact: true })).toHaveAttribute('aria-describedby', /(?:^|\s)setup-error(?:\s|$)/);
       await cancel.click();
       await expect(setup).toHaveCount(0);
     } finally {
