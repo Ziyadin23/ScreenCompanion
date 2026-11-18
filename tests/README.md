@@ -78,6 +78,11 @@ preview does not store keys, capture a screen, call a provider or run an updater
 Save/Back operate on its in-memory draft; reload restores the fixture. The review
 toolbar opens Settings and setup. Stop the server with Ctrl+C.
 
+From `desktop/`, run `npx playwright install chromium` once, then run
+`npx playwright test --config playwright.preview.config.ts` for the compact setup
+regression. It starts the synthetic preview on port 43290 and uses isolated
+Chromium sessions for keyboard focus, error visibility and Save retry.
+
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme
 artifacts together. The browser preview is excluded from Electron production
