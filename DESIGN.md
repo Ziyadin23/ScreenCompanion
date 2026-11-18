@@ -268,9 +268,9 @@ The recurring spacing steps in frontmatter are resolved sizes at the default roo
 
 ## Elevation & Depth
 
-Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. The choice popup uses Astryx's inherited medium shadow (`--shadow-med`), with layered dark ambient shadows and an inset edge. Fields use inherited inset hover/focus feedback. These token values are recorded in the sidecar. The popup sits 4px below its control, can open upward near the window bottom, and scrolls at a maximum height (200px).
+Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. Choice lists use Astryx's inherited medium shadow (`--shadow-med`), with layered dark ambient shadows and an inset edge. Fields use inherited inset hover/focus feedback. These token values are recorded in the sidecar.
 
-**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve ambient shadow for the choice overlay; use tonal changes, borders and Astryx's inset feedback for control states.
+**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve ambient shadow for open choice lists. Use tonal changes, borders and Astryx's inset feedback for control states.
 
 ## Shapes
 
@@ -297,6 +297,8 @@ Show API key uses Astryx CheckboxInput with a small indicator and muted field-la
 ### Choices
 
 Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay; the saved option receives selected text and stronger weight. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+
+In Setup, the service list opens 4px below **API service** in the form's normal flow. The control and list fit within the scrolling content, and the list scrolls independently to reveal the active option. In Settings, choice popups overlay the form 4px below the control and can open upward near the window bottom. Choice lists have a maximum height of 200px at the default text size.
 
 ### Navigation
 
