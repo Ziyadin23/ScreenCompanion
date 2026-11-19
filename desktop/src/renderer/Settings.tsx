@@ -76,7 +76,7 @@ export function Settings({ state }: { state: AppState }) {
     let cancelled = false;
     setLoadFailed(false); setError('');
     void window.sc.getSettingsDraft().then((result) => {
-      if (cancelled) return;
+      if (cancelled || result.session !== state.settingsSession) return;
       const copy = structuredClone(result);
       // Saved secrets never cross the renderer boundary, even as masked text.
       copy.keyUpdates = {};
@@ -92,7 +92,7 @@ export function Settings({ state }: { state: AppState }) {
       cancelled = true; alive.current = false;
       recordingRef.current = null;
     };
-  }, [loadAttempt]);
+  }, [loadAttempt, state.settingsSession]);
 
   useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
   useEffect(() => {
@@ -144,6 +144,7 @@ export function Settings({ state }: { state: AppState }) {
   }
   const models = draft?.values.Models ?? defaultModels();
   const provider = models.Provider;
+  const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
   const pipeline = draft?.values.PipelineMode ?? 'Thorough';
   function updateModels(patch: Partial<ModelSelection>) {
     const next = { ...models, ...patch };
@@ -198,7 +199,7 @@ export function Settings({ state }: { state: AppState }) {
       return key.length > 8192 || /[\u0000-\u001f\u007f]/.test(key);
     });
     if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
-    if (!draft.keyUpdates[provider]?.trim() && !draft.keyPresence[provider]) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
+    if (!draft.keyUpdates[provider]?.trim() && !hasSavedKey) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
     if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
       (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
@@ -232,8 +233,7 @@ export function Settings({ state }: { state: AppState }) {
       const result = await window.sc.saveSettings(outgoing);
       if (!alive.current) return;
       if (result === 'busy') setError('Another Settings save is finishing. Wait a moment, then try Save again.');
-      else if (result === 'shortcut-restore-failed') setError('Settings were not saved and the previous shortcuts could not be restored. Restart SC to restore them.');
-      else if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
+      else if (result === 'saved' && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
       if (alive.current) setError(state.platform === 'linux' ? 'Settings were not saved. Unlock your secure Linux keyring and check the selected service and model IDs, then try again.' : 'Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
@@ -371,12 +371,12 @@ export function Settings({ state }: { state: AppState }) {
             ref={(input) => { if (input) input.maxLength = 8192; }}
             type={showKey ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false} isDisabled={blocked}
             status={invalidField === 'service-key' ? { type: 'error' } : undefined}
-            placeholder={draft.keyPresence[provider] ? 'Leave empty to keep the saved key' : 'Enter API key'}
+            placeholder={hasSavedKey ? 'Leave empty to keep the saved key' : 'Enter API key'}
             value={draft.keyUpdates[provider] ?? ''} onChange={(value) => {
               modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value.slice(0, 8192) } }));
             }} />
           <HStack className="key-feedback" gap={3} wrap="wrap" hAlign="between">
-            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
+            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : hasSavedKey ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
             <CheckboxInput label="Show API key" size="sm" value={showKey} isDisabled={blocked} onChange={setShowKey} />
           </HStack>
           <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies this service to future questions without testing the key or making a model request.</p>
@@ -414,6 +414,7 @@ export function Settings({ state }: { state: AppState }) {
     </VStack>
     </VStack>
     {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
+    {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
     <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
       <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
       <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>

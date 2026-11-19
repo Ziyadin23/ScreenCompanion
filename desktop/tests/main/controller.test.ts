@@ -4,6 +4,7 @@ import { PROVIDERS } from '../../src/contracts';
 import { withSavedSettings } from '../../src/pipeline/configuration';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
+import { ShortcutRestoreError } from '../../src/platform/shortcuts';
 import { ApplicationController, canResizePanel } from '../../src/main/controller';
 import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
@@ -279,6 +280,22 @@ describe('production lifecycle with injected native boundaries', () => {
     await saving;
     expect(f.controller.getState()).toMatchObject({ surface: 'answer', busy: false, error: requestError });
   });
+  it('rejects a Save from an older session that reaches the controller after Settings reopens', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const old = f.controller.getSettingsDraft();
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    f.applyShortcuts.mockClear();
+    expect(f.controller.getSettingsDraft().session).not.toBe(old.session);
+
+    await expect(f.controller.saveSettings(old)).rejects.toMatchObject({ code: 'STALEDRAFT' });
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', visible: true, settingsDirty: true });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).not.toHaveBeenCalled();
+  });
   it('rejects an overlapping save and merges the retry with the newly committed settings and keys', async () => {
     const f = fixture();
     await f.controller.initialize();
@@ -308,6 +325,7 @@ describe('production lifecycle with injected native boundaries', () => {
 
     write.resolve();
     await saving;
+    expect(f.controller.getState().settingsKeyPresence).toMatchObject({ OpenAI: true, DeepSeek: true, Groq: false });
     await f.controller.saveSettings(second);
     expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, appearance: { TransparencyPercent: 35, TextSizePoints: 18 } });
     expect(f.save).toHaveBeenCalledTimes(2);
@@ -318,6 +336,30 @@ describe('production lifecycle with injected native boundaries', () => {
     expect(modelPipeline(saved.ModelPipelines, defaultModels('Groq'))).toBe('Direct');
     expect(f.applyShortcuts).toHaveBeenCalledExactlyOnceWith(saved, false, f.controller.onAction);
     expect(f.run).not.toHaveBeenCalled();
+  });
+  it('retains independent model edits and their model-specific pipelines when a newer draft saves', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    const originalModel = first.values.Models!;
+    first.values.Models = { ...originalModel, AnswerModel: 'gpt-synthetic-answer' };
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first);
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Models = { ...second.values.Models!, VisionModel: 'gpt-synthetic-vision' };
+    second.values.PipelineMode = 'Direct';
+
+    write.resolve();
+    await saving;
+    await f.controller.saveSettings(second);
+    const saved = f.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: { AnswerModel: 'gpt-synthetic-answer', VisionModel: 'gpt-synthetic-vision' }, PipelineMode: 'Thorough' });
+    expect(modelPipeline(saved.ModelPipelines, originalModel)).toBe('Direct');
+    expect(modelPipeline(saved.ModelPipelines, saved.Models!)).toBe('Thorough');
   });
   it('waits for shortcut rollback and keeps a newer draft and recording active after a write failure', async () => {
     const f = fixture();
@@ -375,20 +417,38 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.saveSettings(draft);
     expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, shortcuts: { capture: draft.values.Capture } });
   });
-  it('reports shortcut restore failure without claiming the vault was saved or closing the draft', async () => {
+  it('publishes recovery without writing when native registration cannot restore the previous shortcuts', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    f.applyShortcuts.mockRejectedValueOnce(new ShortcutRestoreError('Synthetic native restore failure'));
+
+    await expect(f.controller.saveSettings(f.controller.getSettingsDraft())).resolves.toBe('shortcut-restore-failed');
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.states.at(-1)).toMatchObject({ surface: 'settings', settingsDirty: true,
+      shortcutRecovery: { code: 'SHORTCUTS-RESTOREFAILED', message: expect.stringContaining('Restart SC') } });
+  });
+  it('publishes shortcut recovery when the failed save belongs to an earlier Settings draft', async () => {
     const f = fixture();
     await f.controller.initialize();
     await f.controller.command({ type: 'settings' });
     const draft = f.controller.getSettingsDraft();
     draft.values.Appearance.TextSizePoints = 18;
-    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
     const write = f.delaySave();
     const saving = f.controller.saveSettings(draft);
     await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
     f.applyShortcuts.mockRejectedValueOnce(new Error('private restore failure'));
     write.reject(new Error('private write failure'));
     expect(await saving).toBe('shortcut-restore-failed');
-    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, error: null, appearance: { TextSizePoints: 11 } });
+    expect(f.states.at(-1)).toMatchObject({ surface: 'settings', settingsDirty: true, error: null, appearance: { TextSizePoints: 11 },
+      shortcutRecovery: { code: 'SHORTCUTS-RESTOREFAILED', message: expect.stringContaining('Restart SC') } });
+    expect(JSON.stringify(f.controller.getState())).not.toContain('private restore failure');
+    await f.controller.saveSettings(f.controller.getSettingsDraft());
+    expect(f.controller.getState().shortcutRecovery).toBeNull();
   });
   it('keeps failed saves dirty and clears the update guard only after a successful save', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });

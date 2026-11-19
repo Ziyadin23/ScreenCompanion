@@ -526,6 +526,23 @@ describe('settings drafts and protected controls', () => {
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
     expect(driver.getState().settingsDirty).toBe(true);
   });
+  it('lets a newer draft use a provider key saved after that draft opened', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    tab('Models & API');
+    choose('API service', 'Groq');
+    expect(screen.getByText('No saved key for this service.')).toBeTruthy();
+
+    await act(async () => driver.emit({ settingsKeyPresence: { ...driver.getDraft().keyPresence, Groq: true } }));
+    expect(screen.getByText('A key is saved for this service.')).toBeTruthy();
+    expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(driver.saved).toEqual([expect.objectContaining({ keyUpdates: {}, values: expect.objectContaining({ ResponseMode: 'Brief' }) })]);
+  });
   it('previews independent opacity and palettes, discards Back, applies Save, and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
     fireEvent.change(screen.getByRole('slider', { name: 'Background transparency' }), { target: { value: '50' } });
@@ -686,12 +703,9 @@ describe('settings drafts and protected controls', () => {
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
     expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
   });
-  it.each([
-    ['busy', 'Wait a moment, then try Save again'],
-    ['shortcut-restore-failed', 'Restart SC to restore them']
-  ] as const)('keeps the draft editable and explains recovery after a %s save result', async (result, guidance) => {
+  it('keeps the draft editable and explains how to retry an overlapping save', async () => {
     const driver = fixture();
-    driver.api.saveSettings.mockResolvedValueOnce(result);
+    driver.api.saveSettings.mockResolvedValueOnce('busy');
     render(<App />);
     await screen.findByTestId('answer-text');
     await openSettings();
@@ -699,10 +713,29 @@ describe('settings drafts and protected controls', () => {
     fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-replacement' } });
     fireEvent.click(screen.getByTestId('settings-save'));
 
-    expect((await screen.findByRole('alert')).textContent).toContain(guidance);
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
     expect(driver.getState().settingsDirty).toBe(true);
     expect(screen.getByTestId('settings-save').matches(':disabled, [aria-disabled="true"]')).toBe(false);
     expect(driver.saved).toHaveLength(0);
+  });
+  it('shows shortcut recovery while keeping the active Settings draft and retained answer', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+
+    await act(async () => driver.emit({ shortcutRecovery: {
+      message: 'Settings were not saved. Restart SC to restore the saved shortcuts.',
+      code: 'SHORTCUTS-RESTOREFAILED', reportId: 'synthetic', logSaved: false, hint: ''
+    } }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Restart SC');
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
+    expect(driver.getState().settingsDirty).toBe(true);
+
+    fireEvent.click(screen.getByTestId('settings-back'));
+    expect((await screen.findByTestId('answer-text')).textContent).toContain('Synthetic SC answer');
+    expect(screen.getByRole('alert').textContent).toContain('Restart SC');
   });
 });

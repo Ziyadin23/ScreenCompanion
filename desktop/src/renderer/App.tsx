@@ -106,6 +106,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
       </nav>
     </div>
     <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
+    {state.shortcutRecovery && <p className="panel-action-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
     {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
       <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
         disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
@@ -123,20 +124,13 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
 }
 
 export function App() {
-  const [snapshot, setSnapshot] = useState<{ state: AppState; settingsSession: number } | null>(null);
-  const state = snapshot?.state;
+  const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
     let receivedEvent = false;
-    function receive(next: AppState) {
-      // IPC updates can enter and leave Settings before React commits a render.
-      // Give each opening its own draft even when those updates are batched.
-      setSnapshot((previous) => ({ state: next, settingsSession: (previous?.settingsSession ?? 0) +
-        (next.surface === 'settings' && previous?.state.surface !== 'settings' ? 1 : 0) }));
-    }
-    const unsubscribe = window.sc.subscribe((next) => { receivedEvent = true; if (active) receive(next); });
-    void window.sc.getState().then((initial) => { if (active && !receivedEvent) receive(initial); })
+    const unsubscribe = window.sc.subscribe((next) => { receivedEvent = true; if (active) setState(next); });
+    void window.sc.getState().then((initial) => { if (active && !receivedEvent) setState(initial); })
       .catch(() => { if (active) setError('SC could not load. Close and reopen the app.'); });
     return () => { active = false; unsubscribe(); };
   }, []);
@@ -157,6 +151,6 @@ export function App() {
   }, [state?.surface]);
   if (!state) return error ? <div className="fixed-theme startup-error" role="alert">{error}</div> : null;
   if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
-  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={snapshot!.settingsSession} state={state} /></Theme>;
+  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={state.settingsSession} state={state} /></Theme>;
   return <Answer state={state} onCommand={command} />;
 }

@@ -8,6 +8,7 @@ const color = z.string().regex(/^#[0-9a-f]{6}$/iu);
 const model = z.string().min(1).max(160).regex(/^[A-Za-z0-9_./:-]+$/u).refine(value => !value.includes('://'));
 const pipeline = z.enum(['Thorough', 'Direct']);
 export const settingsDraftSchema = z.object({
+  session: z.number().int().nonnegative(),
   values: z.object({
     ResponseMode: z.enum(RESPONSE_MODES), CustomInstruction: z.string().max(2000),
     Capture: shortcut, Visibility: shortcut, Test: shortcut,

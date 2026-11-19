@@ -7,11 +7,12 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
   const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
   values.Models = defaultModels(); values.PipelineMode = 'Thorough'; values.CommandsShown = true;
   let draft: SettingsDraft = {
-    values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false },
+    session: 0, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false },
     keyUpdates: {}, ...draftOverrides
   };
   let state: AppState = {
-    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsDirty: false, answer: 'Synthetic SC answer', error: null,
+    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsDirty: false,
+    settingsKeyPresence: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
     captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false,
@@ -21,7 +22,12 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
   const scrollListeners = new Set<(delta: number) => void>();
   const inputListeners = new Set<(submitScreenshot: boolean) => void>();
   const saved: SettingsDraft[] = [];
-  const emit = (patch: Partial<AppState>) => { state = { ...state, ...patch }; for (const listener of listeners) listener(state); };
+  const emit = (patch: Partial<AppState>) => {
+    const settingsSession = state.settingsSession + (patch.surface === 'settings' && state.surface !== 'settings' ? 1 : 0);
+    state = { ...state, settingsSession, ...patch };
+    for (const listener of listeners) listener(state);
+  };
+  const getDraft = () => ({ ...structuredClone(draft), session: state.settingsSession });
   const api = {
     getState: vi.fn(async () => structuredClone(state)),
     setup: vi.fn(async (_request: SetupRequest) => { emit({ surface: 'answer' }); }),
@@ -33,13 +39,13 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       if (command.type === 'submit') emit({ busy: true, surface: 'answer' });
       if (command.type === 'settingsDraftChanged' && state.surface === 'settings') emit({ settingsDirty: command.dirty });
     }),
-    getSettingsDraft: vi.fn(async () => structuredClone(draft)),
+    getSettingsDraft: vi.fn(async () => getDraft()),
     saveSettings: vi.fn<DesktopApi['saveSettings']>(async (next) => {
       saved.push(structuredClone(next));
       const keyPresence = { ...draft.keyPresence };
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) keyPresence[provider] = true;
       draft = { ...structuredClone(next), keyPresence, keyUpdates: {} };
-      emit({ surface: 'answer', settingsDirty: false, appearance: next.values.Appearance });
+      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, appearance: next.values.Appearance });
       return 'saved';
     }),
     discardSettings: vi.fn(async () => { emit({ surface: 'answer', settingsDirty: false }); }),
@@ -50,7 +56,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     onInputAction: vi.fn((listener: (submitScreenshot: boolean) => void) => { inputListeners.add(listener); return () => { inputListeners.delete(listener); }; })
   } satisfies DesktopApi;
   window.sc = api;
-  return { api, saved, emit, getState: () => state, getDraft: () => draft,
+  return { api, saved, emit, getState: () => state, getDraft,
     inputAction: (submitScreenshot: boolean) => { for (const listener of inputListeners) listener(submitScreenshot); },
     scroll: (delta: number) => { for (const listener of scrollListeners) listener(delta); },
     actions: () => Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, draft.values[field]])) as Record<AppAction, typeof values.Capture>

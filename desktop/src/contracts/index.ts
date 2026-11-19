@@ -105,9 +105,11 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState; settingsDirty: boolean;
+  updates: UpdateState; settingsSession: number; settingsDirty: boolean;
+  settingsKeyPresence: SettingsDraft['keyPresence'] | null; shortcutRecovery: DisplayError | null;
 }
 export interface SettingsDraft {
+  session: number;
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
