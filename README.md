@@ -154,6 +154,8 @@ Pipeline preferences are saved per service and answer model. Text-only sends use
 one answering call and never capture. Old Balanced selections become Thorough.
 Some configured or typed-question paths use two calls; see the
 [pipeline reference](docs/PIPELINE.md#pipeline-modes) for conditions and local validation.
+SC stops and reports an unreadable response if OpenAI or DeepSeek returns a
+malformed completion status.
 
 Screen-reading models must support images and structured JSON; answer models need
 structured JSON and support for any required task images. DeepSeek Flash supports
