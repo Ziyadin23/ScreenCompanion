@@ -57,7 +57,7 @@ export class ApplicationController {
   private shortcuts(settings: VaultData): AppState['shortcuts'] {
     return Object.fromEntries(Object.entries(shortcutFields).map(([action, field]) => [action, { ...settings[field] }])) as AppState['shortcuts'];
   }
-  private publish(): void { if (!this.exiting) this.deps.host.publish(this.getState(), this.capturing); }
+  publish(): void { if (!this.exiting) this.deps.host.publish(this.getState(), this.capturing); }
   private defer(action: () => void): boolean {
     if (!this.capturing) return false;
     this.afterCapture.push(action); return true;

@@ -170,6 +170,31 @@ open. Historical recorder results retain their candidate/surface limits in
 [verification](../docs/VERIFICATION.md). For actual exclusion claims, follow the
 [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
 
+### Hyprland panel geometry
+
+On Fedora 44, install Hyprland, KWin, Bubblewrap, GNOME Keyring and the D-Bus session tools.
+Run this regression from the repository root after desktop dependency setup.
+The first command resolves the pinned Electron runtime before network isolation.
+
+```sh
+node -p 'require("./desktop/node_modules/electron")'
+npm --prefix desktop run build
+bwrap --unshare-pid --unshare-net --die-with-parent --clearenv \
+  --setenv PATH /usr/bin:/bin --ro-bind / / --dev-bind /dev /dev \
+  --proc /proc --tmpfs /tmp -- dbus-run-session -- \
+  node --test desktop/tests/linux/panel-settings.mjs
+```
+
+The test reads the floating window dimensions from Hyprland nested in headless
+KWin. The key-free preview checks that Settings Back and Save restore the panel
+size and that Question grows a short panel before Escape restores its size.
+The production entry point uses a temporary keyring and separate fresh profiles
+for Back and Save. Each case checks that the panel fits a later synthetic answer
+without writing a manual size, then saves a deliberate compositor resize. A
+controlled capture cancellation checks that a late Settings load keeps SC hidden.
+See the dated results for the additional restart checks.
+[Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-2026-11-19).
+
 ## Installed updates
 
 Verify installed delivery, automatic restart, expected version, retained settings and cleanup using the candidate-specific update procedure. Check the real vault hashes independently before and after, and use an isolated profile for synthetic retention checks. Keep private feed overrides and runner paths outside source and release assets. Historical local-feed scenarios do not establish public-feed delivery; see [recorded evidence](../docs/VERIFICATION.md) and [installed update history](../docs/history/test-runs.md#installed-update-history).

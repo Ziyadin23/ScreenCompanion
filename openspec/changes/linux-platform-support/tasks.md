@@ -89,3 +89,32 @@
 - The seven target/integration tasks above remain unchecked. No new GUI, Windows-native, provider, RPM upgrade, local beta delivery or release run is claimed by this source publication. Continue at task 2.1 after review.
 - `npm audit --json`: exit 1 because of 25 moderate advisories; no high or critical advisories were reported. No automatic dependency changes were applied.
 - `openspec validate linux-platform-support --strict`, `openspec validate organize-project-workflow --strict` and `git diff --cached --check`: exit 0. The final public-file audit checked 60 intended files and 107 Markdown links/anchors with no private paths, credential patterns, obsolete workflow references or conflict markers.
+
+## Settings-to-answer sizing checkpoint (2026-11-19)
+
+- [Issue #19](https://github.com/Ziyadin23/ScreenCompanion/issues/19) owns the
+  Linux surface transition. Branch `Ziyadin23/issue-19-hyprland-panel-size`
+  started at main `9caa0c2`, then moved to `ee6ed7c` for the frozen review tree
+  `8e73add970a81a1ec03b5838beb307c686c7a591`. The remap correction uses
+  main `a0536bfa76ba663f2a49f770ac8645af7a89f1e5`. Issue #61 owns the shared resize suppression
+  defect. [Candidate identities, reproduction and outcomes](../../../docs/VERIFICATION.md#hyprland-panel-geometry-2026-11-19).
+- `npm --prefix desktop ci` exited 0 on the original base. The package and
+  lockfile matched the updated bases. `VITEST_MAX_WORKERS=1 npm --prefix desktop
+  run verify` on the remap correction exited 0 with 1,256 tests in 36 files,
+  type checking, lint and production bundles. The six affected suites passed
+  179 tests, exit 0.
+- The [isolated Hyprland regression](../../../tests/README.md#hyprland-panel-geometry)
+  first reproduced the shortened Question and capture-time panel show on the
+  initial staged fix. On the later frozen tree, both new production cases wrote
+  a 420×180 manual size after Settings and failed to fit the next answer.
+  The remap correction passed all five scenarios, including Back and Save on
+  separate automatic profiles and deliberate resize persistence. The independent
+  production probe passed 22 checks including 530×240 restart and the remembered
+  380×160 answer size below Question's minimum.
+- The coordinator owns independent review of the corrected staged tree before
+  PR publication and the combined resize review with #61.
+- Keep 2.6 open for the Windows Settings, panel resize and restart smoke on
+  the integrated candidate and the recorder check. The project owner owns the
+  merge and coordinates those checks with the existing Windows queue. Task 2.7
+  owns the final Linux package and integration checks and the numbered runnable
+  beta handoff.

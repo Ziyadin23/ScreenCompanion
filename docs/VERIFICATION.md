@@ -611,6 +611,94 @@ applicable checks on the selected integrated candidate under task 2.7.
 Installed desktop, Windows lab qualification and verified runnable beta
 delivery remain pending for the changed application.
 
+## Hyprland panel geometry (2026-11-19)
+
+[Issue #19](https://github.com/Ziyadin23/ScreenCompanion/issues/19) tracks this
+work in [Linux task 2.6](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness).
+The checks used Fedora 44 x86-64, Electron 45.0.0 and native Wayland on Hyprland
+0.56.2, nested in headless KWin 6.7.5 with one 1280×900 output at scale 1.
+Each run used a synthetic profile, a separate D-Bus session and a network
+namespace with only loopback.
+
+- **Beta.7 source replay.** The original locally delivered RPM was unavailable
+  in the retained locations checked. A fresh build of `d304f2e`, whose Git tree
+  matches PR #23 source `6cbf691`, reproduced the old result. A 560×480 answer
+  adopted the 760×680 Settings size on Back and Save. Hyprland resized the panel
+  to 530×240 and SC saved that size. The next Settings round trip overwrote it
+  with 760×680, which also appeared on restart.
+- **Pre-fix main baseline `9caa0c2`.** The production entry point with a synthetic
+  keyring profile reproduced the 560×480 to 760×680 change and the overwritten
+  size file. The checked-in [regression](../tests/README.md#hyprland-panel-geometry)
+  independently failed on `9caa0c2` with a 420×180 synthetic answer that
+  returned at 760×680 after Back.
+- **Initial staged fix `a5a9fc530efcae418bdd39cdfddaea6d308092dc` on `9caa0c2`.**
+  The main bundle SHA-256 was `649e9857d0f4f85a090c2e4acdd05703f96f437db705b027a77d20495fde8eb9`.
+  Four Back/Save round trips and 12 production profile checks passed. Host
+  verification passed 1,235 tests in 35 files. The review regressions both
+  failed on this frozen tree. Question stayed at 380×160, and the delayed
+  Settings renderer fired one native panel show event during capture.
+- **Frozen review candidate `8e73add970a81a1ec03b5838beb307c686c7a591` on `ee6ed7c` after PRs #111 and #113.**
+  Git blobs for the main entry point, controller and renderer are
+  `46d8f1af1eef3c8fd7b1d2af4e21f2820eb22fa3`,
+  `6884af570f3aea9a102f7caf37d234285c14e6a6` and
+  `380a7ff38a45b5230a408ffe44efbe558ac0f8e8`. The production main bundle
+  SHA-256 is `e9182c91242df78a61fc6b307e072627104f87065ec5b3843fb3c414d7bc3396`.
+  Setup and Settings use a separate native window. Renderer readiness uses
+  the controller's current capture state, and temporary size constraints
+  enforce the visible panel geometry while preserving the chosen size.
+
+The earlier regression passed all **three scenarios**, exit 0. Back and
+Save restored the compact answer and compositor sizes of 530×240 and 380×160.
+Question grew the 380×160 panel to 380×180, and Escape restored it to 380×160.
+The delayed Settings load produced zero panel show events and zero mapped SC
+windows while a test-controlled media request was pending. Cancelling that
+request restored the draft, and Settings could open again.
+
+The frozen production entry point passed **22/22** checks, exit 0, with a temporary,
+encrypted Secret Service profile. The answer returned from Back and Save at
+420×180 after Settings opened at 760×680. The answer, toolbar and input controls
+fit. The selected 530×240 size survived a Settings round trip and same-profile
+restart. With a saved 380×160 answer size, Question used 380×180 before and
+after restart. Escape restored the answer size in both sessions. The app exited
+normally and its isolated profiles were removed.
+
+Earlier attempts timed out after Save or reset the manually chosen size on
+Wayland remap. One frozen replay also encountered a nested compositor
+protocol error. Host verification on the frozen candidate passed **1,255 tests
+in 36 files**, type checking, lint and production bundles. The affected suites
+passed **179 tests in six files**, and the Astryx built check passed with two
+related font warnings and zero failures.
+
+On a fresh production profile for each action, both new regression cases
+failed on the frozen tree, exit 1. After Back or Save, a native resize on
+remap restored 420×180 and SC wrote that size before any user resize or
+typed request. The next synthetic answer overflowed the panel. In a control
+run without a Settings visit, Electron fitted the same answer at 480×276
+while Hyprland still reported 420×180.
+
+The remap correction is based on `a0536bfa76ba663f2a49f770ac8645af7a89f1e5`
+after PR #112. The main entry point blob is
+`e724c5ed98338093f5c912fdb242a37621d788d0` and the checked-in regression blob is
+`e5e543fc229a80f26233763dc64a2f82052ad188`. Temporary Wayland size constraints
+apply the panel's size on remap and apply new automatic sizes to the compositor.
+The shared resize-return guard remains with [issue #61](https://github.com/Ziyadin23/ScreenCompanion/issues/61).
+
+All **five scenarios** passed, exit 0. In separate fresh production profiles,
+Back and Save returned to the measured panel size with no manual size file.
+The next synthetic answer fit in a taller toplevel, and the ensuing deliberate
+530×240 compositor resize was saved. Question still grew from 380×160 to
+380×180 and returned on Escape. The delayed-load capture scenario still kept
+every SC window hidden. The separate **22/22** production checks still covered
+530×240 restart, 380×160 persistence and the minimum after restart. Host
+verification passed **1,256 tests in 36 files** with one Vitest worker, plus
+type checking, lint and production bundles, exit 0. The six affected portable
+suites passed **179 tests**, and the Astryx built check passed with two font
+warnings and zero failures.
+
+Windows runtime, recorder, final packaged target checks and a numbered local
+beta handoff remain pending. The source candidate uses the existing beta.14
+version label and the beta.14 release reservation remains with #84.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
