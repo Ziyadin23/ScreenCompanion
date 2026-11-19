@@ -82,7 +82,8 @@ the unlock instruction next to the API key during setup. Use
 screenshot, use **Capture screen**, or **Ctrl+Enter / Send with screenshot** while
 typing, then select a monitor in the system prompt. Reopen SC to restore a hidden
 window, or configure optional Hyprland bindings. Linux uses a separate encrypted
-settings vault and manual RPM updates.
+settings vault and manual RPM updates. HTTPS API requests can use Basic proxy
+authentication from a matching process proxy setting. See the [proxy guidance](docs/USER_GUIDE.md#works-on-a-hotspot-but-fails-on-university-wi-fi).
 
 Interactive consent, compositor shortcuts and installed desktop operation still
 need qualification. See [Linux setup, prerequisites and limits](docs/USER_GUIDE.md#linux-setup-and-controls).
@@ -155,6 +156,8 @@ Pipeline preferences are saved per service and answer model. Text-only sends use
 one answering call and never capture. Old Balanced selections become Thorough.
 Some configured or typed-question paths use two calls; see the
 [pipeline reference](docs/PIPELINE.md#pipeline-modes) for conditions and local validation.
+SC stops and reports an unreadable response if OpenAI or DeepSeek returns a
+malformed completion status.
 
 Screen-reading models must support images and structured JSON; answer models need
 structured JSON and support for any required task images. DeepSeek Flash supports
