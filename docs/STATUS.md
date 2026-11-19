@@ -1,6 +1,6 @@
 # SC project status
 
-Snapshot: **2026-11-18 UTC**. On 2026-11-17, [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) integrated Windows package optimization at `6c8d671` on baseline main `e7a844f`. Source remains unpublished **0.5.0-beta.14**; the candidate is reserved and undelivered under #84. The earlier beta.13 host and isolated Linux checks retain their own source identity; its Windows stage waits for the existing lab owner’s release. Astryx PR #64 and pipeline PR #58 are integrated source; #57 and #63 retain unfinished runtime/delivery gates. The latest published prerelease remains **Windows beta.6**, and the historical stable release is **C# v0.4.14**. Publication is owned by [release status](../README.md#release-status), source version by the [manifest](../desktop/package.json).
+Snapshot: **2026-11-18 UTC**, with the Linux L5 result refreshed on **2026-11-19 UTC**. On 2026-11-17, [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) integrated Windows package optimization at `6c8d671` on baseline main `e7a844f`. Source remains unpublished **0.5.0-beta.14**; the candidate is reserved and undelivered under #84. The earlier beta.13 host and isolated Linux checks retain their own source identity; its Windows stage waits for the existing lab owner’s release. Astryx PR #64 and pipeline PR #58 are integrated source; #57 and #63 retain unfinished runtime/delivery gates. The latest published prerelease remains **Windows beta.6**, and the historical stable release is **C# v0.4.14**. Publication is owned by [release status](../README.md#release-status), source version by the [manifest](../desktop/package.json).
 
 The compact-panel/settings redesign was delivered as beta.8 and integrated through [PR #53](https://github.com/Ziyadin23/ScreenCompanion/pull/53). Astryx Settings/setup is integrated through [PR #64](https://github.com/Ziyadin23/ScreenCompanion/pull/64); the [active owner](../openspec/changes/integrate-astryx-interface/tasks.md) retains candidate runtime/recorder checks and a new runnable handoff. The pipeline change replaces Balanced with Thorough/Direct and adds explicit text-only or text-plus-screen sends; its candidate-specific checks remain with the active owner. Six provider adapters, response preferences, encrypted settings and installed updates retain their other contracts. [Verification limits](VERIFICATION.md#current-candidate-and-open-gates) and the dated qualification records below retain their actual candidates.
 
@@ -45,7 +45,7 @@ W1, W4, W5 and W8 are completed for their named scopes and appear in recent comp
 
 ### Linux qualification
 
-All rows refer to merged beta.7 source. Existing portable/headless/container checks retain their original scope; public RPM publication remains separate.
+The original qualification tracks merged beta.7 source. Dated follow-ups identify their own candidates. Existing portable/headless/container checks retain their original scope; public RPM publication remains separate.
 
 | Item / proposed priority | State | Next action / completion condition | Owner |
 | --- | --- | --- | --- |
