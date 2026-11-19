@@ -16,3 +16,11 @@ Distribution follows [publishing](docs/PUBLISHING.md). Before release, VM or phy
 For beta application changes, complete the [local beta handoff](docs/PUBLISHING.md#local-beta-handoff) before reporting completion: leave the latest verified runnable build in the transfer folder configured by the primary workspace.
 
 Before resuming or transferring unfinished work, follow [checkpoints and fresh sessions](docs/DEVELOPMENT.md#checkpoints-and-fresh-sessions); treat unrecorded decisions or approvals as unknown.
+
+## Replies to users
+
+Answer in the user's language unless they request another. Use the writing principles of [ASD-STE100 Simplified Technical English](https://www.asd-ste100.org/STE_faq.html).
+
+Start with the answer or result. Write short sentences with one idea each. Prefer the active voice. Use the same term for the same concept.
+
+When a user asks what a term means, define it in plain words first. Add a short example if it helps. If the question refers to SC, explain how the term applies here. When explaining a standard, link to its official source.
