@@ -186,8 +186,10 @@ curl.exe --connect-timeout 10 --max-time 20 --silent --show-error --output NUL -
 `HTTP 401` is expected without a key and indicates an HTTP authentication response was received; it does not verify model access, account credits, or the screenshot POST route. DNS/connection/certificate errors, a redirect, or a campus block response help IT identify where access fails. Curl can use a different proxy configuration from SC, so also provide SC's diagnostic code and matching log entry. Do not add your API key to the command.
 
 On Windows SC uses WinHTTP automatic proxy settings and standard certificate validation.
-On Linux it resolves the desktop proxy with Electron and uses curl with the
-system TLS trust store; authenticated proxy behavior needs target verification.
+On Linux SC resolves the desktop proxy route with Electron and uses curl with the
+system TLS trust store. For HTTPS API requests, SC can use Basic proxy credentials
+from the process's `https_proxy` setting (`HTTPS_PROXY` is also supported) when
+its scheme, host and port match the selected proxy.
 Ask IT to check DNS/filtering, outbound HTTPS, proxy authentication, PC date/time,
 certificate trust and approved HTTPS-inspection requirements as appropriate to the
 failure. Keep certificate validation enabled.

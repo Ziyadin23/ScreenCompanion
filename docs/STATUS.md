@@ -45,7 +45,7 @@ W1, W4, W5 and W8 are completed for their named scopes and appear in recent comp
 
 ### Linux qualification
 
-All rows refer to merged beta.7 source. Existing portable/headless/container checks retain their original scope; public RPM publication remains separate.
+The original qualification tracks merged beta.7 source. Dated follow-ups identify their own candidates. Existing portable/headless/container checks retain their original scope; public RPM publication remains separate.
 
 | Item / proposed priority | State | Next action / completion condition | Owner |
 | --- | --- | --- | --- |
@@ -53,7 +53,7 @@ All rows refer to merged beta.7 source. Existing portable/headless/container che
 | L2 / P1 — Keyring recovery | Needs investigation/verification | Resolve normal dialog dismissal and verify genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes. | [#15](https://github.com/Ziyadin23/ScreenCompanion/issues/15), [Linux tasks](../openspec/changes/linux-platform-support/tasks.md) |
 | L3 / P1 — Desktop controls/relaunch | Needs verification | Actual compositor shortcuts, early/duplicate activation, fallback controls and retained drafts/input. | [#16](https://github.com/Ziyadin23/ScreenCompanion/issues/16), [Linux tasks](../openspec/changes/linux-platform-support/tasks.md) |
 | L4 / P1 — Installed RPM/upgrade | Needs verification | Supported installed desktop and full version upgrade, preserving dependencies, settings and owned launchers. | [#17](https://github.com/Ziyadin23/ScreenCompanion/issues/17), [Linux tasks](../openspec/changes/linux-platform-support/tasks.md) |
-| L5 / P1 — Authenticated proxy | Needs verification | Real proxy authentication, TLS/interception, cancellation and both deadlines with controlled endpoints and synthetic credentials. | [#18](https://github.com/Ziyadin23/ScreenCompanion/issues/18), [Linux tasks](../openspec/changes/linux-platform-support/tasks.md) |
+| L5 / P1 — Authenticated proxy | Source fix verified in an isolated Fedora/Hyprland harness, 2026-11-19 | The fix passed 14/14 loopback cases with main `ee6ed7c`. Pinned beta.7 and the earlier main baseline each failed both supplied-credential cases. Final-candidate verification and beta delivery remain open. | [#18](https://github.com/Ziyadin23/ScreenCompanion/issues/18), [task 2.5](../openspec/changes/linux-platform-support/tasks.md#25-authenticated-proxy-checkpoint-2026-11-19), [verification](VERIFICATION.md#linux-authenticated-proxy-qualification-2026-11-19) |
 | L6 / P2 — Settings-to-answer size | Needs investigation | Verify a compositor fix or explicitly accepted limitation, usable content fit and remembered size. | [#19](https://github.com/Ziyadin23/ScreenCompanion/issues/19), [Linux tasks](../openspec/changes/linux-platform-support/tasks.md) |
 | L7 / P1 — Final qualification evidence | Needs verification after source merge | Reconcile L1–L6 and final-candidate evidence against shared main. Reuse only matching source/environment evidence, rerun checks affected by later changes and satisfy beta handoff for changed application bytes. | [#20](https://github.com/Ziyadin23/ScreenCompanion/issues/20), [task 2.7](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) |
 
