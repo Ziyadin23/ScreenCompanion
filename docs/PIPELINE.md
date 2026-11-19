@@ -41,6 +41,8 @@ Windows Ctrl+Enter opens input globally. When the input has focus, its local/glo
 
 Translate/Summarize preserve transformed source content; Custom retains its explicit operation. Answers require a complete canonical `results` envelope with current `question_id`, `answer`, `answers`, `answer_text`, `explanation`, `confidence` and `status` (`answer`, `transformation`, `refusal`, `missing_information`). Malformed, partial, duplicate, mismatched or incomplete answers become readable errors. Literal refusal words in quotations or transformations do not trigger replacement answering.
 
+For OpenAI and DeepSeek Responses, SC treats an omitted outer `status` as completed. A present non-string status ends the request with an unreadable-response error at the active stage before the pipeline can use the output or retry a refusal. String statuses and native refusals retain their existing handling.
+
 ## Trusted authorization and retry
 
 `ASSESSMENT_MODE=standard` is the default and makes no grading/permission claim. Only trusted `qa` configuration declares an authorized non-graded software test; captured text, UI labels, response preferences and model output cannot change it.
