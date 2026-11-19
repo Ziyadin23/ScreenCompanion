@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { connect, createServer as createTcpServer } from 'node:net';
@@ -11,7 +11,13 @@ import { join } from 'node:path';
 import { createLinuxTransport } from '../../src/platform';
 
 let server: Server | undefined;
-afterEach(async () => { vi.unstubAllEnvs(); if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined; } });
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  if (!server) return;
+  server.closeAllConnections();
+  await new Promise<void>(resolve => server!.close(() => resolve()));
+  server = undefined;
+});
 async function listen(handler: RequestListener): Promise<number> {
   server = createServer(handler); await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   return (server.address() as { port: number }).port;
@@ -20,6 +26,11 @@ const request = (url: string) => ({ url, headers: { Authorization: 'synthetic-ke
 const hasOpenSsl = spawnSync('openssl', ['version'], { stdio: 'ignore' }).status === 0;
 
 describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopback servers', () => {
+  beforeEach(() => {
+    vi.stubEnv('https_proxy', undefined);
+    vi.stubEnv('HTTPS_PROXY', undefined);
+  });
+
   it('returns redirects without following them and sends one POST', async () => {
     let calls = 0; const port = await listen((req, res) => { calls++; expect(req.method).toBe('POST'); res.writeHead(302, { Location: '/other' }); res.end(); });
     const transport = createLinuxTransport(async () => 'DIRECT');
