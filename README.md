@@ -122,6 +122,9 @@ scale with the renderer's default font size. A pale outline marks keyboard focus
 and Back kept visible at the bottom. Panel appearance changes affect the answer
 panel and its preview while Settings keeps its readable palette.
 
+In current source, a Settings save that finishes after you switch surfaces
+keeps Question or a newer Settings draft open.
+
 In the current source, Escape closes the setup service menu first and cancels
 idle setup when the menu is closed. Setup stays open while Save is pending.
 

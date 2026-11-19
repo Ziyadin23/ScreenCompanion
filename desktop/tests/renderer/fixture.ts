@@ -34,12 +34,13 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       if (command.type === 'settingsDraftChanged' && state.surface === 'settings') emit({ settingsDirty: command.dirty });
     }),
     getSettingsDraft: vi.fn(async () => structuredClone(draft)),
-    saveSettings: vi.fn(async (next: SettingsDraft) => {
+    saveSettings: vi.fn<DesktopApi['saveSettings']>(async (next) => {
       saved.push(structuredClone(next));
       const keyPresence = { ...draft.keyPresence };
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) keyPresence[provider] = true;
       draft = { ...structuredClone(next), keyPresence, keyUpdates: {} };
       emit({ surface: 'answer', settingsDirty: false, appearance: next.values.Appearance });
+      return 'saved';
     }),
     discardSettings: vi.fn(async () => { emit({ surface: 'answer', settingsDirty: false }); }),
     chooseColor: vi.fn(async (_initial: string) => '#123456' as string | null),

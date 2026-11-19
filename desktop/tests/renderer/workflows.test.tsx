@@ -429,7 +429,7 @@ describe('settings drafts and protected controls', () => {
     fireEvent.click(screen.getByTestId(action === 'Save' ? 'settings-save' : 'settings-back'));
     await screen.findByTestId('answer-text');
     expect(driver.getState().settingsDirty).toBe(false);
-    expect(driver.api.command).toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
+    expect(driver.api.command).not.toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
     expect(driver.saved).toHaveLength(action === 'Save' ? 1 : 0);
   });
   it('shows loading, allows Back, and focuses the page heading only after hydration', async () => {
@@ -507,6 +507,24 @@ describe('settings drafts and protected controls', () => {
     tab('Panel'); disclose('Advanced appearance');
     expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('100');
     expect(driver.saved).toHaveLength(0);
+  });
+  it('keeps a newer draft dirty after the previous Settings Save returns', async () => {
+    const driver = fixture();
+    let finishSave!: () => void;
+    driver.api.saveSettings.mockImplementationOnce(() => new Promise(resolve => { finishSave = () => resolve('saved'); }));
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await act(async () => driver.api.command({ type: 'showInput' }));
+    await openSettings();
+    choose('Answer mode', 'Summarize');
+
+    await act(async () => finishSave());
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Summarize');
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    expect(driver.getState().settingsDirty).toBe(true);
   });
   it('previews independent opacity and palettes, discards Back, applies Save, and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
@@ -667,5 +685,24 @@ describe('settings drafts and protected controls', () => {
     expect(document.body.textContent).not.toContain('private raw storage error');
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
     expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
+  });
+  it.each([
+    ['busy', 'Wait a moment, then try Save again'],
+    ['shortcut-restore-failed', 'Restart SC to restore them']
+  ] as const)('keeps the draft editable and explains recovery after a %s save result', async (result, guidance) => {
+    const driver = fixture();
+    driver.api.saveSettings.mockResolvedValueOnce(result);
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    tab('Models & API');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-replacement' } });
+    fireEvent.click(screen.getByTestId('settings-save'));
+
+    expect((await screen.findByRole('alert')).textContent).toContain(guidance);
+    expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
+    expect(driver.getState().settingsDirty).toBe(true);
+    expect(screen.getByTestId('settings-save').matches(':disabled, [aria-disabled="true"]')).toBe(false);
+    expect(driver.saved).toHaveLength(0);
   });
 });

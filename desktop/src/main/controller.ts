@@ -1,7 +1,8 @@
-import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
+import { isDeepStrictEqual } from 'node:util';
+import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
-import { rememberModelPipeline } from '../contracts/model-pipelines';
+import { modelPipeline, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText } from '../contracts/shortcut-display';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
@@ -25,6 +26,34 @@ export interface ControllerDependencies {
   executableDirectory?: string; defaultPipelineMode?: PipelineMode;
 }
 const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
+type SettingsValues = SettingsDraft['values'];
+
+function applyDraftEdits<T extends object>(current: T, original: T, edited: T): T {
+  const result = { ...current };
+  for (const field of Object.keys(edited) as (keyof T)[]) {
+    if (!isDeepStrictEqual(edited[field], original[field])) result[field] = edited[field];
+  }
+  return result;
+}
+
+function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, edited: SettingsValues): SettingsValues {
+  const result = applyDraftEdits(current, original, edited);
+  result.Appearance = applyDraftEdits(current.Appearance, original.Appearance, edited.Appearance);
+  result.ModelPipelines = current.ModelPipelines;
+  for (const preference of edited.ModelPipelines) {
+    if (modelPipeline(original.ModelPipelines, preference) !== preference.PipelineMode) {
+      result.ModelPipelines = rememberModelPipeline(result.ModelPipelines, preference, preference.PipelineMode);
+    }
+  }
+  if (!isDeepStrictEqual(edited.Models, original.Models) || edited.PipelineMode !== original.PipelineMode) {
+    result.Models = edited.Models;
+    result.PipelineMode = edited.PipelineMode;
+  } else if (result.Models) {
+    result.PipelineMode = modelPipeline(result.ModelPipelines, result.Models) ?? result.PipelineMode;
+  }
+  return result;
+}
+
 export function isPanelSurface(surface: AppState['surface']): boolean { return surface === 'answer' || surface === 'input' || surface === 'captureTest'; }
 export function canResizePanel(state: Pick<AppState, 'ready' | 'visible' | 'surface'>, capturing: boolean): boolean {
   return state.ready && state.visible && !capturing && isPanelSurface(state.surface);
@@ -42,6 +71,11 @@ export class ApplicationController {
   private hiddenByUser = false;
   private detachWheel: (() => void) | null = null;
   private settingsActions = 0;
+  private settingsSession = 0;
+  private settingsDraftBase: SettingsValues | null = null;
+  private savingSettings = false;
+  private registeredShortcutSettings: VaultData | null = null;
+  private shortcutChanges = Promise.resolve();
   constructor(private readonly deps: ControllerDependencies) {
     const defaults = defaultSettings('');
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
@@ -148,10 +182,11 @@ export class ApplicationController {
     this.state.visible = true; this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), true); this.publish(); this.deps.host.activate?.();
   }
   readonly onAction = (action: DesktopAction): void => {
+    if (this.exiting) return;
     const inputAction = action === 'input' || action === 'input-with-screenshot';
     if (inputAction && this.state.ready && this.state.surface === 'input' && this.state.visible && this.deps.host.isFocused?.()) {
       if (!this.state.busy) {
-        const binding = this.settings!.InputShortcut;
+        const binding = (this.registeredShortcutSettings ?? this.settings)!.InputShortcut;
         this.deps.host.inputAction?.(action === 'input-with-screenshot' || (this.state.platform === 'windows' && binding.Modifiers === 2 && binding.Key === 13));
       }
       return;
@@ -184,7 +219,11 @@ export class ApplicationController {
         break;
       case 'settings':
         if (this.defer(() => { void this.command(command); })) return;
-        if (this.state.surface !== 'settings') this.state.settingsDirty = false;
+        if (this.state.surface !== 'settings') {
+          this.settingsSession++;
+          this.settingsDraftBase = null;
+          this.state.settingsDirty = false;
+        }
         this.state.surface = 'settings'; this.state.visible = true; this.hiddenByUser = false;
         this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), true); this.publish(); this.deps.host.activate?.(); break;
       case 'showInput':
@@ -208,7 +247,9 @@ export class ApplicationController {
       case 'settingsDraftChanged':
         if (this.state.surface === 'settings') { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
-      case 'recordShortcut': if (this.state.surface === 'settings') await this.setRecording(command.recording); break;
+      case 'recordShortcut':
+        if (this.state.surface === 'settings') await this.setRecording(command.recording, this.settingsSession);
+        break;
       case 'beginMove': if (this.state.visible && !this.capturing) this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
       case 'beginResize':
         if (canResizePanel(this.state, this.capturing))
@@ -216,62 +257,97 @@ export class ApplicationController {
         break;
     }
   }
-  private async setRecording(recording: boolean): Promise<void> {
-    if (this.recording === recording || !this.settings) return;
-    await this.deps.platform.applyShortcuts(this.settings, recording, this.onAction); this.recording = recording;
+  private ownsSettings(session: number): boolean {
+    return !this.exiting && this.state.surface === 'settings' && this.settingsSession === session;
   }
-  getSettingsDraft(): SettingsDraft {
-    if (!this.settings) throw new AppError('NOTREADY', 'Finish API-key setup first.');
-    const { ApiKey: _key, ProviderKeys: _keys, ...values } = structuredClone(this.settings);
-    const effective = this.deps.configuration(this.settings);
+  private changeShortcuts(change: { settings?: VaultData; recording?: boolean; session?: number }): Promise<void> {
+    const applied = this.shortcutChanges.then(async () => {
+      if (this.exiting || (change.session !== undefined && !this.ownsSettings(change.session))) return;
+      const settings = change.settings ?? this.registeredShortcutSettings ?? this.settings;
+      const recording = change.recording ?? this.recording;
+      if (!settings || (!change.settings && recording === this.recording)) return;
+      await this.deps.platform.applyShortcuts(settings, recording, this.onAction);
+      if (this.exiting) return;
+      this.registeredShortcutSettings = settings;
+      this.recording = recording;
+    });
+    this.shortcutChanges = applied.catch(() => {});
+    return applied;
+  }
+  private setRecording(recording: boolean, session?: number): Promise<void> { return this.changeShortcuts({ recording, session }); }
+  private settingsValues(settings: VaultData): SettingsValues {
+    const { ApiKey: _key, ProviderKeys: _keys, ...values } = settings;
+    const effective = this.deps.configuration(settings);
     values.Models ??= { Provider: effective.provider, AnswerModel: effective.answerModel, VisionModel: effective.visionModel,
       Thinking: effective.thinking, AnswerTokenLimit: effective.provider === 'DeepSeek' ? effective.answerMaxOutputTokens : null };
     values.PipelineMode = effective.mode;
     values.ModelPipelines = rememberModelPipeline(values.ModelPipelines, values.Models, effective.mode);
-    return { values, keyPresence: Object.fromEntries(PROVIDERS.map(provider => [provider, this.keyFor(provider).length > 0])) as Record<ApiProvider, boolean>, keyUpdates: {} };
+    return values;
+  }
+  getSettingsDraft(): SettingsDraft {
+    if (!this.settings) throw new AppError('NOTREADY', 'Finish API-key setup first.');
+    const values = this.state.surface === 'settings' ? (this.settingsDraftBase ??= this.settingsValues(this.settings)) : this.settingsValues(this.settings);
+    return { values: structuredClone(values), keyPresence: Object.fromEntries(PROVIDERS.map(provider => [provider, this.keyFor(provider).length > 0])) as Record<ApiProvider, boolean>, keyUpdates: {} };
   }
   private keyFor(provider: ApiProvider, settings = this.settings): string {
     if (!settings) return '';
     return settings.ProviderKeys[provider] || (provider === (settings.Models?.Provider ?? this.deps.configuration(settings).provider) ? settings.ApiKey : '');
   }
-  async saveSettings(draft: SettingsDraft): Promise<void> {
+  async saveSettings(draft: SettingsDraft): Promise<SettingsSaveResult> {
     if (this.state.updates.status === 'installing') throw new AppError('UPDATEBUSY', 'Wait for SC to restart.');
+    if (!this.settings || !this.ownsSettings(this.settingsSession)) throw new AppError('NOTREADY', 'Open Settings before saving.');
+    if (this.savingSettings) return 'busy';
+    this.savingSettings = true;
     this.settingsActions++;
-    try { await this.saveSettingsDraft(draft); }
-    finally { this.settingsActions--; }
+    try { return await this.saveSettingsDraft(draft, this.settings, this.settingsSession); }
+    finally { this.settingsActions--; this.savingSettings = false; }
   }
-  private async saveSettingsDraft(draft: SettingsDraft): Promise<void> {
-    if (!this.settings || this.state.surface !== 'settings') throw new AppError('NOTREADY', 'Open Settings before saving.');
-    const previous = this.settings;
+  private async saveSettingsDraft(draft: SettingsDraft, previous: VaultData, session: number): Promise<SettingsSaveResult> {
+    const priorError = this.state.error;
+    const committed = this.settingsValues(previous);
+    const values = this.settingsDraftBase && !isDeepStrictEqual(committed, this.settingsDraftBase)
+      ? mergeSettingsDraft(committed, this.settingsDraftBase, draft.values) : draft.values;
     const keys = { ...previous.ProviderKeys };
     const priorProvider = previous.Models?.Provider ?? this.deps.configuration(previous).provider;
     if (!keys[priorProvider]) keys[priorProvider] = previous.ApiKey;
     for (const provider of PROVIDERS) if (draft.keyUpdates[provider] !== undefined) keys[provider] = draft.keyUpdates[provider]!.trim();
-    const selected = draft.values.Models?.Provider ?? priorProvider;
-    const candidate: VaultData = { ...structuredClone(draft.values), ApiKey: keys[selected], ProviderKeys: keys };
+    const selected = values.Models?.Provider ?? priorProvider;
+    const candidate: VaultData = { ...structuredClone(values), ApiKey: keys[selected], ProviderKeys: keys };
     if (candidate.Models && candidate.PipelineMode) candidate.ModelPipelines = rememberModelPipeline(candidate.ModelPipelines, candidate.Models, candidate.PipelineMode);
     this.deps.validateSettings(candidate);
     this.deps.configuration(candidate);
-    await this.deps.platform.applyShortcuts(candidate, false, this.onAction);
-    this.recording = false;
+    await this.changeShortcuts({ settings: candidate, recording: false });
+    if (this.exiting) throw new AppError('NOTREADY', 'SC is closing.');
     try { await this.deps.store.save(candidate); }
     catch (error) {
-      await this.deps.platform.applyShortcuts(previous, false, this.onAction);
-      this.fail('Credentials', error); throw new AppError('SAVEFAILED', 'Settings could not be saved. Previous shortcuts remain active.');
+      this.deps.diagnostics.failure('Credentials', error);
+      if (this.exiting) throw new AppError('SAVEFAILED', 'Settings could not be saved.');
+      try { await this.changeShortcuts({ settings: previous }); }
+      catch (rollbackError) {
+        this.deps.diagnostics.failure('Shortcuts', rollbackError);
+        return 'shortcut-restore-failed';
+      }
+      throw new AppError('SAVEFAILED', 'Settings could not be saved. Previous shortcuts remain active.');
     }
+    if (this.exiting) return 'saved';
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
-    this.state.shortcuts = this.shortcuts(candidate); this.state.error = null;
+    this.state.shortcuts = this.shortcuts(candidate);
+    if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
+    this.publish();
+    return 'saved';
+  }
+  private closeSettings(session: number): boolean {
+    if (!this.ownsSettings(session)) return false;
     this.deps.platform.closeOwnedDialogs(this.deps.host.panelHandle());
+    this.settingsDraftBase = null;
     this.state.settingsDirty = false;
-    this.state.surface = 'answer'; this.state.visible = true; this.hiddenByUser = false; this.publish();
+    this.state.surface = 'answer';
+    return true;
   }
   async discardSettings(): Promise<void> {
-    await this.setRecording(false);
-    if (this.state.surface === 'settings') {
-      this.deps.platform.closeOwnedDialogs(this.deps.host.panelHandle());
-      this.state.settingsDirty = false;
-      this.state.surface = 'answer'; this.state.visible = true; this.hiddenByUser = false; this.publish();
-    }
+    const session = this.settingsSession;
+    await this.setRecording(false, session);
+    if (this.closeSettings(session)) this.publish();
   }
   async chooseColor(initialColor: string): Promise<string | null> {
     if (this.state.surface !== 'settings' || !this.state.visible) return null;
@@ -341,5 +417,6 @@ export class ApplicationController {
     if (this.exiting) return;
     this.exiting = true; this.cancellation?.abort(); this.afterCapture.length = 0;
     this.detachWheel?.(); this.detachWheel = null; this.deps.platform.dispose(); this.settings = null;
+    this.registeredShortcutSettings = null;
   }
 }

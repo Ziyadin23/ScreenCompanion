@@ -3,6 +3,7 @@ import type { AppState, PipelineConfiguration, PipelineMode, PipelineInput, Pipe
 import { PROVIDERS } from '../../src/contracts';
 import { withSavedSettings } from '../../src/pipeline/configuration';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
+import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { ApplicationController, canResizePanel } from '../../src/main/controller';
 import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
@@ -22,6 +23,12 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
   const load = vi.fn(async () => structuredClone(initial));
   const legacyPasswordVaultExists = vi.fn(async () => false);
   const save = vi.fn(async (_value: VaultData) => {});
+  function delaySave() {
+    const started = deferred<void>();
+    const write = deferred<void>();
+    save.mockImplementationOnce(() => { started.resolve(); return write.promise; });
+    return { started: started.promise, resolve: write.resolve, reject: write.reject };
+  }
   const outcome = deferred<PipelineResult>();
   const run = vi.fn((_input: PipelineInput) => outcome.promise);
   const states: AppState[] = [];
@@ -34,7 +41,7 @@ function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host,
     diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName });
-  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg, host };
+  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, delaySave, run, outcome, states, jpeg, host };
 }
 describe('production lifecycle with injected native boundaries', () => {
   it('does not rewrite existing normalized settings at startup even when help has never been shown', async () => {
@@ -208,6 +215,180 @@ describe('production lifecycle with injected native boundaries', () => {
     expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
     await f.controller.discardSettings(); await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
+  });
+  it('applies a delayed save without closing a newer Settings draft opened through the input shortcut', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const answering = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+    await answering;
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Appearance.TextSizePoints = 18;
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(draft);
+    await write.started;
+
+    const inputOpened = deferred<void>();
+    f.host.inputAction.mockImplementationOnce(() => inputOpened.resolve());
+    f.controller.onAction('input');
+    await inputOpened.promise;
+    expect(f.controller.getState().surface).toBe('input');
+    await f.controller.command({ type: 'settings' });
+    const newer = f.controller.getSettingsDraft();
+    newer.values.CustomInstruction = 'Newer unsaved instruction';
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    f.platform.closeOwnedDialogs = vi.fn();
+
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', visible: true, settingsDirty: true,
+      answer: 'Retained answer', appearance: { TextSizePoints: 18 } });
+    expect(f.controller.canInstallUpdate()).toBe(false);
+    expect(f.platform.closeOwnedDialogs).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ CustomInstruction: '', ApiKey: 'synthetic-key' }));
+    expect(f.run).toHaveBeenCalledOnce();
+    expect(f.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+  it('keeps Question hidden if the user leaves Settings and hides the panel during a save', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'toggleVisibility' });
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'input', visible: false });
+  });
+  it('keeps a request error that arrived while Settings was saving', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const request = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    await f.controller.command({ type: 'settings' });
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await write.started;
+    f.outcome.reject(new Error('private request failure'));
+    await request;
+    const requestError = f.controller.getState().error;
+    expect(requestError?.code).toBe('APIREQUEST-UNEXPECTED');
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', busy: false, error: requestError });
+  });
+  it('rejects an overlapping save and merges the retry with the newly committed settings and keys', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.Appearance.TransparencyPercent = 35;
+    first.values.Capture = { Modifiers: 2, Key: 81 };
+    first.values.Models = defaultModels('DeepSeek');
+    first.values.PipelineMode = 'Direct';
+    first.keyUpdates.DeepSeek = 'synthetic-first-key';
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first);
+    await write.started;
+
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Appearance.TextSizePoints = 18;
+    second.values.ModelPipelines = rememberModelPipeline(second.values.ModelPipelines, defaultModels('Groq'), 'Direct');
+    second.keyUpdates.Groq = 'synthetic-second-key';
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    f.applyShortcuts.mockClear();
+    await expect(f.controller.saveSettings(second)).resolves.toBe('busy');
+    expect(f.save).toHaveBeenCalledOnce();
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+
+    write.resolve();
+    await saving;
+    await f.controller.saveSettings(second);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, appearance: { TransparencyPercent: 35, TextSizePoints: 18 } });
+    expect(f.save).toHaveBeenCalledTimes(2);
+    const saved = f.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: defaultModels('DeepSeek'), PipelineMode: 'Direct', Capture: { Modifiers: 2, Key: 81 },
+      ApiKey: 'synthetic-first-key', ProviderKeys: { OpenAI: 'synthetic-key', DeepSeek: 'synthetic-first-key', Groq: 'synthetic-second-key' } });
+    expect(modelPipeline(saved.ModelPipelines, defaultModels('DeepSeek'))).toBe('Direct');
+    expect(modelPipeline(saved.ModelPipelines, defaultModels('Groq'))).toBe('Direct');
+    expect(f.applyShortcuts).toHaveBeenCalledExactlyOnceWith(saved, false, f.controller.onAction);
+    expect(f.run).not.toHaveBeenCalled();
+  });
+  it('waits for shortcut rollback and keeps a newer draft and recording active after a write failure', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const answering = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+    await answering;
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.InputShortcut = { Modifiers: 2, Key: 81 };
+    first.keyUpdates.OpenAI = 'synthetic-rejected-key';
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first).catch((error: unknown) => error);
+    await write.started;
+
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Appearance.TextSizePoints = 18;
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    await f.controller.command({ type: 'recordShortcut', recording: true });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: first.values.InputShortcut }), true, f.controller.onAction);
+
+    const restoreStarted = deferred<void>();
+    const restore = deferred<void>();
+    f.applyShortcuts.mockImplementationOnce(() => { restoreStarted.resolve(); return restore.promise; });
+    write.reject(new Error('private storage failure'));
+    await restoreStarted.promise;
+    const previous = defaultSettings('synthetic-key');
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: previous.InputShortcut }), true, f.controller.onAction);
+    await expect(f.controller.saveSettings(second)).resolves.toBe('busy');
+    expect(f.save).toHaveBeenCalledOnce();
+    restore.resolve();
+    expect(await saving).toMatchObject({ code: 'SAVEFAILED' });
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, answer: 'Retained answer', error: null,
+      shortcuts: { input: previous.InputShortcut } });
+
+    await f.controller.command({ type: 'recordShortcut', recording: false });
+    await f.controller.saveSettings(second);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, answer: 'Retained answer' });
+    expect(f.save.mock.calls[1]![0]).toMatchObject({ ApiKey: 'synthetic-key', InputShortcut: previous.InputShortcut, Appearance: { TextSizePoints: 18 } });
+  });
+  it('leaves the active draft available to retry after shortcut registration rejects the candidate', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Capture = { Modifiers: 2, Key: 81 };
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    const previous = f.controller.getState().shortcuts;
+    f.applyShortcuts.mockRejectedValueOnce(new Error('Synthetic occupied binding'));
+    await expect(f.controller.saveSettings(draft)).rejects.toThrow('Synthetic occupied binding');
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, shortcuts: previous });
+    await f.controller.saveSettings(draft);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, shortcuts: { capture: draft.values.Capture } });
+  });
+  it('reports shortcut restore failure without claiming the vault was saved or closing the draft', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Appearance.TextSizePoints = 18;
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(draft);
+    await write.started;
+    f.applyShortcuts.mockRejectedValueOnce(new Error('private restore failure'));
+    write.reject(new Error('private write failure'));
+    expect(await saving).toBe('shortcut-restore-failed');
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, error: null, appearance: { TextSizePoints: 11 } });
   });
   it('keeps failed saves dirty and clears the update guard only after a successful save', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });

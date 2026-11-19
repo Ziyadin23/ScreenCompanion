@@ -63,7 +63,7 @@ The 2026-11-02 audit findings were checked against main and filed on **2026-11-1
 
 | Outcome | Priority | Intake |
 | --- | --- | --- |
-| Preserve a new Settings draft when an earlier save completes | P1 | [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59) |
+| Preserve a new Settings draft when an earlier save completes | P1 | [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59), [source and Windows qualification tasks](../openspec/changes/fix-settings-save-session/tasks.md) |
 | Reject malformed extracted option text before answering | P1 | [#60](https://github.com/Ziyadin23/ScreenCompanion/issues/60) |
 | Persist final user dimensions after returning to an old programmatic size | P2 | [#61](https://github.com/Ziyadin23/ScreenCompanion/issues/61) |
 | Reject present malformed Responses completion statuses | P2 | [#62](https://github.com/Ziyadin23/ScreenCompanion/issues/62) |

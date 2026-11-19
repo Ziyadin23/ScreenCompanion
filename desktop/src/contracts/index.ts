@@ -112,6 +112,7 @@ export interface SettingsDraft {
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
 }
+export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
@@ -125,7 +126,7 @@ export interface DesktopApi {
   setup(request: SetupRequest): Promise<void>;
   command(command: AppCommand): Promise<void>;
   getSettingsDraft(): Promise<SettingsDraft>;
-  saveSettings(draft: SettingsDraft): Promise<void>;
+  saveSettings(draft: SettingsDraft): Promise<SettingsSaveResult>;
   discardSettings(): Promise<void>;
   chooseColor(initialColor: string): Promise<string | null>;
   update(action: UpdateAction): Promise<void>;

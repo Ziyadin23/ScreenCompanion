@@ -38,6 +38,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       }
       draft = { values: structuredClone(next.values), keyPresence, keyUpdates: {} };
       emit({ surface: 'answer', settingsDirty: false, appearance: { ...draft.values.Appearance } });
+      return 'saved';
     },
     discardSettings: async () => { emit({ surface: 'answer', settingsDirty: false }); },
     chooseColor: async () => null,

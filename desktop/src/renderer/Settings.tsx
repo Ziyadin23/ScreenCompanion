@@ -90,7 +90,6 @@ export function Settings({ state }: { state: AppState }) {
     }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
     return () => {
       cancelled = true; alive.current = false;
-      if (recordingRef.current) void window.sc.command({ type: 'recordShortcut', recording: false }).catch(() => {});
       recordingRef.current = null;
     };
   }, [loadAttempt]);
@@ -109,11 +108,11 @@ export function Settings({ state }: { state: AppState }) {
     field?.focus(); field?.scrollIntoView?.({ block: 'nearest' });
   }, [focusRequest]);
 
-  function markDirty(value: boolean) {
-    if (dirtyRef.current === value) return;
-    dirtyRef.current = value;
-    if (alive.current) setDirty(value);
-    void window.sc.command({ type: 'settingsDraftChanged', dirty: value }).catch(() => {
+  function markDirty() {
+    if (dirtyRef.current) return;
+    dirtyRef.current = true;
+    setDirty(true);
+    void window.sc.command({ type: 'settingsDraftChanged', dirty: true }).catch(() => {
       if (alive.current) setError('Settings edit status could not be updated. Save your changes or use Back before restarting.');
     });
   }
@@ -123,7 +122,7 @@ export function Settings({ state }: { state: AppState }) {
     if (!previous || savingRef.current) return;
     const next = change(previous);
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
-    replaceDraft(next); markDirty(true); setError(''); setInvalidField(null);
+    replaceDraft(next); markDirty(); setError(''); setInvalidField(null);
   }
 
   function stopRecording() {
@@ -230,9 +229,11 @@ export function Settings({ state }: { state: AppState }) {
       else delete outgoing.keyUpdates[key];
     }
     try {
-      await window.sc.saveSettings(outgoing);
-      markDirty(false);
-      if (alive.current && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
+      const result = await window.sc.saveSettings(outgoing);
+      if (!alive.current) return;
+      if (result === 'busy') setError('Another Settings save is finishing. Wait a moment, then try Save again.');
+      else if (result === 'shortcut-restore-failed') setError('Settings were not saved and the previous shortcuts could not be restored. Restart SC to restore them.');
+      else if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
       if (alive.current) setError(state.platform === 'linux' ? 'Settings were not saved. Unlock your secure Linux keyring and check the selected service and model IDs, then try again.' : 'Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
@@ -247,7 +248,7 @@ export function Settings({ state }: { state: AppState }) {
     stopRecording(); setError('');
     // Clear typed replacements before leaving, including when IPC fails.
     if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
-    try { await window.sc.discardSettings(); markDirty(false); }
+    try { await window.sc.discardSettings(); }
     catch { if (alive.current) setError('Could not return to the answer. Try Back again.'); }
   }
   async function chooseColor(field: typeof COLOR_FIELDS[number]['field']) {
