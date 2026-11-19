@@ -18,7 +18,7 @@
 ## Planning checkpoint
 
 - The issue branch starts clean at `9caa0c26af6670363b6991a78939d3c991a2b0c0`, matching fetched `origin/main`. The worktree card links #61. The Orca setup hook was empty and this checkout had no installed dependencies. `npm --prefix desktop ci` installed 597 packages, exit 0.
-- This task authorizes plan, source, independent review and a branch PR. The Windows recovery hold leaves target work and local beta delivery pending with the lab owner and project owner. The current package marker is reserved for [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). A numbered candidate for this fix belongs to integration and delivery.
+- This task authorizes plan, source, independent review and a branch PR. Target work and local beta delivery remain pending until the current Windows lab owner releases access and the project owner schedules qualification. The current package marker is reserved for [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). A numbered candidate for this fix belongs to integration and delivery.
 - Keep this change active for tasks 2.3 and 2.4. The project owner owns source integration and can schedule target verification when the lab is released.
 
 ## Regression checkpoint

@@ -146,6 +146,8 @@ it.each([
   await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(savedA));
 
   close();
+  // A fresh fit would be taller, so matching A on startup proves restoration.
+  measuredTextHeight = 260;
   await boot();
   expect(panel.getSize()).toEqual(sizeA);
 });
