@@ -42,6 +42,7 @@
   ```
 
   The first two commands exited 1 and the third exited 0. The three modules were bundled from the exact source commits in the verification record. Private receipts bind each invocation to its source tree and exit code.
+- After merging main `ee6ed7c`, issue-branch commit `5eeeba59598aa0293e77bdee743a13f603ad26cf` passed the same isolated matrix using the transport and provider sources rebuilt from that commit (14/14, zero fallback attempts, exit 0). With one Vitest worker, `npm --prefix desktop run verify` passed all 1,256 portable tests across 36 files, type checking, lint and production builds (exit 0).
 - Keep 2.5 open for the selected integrated candidate. The issue-linked PR owns source review and hosted checks. Task 2.7 owns final-candidate reconciliation and runnable beta handoff. Windows lab work is outside this assignment, and beta.14 remains reserved for [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84).
 
 ## Workflow follow-up

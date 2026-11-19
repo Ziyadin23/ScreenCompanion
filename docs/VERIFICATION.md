@@ -586,16 +586,17 @@ bundle for the trusted-certificate cases. The host trust store is read-only.
 | Pinned beta.7, `d304f2e57725f1244f8de46120731b59b9ca2eca` | 12/14, exit 1 | Electron resolved the proxy, but curl omitted the supplied Basic credentials in both valid- and wrong-password cases. |
 | Main baseline, `9caa0c26af6670363b6991a78939d3c991a2b0c0` | 12/14, exit 1 | Same authentication failures as beta.7. |
 | Issue branch application commit, `211d2eda7b8d0ef8e3d6e51b9b68011a465a0374` | 14/14, exit 0 | Valid credentials enabled one HTTPS POST with intact bytes. Wrong, missing and different-proxy credentials produced 407 with no origin POST or fallback. |
+| Issue branch updated with main `ee6ed7c`, `5eeeba59598aa0293e77bdee743a13f603ad26cf` | 14/14, exit 0 | The same transport and provider cases passed with zero fallback attempts. |
 
-The authenticated run checked that the provider key reached only the TLS
-origin and that proxy credentials reached only CONNECT. All three candidates
+On both fixed candidates, the provider key reached only the TLS origin and
+proxy credentials reached only CONNECT. All four candidates
 accepted the trusted certificate, rejected untrusted and wrong-name
 certificates before a POST, and rejected a 302, HTML login and 511 with the
 response bodies discarded. The redirect destination received zero requests.
-All three stopped a stalled CONNECT at the connection deadline, stopped and
+All four stopped a stalled CONNECT at the connection deadline, stopped and
 closed a response stalled past the total deadline, cancelled during response
 reading, and reported a dropped connection after one POST with zero route
-fallbacks. On the issue branch the 600 ms and 1,000 ms deadline cases completed
+fallbacks. At `211d2ed`, the 600 ms and 1,000 ms deadline cases completed
 in 621 ms and 1,021 ms respectively, including observation of socket closure.
 
 Earlier fixture attempts encountered compositor startup, module argument and
