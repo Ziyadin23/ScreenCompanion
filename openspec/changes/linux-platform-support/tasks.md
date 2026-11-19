@@ -28,6 +28,13 @@
 - [ ] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
 - [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
+### 2.5 Authenticated proxy checkpoint (2026-11-19)
+
+- [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) owns this continuation on branch `Ziyadin23/issue-18-linux-proxy`, based on `9caa0c26af6670363b6991a78939d3c991a2b0c0`. Application commit `211d2eda7b8d0ef8e3d6e51b9b68011a465a0374` changes `desktop/src/platform/linux-transport.ts`, `desktop/src/providers/index.ts` and the corresponding two regression suites. The proxy credentials are scoped to the selected HTTP proxy and passed through curl's private config pipe.
+- `npm --prefix desktop ci`: exit 0. `npm --prefix desktop test -- tests/platform/linux-transport.test.ts tests/providers/network.test.ts`: red exit 1 with eight failures and 157 passes. Authenticated CONNECT returned 407 and seven errors gave Windows-specific guidance. Green exit 0 with 165/165 passing. `flock /tmp/sc-20261119-desktop-verify.lock npm --prefix desktop run verify`: exit 0, 1,236 tests across 35 files, type checking, lint and production bundles.
+- The [isolated Fedora/Hyprland transport matrix](../../../docs/VERIFICATION.md#linux-authenticated-proxy-qualification-2026-11-19) passed 14/14 on the issue branch. Pinned beta.7 and unmodified main each passed 12/14 and failed the two uses of supplied proxy credentials. This evidence comes from Electron's real proxy resolver, curl and loopback endpoints.
+- Keep 2.5 open for the selected integrated candidate. The issue-linked PR owns source review and hosted checks. Task 2.7 owns final-candidate reconciliation and runnable beta handoff. Windows lab access remains on hold, and beta.14 remains reserved for [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84).
+
 ## Workflow follow-up
 
 - This workflow migration does not run the seven pending application/lab groups, merge the branch, publish a release or authorize new paid provider requests.

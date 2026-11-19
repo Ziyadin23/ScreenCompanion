@@ -570,6 +570,46 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+## Linux authenticated proxy qualification (2026-11-19)
+
+[Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) uses a Fedora
+44 x86-64 harness with Hyprland 0.56.2 nested under headless KWin, Electron
+45.0.0 and curl 8.18.0. It calls the production Linux transport through
+`session.defaultSession.resolveProxy` and overrides only the destination when
+exercising provider error handling. The sandbox has its own user, profile,
+D-Bus session and loopback-only network. The origin and proxy fixtures accept
+only test endpoints. They use synthetic credentials and a per-process CA
+bundle for the trusted-certificate cases. The host trust store is read-only.
+
+| Source exercised | Real loopback cases | Outcome |
+| --- | --- | --- |
+| Pinned beta.7, `d304f2e57725f1244f8de46120731b59b9ca2eca` | 12/14, exit 1 | Electron resolved the proxy, but curl omitted the supplied Basic credentials in both valid- and wrong-password cases. |
+| Main baseline, `9caa0c26af6670363b6991a78939d3c991a2b0c0` | 12/14, exit 1 | Same authentication failures as beta.7. |
+| Issue branch application commit, `211d2eda7b8d0ef8e3d6e51b9b68011a465a0374` | 14/14, exit 0 | Valid credentials enabled one HTTPS POST with intact bytes. Wrong, missing and different-proxy credentials produced 407 with no origin POST or fallback. |
+
+The authenticated run checked that the provider key reached only the TLS
+origin and that proxy credentials reached only CONNECT. All three candidates
+accepted the trusted certificate, rejected untrusted and wrong-name
+certificates before a POST, and rejected a 302, HTML login and 511 with the
+response bodies discarded. The redirect destination received zero requests.
+All three stopped a stalled CONNECT at the connection deadline, stopped and
+closed a response stalled past the total deadline, cancelled during response
+reading, and reported a dropped connection after one POST with zero route
+fallbacks. On the issue branch the 600 ms and 1,000 ms deadline cases completed
+in 621 ms and 1,021 ms respectively, including observation of socket closure.
+
+Earlier fixture attempts encountered compositor startup, module argument and
+socket-observation problems. The stalled-CONNECT fixture needed to finish its
+own side after receiving the peer close. The passing issue-branch run used
+Electron's in-process GPU flag to avoid a startup timeout under host load.
+
+Portable regression evidence is [recorded in task 2.5](../openspec/changes/linux-platform-support/tasks.md#25-authenticated-proxy-checkpoint-2026-11-19).
+This scope covers Basic authentication to a loopback HTTP CONNECT proxy using
+matching process credentials. Pinned beta.7 remains affected. Repeat the
+applicable checks on the selected integrated candidate under task 2.7.
+Installed desktop, Windows lab qualification and verified runnable beta
+delivery remain pending for the changed application.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
