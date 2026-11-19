@@ -11,7 +11,7 @@
 ## 2. Verification and delivery
 
 - [x] 2.1 Run desktop verify with the host resource lock, the affected tests, and documentation/OpenSpec checks. Record the candidate, counts, exit statuses and environment.
-- [ ] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
+- [x] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
 - [ ] 2.3 After lab-owner release, run the affected Windows native, vault and UI checks against the integrated candidate, including the two same-profile restarts. Verify packaged startup with an isolated profile.
 - [ ] 2.4 Deliver a newly versioned, verified runnable beta and verify the transfer copy. [Local beta handoff](../../../docs/PUBLISHING.md#local-beta-handoff)
 
@@ -31,3 +31,4 @@
 
 - Fedora 44 x64, Node 22.23.1, and the reserved source marker 0.5.0-beta.14. The verified source consists of the main-process resize handling, the portable and Windows panel tests, the OpenSpec change, and panel and contributor documentation. The first locked verify stopped at a lint error in the Electron test double, exit 1. After correcting its constructor, `VITEST_MAX_WORKERS=1 flock /tmp/sc-20261119-desktop-verify.lock npm --prefix desktop run verify` exited 0 with type checking, lint, 1,238 tests in 36 files and production bundles.
 - On the same checkout, `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs` (114 Markdown files, 493 local links/anchors), `openspec validate --all --strict --no-interactive` (11/11) and `git diff --check` exited 0.
+- An independent standards and acceptance review cleared commit `a2300001f00796152ebf4ab88b8ad68f20789f36` after two corrections. The checkpoint records the need for the current Windows lab owner to release the VM, and the restart test distinguishes the saved 200-DIP height from a fresh 280-DIP fit at both simulated scales. The resize listener, panel geometry and storage suites passed again on that commit (61 tests in three files, one Vitest worker, exit 0). Windows runtime verification and the numbered beta handoff remain open in tasks 2.3 and 2.4.
