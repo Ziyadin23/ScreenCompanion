@@ -54,7 +54,7 @@ function connectionFailure(error: unknown, signal?: AbortSignal): ProviderError 
       ? 'The secure API connection failed (TLS). Check the PC date/time and ask network IT about certificate or HTTPS inspection requirements.'
       : code === 'network_proxy'
         ? 'The network proxy could not connect to the API. Ask network IT to check proxy authentication and allow HTTPS to the API host.'
-        : 'The API connection failed. Check Wi-Fi sign-in and Windows proxy settings, then retry.';
+        : 'The API connection failed. Check Wi-Fi sign-in and system proxy settings, then retry.';
   return new ProviderError(message, 'Network');
 }
 export function parseModelResponse(value: unknown, provider: ApiProvider): ModelResponse {
@@ -135,7 +135,7 @@ export async function sendModel(transport: HttpTransport, request: ModelRequest,
     responseBody = response.body;
     if (signal?.aborted) throw connectionFailure(undefined, signal);
     const status = response.status;
-    if (status === 407) throw new ProviderError('The network proxy requires authentication. Check Windows proxy settings with university IT.', 'Network', status);
+    if (status === 407) throw new ProviderError('The network proxy requires authentication. Check your system proxy settings with network IT.', 'Network', status);
     if ((status >= 300 && status < 400) || status === 511)
       throw new ProviderError('The API request was redirected or requires network sign-in. Sign in to Wi-Fi in a browser, then retry. If it persists, ask university IT to allow the API connection.', 'Network', status);
     const mediaType = Object.entries(response.headers).find(([name]) => name.toLowerCase() === 'content-type')?.[1]?.split(';')[0]?.trim().toLowerCase();

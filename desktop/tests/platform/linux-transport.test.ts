@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { connect, createServer as createTcpServer } from 'node:net';
@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { createLinuxTransport } from '../../src/platform';
 
 let server: Server | undefined;
-afterEach(async () => { if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined; } });
+afterEach(async () => { vi.unstubAllEnvs(); if (server) { server.closeAllConnections(); await new Promise<void>(resolve => server!.close(() => resolve())); server = undefined; } });
 async function listen(handler: RequestListener): Promise<number> {
   server = createServer(handler); await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   return (server.address() as { port: number }).port;
@@ -32,15 +32,16 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
     expect((await transport.send(request('http://fixture.invalid/api'))).status).toBe(200);
     expect(target).toBe('http://fixture.invalid/api');
   });
-  it('returns an HTTPS CONNECT 407 without forwarding API credentials or trying a fallback', async () => {
+  it('returns an HTTPS CONNECT 407 without sending unrelated credentials or trying a fallback', async () => {
     const origin = createServer(); let originCalls = 0;
     origin.on('connection', socket => { originCalls++; socket.destroy(); });
     await new Promise<void>(resolve => origin.listen(0, '127.0.0.1', resolve));
     const originPort = (origin.address() as { port: number }).port;
+    vi.stubEnv('https_proxy', `http://other-user:other-pass@127.0.0.1:${originPort}`);
     server = createServer(); let connects = 0, authorization: string | undefined;
     const sockets = new Set<Duplex>();
     server.on('connect', (req, socket) => {
-      connects++; authorization = req.headers.authorization; sockets.add(socket);
+      connects++; authorization = req.headers.authorization ?? req.headers['proxy-authorization']; sockets.add(socket);
       socket.on('close', () => sockets.delete(socket));
       socket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="fixture"\r\nContent-Length: 999\r\n\r\n');
     });
@@ -58,25 +59,38 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
     }
   });
-  it.skipIf(!hasOpenSsl).each([200, 302])('reads the origin response after a successful HTTPS CONNECT (%i)', async status => {
+  it.skipIf(!hasOpenSsl).each([
+    { status: 200, authenticate: false },
+    { status: 302, authenticate: false },
+    { status: 200, authenticate: true }
+  ])('reads the origin response after HTTPS CONNECT ($status, authentication: $authenticate)', async ({ status, authenticate }) => {
     const dir = await mkdtemp(join(tmpdir(), 'sc-proxy-tls-'));
-    const oldCa = process.env.CURL_CA_BUNDLE;
     const sockets = new Set<Duplex>();
+    const proxyPassword = 'synthetic:quote"\\@%';
+    const proxyAuthorization = `Basic ${Buffer.from(`fixture-user:${proxyPassword}`).toString('base64')}`;
+    let connects = 0, providerAuthorizationAtProxy = false, proxyAuthorizationAtOrigin = false;
     let tlsServer: ReturnType<typeof createHttpsServer> | undefined;
     try {
       execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'key.pem'),
         '-out', join(dir, 'cert.pem'), '-days', '1', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1'], { stdio: 'ignore' });
-      process.env.CURL_CA_BUNDLE = join(dir, 'cert.pem');
+      vi.stubEnv('CURL_CA_BUNDLE', join(dir, 'cert.pem'));
       let originRequests = 0;
       tlsServer = createHttpsServer({ key: await readFile(join(dir, 'key.pem')), cert: await readFile(join(dir, 'cert.pem')) }, (req, res) => {
         originRequests++; expect(req.headers.authorization).toBe('synthetic-key');
+        proxyAuthorizationAtOrigin ||= Boolean(req.headers['proxy-authorization']);
         res.writeHead(status, { 'x-origin': 'yes', ...(status === 302 ? { location: '/other' } : {}) }); res.end('{"ok":true}');
       });
       await new Promise<void>(resolve => tlsServer!.listen(0, '127.0.0.1', resolve));
       const originPort = (tlsServer.address() as { port: number }).port;
       server = createServer();
-      server.on('connect', (_req, client, head) => {
+      server.on('connect', (req, client, head) => {
+        connects++;
+        providerAuthorizationAtProxy ||= Boolean(req.headers.authorization);
         sockets.add(client); client.on('close', () => sockets.delete(client));
+        if (authenticate && req.headers['proxy-authorization'] !== proxyAuthorization) {
+          client.end('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="fixture"\r\nContent-Length: 0\r\n\r\n');
+          return;
+        }
         const upstream = connect(originPort, '127.0.0.1', () => {
           client.write('HTTP/1.1 200 Connection Established\r\nX-Proxy-Only: yes\r\n\r\n');
           if (head.length) upstream.write(head);
@@ -86,14 +100,15 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       });
       await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
       const proxyPort = (server.address() as { port: number }).port;
+      if (authenticate) vi.stubEnv('https_proxy', `http://fixture-user:${encodeURIComponent(proxyPassword)}@127.0.0.1:${proxyPort}`);
       const result = await createLinuxTransport(async () => `PROXY 127.0.0.1:${proxyPort}`)
         .send(request(`https://127.0.0.1:${originPort}/`));
       expect(result.status).toBe(status); expect(result.headers['x-origin']).toBe('yes');
       expect(result.headers['x-proxy-only']).toBeUndefined(); expect(originRequests).toBe(1);
+      expect(connects).toBe(1); expect(providerAuthorizationAtProxy).toBe(false); expect(proxyAuthorizationAtOrigin).toBe(false);
       if (status === 200) expect(result.body.toString()).toBe('{"ok":true}');
       else { expect(result.headers.location).toBe('/other'); expect(result.body).toHaveLength(0); }
     } finally {
-      if (oldCa === undefined) delete process.env.CURL_CA_BUNDLE; else process.env.CURL_CA_BUNDLE = oldCa;
       for (const socket of sockets) socket.destroy();
       tlsServer?.closeAllConnections();
       if (tlsServer) await new Promise<void>(resolve => tlsServer!.close(() => resolve()));
