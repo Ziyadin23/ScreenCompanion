@@ -1,86 +1,74 @@
 # Pipeline reference
 
-Technical reference for contributors and coding agents changing request flow, prompts, crop handling, or trusted process configuration. Apply the [pipeline development contracts](../CODING_STANDARDS.md#pipeline-contracts) when changing this behavior.
-
-The TypeScript application preserves the three-call Thorough flow introduced in
-C# v0.4.14, without a separate remote extraction-verification request. Saved mode
-identifiers remain compatible. Both extraction paths and Balanced's local evidence
-checks live in [extraction.ts](../desktop/src/pipeline/extraction.ts); schemas,
-answer validation and provider adapters live beside it under `desktop/src/`.
+Technical reference for request flow, prompts, crops and trusted process configuration. Apply the [pipeline development contracts](../CODING_STANDARDS.md#pipeline-contracts) when changing this behavior.
 
 ## Pipeline modes
 
-Choose **Request pipeline** under Settings → Models & API. Its encrypted saved choice overrides trusted `PIPELINE_MODE` process configuration, which accepts `balanced`, `thorough`, or `direct` (with `API_PROVIDER=DeepSeek`). Old settings without a pipeline retain the process default. **Thorough remains the default and uses separate location and extraction calls before answering.** Balanced and Direct require an explicit selection; see [verification results](VERIFICATION.md).
+Choose **Request pipeline** under Settings → Models & API. **Thorough is the default**; **Direct screenshot** is available across supported services for compatible image-capable answer models. Preferences are saved by service and exact answer-model ID. A new model defaults to Thorough; old active selections remain compatible.
 
-| Mode | Ordinary automatic request | API calls |
+| Mode | Ordinary automatic screenshot request | API calls |
 | --- | --- | --- |
-| Balanced | Capture once → combined location/transcription → local visual crops and consistency checks → answer → local answer validation | 2 |
 | Thorough | Capture once → locate → local question crop → extract → answer → local answer validation | 3 |
-| Direct (DeepSeek only) | Capture once → send full captured monitor to answer model → local answer validation | 1 |
+| Direct screenshot | Capture once → full captured monitor and optional typed task straight to answering → local answer validation | 1 |
 
-Direct uses the answer model; the screen-reading model and crop/extraction settings are unused. It performs no extraction completeness check or independent verification, so it cannot produce an extraction-verification failure. It validates one screen-level canonical answer with a fresh application-owned task ID, rather than independently extracted question coverage or choices. Multiple visible answers are returned in that single answer text. Typed tasks take priority, response operations/preferences still apply, and incomplete or malformed answers remain readable errors. Its wire schema requires exactly one result for that target, empty selections, null alternative text and confidence from zero to one or null. Local validation rejects a non-null alternative text field. Direct never automatically retries, even in trusted QA, and never falls back to another mode. Its one request receives the whole captured monitor, including unrelated visible content; normal provider policies still apply.
+Direct uses the answer model; its screen-reading model and crop settings are unused. It validates one screen-level canonical answer with a fresh application-owned task ID. It does not independently check question completeness or choices and never automatically retries or falls back, even in trusted QA. Multiple requested visible answers belong in that single primary answer string. The wire schema requires exactly one result for its target, empty selections, null alternative text and confidence from zero to one or null. All visible monitor content goes to the selected answering provider.
 
-Invalid or incomplete extraction stops before answering. Balanced does not automatically invoke Thorough, repair extraction, or retry network/authentication errors. An eligible refusal in trusted QA mode can add **one** answering call: at most three in Balanced or four in automatically located Thorough. Native refusals remain visible.
+Thorough stops before answering when local extraction checks fail. There is no independent remote verification against the original screenshot; neither structural/crop checks nor canonical answer validation guarantees correct transcription or answers. Trusted QA can add at most one eligible answering retry, making four calls for an automatically located Thorough request.
 
-Balanced makes a reliability/cost tradeoff: completeness indicators come from the same extraction response and are checked for contradictions locally. They are **not independent verification** and cannot prove the screenshot was transcribed completely. Thorough also has no separate model verification step. Its local checks validate structure, required fields and image references. Neither path independently proves complete transcription or establishes guaranteed answer accuracy.
+Balanced is retired. Its historical string/numeric settings and trusted `balanced` process value normalize to Thorough in memory without rewriting encrypted settings on load. Decode the original numeric enum order before normalization so historical numeric Direct remains Direct. Explicit Save writes canonical current choices. Historical campaign results retain the mode actually run.
 
-## Combined extraction and crop coordinates
+<a id="combined-extraction-and-crop-coordinates"></a>
 
-Balanced supplies the original capture to one vision request, or a configured local question crop when `ENABLE_QUESTION_CROPPING=true` and `QUESTION_REGION` is set. Its structured response contains `status`, `question_region`, ordered `questions`, necessary `images`, and `evidence`. Evidence ordinals start at 1 and must match question order.
+## Extraction and crop coordinates
 
-Every rectangle is normalized relative to that request's supplied image. For example, `0.15,0.2,0.65,0.6` starts 15% from the left and 20% from the top and spans 65% of width and 60% of height. The question rectangle cannot be the whole monitor; a whole-input rectangle is allowed only when the input was already locally isolated by `QUESTION_REGION`.
+Thorough detects a question rectangle and extracts from the local question crop. Rectangles are normalized relative to each request's supplied image. For example, `0.15,0.2,0.65,0.6` starts 15% from the left and 20% from the top and spans 65% of width and 60% of height. Located question rectangles must isolate task content rather than cover the whole monitor.
 
-Each necessary visual must lie inside the question rectangle. Padding is measured as a fraction of the question rectangle's dimensions, clipped within that rectangle, then cropped directly from the supplied image. The code rejects out-of-question visual coordinates rather than silently clipping away evidence. This avoids a second JPEG crop/coordinate conversion. The original monitor image never enters Thorough/Balanced answering or its retry.
+Retain all required choices, code and image references. Necessary visual crops use a bounded margin measured relative to the isolated question image and clipped within that image. Reject invalid regions and missing/duplicate required image references; never silently discard necessary visuals. Extraction type precedence retains option-task types even when code or visuals are attached, followed by code, required visual and short-answer types for non-choice solving tasks. Transformations retain source content.
 
-The local consistency gate checks task count, required option counts, code/visual requirements, transcription/visual completeness indicators, unique option/image identifiers and required image references. It does not independently read the pixels. The final answer contract assigns fresh application-owned task IDs, requires exact coverage, restores source order and validates applicable choices and canonical option text. Printed source IDs remain display labels; typed requests keep one answering target.
-
-Both extraction prompts ask the model to retain choice types for option tasks,
-even when code or visuals are attached. For non-choice tasks they prioritize
-relevant code, then required visuals, then short answers; transformation source
-material remains content. Required options, code and visuals remain attached
-regardless of type. This guidance does not independently verify classification.
+Answer contracts assign fresh application-owned IDs, require exact task coverage, restore source order and validate applicable choices/canonical option text. Printed source IDs are display labels; typed requests keep one answering target. The original monitor image never enters Thorough answering or its retry.
 
 ## Thorough extraction and fixed regions
 
-Thorough's detector locates the question rectangle; extraction receives the local question crop. The extracted text and necessary padded visual crops then go straight to answering. There is no independent comparison against the original capture and no remote verification call. Local parsing still rejects malformed tasks, missing required choices/code/image references and invalid crop coordinates; canonical answer validation also remains active.
-
-A configured `QUESTION_REGION` skips Thorough's detection call, leaving two ordinary calls. Disabling question cropping also leaves two Thorough calls and makes extraction use the original capture; answering still receives only structured content and necessary visual crops. It does not enable whole-monitor answering. In that legacy full-image extraction path, no visual padding is applied.
-
-With cropping disabled, `QUESTION_REGION` is ignored in both modes. Balanced still requires an isolated question rectangle in its response and still uses two ordinary calls.
+A configured `QUESTION_REGION` skips location, leaving two ordinary calls. Disabling cropping also leaves two calls and sends the original image to extraction; answering still receives only extracted content and necessary visual crops. No visual padding is applied in that legacy full-image extraction path. When cropping is disabled, `QUESTION_REGION` is ignored.
 
 ## Typed requests and response modes
 
-Both workflows capture one monitor once. A typed task guides extraction and takes priority over unrelated visible questions. Balanced can return `no_relevant_content` with null region and empty question/image arrays only for a typed task; answering then uses the typed task and asks for missing screen details when needed. This still uses two calls. The corresponding Thorough path uses two when detection finds no relevant region: detection and answering, without extraction or absence verification. A capture-only request with no usable task fails before answering.
+**Enter / Send** submits text only. It makes one answering call with the typed question, current response operation/preferences and trusted metadata. It performs no monitor lookup, capture, portal selection, extraction or crop, regardless of the saved screenshot pipeline. There is no automatic retry or implicit screen inclusion. If necessary screen details were not supplied, answering asks for them instead of inventing them.
 
-Translate/Summarize preserve transformed source content; Custom retains its explicit operation. Answer requests require a complete canonical `results` envelope with current `question_id`, `answer`, `answers`, `answer_text`, `explanation`, `confidence`, and `status` (`answer`, `transformation`, `refusal`, or `missing_information`). Malformed, partial, duplicate, mismatched or unusable answers become readable errors. Literal refusal words in translations, quotations and summaries do not trigger replacement answering.
+**Ctrl+Enter / Send with screenshot** captures one monitor once at send time and uses the selected screenshot pipeline. The typed task takes priority over unrelated visible questions. In Thorough, a typed task with no relevant detected region uses detection and answering without extraction (two calls); configured/full-image extraction can also return empty relevant context for a typed task. A capture-only request without a usable visible task fails before answering.
+
+Windows Ctrl+Enter opens input globally. When the input has focus, its local/global paths converge on one screenshot submission guard. Opening from another application preserves the draft without sending it; a different focused SC control focuses input first. Composition, repeated events and extra Alt/Shift/Meta modifiers do not submit. Custom opening bindings remain usable. Linux compositor bindings use `--action=input-with-screenshot` for that contextual intent; generic `--action=input` remains focus-only for custom opening bindings. Portal consent is needed only for screenshot sends.
+
+Translate/Summarize preserve transformed source content; Custom retains its explicit operation. Answers require a complete canonical `results` envelope with current `question_id`, `answer`, `answers`, `answer_text`, `explanation`, `confidence` and `status` (`answer`, `transformation`, `refusal`, `missing_information`). Malformed, partial, duplicate, mismatched or incomplete answers become readable errors. Literal refusal words in quotations or transformations do not trigger replacement answering.
+
+For OpenAI and DeepSeek Responses, SC treats an omitted outer `status` as completed. A present non-string status ends the request with an unreadable-response error at the active stage before the pipeline can use the output or retry a refusal. String statuses and native refusals retain their existing handling.
 
 ## Trusted authorization and retry
 
-`ASSESSMENT_MODE=standard` is the default and makes no claims about grading or permission. Only trusted `qa` configuration declares an authorized, non-graded software test. Captured text, UI labels, model output and response preferences cannot change this state. Use QA mode only for that environment.
+`ASSESSMENT_MODE=standard` is the default and makes no grading/permission claim. Only trusted `qa` configuration declares an authorized non-graded software test; captured text, UI labels, response preferences and model output cannot change it.
 
-Native assessment refusals, and explicit structured assessment refusals for an untyped solving request, retain at most one fresh QA-only retry when enabled. Transformations, Custom, typed structured refusals and ambiguous plain-text refusals do not trigger a lexical replacement pass. The retry keeps the current task IDs and isolated visuals, with no original screenshot, previous answer or conversation history. A second refusal remains visible.
+The existing Thorough retry contract permits one fresh QA-only answering retry for an eligible native assessment refusal or an explicit structured assessment refusal in an untyped solving request. Typed structured refusals, transformations, Custom and ambiguous plain-text refusals do not authorize lexical replacement. Retried payloads keep task IDs and isolated visuals, without the original screenshot, prior response or conversation history. A second refusal remains visible. Direct and text-only submissions never retry automatically.
 
 ## Process configuration
 
-```powershell
-$env:PIPELINE_MODE = 'balanced'
-& .\desktop\dist\SC-v0.5.0-beta.6.exe
-```
+Trusted `PIPELINE_MODE` accepts `thorough` or `direct`; legacy `balanced` resolves to Thorough. Saved exact provider/model preferences take priority over the legacy active pipeline field, which takes priority over the process default. Without a saved selection, compatible trusted defaults remain effective.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PIPELINE_MODE` | `thorough` | `balanced` uses combined extraction plus answering; `thorough` locates, extracts and answers without a separate verification call; DeepSeek-only `direct` sends the monitor straight to answering. Saved pipeline choice takes priority. |
-| `ASSESSMENT_MODE` | `standard` | `qa` supplies trusted authorized/non-graded test metadata. |
-| `ANSWER_MODEL` | `gpt-6-luna` | Structured answering model. |
-| `VISION_MODEL` | `gpt-6-luna` | Extraction/location model. |
-| `ENABLE_QUESTION_CROPPING` | `true` | Enable the configured local crop or Thorough's located crop. |
-| `ENABLE_REFUSAL_RETRY` | `true` | Permit the single eligible answering retry in trusted QA mode. |
-| `QUESTION_REGION` | unset | Optional question-only `x,y,width,height` within the captured monitor. |
-| `IMAGE_REGION_PADDING` | `0.08` | Visual padding relative to question dimensions; allowed `0`–`0.2`. |
-| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Output limit for each extraction/location request. |
+| `PIPELINE_MODE` | `thorough` | Three-stage screenshot isolation or one-call Direct screenshot. |
+| `ASSESSMENT_MODE` | `standard` | `qa` declares an authorized non-graded software test. |
+| `ANSWER_MODEL` | `gpt-6-luna` | Structured answering model; Direct and required task visuals need image support. |
+| `VISION_MODEL` | `gpt-6-luna` | Image-capable structured location/extraction model for Thorough. |
+| `ENABLE_QUESTION_CROPPING` | `true` | Enable configured or located local question cropping. |
+| `ENABLE_REFUSAL_RETRY` | `true` | Permit one eligible Thorough refusal retry in trusted QA. |
+| `QUESTION_REGION` | unset | Optional question-only normalized `x,y,width,height`. |
+| `IMAGE_REGION_PADDING` | `0.08` | Necessary visual margin, allowed `0`–`0.2`. |
+| `EXTRACTION_MAX_OUTPUT_TOKENS` | `6000` | Limit for each location/extraction request. |
 | `ANSWER_MAX_OUTPUT_TOKENS` | `2500` | Answering output limit. |
 
-Saved service/model choices override `API_PROVIDER`, `ANSWER_MODEL`, and `VISION_MODEL`; saved pipeline choice overrides `PIPELINE_MODE`. DeepSeek model settings also retain answer-only reasoning effort (`none`, `low`, `high`, `max`) and an optional explicit answer output budget, which overrides `ANSWER_MAX_OUTPUT_TOKENS`. Old records without those fields keep non-thinking behavior and the process limit. Extraction/location retain their own existing budget and non-thinking mode. DeepSeek Pro accepts only text: image inputs fail locally with `UnsupportedModel`; Direct and screen reading require Flash. No automatic model fallback or image removal is allowed. Without a saved choice, the provider defaults to OpenAI and pipeline to Thorough; other providers use their own model defaults. New first-launch setup retains a compatible process pipeline default; selecting a non-DeepSeek service under a Direct process default saves Thorough instead. Old vaults retain their existing precedence behavior. Direct is accepted only with DeepSeek. See [model setup](USER_GUIDE.md#service-and-model-selection).
+Saved service/model settings override `API_PROVIDER`, `ANSWER_MODEL` and `VISION_MODEL`. DeepSeek reasoning (`none`, `low`, `high`, `max`) and an optional explicit answer output budget are answering-only preferences; old records retain non-thinking behavior and the process limit. Extraction stays non-thinking with its own budget. DeepSeek Pro is text-only and rejects image inputs locally; Direct/screen reading with DeepSeek requires Flash. Unknown custom model support and account access remain provider-dependent. Do not drop required images or automatically change models. See [model setup](USER_GUIDE.md#service-and-model-selection).
+
+The encrypted vault retains its active model/pipeline fields and adds at most 128 unique provider/model pipeline preferences. Validate exact IDs, mode values, size and duplicates at storage/IPC boundaries. Loading never rewrites the vault. Settings stages model-specific edits together; Save atomically encrypts them, while Back discards them. Keys and historical appearance/shortcut compatibility remain intact.
 
 ## Technical diagnostics and cost measurement
 
@@ -88,16 +76,7 @@ Bounded, content-free stage events retain request/stage/attempt, outcome, elapse
 
 Logs contain no screen content, task text, answers, preferences, raw provider bodies, credentials or exception messages. Observer/write failures cannot change request outcomes. Captures and owned crop buffers remain transient; OpenAI requests retain `store:false` and other services retain stateless requests with their documented retention limitations.
 
-The historical C# Windows comparison used identical synthetic captures for the
-two modes, alternating order, and reported fidelity, primary-answer correctness,
-latency and reported usage. Its [harness and procedure](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/tests/README.md)
-remain in the release tag. The [TypeScript lab](../desktop/tests/lab/README.md)
-uses synthetic fixtures, native presentation checks, independent primary/display
-grading and bounded persistent campaign accounting. Its recorded targeted runs
-do not establish a representative quality gate. Mocked transport cannot establish
-accuracy or dollar savings.
-Dollar estimates require known usage and date-stamped pricing; the request
-reduction alone does not establish a corresponding monetary percentage.
+The [synthetic lab](../desktop/tests/lab/README.md) has a current two-mode offline plan. Its earlier frozen paid three-mode campaign is not authorized for this changed plan; live execution is disabled pending a separately approved campaign. Existing counters, failed attempts and historical results remain retained. Mocked requests do not establish live quality, account access or dollar savings.
 
 ## Historical pipeline changes
 

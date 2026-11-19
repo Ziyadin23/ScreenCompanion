@@ -8,6 +8,9 @@ node_prefix=$(dirname "$(dirname "$node_source")")
 test "$npm_source" = "$node_prefix/lib/node_modules/npm/bin/npm-cli.js"
 sudo install -d /usr/local/lib/sc-ci-node
 sudo cp -a "$node_prefix/." /usr/local/lib/sc-ci-node/
+# The toolcache can retain writable runner/group ownership; the fixed sandbox runtime must be immutable.
+sudo chown -hR root:root /usr/local/lib/sc-ci-node
+sudo chmod -R go-w /usr/local/lib/sc-ci-node
 sudo ln -sfn /usr/local/lib/sc-ci-node/bin/node /usr/bin/node
 sudo ln -sfn /usr/local/lib/sc-ci-node/bin/npm /usr/bin/npm
 cmp "$node_source" /usr/bin/node
@@ -15,9 +18,15 @@ cmp "$npm_source" "$(readlink -f /usr/bin/npm)"
 diff -qr "$node_prefix/lib/node_modules/npm" /usr/local/lib/sc-ci-node/lib/node_modules/npm
 test "$(node --version)" = "$(/usr/bin/node --version)"
 test "$(npm --version)" = "$(/usr/bin/npm --version)"
+/usr/bin/node --input-type=module - <<'JS'
+import assert from 'node:assert/strict';
+import { realpathSync, statSync } from 'node:fs';
+const info = statSync(realpathSync('/usr/bin/node'));
+assert(info.isFile() && info.uid === 0 && !(info.mode & 0o022) && info.mode & 0o111 && info.size <= 500_000_000);
+console.log('Fixed Node runtime metadata verified:', { uid: info.uid, mode: (info.mode & 0o777).toString(8), bytes: info.size });
+JS
 
-sudo apt-get update
-sudo apt-get install --yes bubblewrap
+node "$(dirname "$0")/install-bubblewrap.mjs"
 # Ubuntu 24.04 AppArmor otherwise strips capabilities needed for bwrap's namespace setup.
 # This setting lives only for this fresh GitHub-hosted runner job.
 sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0

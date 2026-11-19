@@ -40,6 +40,7 @@ let readyToShow = false;
 let panelBounds: Electron.Rectangle | null = null;
 let surface: AppState['surface'] = 'answer';
 let lastCaptureProtection: AppState['captureProtection'] = 'Failed';
+let composerHeight = 96;
 let activationPending = false;
 let manualPanelSize = false;
 let settingBounds = false;
@@ -59,9 +60,10 @@ function trayImage(working: boolean): Electron.NativeImage {
 function clampBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   const area = screen.getDisplayMatching(bounds).workArea;
   const width = Math.min(Math.max(linux ? 340 : 180, bounds.width), area.width);
-  const height = Math.min(Math.max(linux ? 140 : 80, bounds.height), area.height);
+  const height = Math.min(Math.max(minimumPanelHeight(), bounds.height), area.height);
   return { width, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - width)), y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height)) };
 }
+function minimumPanelHeight(): number { return surface === 'input' ? (linux ? 180 : 128) : linux ? 140 : 80; }
 function setBounds(bounds: Electron.Rectangle): void {
   if (!window) return;
   expectedBounds = bounds; settingBounds = true;
@@ -90,21 +92,24 @@ function measurePanel(state: AppState): void {
     copy.style.font = style.font;
     copy.style.fontSize = style.fontSize;
     copy.style.lineHeight = style.lineHeight;
-    copy.style.cssText += ';position:fixed;visibility:hidden;height:auto;max-height:none;overflow:visible;width:${width - 14}px;';
+    copy.style.cssText += ';position:fixed;visibility:hidden;height:auto;max-height:none;overflow:visible;width:${width - 16}px;';
     document.body.appendChild(copy);
-    const height = copy.getBoundingClientRect().height;
-    const controlsHeight = document.querySelector('.linux-controls')?.getBoundingClientRect().height || 0;
-    copy.remove(); resolve({ height, controlsHeight });
+    const height = copy.getBoundingClientRect().height + parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+    const controlsHeight = document.querySelector('.panel-chrome')?.getBoundingClientRect().height || 0;
+    const input = document.querySelector('.question-form');
+    const inputStyle = input && getComputedStyle(input);
+    const inputHeight = input ? input.getBoundingClientRect().height + parseFloat(inputStyle.marginTop) + parseFloat(inputStyle.marginBottom) : 0;
+    copy.remove(); resolve({ height, controlsHeight, inputHeight });
   })))`;
   void window.webContents.executeJavaScript(script).then((result: unknown) => {
     if (!window || window.isDestroyed() || revision !== measurement || manualPanelSize || !isPanel(surface) || !result || typeof result !== 'object' ||
       !('height' in result) || !('controlsHeight' in result) || typeof result.height !== 'number' || !Number.isFinite(result.height) ||
-      typeof result.controlsHeight !== 'number' || !Number.isFinite(result.controlsHeight)) return;
+      typeof result.controlsHeight !== 'number' || !Number.isFinite(result.controlsHeight) ||
+      !('inputHeight' in result) || typeof result.inputHeight !== 'number' || !Number.isFinite(result.inputHeight)) return;
     const old = window.getBounds();
-    const inputHeight = surface === 'input' ? 56 : 0;
     const frameHeight = linux ? Math.max(0, old.height - window.getContentBounds().height) : 0;
-    const nextHeight = autoPanelHeight({ textHeight: result.height, controlsHeight: linux ? result.controlsHeight : 0, inputHeight,
-      frameHeight, workAreaHeight: area.height, minimumHeight: linux ? 140 : 80 });
+    const nextHeight = autoPanelHeight({ textHeight: result.height, controlsHeight: result.controlsHeight, inputHeight: result.inputHeight,
+      frameHeight, workAreaHeight: area.height, minimumHeight: minimumPanelHeight() });
     setBounds(clampBounds({ x: old.x + old.width - width, y: old.y + old.height - nextHeight, width, height: nextHeight }));
     panelBounds = window.getBounds();
   }).catch(() => { /* Content measurement failure keeps the usable current bounds. */ });
@@ -124,7 +129,7 @@ function publish(state: AppState, capturing: boolean): void {
     const area = screen.getDisplayMatching(window.getBounds()).workArea;
     surface = state.surface;
     window.setResizable(isPanel(state.surface));
-    if (isPanel(state.surface)) { window.setMinimumSize(Math.min(linux ? 340 : 180, area.width), Math.min(linux ? 140 : 80, area.height)); if (panelBounds) setBounds(clampBounds(panelBounds)); }
+    if (isPanel(state.surface)) { window.setMinimumSize(Math.min(linux ? 340 : 180, area.width), Math.min(minimumPanelHeight(), area.height)); if (panelBounds) setBounds(clampBounds(panelBounds)); }
     else {
       const width = Math.min(state.surface === 'setup' ? 560 : 760, area.width);
       const height = Math.min(state.surface === 'setup' ? 480 : 680, area.height);
@@ -135,10 +140,10 @@ function publish(state: AppState, capturing: boolean): void {
   }
   if (readyToShow) window.webContents.send('sc:state', state);
   if (platform && state.ready) {
-    platform.setPanelResizeEnabled(window.getNativeWindowHandle(), readyToShow && canResizePanel(state, capturing));
+    platform.setPanelResizeEnabled(window.getNativeWindowHandle(), readyToShow && canResizePanel(state, capturing), minimumPanelHeight());
     const scale = screen.getDisplayMatching(window.getBounds()).scaleFactor;
     platform.setHoverInputHeight(state.surface === 'settings' || state.surface === 'setup'
-      ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(56 * scale) : 0);
+      ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(composerHeight * scale) : 0);
   }
   tray?.setImage(trayImage(state.busy));
   if (capturing || !state.visible || !readyToShow) hidePanel();
@@ -209,7 +214,13 @@ async function boot(): Promise<void> {
     executableDirectory: dirname(process.execPath), platformName: linux ? 'linux' : 'windows',
     mode: synthetic ? 'synthetic' : captureTest ? 'captureTest' : 'production',
     host: { publish, panelHandle: () => window!.getNativeWindowHandle(), scroll: delta => { window?.webContents.send('sc:scroll', delta); }, exit: () => app.quit(),
-      activate: () => { if (window && readyToShow) { window.show(); window.focus(); } } } });
+      activate: () => { if (window && readyToShow) { window.show(); window.focus(); } },
+      isFocused: () => window?.isFocused() ?? false,
+      inputAction: (submitScreenshot) => { window?.webContents.send('sc:input-action', submitScreenshot); },
+      inputHeight: (height) => {
+        composerHeight = height;
+        if (window) platform?.setHoverInputHeight(Math.ceil(height * screen.getDisplayMatching(window.getBounds()).scaleFactor));
+      } } });
   updates = new ApplicationUpdates({
     client: !linux && app.isPackaged && !process.env.PORTABLE_EXECUTABLE_DIR && !preview && !captureTest ? electronUpdater.autoUpdater : null,
     version, diagnostics, publish: state => controller?.setUpdateState(state), canInstall: () => controller?.canInstallUpdate() ?? false

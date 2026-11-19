@@ -1,15 +1,12 @@
-# Local development workflow
+# Optional LangGraph runner
 
-The development tool under `tools/agent-workflow/` uses TypeScript, LangGraph and
-local SQLite state. Start it when needed; it does not install a resident service.
-The [OpenSpec owner](../openspec/changes/add-local-langgraph-workflow/tasks.md)
-records implementation progress and qualification. The current runner supports
-bounded investigation, independent executable reproduction and report/issues
-delivery. Isolated Codex source access has a real read-only qualification;
-the discovery pilot reached its deliberately short 90-second limit. The plan/apply/check/review/PR path has a synthetic end-to-end test, including
-CI wait/resume without a second writer. Actual publication, protected automatic
-merge and Windows beta delivery still require the qualification gates in that
-owner. An unavailable capability produces a saved wait.
+For everyday issue work in Codex, follow the [contributor workflow](DEVELOPMENT.md#contributor-workflow).
+When a LangGraph run is requested, the tool under `tools/agent-workflow/` starts on demand and uses local SQLite state.
+The runner investigates within an agreed scope, verifies a reproduction, and can
+deliver a report, issue or reviewed PR within the selected permissions. The
+[OpenSpec task record](../openspec/changes/add-local-langgraph-workflow/tasks.md#workflow-and-pilot-checkpoint--2026-11-19)
+tracks the tested revisions, issue #60 pilot results, failed attempts and pending
+qualification. Consult it before resuming a run or approving another attempt.
 
 ## Install and verify
 
@@ -25,10 +22,40 @@ This independent package does not add dependencies to the Electron application.
 Its tests use synthetic data, temporary Git repositories and local state. They
 make no model/provider requests or GitHub mutations.
 
+After building, a user-local command can be installed from the package directory:
+
+```sh
+cd tools/agent-workflow
+npm install --global --prefix "$HOME/.local" --ignore-scripts "$PWD"
+```
+
+This exposes `~/.local/bin/sc-dev`; that directory must be on `PATH`. That recipe
+links this checkout's built tool, so retain it and rebuild after tool changes.
+The qualified local environment instead uses a verified package/dependency runtime
+snapshot outside writing worktrees, with source identity and installed-command
+checks recorded in private setup receipts. It retains the existing account and
+state; credentials are not part of that package.
+Check the installed command's recorded source before relying on a recovery flag.
+The [PR #81 checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md#tool-source-verification)
+records the integrated source, the separately prepared runtime and the earlier
+installed stable command.
+`sc-dev` accepts the same arguments as the longer npm command. For example:
+
+```sh
+sc-dev doctor
+sc-dev runs
+sc-dev run --scope providers-json --delivery report
+```
+
+Run from the intended clean source checkout or select it with `--repo`. Doctor
+checks prerequisites; saved runs can still have an unresolved execution or
+integration hold. Inspect `runs` before dispatching new work.
+
 The hosted `agent-workflow` check uses a fresh Ubuntu 24.04 runner. Its setup
 copies the selected `actions/setup-node` Node/npm installation into `/usr`,
-which the fixed sandbox profile mounts read-only, and verifies the copied bytes,
-npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
+which the fixed sandbox profile mounts read-only, normalizes that copy to root
+ownership without group/world write access, and verifies the copied bytes,
+Node metadata, npm dependency tree and versions. It installs bubblewrap and pinned OpenSpec
 `1.16.0`, then checks both ordinary and nested user, PID and network namespaces
 with a fresh `/proc` mount for each. Ubuntu
 24.04's [AppArmor user namespace restriction](https://documentation.ubuntu.com/release-notes/24.04/#unprivileged-user-namespace-restrictions)
@@ -51,6 +78,7 @@ supported local executables, the private state location, namespace availability,
 selected account files and read-only protection metadata. It reports local
 readiness separately from protected-merge prerequisites. Account-file availability
 does not establish live authentication or candidate/platform qualification.
+The Orca probe resolves the same configured session command as task execution.
 
 Available initial scopes are `providers-json`, `pipeline` and `docs-links`.
 Their source/test paths come from trusted configuration. A task or model cannot
@@ -78,6 +106,15 @@ be selected before admission, for example `--workers 3 --worker-seconds 180
 change a saved run's limits. A short timeout can end a valid investigation before
 it establishes any finding.
 
+Prepare application dependencies in that source checkout with the normal
+`npm --prefix desktop ci` setup before provider/pipeline investigation. Oracle
+execution imports production `.ts` modules directly. A fixed trusted Node
+resolver supports extensionless relative TypeScript imports and parameter
+properties, without giving the proposed test filesystem, transpiler or VM
+imports. The runtime protocol is part of the observed oracle operation identity
+and is checked again before issue-regression reuse or integration. Missing
+dependencies or unsupported code remain unavailable evidence.
+
 The command writes an admitted run ID to stderr and its final structured report
 to stdout. A missing execution capability produces a durable `awaiting_input`
 result, exit 2. Candidate findings go to a fresh reproducer session; the
@@ -85,6 +122,10 @@ coordinator executes its frozen assertion script in a credential-free sandbox.
 Only an observed baseline assertion failure with a separate source-bound review
 of its existing contract can enter issue publication. Unrelated assertions and
 review concerns remain unconfirmed; a passing oracle disproves the suspicion.
+Baseline review returns an explicit oracle-validity result and concerns about
+the oracle or its contract. Notes may describe the expected baseline defect;
+that defect does not itself reject an otherwise sound reproducer. Candidate-code
+review and whole-issue acceptance use their own results.
 The coordinator generates public issue fields from scope and evidence identities;
 raw investigator prose stays private. A model's boolean verdict never creates an
 issue.
@@ -99,6 +140,13 @@ match its full title/body, confirmed finding and frozen oracle/contract. The
 review also checks that this correction satisfies the issue's entire acceptance
 scope. An unrelated or broader issue waits before writing; issue prose cannot
 grant a wider path or delivery permission.
+The reviewer receives the actual frozen script and contract paths, plus the
+coordinator's existing delivery boundaries. Its scope verdict covers the whole
+outcome; it does not certify completed delivery. An application source PR may
+await required Windows beta handoff, with the issue and completion/merge gates
+still open. The implementer and final candidate reviewer also receive the complete
+issue body and delivery boundaries; both see the frozen oracle, so a narrow
+reproducer cannot silently replace the other acceptance.
 
 ## Delegated correction and delivery
 
@@ -114,11 +162,26 @@ separate fresh apply worker for the selected task. It does not create a second
 change or copy a local template over the tracked owner. Generated narrow plans
 record their issue link and task IDs so a later matching run can reuse them.
 
+Orca transport uses the session's `ORCA_CLI_COMMAND` when configured, with the
+installed `orca-ide` as its default. Repository selection uses the primary
+checkout identified by the admitted common Git directory; a linked source
+checkout remains the frozen investigation source. The allocated workspace still
+must match the exact repository, issue, branch, baseline and ownership marker.
+
 Application setup runs the documented `npm --prefix desktop ci` inside a
 credential-free sandbox. Its successful receipt and a dependency fingerprint are
 recorded before the writer starts. Documentation-only work may explicitly skip
 package installation. Setup failure blocks coding. Workers cannot own commits,
 versions, GitHub access or merge policy.
+The fresh writer receives the source/workspace-bound successful setup receipt
+and dependency identity as trusted context. It reuses that installation instead
+of repeating package installation. Missing or mismatched receipts cannot produce
+a successful-setup handoff; unavailable dependencies remain a decision.
+For that verified installation, model workers receive a read-only application
+dependency mount after a fresh integrity check. Its identity enters the worker
+operation key. Private dependency caches stay hidden behind empty temporary
+caches, and all other ignored workspace files remain masked. Dependency drift
+stops dispatch before a replacement worker starts.
 
 The coordinator inspects all actual changes, freezes a complete commit H, runs
 the same baseline-failing oracle on H, executes fixed affected checks, and starts
@@ -127,15 +190,24 @@ only fixed generated-output/cache locations are temporary writable mounts. The
 application's existing typecheck, lint, test and build scripts run as separate
 fixed checks. For Electron Vite, the frozen config is copied into a fresh temporary
 cache and supplied through its config option, allowing temporary bundles without
-source writes. An unknown aggregate verify script is refused. Runtime and
+source writes. Vitest's filesystem module cache is explicitly redirected to the
+private temporary directory, leaving installed dependencies read-only. An unknown aggregate verify script is refused. Runtime and
 dependency identities enter evidence. A source edit invalidates evidence;
 a repair that changes no source stops without repeating acceptance tests.
+After a coordinator freeze, subsequent edits can retain the index from that
+current commit. Hidden staged content that differs from baseline, current commit
+and working source is still rejected. Repair workers receive bounded excerpts of
+observed failed checks bound to the previous frozen source and environment, plus
+source-bound review findings; these diagnostic data grant no additional authority.
 
 Application corrections reserve a unique beta from a complete remote tag/release
 inventory and prepare exact manifest/lock/current-record updates before final
 verification. Real Windows packaging/transfer is unavailable until its separate
 profile is qualified. Such a candidate can remain a reviewable PR but cannot
 report full delivery or merge by substituting portable checks.
+Current README table/status-header records and their earlier prose layouts are
+supported explicitly. Historical versions and published asset links are retained;
+unknown or ambiguous current-version records stop for inspection.
 
 A source PR stays open while CI is pending. `resume` observes CI again without
 starting another writer. Automatic merge also needs the trusted category,
@@ -148,6 +220,9 @@ Finalization checks only the selected task rows proved by this run and preserves
 other task text and acceptance. A reused issue uses its verified existing-issue
 receipt for closure; a newly published issue retains its separate publication
 receipt requirement. Both paths recheck the exact remote issue before closure.
+For incremental maintenance PRs, use issue references and inspect GitHub's
+closing-issue readback before merge. Only intentionally completed issue outcomes
+belong in that list.
 
 ## Codex execution boundary
 
@@ -180,6 +255,7 @@ Replace `<run-id>` with the admitted identity:
 
 ```sh
 npm --prefix tools/agent-workflow run workflow -- status <run-id>
+npm --prefix tools/agent-workflow run workflow -- runs
 npm --prefix tools/agent-workflow run workflow -- report <run-id> --format markdown
 npm --prefix tools/agent-workflow run workflow -- resume <run-id>
 npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
@@ -188,12 +264,102 @@ npm --prefix tools/agent-workflow run workflow -- cancel <run-id>
 Status/report read existing state without worker execution or remote mutation.
 They omit raw worker content, credential material and private paths. Resume keeps
 the original scope and resource consumption; it rejects new authority options.
+After a tool compatibility fix, explicit resume can validate the same observed
+worker receipt again without launching another process or consuming a second
+worker allowance. A changed interpretation retains the original result in
+private history; current reports count each execution once. Worker JSONL stays
+bounded to 1,000,000 bytes and 1,000 events, with separate final-message/schema
+limits. A single source-read event can occupy that existing total-byte bound.
+
+Recovery commands require the qualified runtime that implements them. The
+installed `sc-dev` can lag the qualified source while an application candidate
+keeps its frozen base. Use the exact runtime and command recorded in the private
+handoff for the approved recovery; keep the admitted source and stable command
+unchanged until their recorded integration and postflight steps complete.
+Baseline Git blobs explain code behavior; historical executor identity requires
+separately retained runtime evidence.
+
+Ordinary resume also recognizes the known legacy Windows handoff rejection in
+which a valid long beta deadline was refused before process intent or launch.
+Recovery requires the retained failure, known baseline code and unchanged
+candidate, profile and request identities. It preserves the original unknown
+operation and failure in private history, consumes one existing repair and
+returns only that proved unstarted operation to preparation. Any partial process
+state, changed identity or other unknown outcome still blocks execution. This
+recovery produces no qualification receipt; the real Windows job must pass.
+
+A terminal host-discovery failure needs separate authorization before another
+beta attempt. Fresh helper launches use explicit `PATH`/`HOME` and `USER`/`LOGNAME`
+from the effective OS account. A safely available canonical user-session bus can
+supply the already authorized credential lookup; it must be a current-user Unix
+socket below a private owned runtime directory. Ambient bus addresses, display
+variables and the rest of the environment are not inherited. Model workers do
+not receive this transport. Existing legacy operations keep their original
+environment and receipts. After explicit approval for one additional environment
+repair, the operator can use:
+
+```sh
+sc-dev resume <run-id> --retry-beta-environment --preflight-evidence /private/preflight-evidence.json
+```
+
+The private resource-owner evidence must bind the exact failed operation and
+unchanged candidate/profile, and establish that no guest or acceptance job
+started. Its request-file hash identifies the owned process launch request,
+which differs from the helper's input request. A generic nonzero exit is
+insufficient. Admission records one separate
+repair grant and one new environment-bound operation without rewriting the
+original manifest or failure. Reports show the original allowance and the extra
+grant separately. Time, model-call and provider allowances do not increase;
+after admission, use ordinary `resume <run-id>` to reconcile the existing
+operation. A terminal failure consumes that environment grant. This flag cannot
+authorize another attempt or a repeated failed acceptance matrix.
+
+A different, separately approved recovery covers the known Vitest UNC JSON-report
+lookup failure after successful setup, package, native and vault commands, before
+UI or packaged startup. It requires the exact failed owned-process receipt,
+unchanged source/check/review identities, the original nine-case vault report,
+and independent protected-state/input/process and normal-shutdown cleanup
+receipts. A separately prepared private profile may change only the helper and
+shorten its deadline within the original remaining active allowance:
+
+```sh
+sc-dev resume <run-id> --retry-beta-report-path \
+  --preflight-evidence <private-report-path-facts.json> \
+  --replacement-beta-profile <private-unregistered-profile.json>
+```
+
+The explicit command records one distinct additional repair and binds the new
+profile, helper, environment and process identity. It leaves the original
+manifest, selected profile, failed results and prior usage intact. Its helper
+uses fresh task directories and local reporter paths; ordinary resume reconciles
+that same operation. No time, worker or provider allowance increases, and a
+terminal result exhausts this grant. A failed UI matrix or an arbitrary missing
+file does not qualify. Before invoking the command, obtain separate approval and
+verify current resource ownership, readiness and the saved candidate binding.
+The [#60 pilot checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md#application-pilot-and-remaining-acceptance)
+records the declined retry and the later release of the shared reservation for
+queued checks. The release covers resource scheduling.
+
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination
 when a coordinator has exited. A confirmed stop records `cancelled`; an uncertain
 launch or termination records `quarantined` and blocks replacement writers.
 The coordinator never kills a reused numeric PID or process group. Inspection
 remains available after the coordinator exits.
+
+`runs` lists up to twenty recent runs for this repository, including their IDs,
+safe error codes and next actions. An empty history returns an empty list without
+creating state. A quarantined run explicitly reports that execution inspection
+is required.
+
+Linux process scans tolerate an enumerated process disappearing with `ENOENT`
+or `ESRCH`; permission and other inspection failures still prevent execution.
+After a verified host boot-ID change, an owned process without a terminal receipt
+is classified as interrupted. Cancel that run to record the interruption and
+release its execution hold. Its command result remains unknown, original files
+and consumed allowances are retained, and cancellation does not resolve unknown
+GitHub effects or an integration hold. A missing PID within the same boot is
+insufficient evidence for this recovery.
 
 State defaults to a private repository-specific directory under the user's XDG
 state location. `--state-dir <private-directory>` chooses a separate private
@@ -210,6 +376,41 @@ exit code and signal). These are diagnostics only. A missing file is ambiguous;
 neither file proves a terminal effect or authorizes replacement, finalization or
 issue closure. Preserve the original state and execution evidence for recovery.
 
+## Explicit continuation and Windows capability
+
+An exhausted unpublished task can receive a new, explicitly authorized bounded
+admission on the current clean source and policy:
+
+```sh
+sc-dev run --continue-from <run-id> --repo /path/to/clean/source --dry-run
+sc-dev run --continue-from <run-id> --repo /path/to/clean/source
+```
+
+This keeps the original manifest, worktree, receipts and spent limits. The new
+admission starts fresh verification; it inherits no passing proof. Identical
+admission retries reuse the same child, and reports show linked cumulative
+resources. Older policy metadata remains readable for inspection; execution
+still requires the current policy. Unknown effects must be reconciled first.
+A retained parent workspace must match its exact recorded ownership and frozen
+source before any new worker runs. The continuation uses a separate owned
+workspace; another issue-linked workspace is still a conflict.
+
+A real Windows capability is selected explicitly with `--beta-profile <name>`.
+Its owner-only configuration lives in the coordinator's private state under
+`profiles/<name>.json`; credentials remain in private handles. The profile binds
+its helper, runtime and resource-token identities. Changing any selected
+identity stops execution for explicit revalidation. The helper's actual observed
+result must bind the candidate source/version, artifacts, complete Windows
+verification and cleanup before transfer can qualify. Synthetic results cannot
+qualify a real handoff.
+
+The normal default remains twelve workers, two repairs, twenty minutes per
+worker and 120 active minutes. The documented Windows UI matrix can require up
+to two hours in addition to setup/build. A selected Windows profile can explicitly
+request `--active-minutes 180`; 180 is the ceiling, and the helper timeout is
+separately bounded to at most 150 minutes and the remaining active allowance.
+No additional time is added during resume.
+
 ## Recovery and retention
 
 Resume reconciles an existing operation before it can dispatch a replacement.
@@ -220,6 +421,28 @@ original bytes intact. Unknown policy/schema versions require explicit operator
 revalidation. A recognized historical v1 journal has an explicit structural
 migration command; authority and old policy identities are never upgraded
 implicitly.
+
+When an existing selected issue stops because its portable oracle is invalid or
+unavailable, request a bounded repair of that same run:
+
+```sh
+sc-dev resume <run-id> --retry-oracle --repo /path/to/the/original/clean/source
+```
+
+The coordinator verifies the saved source, failure and ownership before admitting
+the repair. It retains the previous result and exact oracle, consumes an existing
+repair allowance and uses the remaining worker/time limits. Repeated requests
+reuse the admitted attempt. The new oracle and its baseline contract review run
+fresh before implementation. A target-only finding or unresolved effect requires
+its own recorded recovery action.
+
+If the trusted source or policy changes before implementation of that unresolved
+selected issue, select a new clean source with `run --continue-from <run-id>`.
+The remaining-budget continuation preserves the original run and derives its
+aggregate allowances from the resources still available there. Source refresh
+consumes one existing repair; smaller requested limits are allowed. The task,
+model and beta profile authority stay bound, retries reuse one child, and the
+new source receives fresh reproduction, review and checks.
 
 Take an SQLite snapshot while coordinators are stopped, using a new private
 directory outside source and Git metadata:
@@ -263,15 +486,22 @@ way to reset limits or resolve a lost publication.
 
 ## Ownership and limits
 
-GitHub issues identify independently deliverable outcomes; OpenSpec owns plans,
-progress and checkpoints; Orca owns worktree allocation/cards. LangGraph state
-records execution and effect receipts rather than a second implementation list.
+For delegated corrections, the GitHub issue owns the outcome, OpenSpec owns the
+plan and checkpoints, and Orca allocates the worktree. LangGraph records its
+executions and their effects.
 
 Admission freezes the repository/baseline, scope, delivery, policy identity and
 limits. Initial defaults allow 5 candidate findings, 3 new issues, one writing
 task, one concurrent writer, 12 worker invocations and two repair rounds.
 Worker duration is bounded to 20 minutes, active run duration to 120 minutes and
 one CI observation period to 30 minutes. Failed/interrupted attempts count.
+The worker-duration ceiling also bounds ordinary non-CI graph stages, which can
+contain several sequential roles. Lowering `--worker-seconds` therefore shortens
+those complete stages; it is suitable for a smoke, not proof of full delivery.
+For a configured beta handoff, the graph stage is bounded by the remaining active
+allowance and the helper has its separate profile timeout; see
+[Windows capability](#explicit-continuation-and-windows-capability). Resume adds
+no time to either limit.
 Unavailable model-cost data is reported as unknown; these limits do not pretend
 to enforce a monetary ceiling. SC live-provider campaigns retain separate scope
 and budgets, with zero such calls in ordinary workflow runs.

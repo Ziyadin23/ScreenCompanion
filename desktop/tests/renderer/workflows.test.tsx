@@ -10,10 +10,71 @@ import userEvent from '@testing-library/user-event';
 afterEach(cleanup);
 async function openSettings() { await act(async () => window.sc.command({ type: 'settings' })); await screen.findByRole('combobox', { name: 'Answer mode' }); }
 function tab(name: string) { fireEvent.click(screen.getByRole('tab', { name })); }
+function disclose(name: string) {
+  const summary = screen.getByText(name, { selector: 'summary' });
+  if (!summary.parentElement!.hasAttribute('open')) fireEvent.click(summary);
+}
 function advanced() {
   const summary = screen.getByText('Advanced model settings', { selector: 'summary' });
   if (!summary.parentElement!.hasAttribute('open')) fireEvent.click(summary);
 }
+describe('explicit screenshot submission', () => {
+  it.each(['shortcut', 'button', 'global'] as const)('sends text with a screenshot once via %s', async path => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Explain the current screen.' } }); input.focus(); driver.api.command.mockClear();
+    if (path === 'shortcut') fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    else if (path === 'button') fireEvent.click(screen.getByRole('button', { name: 'Send with screenshot' }));
+    else await act(async () => { driver.inputAction(true); driver.inputAction(true); });
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'submit', question: 'Explain the current screen.', includeScreenshot: true });
+  });
+  it('focuses input without sending when an opening intent arrives from another control', async () => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep this draft' } }); screen.getByRole('button', { name: 'Settings' }).focus(); driver.api.command.mockClear();
+    await act(async () => driver.inputAction(true));
+    expect(document.activeElement).toBe(input); expect((input as HTMLInputElement).value).toBe('Keep this draft'); expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('does not submit composition, repeat or extra-modifier Enter events', async () => {
+    const driver = fixture({ surface: 'input' }); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep composing' } }); input.focus(); driver.api.command.mockClear();
+    fireEvent.compositionStart(input); fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
+    await act(async () => driver.inputAction(true)); fireEvent.compositionEnd(input);
+    for (const extra of [{ repeat: true }, { altKey: true }, { metaKey: true }, { shiftKey: true }]) fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true, ...extra });
+    expect(driver.api.command).not.toHaveBeenCalled(); expect((input as HTMLInputElement).value).toBe('Keep composing');
+  });
+});
+
+describe('durable model pipeline choices', () => {
+  it('restores separate model preferences after Save/reopen and discards later edits on Back', async () => {
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
+    const selectModel = (model: string) => { const input = screen.getByRole('combobox', { name: 'Answer model' }); fireEvent.change(input, { target: { value: model } }); fireEvent.blur(input); };
+    choose('Request pipeline', 'Direct screenshot');
+    selectModel('another-vision-model'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Thorough');
+    selectModel('gpt-6-luna'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
+    selectModel('another-vision-model'); choose('Request pipeline', 'Thorough');
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(driver.saved[0]?.values.ModelPipelines).toEqual(expect.arrayContaining([
+      { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', PipelineMode: 'Direct' },
+      { Provider: 'OpenAI', AnswerModel: 'another-vision-model', PipelineMode: 'Thorough' }
+    ]));
+    await openSettings(); tab('Models & API'); advanced(); selectModel('gpt-6-luna');
+    expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
+    choose('Request pipeline', 'Thorough'); fireEvent.click(screen.getByTestId('settings-back')); await screen.findByTestId('answer-text');
+    await openSettings(); tab('Models & API'); advanced(); selectModel('gpt-6-luna');
+    expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot'); expect(driver.saved).toHaveLength(1);
+  });
+  it('offers the same two choices on every service', async () => {
+    fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
+    for (const provider of PROVIDERS) {
+      choose('API service', provider === 'Gemini' ? 'Google Gemini' : provider);
+      fireEvent.click(screen.getByRole('combobox', { name: 'Request pipeline' }));
+      expect(screen.getAllByRole('option').map(option => option.textContent)).toEqual(['Thorough', 'Direct screenshot']);
+      fireEvent.keyDown(screen.getByRole('combobox', { name: 'Request pipeline' }), { key: 'Escape' });
+    }
+  });
+});
 function choose(name: string, value: string) {
   fireEvent.click(screen.getByRole('combobox', { name }));
   fireEvent.click(screen.getByRole('option', { name: value }));
@@ -21,6 +82,48 @@ function choose(name: string, value: string) {
 function value(name: string) { return (screen.getByRole('textbox', { name }) as HTMLInputElement).value; }
 
 describe('answer and temporary input', () => {
+  it.each([
+    ['Capture screen', { type: 'capture' }], ['Question', { type: 'showInput' }],
+    ['Settings', { type: 'settings' }], ['Hide', { type: 'toggleVisibility' }], ['Exit', { type: 'exit' }]
+  ])('offers the %s toolbar action on Windows', async (label, command) => {
+    const driver = fixture(); render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: label as string }));
+    expect(driver.api.command).toHaveBeenCalledWith(command);
+  });
+  it('keeps controls keyboard reachable, reports action failure safely and blocks requests while busy', async () => {
+    const driver = fixture(); const user = userEvent.setup(); render(<App />);
+    await screen.findByTestId('answer-text'); await user.tab();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Capture screen' }));
+    driver.api.command.mockRejectedValueOnce(new Error('private native details'));
+    fireEvent.click(screen.getByRole('button', { name: 'Capture screen' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Try again');
+    expect(document.body.textContent).not.toContain('private native details');
+    await act(async () => driver.emit({ busy: true }));
+    for (const label of ['Capture screen', 'Question']) expect(screen.getByRole('button', { name: label }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    for (const label of ['Settings', 'Hide', 'Exit']) expect(screen.getByRole('button', { name: label }).matches(':disabled, [aria-disabled="true"]')).toBe(false);
+    expect(screen.getByTestId('answer-text').textContent).toBe('Synthetic SC answer');
+  });
+  it.each(['', 'Keep this draft'])('activates toolbar buttons with Enter while composing %j without submitting', async (draft) => {
+    const driver = fixture({ surface: 'input' }); const user = userEvent.setup();
+    driver.api.command.mockResolvedValue(); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: draft } });
+    for (const [label, type] of [['Capture screen', 'capture'], ['Question', 'showInput'], ['Settings', 'settings'], ['Hide', 'toggleVisibility'], ['Exit', 'exit']]) {
+      screen.getByRole('button', { name: label }).focus();
+      await user.keyboard('{Enter}');
+      expect(driver.api.command.mock.calls.at(-1)).toEqual([{ type }]);
+      expect((input as HTMLInputElement).value).toBe(draft);
+    }
+    expect(driver.api.command).toHaveBeenCalledTimes(5);
+  });
+  it.each(['Question', 'Send'])('submits once when Enter activates %s', async (target) => {
+    const driver = fixture({ surface: 'input' }); const user = userEvent.setup(); render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'One question' } });
+    (target === 'Question' ? input : screen.getByRole('button', { name: 'Send' })).focus();
+    await user.keyboard('{Enter}');
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'submit', question: 'One question', includeScreenshot: false });
+  });
   it('offers Linux window controls even without a tray or global shortcuts', async () => {
     const driver = fixture({ platform: 'linux' } as Partial<AppState>); render(<App />);
     fireEvent.click(await screen.findByRole('button', { name: 'Capture screen' }));
@@ -47,13 +150,13 @@ describe('answer and temporary input', () => {
     fixture({ platform: 'linux', surface: 'captureTest', captureProtection: 'Failed' } as Partial<AppState>); render(<App />);
     expect((await screen.findByTestId('answer-text')).textContent).toMatch(/appear in recordings/i);
   });
-  it('renders selectable plain text, including code and hostile markup, without permanent controls', async () => {
+  it('renders selectable plain text, including code and hostile markup, with a temporary composer and inert content', async () => {
     fixture({ answer: '<img src=x onerror=alert(1)>\n<script>throw 1</script>\n  code & text' });
     const { container } = render(<App />);
     const answer = await screen.findByTestId('answer-text');
     expect(answer.textContent).toBe('<img src=x onerror=alert(1)>\n<script>throw 1</script>\n  code & text');
     expect(container.querySelector('img,script')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(5);
     expect(screen.queryByRole('textbox')).toBeNull();
   });
   it('retains the last answer while busy, disables input, and submits once with Enter/Send', async () => {
@@ -63,12 +166,12 @@ describe('answer and temporary input', () => {
     expect((input as HTMLInputElement).maxLength).toBe(4000);
     fireEvent.change(input, { target: { value: '  What is 2 + 2?  ' } });
     fireEvent.submit(input.closest('form')!); fireEvent.submit(input.closest('form')!);
-    await waitFor(() => expect(driver.api.command).toHaveBeenCalledWith({ type: 'submit', question: 'What is 2 + 2?' }));
+    await waitFor(() => expect(driver.api.command).toHaveBeenCalledWith({ type: 'submit', question: 'What is 2 + 2?', includeScreenshot: false }));
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'submit')).toHaveLength(1);
     expect(screen.getByTestId('answer-text').textContent).toBe('Synthetic SC answer');
     await act(async () => driver.emit({ surface: 'input', busy: true }));
     expect((screen.getByRole('textbox', { name: 'Question' }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Send' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
   });
   it('bounds typed input, ignores whitespace, and clears temporary input on Escape', async () => {
     const driver = fixture({ surface: 'input' }); render(<App />);
@@ -112,6 +215,64 @@ describe('answer and temporary input', () => {
 });
 
 describe('service and key setup', () => {
+  it('closes the service menu before idle Escape exits setup', async () => {
+    const driver = fixture({ surface: 'setup' });
+    const user = userEvent.setup();
+    render(<App />);
+    const service = await screen.findByRole('combobox', { name: 'API service' });
+    service.focus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('listbox', { name: 'API service' })).toBeTruthy();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.activeElement).toBe(service);
+    expect(driver.api.command).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('exits setup when Cancel is pressed while idle', async () => {
+    const driver = fixture({ surface: 'setup' });
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    expect(driver.api.command).toHaveBeenCalledExactlyOnceWith({ type: 'exit' });
+  });
+  it('ignores document Escape until a pending setup save succeeds', async () => {
+    const driver = fixture({ surface: 'setup' });
+    let resolve!: () => void;
+    driver.api.setup.mockImplementationOnce(async () => {
+      await new Promise<void>((done) => { resolve = done; });
+      driver.emit({ surface: 'answer' });
+    });
+    render(<App />);
+    const key = await screen.findByTestId('setup-key');
+    fireEvent.change(key, { target: { value: 'synthetic-setup-key' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Cancel' }).getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
+    const setup = screen.getByRole('region', { name: 'Set up SC' });
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    const busyRegion = key.closest('[aria-busy="true"]');
+    expect(setup.contains(busyRegion)).toBe(true);
+    expect(busyRegion?.contains(screen.getByRole('combobox', { name: 'API service' }))).toBe(true);
+
+    await act(async () => resolve());
+    await screen.findByTestId('answer-text');
+    expect(screen.queryByRole('region', { name: 'Set up SC' })).toBeNull();
+    expect(driver.api.command).not.toHaveBeenCalled();
+  });
+  it('describes the Linux key field with the keyring prerequisite', async () => {
+    fixture({ surface: 'setup', platform: 'linux' }); render(<App />);
+    const key = await screen.findByLabelText('OpenAI API key');
+    const descriptions = key.getAttribute('aria-describedby')?.split(' ').map((id) => document.getElementById(id)?.textContent);
+
+    expect(descriptions).toContain('Unlock your desktop keyring before saving.');
+    expect(screen.getByText(/SC windows can appear in recordings and screen shares/)).toBeTruthy();
+  });
   it('defaults to OpenAI, shows migration notice and requires a key before local Save', async () => {
     const driver = fixture({ surface: 'setup', setupLegacyNotice: true }); render(<App />);
     const input = await screen.findByTestId('setup-key');
@@ -119,11 +280,28 @@ describe('service and key setup', () => {
     expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe('OpenAI');
     expect((input as HTMLInputElement).type).toBe('password');
     expect(screen.getByText(/without contacting the service or checking access/)).toBeTruthy();
-    fireEvent.submit(input.closest('form')!); expect(await screen.findByRole('alert')).toBeTruthy();
+    fireEvent.submit(input.closest('form')!);
+    const error = screen.getByText('Enter your OpenAI API key without line breaks or control characters.');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(input.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
+    expect(document.activeElement).toBe(input);
     expect(driver.api.setup).not.toHaveBeenCalled();
-    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } }); fireEvent.submit(input.closest('form')!);
+    fireEvent.change(input, { target: { value: '  synthetic-setup-key  ' } });
+    expect(input.getAttribute('aria-invalid')).not.toBe('true');
+    expect(error.isConnected).toBe(false);
+    fireEvent.submit(input.closest('form')!);
     await waitFor(() => expect(driver.api.setup).toHaveBeenCalledWith({ provider: 'OpenAI', apiKey: 'synthetic-setup-key' }));
     expect(driver.api.command).not.toHaveBeenCalled(); expect(driver.api.getSettingsDraft).not.toHaveBeenCalled();
+  });
+  it('marks a key with control characters invalid without attempting storage', async () => {
+    const driver = fixture({ surface: 'setup' }); render(<App />);
+    const key = await screen.findByTestId('setup-key');
+    fireEvent.change(key, { target: { value: 'synthetic\u007fkey' } });
+    fireEvent.submit(key.closest('form')!);
+    expect(key.getAttribute('aria-invalid')).toBe('true');
+    const error = screen.getByText(/without line breaks or control characters/);
+    expect(key.getAttribute('aria-describedby')?.split(' ')).toContain(error.id);
+    expect(driver.api.setup).not.toHaveBeenCalled();
   });
   it.each(PROVIDERS)('saves the selected %s service and its key without requesting Settings or updates', async (provider) => {
     const driver = fixture({ surface: 'setup' }); render(<App />); const key = await screen.findByTestId('setup-key');
@@ -142,33 +320,94 @@ describe('service and key setup', () => {
     const key = screen.getByLabelText('Groq API key'); expect(document.activeElement).toBe(key);
     expect(screen.queryByRole('listbox')).toBeNull();
   });
-  it('serializes pending setup saves and retains an editable key after a safe failure', async () => {
-    const driver = fixture({ surface: 'setup' }); let reject!: (reason: Error) => void;
+  it.each([
+    ['windows', 'The key could not be saved. Try again.'],
+    ['linux', 'The key could not be saved. Unlock your secure Linux keyring and try again.']
+  ] as const)('announces a %s storage failure at the form and retries the same key', async (platform, message) => {
+    const driver = fixture({ surface: 'setup', platform }); let reject!: (reason: Error) => void;
     driver.api.setup.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
     render(<App />); const key = await screen.findByTestId('setup-key');
-    fireEvent.change(key, { target: { value: 'synthetic-secret' } }); fireEvent.submit(key.closest('form')!); fireEvent.submit(key.closest('form')!);
+    const form = key.closest('form')!;
+    const liveRegion = form.querySelector('[role="alert"]');
+    fireEvent.change(key, { target: { value: 'synthetic-secret' } }); fireEvent.submit(form); fireEvent.submit(form);
     expect(driver.api.setup).toHaveBeenCalledTimes(1);
-    expect((screen.getByRole('combobox', { name: 'API service' }) as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByRole('button', { name: 'Saving…' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'API service' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    expect(screen.getByRole('button', { name: 'Saving…' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'Saving…' }));
+    expect(driver.api.setup).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(driver.api.command).not.toHaveBeenCalled();
     await act(async () => reject(new Error('private setup path and credentials')));
-    expect(screen.getByRole('alert').textContent).toContain('could not be saved');
+    expect(key.getAttribute('aria-invalid')).not.toBe('true');
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toBe(message);
+    expect(alert).toBe(liveRegion);
+    expect(alert.parentElement).toBe(form);
+    expect(alert.closest('[aria-busy="true"]')).toBeNull();
+    const descriptions = key.getAttribute('aria-describedby')?.split(' ');
+    expect(descriptions).toContain('setup-privacy');
+    expect(descriptions).not.toContain(alert.id);
     expect(document.body.textContent).not.toContain('private setup path and credentials');
+    expect(document.body.textContent).not.toContain('synthetic-secret');
     expect((key as HTMLInputElement).value).toBe('synthetic-secret'); expect((key as HTMLInputElement).disabled).toBe(false);
-    fireEvent.submit(key.closest('form')!); await screen.findByTestId('answer-text');
+    fireEvent.submit(form); await screen.findByTestId('answer-text');
+    expect(driver.api.setup.mock.calls).toEqual([
+      [{ provider: 'OpenAI', apiKey: 'synthetic-secret' }],
+      [{ provider: 'OpenAI', apiKey: 'synthetic-secret' }]
+    ]);
   });
 });
 
 describe('settings drafts and protected controls', () => {
+  it('starts with expert controls collapsed and retains custom instructions across mode changes', async () => {
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
+    expect(screen.queryByRole('textbox', { name: 'Custom instruction' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Capture and answer shortcut' })).toBeNull();
+    choose('Answer mode', 'Custom');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom instruction' }), { target: { value: 'Keep this draft.' } });
+    choose('Answer mode', 'Brief'); expect(screen.queryByRole('textbox', { name: 'Custom instruction' })).toBeNull();
+    choose('Answer mode', 'Custom'); expect(value('Custom instruction')).toBe('Keep this draft.');
+    fireEvent.click(screen.getByRole('tab', { name: 'Panel' }));
+    expect(screen.queryByRole('slider', { name: 'Text visibility' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Text color' })).toBeNull();
+    expect(driver.saved).toHaveLength(0);
+  });
+  it('reveals and focuses an invalid shortcut inside the closed editor', async () => {
+    const original = fixture().getDraft();
+    const driver = fixture({}, { values: { ...original.values, Capture: { Modifiers: 0, Key: 123 } } });
+    render(<App />); await screen.findByTestId('answer-text'); await openSettings();
+    expect(screen.queryByRole('textbox', { name: 'Capture and answer shortcut' })).toBeNull();
+    tab('Updates'); fireEvent.click(screen.getByTestId('settings-save'));
+    const field = await screen.findByRole('textbox', { name: 'Capture and answer shortcut' });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(field.getAttribute('aria-invalid')).toBe('true'); expect(driver.saved).toHaveLength(0);
+    fireEvent.click(screen.getByText('Keyboard shortcuts', { selector: 'summary' }));
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false });
+  });
+  it('adapts keyboard navigation to a narrow horizontal tab list', async () => {
+    const previousWidth = window.innerWidth;
+    try {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 420 });
+      fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
+      expect(screen.getByRole('tablist').getAttribute('aria-orientation')).toBe('horizontal');
+      const first = screen.getByRole('tab', { name: 'Answer & shortcuts' }); first.focus();
+      fireEvent.keyDown(first, { key: 'ArrowRight' });
+      expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Panel' }));
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 760 });
+      fireEvent(window, new Event('resize'));
+      expect(screen.getByRole('tablist').getAttribute('aria-orientation')).toBe('vertical');
+    } finally { Object.defineProperty(window, 'innerWidth', { configurable: true, value: previousWidth }); }
+  });
   it('keeps hydration, navigation, disclosure and unchanged controls clean', async () => {
     const original = fixture().getDraft();
     const driver = fixture({}, { values: { ...original.values, Models: null, PipelineMode: null } });
     driver.api.chooseColor.mockResolvedValueOnce(null);
     render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     choose('Answer mode', 'Default');
-    fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' }));
-    tab('Panel'); fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
+    disclose('Keyboard shortcuts'); fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' }));
+    tab('Panel'); disclose('Advanced appearance'); fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
     fireEvent.click(screen.getByRole('button', { name: 'Text color' }));
-    await waitFor(() => expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByTestId('settings-save').matches(':disabled, [aria-disabled="true"]')).toBe(false));
     tab('Models & API');
     expect(screen.getByText('Advanced model settings', { selector: 'summary' }).parentElement!.hasAttribute('open')).toBe(false);
     expect(screen.queryByRole('combobox', { name: 'Answer model' })).toBeNull();
@@ -198,8 +437,9 @@ describe('settings drafts and protected controls', () => {
     driver.api.getSettingsDraft.mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
     render(<App />); await screen.findByText('Loading settings…');
     expect(screen.getByRole('region', { name: 'SC settings' }).getAttribute('aria-busy')).toBe('true');
-    expect((screen.getByTestId('settings-save') as HTMLButtonElement).disabled).toBe(true);
-    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('settings-save').getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(screen.getByTestId('settings-save')); expect(driver.saved).toHaveLength(0);
+    expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
     await waitFor(() => expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(1));
     await act(async () => resolve({ ...driver.getDraft(), keyUpdates: { OpenAI: 'must-never-hydrate' } }));
     await screen.findByRole('combobox', { name: 'Answer mode' });
@@ -221,7 +461,7 @@ describe('settings drafts and protected controls', () => {
     fixture(); const user = userEvent.setup(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     const first = screen.getByRole('tab', { name: 'Answer & shortcuts' }); first.focus();
     expect(screen.getAllByRole('tab').filter((element) => element.tabIndex === 0)).toEqual([first]);
-    await user.keyboard('{ArrowRight}');
+    await user.keyboard('{ArrowDown}');
     const panel = screen.getByRole('tab', { name: 'Panel' }); expect(document.activeElement).toBe(panel);
     expect(panel.getAttribute('aria-selected')).toBe('true');
     const content = screen.getByRole('tabpanel', { name: 'Panel' });
@@ -233,7 +473,7 @@ describe('settings drafts and protected controls', () => {
   });
   it('takes validation to the affected page and field from another page', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
-    choose('Answer mode', 'Custom'); tab('Panel'); fireEvent.click(screen.getByTestId('settings-save'));
+    choose('Answer mode', 'Custom'); tab('Panel'); disclose('Advanced appearance'); fireEvent.click(screen.getByTestId('settings-save'));
     const instruction = await screen.findByRole('textbox', { name: 'Custom instruction' });
     await waitFor(() => expect(document.activeElement).toBe(instruction));
     expect(instruction.getAttribute('aria-invalid')).toBe('true');
@@ -249,7 +489,7 @@ describe('settings drafts and protected controls', () => {
     advanced(); const model = screen.getByRole('combobox', { name: 'Answer model' });
     fireEvent.change(model, { target: { value: 'not a model' } }); fireEvent.blur(model);
     fireEvent.click(screen.getByText('Advanced model settings', { selector: 'summary' }));
-    tab('Panel'); fireEvent.click(screen.getByTestId('settings-save'));
+    tab('Panel'); disclose('Advanced appearance'); fireEvent.click(screen.getByTestId('settings-save'));
     const invalid = await screen.findByRole('combobox', { name: 'Answer model' });
     await waitFor(() => expect(document.activeElement).toBe(invalid));
     expect(invalid.getAttribute('aria-invalid')).toBe('true'); expect((invalid as HTMLInputElement).value).toBe('not a model');
@@ -257,19 +497,19 @@ describe('settings drafts and protected controls', () => {
     expect(driver.saved).toHaveLength(0);
   });
   it('discards the previous draft when Back and reopen updates arrive in the same render batch', async () => {
-    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel');
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
     fireEvent.change(screen.getByRole('slider', { name: 'Text visibility' }), { target: { value: '25' } });
     await act(async () => {
       await driver.api.discardSettings();
       await driver.api.command({ type: 'settings' });
     });
     await waitFor(() => expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(2));
-    tab('Panel');
-    expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('80');
+    tab('Panel'); disclose('Advanced appearance');
+    expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('100');
     expect(driver.saved).toHaveLength(0);
   });
   it('previews independent opacity and palettes, discards Back, applies Save, and restores defaults', async () => {
-    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel');
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
     fireEvent.change(screen.getByRole('slider', { name: 'Background transparency' }), { target: { value: '50' } });
     fireEvent.change(screen.getByRole('slider', { name: 'Text visibility' }), { target: { value: '25' } });
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '20' } });
@@ -281,21 +521,21 @@ describe('settings drafts and protected controls', () => {
     expect(driver.getState().appearance).toEqual(DEFAULT_APPEARANCE);
     fireEvent.click(screen.getByTestId('settings-back')); await screen.findByTestId('answer-text');
     expect(driver.saved).toHaveLength(0);
-    await openSettings(); tab('Panel'); expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('80');
+    await openSettings(); tab('Panel'); disclose('Advanced appearance'); expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('100');
     choose('Panel color theme', 'Forest'); fireEvent.click(screen.getByTestId('settings-save'));
     await screen.findByTestId('answer-text'); expect(driver.saved[0]?.values.Appearance.BackgroundColor).toBe('#14251F');
-    expect(screen.getByTestId('answer-panel').style.backgroundColor).toContain('0.004');
-    await openSettings(); tab('Panel'); fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
+    expect(screen.getByTestId('answer-panel').style.backgroundColor).toContain('0.902');
+    await openSettings(); tab('Panel'); disclose('Advanced appearance'); fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
     expect(driver.saved[1]?.values.Appearance).toEqual(DEFAULT_APPEARANCE);
   });
   it('uses the protected color API, updates only the draft, and handles cancel', async () => {
-    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel');
+    const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
     fireEvent.click(screen.getByRole('button', { name: 'Text color' }));
-    await waitFor(() => expect(driver.api.chooseColor).toHaveBeenCalledWith('#EFF2F7'));
+    await waitFor(() => expect(driver.api.chooseColor).toHaveBeenCalledWith('#F2F3F5'));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Text color' }).textContent).toBe('#123456'));
     expect(screen.getByRole('combobox', { name: 'Panel color theme' }).textContent).toBe('Custom');
-    expect(driver.getState().appearance.TextColor).toBe('#EFF2F7');
+    expect(driver.getState().appearance.TextColor).toBe('#F2F3F5');
     driver.api.chooseColor.mockResolvedValueOnce(null); fireEvent.click(screen.getByRole('button', { name: 'Text color' }));
     await waitFor(() => expect(driver.api.chooseColor).toHaveBeenCalledTimes(2));
     expect(screen.getByRole('button', { name: 'Text color' }).textContent).toBe('#123456');
@@ -311,7 +551,7 @@ describe('settings drafts and protected controls', () => {
     // Move focus to close editable suggestions, which stay in the same DOM surface.
     fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' }));
     fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-deepseek-replacement' } });
-    choose('Request pipeline', 'Direct screenshot (DeepSeek)');
+    choose('Request pipeline', 'Direct screenshot');
     choose('DeepSeek reasoning', 'High');
     expect((screen.getByRole('spinbutton', { name: 'Answer output token limit' }) as HTMLInputElement).value).toBe('16000');
     choose('API service', 'Groq');
@@ -339,17 +579,17 @@ describe('settings drafts and protected controls', () => {
     choose('API service', 'Groq'); expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('');
     expect(driver.saved).toHaveLength(0);
   });
-  it('limits Direct to DeepSeek and rejects Pro vision/direct while allowing Pro text answering', async () => {
+  it('offers Direct across providers and rejects Pro vision/direct while allowing Pro text answering', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API');
     advanced();
     fireEvent.click(screen.getByRole('combobox', { name: 'Request pipeline' })); expect(screen.getAllByRole('option')).toHaveLength(2);
     fireEvent.keyDown(screen.getByRole('combobox', { name: 'Request pipeline' }), { key: 'Escape' });
     choose('API service', 'DeepSeek'); fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-key' } });
     fireEvent.change(screen.getByRole('combobox', { name: 'Answer model' }), { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' })); choose('Request pipeline', 'Direct screenshot (DeepSeek)');
+    fireEvent.blur(screen.getByRole('combobox', { name: 'Answer model' })); choose('Request pipeline', 'Direct screenshot');
     fireEvent.click(screen.getByTestId('settings-save')); expect((await screen.findByRole('alert')).textContent).toContain('text answering only');
     expect(driver.saved).toHaveLength(0);
-    choose('Request pipeline', 'Balanced');
+    choose('Request pipeline', 'Thorough');
     fireEvent.click(screen.getByRole('combobox', { name: 'Screen-reading model' }));
     fireEvent.click(screen.getByRole('button', { name: 'Screen-reading model suggestions' }));
     expect(screen.queryByRole('option', { name: 'deepseek-v4-pro' })).toBeNull();
@@ -389,12 +629,13 @@ describe('settings drafts and protected controls', () => {
       'Shift+F5 — capture test', 'Ctrl+R — open settings',
       'Ctrl+Alt+E — exit app', 'Z — type a question'
     ]);
-    for (const shortcut of ['Ctrl+Alt+Space', 'Ctrl+/', 'Ctrl+Alt+T', 'Ctrl+I', 'Ctrl+Backspace', 'Ctrl+Enter']) {
+    for (const shortcut of ['Ctrl+Alt+Space', 'Ctrl+/', 'Ctrl+Alt+T', 'Ctrl+I', 'Ctrl+Backspace']) {
       expect(help).not.toContain(shortcut);
     }
   });
   it('records six shortcuts, rejects duplicates and F12, notifies native host and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
+    disclose('Keyboard shortcuts');
     const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
     fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true });
     fireEvent.keyDown(capture, { key: 'F12', code: 'F12', keyCode: 123 }); expect((capture as HTMLInputElement).value).toContain('F12 is reserved');
@@ -406,11 +647,12 @@ describe('settings drafts and protected controls', () => {
     await act(async () => driver.emit({ visible: false }));
     expect((visibility as HTMLInputElement).value).toBe('Ctrl+/');
     await act(async () => driver.emit({ visible: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' })); expect((capture as HTMLInputElement).value).toBe('Ctrl+Alt+Space');
+    disclose('Keyboard shortcuts'); fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' })); expect((capture as HTMLInputElement).value).toBe('Ctrl+Alt+Space');
     tab('Commands'); expect(screen.getByText(/Recording\/stream exclusion is best effort/)).toBeTruthy();
   });
   it('records modifier-only shortcuts on release and stops recording on native window blur', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
+    disclose('Keyboard shortcuts');
     const field = screen.getByRole('textbox', { name: 'Capture and answer shortcut' }); fireEvent.focus(field);
     fireEvent.keyDown(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16, shiftKey: true });
     expect((field as HTMLInputElement).value).toContain('Listening');
@@ -424,6 +666,6 @@ describe('settings drafts and protected controls', () => {
     fireEvent.click(screen.getByTestId('settings-save')); expect((await screen.findByRole('alert')).textContent).toContain('Settings were not saved');
     expect(document.body.textContent).not.toContain('private raw storage error');
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
-    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
   });
 });

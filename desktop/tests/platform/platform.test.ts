@@ -20,6 +20,12 @@ beforeEach(() => {
 afterEach(() => { platform.dispose(); Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform }); vi.restoreAllMocks(); });
 
 describe('native platform boundary (injected addon; no Windows runtime claim)', () => {
+  it('carries the surface minimum into native resizing and rejects invalid geometry before calling it', () => {
+    platform.setPanelResizeEnabled(handle, true, 128);
+    expect(native.setPanelResizeEnabled).toHaveBeenCalledExactlyOnceWith(handle, true, 128);
+    for (const height of [79, 1.5, 32769, NaN]) expect(() => platform.setPanelResizeEnabled(handle, true, height)).toThrow('minimum height');
+    expect(native.setPanelResizeEnabled).toHaveBeenCalledTimes(1);
+  });
   it('loads the native bridge lazily and exactly once', () => {
     expect(mock.load).not.toHaveBeenCalled(); platform.startCaptureProtection(); platform.protectWindow(handle);
     expect(mock.load).toHaveBeenCalledExactlyOnceWith('synthetic-bridge.node'); expect(mock.create).toHaveBeenCalledOnce();
@@ -92,7 +98,7 @@ describe('native platform boundary (injected addon; no Windows runtime claim)', 
   it('sends explicit resize eligibility without disturbing hover and rejects invalid permission inputs', () => {
     const wheel = vi.fn(); platform.attachPanel(handle, wheel);
     platform.setPanelResizeEnabled(handle, true); platform.setPanelResizeEnabled(handle, false);
-    expect(native.setPanelResizeEnabled!.mock.calls).toEqual([[handle, true], [handle, false]]);
+    expect(native.setPanelResizeEnabled!.mock.calls).toEqual([[handle, true, 80], [handle, false, 80]]);
     expect(native.detachPanel).not.toHaveBeenCalled();
     mock.callback?.({ type: 'wheel', delta: 120 }); expect(wheel).toHaveBeenCalledWith(120);
     expect(() => platform.setPanelResizeEnabled(Buffer.alloc(8), true)).toThrow('handle');

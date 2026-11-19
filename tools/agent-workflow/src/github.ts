@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
-import { digest, WorkflowError } from './manifest.js';
+import { digest, ORACLE_RUNTIME, WorkflowError } from './manifest.js';
 import type { RunStore } from './store.js';
+import { assertOracleRuntime } from './intake.js';
 
 export type GithubTransport = (method: 'GET' | 'POST', endpoint: string, body?: unknown) => Promise<unknown>;
 type Json = Record<string, unknown>;
@@ -205,7 +206,8 @@ export class GithubClient {
       throw new WorkflowError('delivery_denied', 'Frozen delivery permission does not allow this publication.');
   }
   private oracleProof(source: string, oracleHash: string, contractHash: string, expectedExit: 0 | 42): Json {
-    const identity = { runId: this.runId, source, workspace: this.manifest.root, oracleHash, contractHash };
+    const identity = { runId: this.runId, source, workspace: this.manifest.root, oracleHash, contractHash,
+      runtime: ORACLE_RUNTIME };
     const key = `oracle:${digest(identity)}`;
     const observed = this.store.observedEffect(this.runId, key);
     if (!observed || observed.kind !== 'verification' || observed.requestHash !== digest(identity))
@@ -234,6 +236,7 @@ export class GithubClient {
         observed.outputHash === input.outputHash && observed.outcome === 'failed') { confirmedEvidence = observed; break; }
     }
     if (!confirmedEvidence) fail('github_unconfirmed_finding');
+    assertOracleRuntime(this.store, this.runId, { ...input, workspace: this.manifest.root });
     const problem = text(input.problem); const reproduction = text(input.reproduction, 2000);
     const acceptance = text(input.acceptance, 1000); const owner = text(input.owner, 300);
     const environment = text(input.environment, 200);
@@ -376,7 +379,8 @@ export class GithubClient {
       else if (current) {
         const conclusion = current.conclusion ?? current.status ?? current.state;
         state = conclusion === 'success' ? 'success' : conclusion === 'skipped' ? 'skipped' :
-          ['queued', 'in_progress', 'pending', 'requested', 'waiting'].includes(String(conclusion)) ? 'pending' : 'failure';
+          ['queued', 'in_progress', 'pending', 'requested', 'waiting'].includes(String(conclusion)) ? 'pending' :
+            ['failure', 'error', 'cancelled', 'timed_out', 'action_required', 'startup_failure'].includes(String(conclusion)) ? 'failure' : 'missing';
       }
       return { name, state, attempts: [...checkAttempts, ...statusAttempts]
         .map(item => String(item.conclusion ?? item.status ?? item.state ?? 'unknown')) };

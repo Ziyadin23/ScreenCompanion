@@ -6,5 +6,5 @@ if (args.length === 1 && args[0] === '--help') {
 } else if (args.length === 1 && args[0] === '--identity') process.exitCode = await bundledRun('windows', [], false, true);
 else if (!args.length || args.length === 1 && args[0] === '--plan') process.exitCode = await bundledRun('plan');
 else if (args[0] === '--self-test') process.exitCode = portableTests(args.slice(1));
-else if (args.includes('--live')) process.exitCode = await bundledRun('windows', args, true);
+else if (args.includes('--live')) { console.error('Live execution is disabled for this changed two-mode plan. The frozen beta5 campaign includes retired Balanced runs; preserve its ledger and obtain a new approved scope before any further contacts.'); process.exitCode = 1; }
 else { console.error('Choose --plan, --self-test, or explicit --live with --phase and --candidate.'); process.exitCode = 1; }

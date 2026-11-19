@@ -4,11 +4,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { makeManifest } from '../src/manifest.js';
+import { makeManifest, type Scope } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
-import { normalizeFindings, planningOwner, runOracle } from '../src/intake.js';
+import { normalizeFindings, oracleSchema, planningOwner, runOracle } from '../src/intake.js';
 
-function fixture(t: { after(fn: () => void): void }) {
+function fixture(t: { after(fn: () => void): void }, scope: Scope = 'providers-json') {
   const directory = mkdtempSync(join(tmpdir(), 'sc-intake-'));
   const root = join(directory, 'repo'); mkdirSync(root);
   const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
@@ -21,11 +21,30 @@ function fixture(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, 'openspec/changes/linux-platform-support/tasks.md'), '# Tasks\n\n- [ ] 4.1 Native evidence still required\n');
   git('add', '.'); git('commit', '-m', 'synthetic contract');
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
-    base: git('rev-parse', 'HEAD'), scope: 'providers-json', modelProfile: 'fixture' });
+    base: git('rev-parse', 'HEAD'), scope, modelProfile: 'fixture' });
   const store = new RunStore(join(directory, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
   return { root, git, manifest, store };
 }
+
+test('portable oracle executes TypeScript dependency graphs and parameter properties on both candidates', async t => {
+  const { root, git, manifest, store } = fixture(t, 'pipeline');
+  writeFileSync(join(root, 'docs/contract.md'), '# Contract\n\nreadValue returns expected.\n');
+  const source = join(root, 'desktop/src/pipeline'); mkdirSync(source);
+  writeFileSync(join(source, 'value.ts'), "export class Value { constructor(public readonly text: string = 'wrong') {} }\n");
+  writeFileSync(join(source, 'index.ts'), "import {Value} from './value'; export function readValue(): string { return new Value().text; }\n");
+  git('add', '.'); git('commit', '-m', 'synthetic TypeScript graph');
+  const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script:
+    "import assert from 'node:assert/strict'; import {readValue} from '/workspace/desktop/src/pipeline/index.ts'; assert.equal(readValue(), 'expected');" };
+  const before = await runOracle({ store, runId: manifest.id, workspace: root, revision: git('rev-parse', 'HEAD'), oracle });
+  assert.equal(before.outcome, 'failed');
+  writeFileSync(join(source, 'value.ts'), "export class Value { constructor(public readonly text: string = 'expected') {} }\n");
+  git('add', '.'); git('commit', '-m', 'correct synthetic value');
+  const after = await runOracle({ store, runId: manifest.id, workspace: root, revision: git('rev-parse', 'HEAD'), oracle });
+  assert.equal(after.outcome, 'passed');
+  assert.equal(after.oracleHash, before.oracleHash);
+  assert.equal(after.contractHash, before.contractHash);
+});
 
 test('scoped findings deduplicate deterministically and reject injected paths/authority', t => {
   const { manifest } = fixture(t);
@@ -80,4 +99,44 @@ test('a proposed exit code or unrelated assertion cannot forge confirmed baselin
   const unusedImport = await runOracle({ ...request, oracle: { kind: 'portable-node', contractPaths: ['docs/contract.md'],
     script: "import assert from 'node:assert/strict';import {parseJson} from '/workspace/desktop/src/providers/json.ts';assert.equal(1,2);" } });
   assert.equal(unusedImport.outcome, 'unavailable');
+});
+
+const oracleImports = "import assert from 'node:assert/strict'; import {parseJson} from '/workspace/desktop/src/providers/json.ts'; assert.deepEqual(parseJson('{}'), {});\n";
+function boundaryOracle(tail: string): string {
+  const prefix = oracleImports + '/* — */\n';
+  return prefix + ' '.repeat(8000 - prefix.length - tail.length) + tail;
+}
+
+test('oracle syntax errors are rejected before source validation or process launch, including the exact character limit', async t => {
+  const { manifest, store, root } = fixture(t);
+  const boundary = boundaryOracle('const c = {}; assert.ok(c');
+  assert.equal(boundary.length, 8000); assert.equal(Buffer.byteLength(boundary), 8002);
+  const malformed = [boundary, ...[
+    'assert.ok(parseJson(', "const c = 'unterminated", 'const c = `unterminated',
+    '/* unterminated', 'if (true) {', 'const c = { answer:', 'const c = ;'
+  ].map(tail => oracleImports + tail)];
+  for (const script of malformed) {
+    const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script };
+    assert.equal(oracleSchema.safeParse(oracle).success, true);
+    // The sentinel prevents even the unfixed runner from executing a malformed payload.
+    await assert.rejects(runOracle({ store, runId: manifest.id, workspace: root, revision: 'invalid-source-sentinel', oracle }), {
+      code: 'invalid_oracle', message: 'Oracle script has invalid JavaScript syntax; return one complete program within the existing limit.'
+    });
+  }
+  assert.deepEqual(store.ownedProcesses(manifest.id), []); assert.equal(store.usage(manifest.id).activeMs, 0);
+});
+
+test('complete direct-production oracle programs preserve the existing syntax and character authority', async t => {
+  const { manifest, store, root } = fixture(t);
+  const scripts = [oracleImports, boundaryOracle('const c = {}; assert.ok(c);'),
+    "import assert from 'node:assert/strict'; const {parseJson} = await import('/workspace/desktop/src/providers/json.ts'); assert.equal(parseJson('42'), 42);",
+    "import assert from 'node:assert/strict'; import * as parser from '/workspace/desktop/src/providers/json.ts'; assert.deepEqual(parser.parseJson('[1,2]'), [1,2]);"
+  ];
+  for (const script of scripts) {
+    const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script };
+    assert.equal(oracleSchema.safeParse(oracle).success, true);
+    await assert.rejects(runOracle({ store, runId: manifest.id, workspace: root, revision: 'invalid-source-sentinel', oracle }), { code: 'invalid_source' });
+  }
+  assert.equal(oracleSchema.safeParse({ kind: 'portable-node', contractPaths: ['docs/contract.md'], script: scripts[1]! + ' ' }).success, false);
+  assert.deepEqual(store.ownedProcesses(manifest.id), []); assert.equal(store.usage(manifest.id).activeMs, 0);
 });

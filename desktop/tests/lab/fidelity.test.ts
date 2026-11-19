@@ -14,7 +14,7 @@ describe('fixed extraction components and actual production crop coverage (in me
   let directory: string, ledger: CampaignLedger;
   beforeEach(async () => { directory = await fs.mkdtemp(join(tmpdir(), 'sc-fake-fidelity-')); ledger = await openFakeLedger(join(directory, 'ledger.jsonl')); });
   afterEach(async () => { await ledger.close(); await fs.rm(directory, { recursive: true, force: true }); });
-  it.each(['Thorough', 'Balanced'])('fails %s code fidelity with a right primary and never records code/transcription values', async mode => {
+  it.each(['Thorough'])('fails %s code fidelity with a right primary and never records code/transcription values', async mode => {
     const run = campaign().find(item => item.caseId === 'code' && item.mode === mode && item.layout === 'plain')!;
     const fake = new FixtureTransport(run);
     const transport: HttpTransport = { async send(request) {
@@ -76,7 +76,7 @@ describe('fixed extraction components and actual production crop coverage (in me
     const multiple = visualCase('multiple'); expect(gradeExtractionComponents(multiple, fakeExtraction(multiple).questions.reverse())).toMatchObject({ taskCount: true, questionText: false });
     expect(gradeExtractionComponents(fixture, [])).toMatchObject({ observed: true, taskCount: false });
   });
-  it.each(['Thorough', 'Balanced'])('grades %s diagram and both labels independently using production normalized crop calls', async mode => {
+  it.each(['Thorough'])('grades %s diagram and both labels independently using production normalized crop calls', async mode => {
     const run = campaign().find(item => item.caseId === 'diagram' && item.mode === mode && item.layout === 'plain')!;
     const runWith = async (requiredVisuals = FAKE_REQUIRED_VISUALS) => {
       const result = await measureRun({ run, attempt: ledger.nextAttempt(run.id), ledger,

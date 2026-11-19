@@ -18,3 +18,7 @@ desktop/test-results/
 desktop/playwright-report/
 desktop/native/build/
 desktop/.cache/
+
+.impeccable/review/
+
+.impeccable/questions/

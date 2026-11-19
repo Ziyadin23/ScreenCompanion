@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { app, BrowserWindow, nativeImage, screen, type NativeImage } from 'electron';
 import type { CapturedFrame, PixelBounds, WindowsPlatform } from '../../src/contracts';
 import { createWindowsPlatform } from '../../src/platform';
-import { ALL_CASES, CAPTURE_CASES, LAYOUTS, visualCase, type Layout, type VisualCase } from './cases';
+import { ALL_CASES, CAPTURE_CASES, LAYOUTS, campaign, visualCase, type Layout, type VisualCase } from './cases';
 import { CampaignExecutionError, executeCampaign } from './execution';
 import { CampaignLedger } from './ledger';
 import { measureRun } from './measure';
@@ -184,6 +184,8 @@ async function requiredVisuals(): Promise<RequiredVisual[]> {
   return result;
 }
 async function liveCampaign(): Promise<boolean> {
+  // The existing private registry authorized a frozen three-mode 49-operation/96-call plan.
+  if (campaign().length !== 49 || campaign().reduce((sum, run) => sum + run.expectedCalls, 0) !== 96) throw new CampaignExecutionError('scope');
   const options = liveOptions(args);
   requireCandidate(process.env.SC_LAB_CANDIDATE ?? '', options.candidate);
   const validateCandidateSources = async (): Promise<void> => {

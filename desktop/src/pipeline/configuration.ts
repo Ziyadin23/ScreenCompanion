@@ -1,6 +1,7 @@
 import type { PipelineConfiguration, VaultData } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels } from '../contracts/defaults';
+import { modelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { validModel } from '../providers';
 import { validateRegion } from './regions';
 
@@ -11,8 +12,8 @@ export function loadPipelineConfiguration(env: Record<string, string | undefined
   const defaults = defaultModels(provider);
   const assessmentMode = value('ASSESSMENT_MODE', 'standard').toLowerCase();
   if (assessmentMode !== 'qa' && assessmentMode !== 'standard') throw new Error('ASSESSMENT_MODE must be qa or standard.');
-  const mode = ({ thorough: 'Thorough', balanced: 'Balanced', direct: 'Direct' } as const)[value('PIPELINE_MODE', 'thorough').toLowerCase() as 'thorough'];
-  if (!mode) throw new Error('PIPELINE_MODE must be balanced, thorough, or direct (DeepSeek only).');
+  const mode = ({ thorough: 'Thorough', balanced: 'Thorough', direct: 'Direct' } as const)[value('PIPELINE_MODE', 'thorough').toLowerCase() as 'thorough'];
+  if (!mode) throw new Error('PIPELINE_MODE must be thorough or direct.');
   const boolean = (name: string): boolean => {
     const text = value(name, 'true').toLowerCase();
     if (text !== 'true' && text !== 'false') throw new Error(`${name} must be true or false.`);
@@ -48,15 +49,17 @@ export function loadPipelineConfiguration(env: Record<string, string | undefined
   return configuration;
 }
 
-export function withSavedSettings(configuration: PipelineConfiguration, settings: Pick<VaultData, 'Models' | 'PipelineMode'>): PipelineConfiguration {
+export function withSavedSettings(configuration: PipelineConfiguration, settings: Pick<VaultData, 'Models' | 'PipelineMode'> & Partial<Pick<VaultData, 'ModelPipelines'>>): PipelineConfiguration {
   const models = settings.Models;
   if (models && (!PROVIDERS.includes(models.Provider) || !validModel(models.AnswerModel) || !validModel(models.VisionModel) ||
       !['None', 'Low', 'High', 'Max'].includes(models.Thinking ?? 'None') ||
       (models.AnswerTokenLimit != null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000))))
     throw new Error('The saved model selection is invalid.');
+  if (settings.ModelPipelines !== undefined && !validModelPipelines(settings.ModelPipelines)) throw new Error('The saved model pipeline preferences are invalid.');
   const result = { ...configuration, provider: models?.Provider ?? configuration.provider,
     answerModel: models?.AnswerModel ?? configuration.answerModel, visionModel: models?.VisionModel ?? configuration.visionModel,
-    mode: settings.PipelineMode ?? configuration.mode, thinking: models ? models.Thinking ?? 'None' : configuration.thinking,
+    mode: (models ? modelPipeline(settings.ModelPipelines ?? [], models) : undefined) ?? settings.PipelineMode ?? configuration.mode,
+    thinking: models ? models.Thinking ?? 'None' : configuration.thinking,
     answerMaxOutputTokens: models?.AnswerTokenLimit ?? configuration.answerMaxOutputTokens };
   validateConfiguration(result);
   return result;
@@ -65,8 +68,7 @@ export function withSavedSettings(configuration: PipelineConfiguration, settings
 export function validateConfiguration(configuration: PipelineConfiguration): void {
   if (!PROVIDERS.includes(configuration.provider) || !validModel(configuration.answerModel) || !validModel(configuration.visionModel))
     throw new Error('Choose a supported service and valid model IDs in Settings.');
-  if (!['Thorough', 'Balanced', 'Direct'].includes(configuration.mode) || (configuration.mode === 'Direct' && configuration.provider !== 'DeepSeek'))
-    throw new Error('Choose a supported pipeline. Direct screenshot is available only with DeepSeek.');
+  if (!['Thorough', 'Direct'].includes(configuration.mode)) throw new Error('Choose Thorough or Direct screenshot in Settings.');
   if (!['standard', 'qa'].includes(configuration.assessmentMode) || !['None', 'Low', 'High', 'Max'].includes(configuration.thinking) ||
       typeof configuration.enableQuestionCropping !== 'boolean' || typeof configuration.enableRefusalRetry !== 'boolean')
     throw new Error('The trusted pipeline configuration is invalid.');

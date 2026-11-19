@@ -1,9 +1,9 @@
 {
-  "status": "review-only",
-  "observedAt": "2026-11-04T10:49:07.770Z",
+  "status": "applied-and-verified",
+  "observedAt": "2026-11-11T12:51:20Z",
   "repository": "Ziyadin23/ScreenCompanion",
   "branch": "main",
-  "base": "b692d7ff8b2d8e5a9e4340df3b32a560a9a0a9d9",
+  "base": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
   "current": {
     "protection": null,
     "rulesets": [],
@@ -29,12 +29,7 @@
         "dismiss_stale_reviews": false,
         "require_code_owner_reviews": false,
         "require_last_push_approval": false,
-        "required_approving_review_count": 0,
-        "bypass_pull_request_allowances": {
-          "users": [],
-          "teams": [],
-          "apps": []
-        }
+        "required_approving_review_count": 0
       },
       "restrictions": null,
       "required_linear_history": false,
@@ -93,10 +88,239 @@
     }
   ],
   "activationPrerequisites": [
-    "final source review and passing tool/application/hosted checks",
-    "explicit acceptance of this concrete settings change",
-    "fresh settings read-back and controlled failed/stale candidate rejection",
-    "genuine bounded documentation delivery pilot"
+    "Independent review of the unchanged settings payload and bounded isolated verification plan.",
+    "Explicit acceptance of this concrete main protection change and its temporary test refs/PRs.",
+    "Fresh settings and check-source read-back; preserve any intervening stricter requirements or stop for reconciliation.",
+    "Real failed and stale merge rejection on an isolated protected branch, with complete cleanup.",
+    "Apply the accepted payload to main once and independently read back the exact protections and unchanged repository settings."
   ],
-  "note": "Independent source-bound agent review is a runner requirement. Existing stricter server review requirements must be preserved if they appear before application. Parser automatic merge and real Windows beta capability remain unqualified."
+  "note": "Task 8.2 protection is applied and verified. The unsupported empty bypass object was omitted for this personal repository after a retained 422 failure; the approved policy is unchanged. Independent source-bound agent review remains separate from zero required GitHub approving reviews. All five checks are bound to github-actions app ID15368. Other workflow tasks remain unfinished; parser automatic merge, native deferred automerge and real Windows beta capability were not enabled.",
+  "previousObservation": {
+    "observedAt": "2026-11-04T10:49:07.770Z",
+    "base": "b692d7ff8b2d8e5a9e4340df3b32a560a9a0a9d9",
+    "current": {
+      "protection": null,
+      "rulesets": [],
+      "allow_auto_merge": false,
+      "allow_squash_merge": true
+    },
+    "status": "review-only",
+    "sourceRevision": "e1f84be311ec7750bd45a8c9648237a9e4971e98",
+    "note": "Initial 2026-11-04 proposal was not applied. The same seven-field policy is retained; the unsupported personal-repository encoding correction is recorded separately."
+  },
+  "observedChecks": [
+    {
+      "name": "changes",
+      "app": "github-actions",
+      "app_id": 15368,
+      "conclusion": "success",
+      "head": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804"
+    },
+    {
+      "name": "documentation",
+      "app": "github-actions",
+      "app_id": 15368,
+      "conclusion": "success",
+      "head": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804"
+    },
+    {
+      "name": "portable",
+      "app": "github-actions",
+      "app_id": 15368,
+      "conclusion": "skipped",
+      "head": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804"
+    },
+    {
+      "name": "windows-build",
+      "app": "github-actions",
+      "app_id": 15368,
+      "conclusion": "skipped",
+      "head": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804"
+    },
+    {
+      "name": "agent-workflow",
+      "app": "github-actions",
+      "app_id": 15368,
+      "conclusion": "success",
+      "head": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804"
+    }
+  ],
+  "payloadSha256": "f36c41238043c4efa52ea205e19ce27ef21737e884481797b64ae71dd995e7b7",
+  "verificationPlan": "protection-verification.md",
+  "authorization": {
+    "workScope": "The user selected repository protection and documentation with separate agents on 2026-11-11.",
+    "settingsAcceptance": "accepted",
+    "acceptedAt": "2026-11-11T12:48:37Z",
+    "acceptedSelection": "Apply and verify protection",
+    "acceptedScope": "Exact reviewed payload plus two temporary PRs/three temporary refs, owned cleanup, then main activation/read-back. No automatic main rollback or repository-wide automerge change.",
+    "payloadSha256": "b47cc92c24ed5f3bd038a0bc60cf31f947ef545101ebae503c81d8df25d43055",
+    "remoteExecution": "complete: controlled rejection proofs, owned cleanup and main activation/read-back",
+    "apiCompatibilityReview": "accepted by independent reviewer and coordinator",
+    "reviewedApiPayloadSha256": "f36c41238043c4efa52ea205e19ce27ef21737e884481797b64ae71dd995e7b7",
+    "apiCompatibilityReviewedAt": "2026-11-11T12:55:21Z"
+  },
+  "automaticMergeReadiness": {
+    "status": "unqualified",
+    "remainingGates": "Protection alone does not satisfy tasks 8.1, 8.4, 8.5 or 9.2/9.3; a genuine bounded documentation delivery pilot and real beta capability remain separate.",
+    "allow_auto_merge": "unchanged false"
+  },
+  "sourceReconciliations": [
+    {
+      "observedAt": "2026-11-11T12:51:20Z",
+      "from": "e1f84be311ec7750bd45a8c9648237a9e4971e98",
+      "to": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+      "reason": "Concurrent guidelines integration advanced main. Coordinator explicitly confirmed unchanged accepted settings payload applies to refreshed current main. All five check provider bindings were freshly observed."
+    }
+  ],
+  "apiCompatibilityCorrections": [
+    {
+      "observedAt": "2026-11-11T12:53:25Z",
+      "previousPayloadSha256": "b47cc92c24ed5f3bd038a0bc60cf31f947ef545101ebae503c81d8df25d43055",
+      "correctedPayloadSha256": "f36c41238043c4efa52ea205e19ce27ef21737e884481797b64ae71dd995e7b7",
+      "removedPointer": "/required_pull_request_reviews/bypass_pull_request_allowances",
+      "removedValue": {
+        "users": [],
+        "teams": [],
+        "apps": []
+      },
+      "reason": "GitHub rejected the explicit empty user/team allowance object for this personal repository with HTTP 422. Omitting it preserves zero bypass actors; absence/empty read-back remains mandatory.",
+      "policyChange": false,
+      "review": "Independent reviewer and coordinator confirmed exactly one unsupported empty object omitted; approved policy unchanged.",
+      "rejectedAttempt": {
+        "target": "sc-protection-8-2-20261111-base",
+        "status": 422,
+        "message": "Only organization repositories can have users and team restrictions",
+        "mainChanged": false,
+        "probesCreated": 0,
+        "createdTemporaryRefCleaned": true
+      }
+    }
+  ],
+  "executionRecovery": {
+    "observedAt": "2026-11-11T15:32:36Z",
+    "oldPrivateReceipts": "unavailable after interruption; earlier proof preserved only as reported agent tool output/handoff",
+    "approvedRecovery": "Coordinator authorized fresh expected failure and repair by normal commits on existing PR44 before advancing the isolated base. No additional PRs, refs or CI reruns.",
+    "source": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+    "newRawEvidence": "Fresh failure/repair and stale-base proof requests/read-backs are retained persistently outside Git. Earlier original raw files remain unavailable."
+  },
+  "observationRole": "The current/base/observedAt fields retain the pre-activation snapshot; verificationResult is the applied-state read-back.",
+  "verificationResult": {
+    "activatedAt": "2026-11-11T15:43:15Z",
+    "readBackAt": "2026-11-11T15:43:18Z",
+    "mainSource": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+    "protected": true,
+    "payloadSha256": "f36c41238043c4efa52ea205e19ce27ef21737e884481797b64ae71dd995e7b7",
+    "httpStatus": 200,
+    "requiredChecks": [
+      {
+        "context": "changes",
+        "app_id": 15368
+      },
+      {
+        "context": "documentation",
+        "app_id": 15368
+      },
+      {
+        "context": "portable",
+        "app_id": 15368
+      },
+      {
+        "context": "windows-build",
+        "app_id": 15368
+      },
+      {
+        "context": "agent-workflow",
+        "app_id": 15368
+      }
+    ],
+    "strict": true,
+    "requirePR": true,
+    "approvingReviews": 0,
+    "enforceAdmins": true,
+    "bypassActors": [],
+    "forcePushes": false,
+    "deletions": false,
+    "allow_auto_merge": false,
+    "allow_squash_merge": true,
+    "unrelatedSettingsUnchanged": true,
+    "rulesets": [],
+    "cleanupAt": "2026-11-11T15:42:33Z",
+    "rollbackInvoked": false
+  },
+  "controlledExperiment": {
+    "failedCandidate": {
+      "pr": "https://github.com/Ziyadin23/ScreenCompanion/pull/44",
+      "head": "bece31a974aac40f7f0e3c32091e335362144b8d",
+      "ciRun": "https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43049444182",
+      "cause": "Synthetic missing Markdown target",
+      "httpStatus": 405,
+      "message": "4 of 5 required status checks are failing.",
+      "baseBefore": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+      "baseAfter": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+      "merged": false,
+      "rawRetained": true
+    },
+    "repairedCandidate": {
+      "head": "f3472d9f6b7f7fd5f1b190f34c2858a96db78180",
+      "gates": {
+        "changes": "SUCCESS",
+        "documentation": "SUCCESS",
+        "portable": "SKIPPED",
+        "windows-build": "SKIPPED",
+        "agent-workflow": "SUCCESS"
+      },
+      "observedBeforeBaseAdvance": "CLEAN and MERGEABLE"
+    },
+    "positiveControl": {
+      "pr": "https://github.com/Ziyadin23/ScreenCompanion/pull/45",
+      "head": "1f585761240c5f0d7c4826b45a78cb858b851424",
+      "gates": {
+        "changes": "SUCCESS",
+        "documentation": "SUCCESS",
+        "portable": "SUCCESS",
+        "windows-build": "SUCCESS",
+        "agent-workflow": "SUCCESS"
+      },
+      "httpStatus": 200,
+      "merged": true,
+      "temporaryBaseResult": "1e8a68f5c4c684856e260886f11ed17fd5fe245d"
+    },
+    "staleCandidate": {
+      "head": "f3472d9f6b7f7fd5f1b190f34c2858a96db78180",
+      "mergeStateStatus": "BEHIND",
+      "headGates": {
+        "changes": "SUCCESS",
+        "documentation": "SUCCESS",
+        "portable": "SKIPPED",
+        "windows-build": "SKIPPED",
+        "agent-workflow": "SUCCESS"
+      },
+      "targetAhead": 1,
+      "headAhead": 4,
+      "httpStatus": 405,
+      "message": "5 of 5 required status checks are expected.",
+      "baseBefore": "1e8a68f5c4c684856e260886f11ed17fd5fe245d",
+      "baseAfter": "1e8a68f5c4c684856e260886f11ed17fd5fe245d",
+      "merged": false,
+      "rawRetained": true,
+      "interpretation": "Strict-base invalidation is inferred from the controlled state: only the target advanced after this unchanged head passed, protection/app bindings stayed identical, and BEHIND/divergence plus unchanged actual target/head and merged=false were independently observed. The server literal does not mention base.",
+      "restBaseSnapshot": "REST pull base.sha retained the earlier snapshot; actual target identity was established through branch/git-ref reads."
+    }
+  },
+  "cleanupResult": {
+    "completedAt": "2026-11-11T15:42:33Z",
+    "pr44": "closed unmerged",
+    "pr45": "merged only into temporary base",
+    "temporaryRuleAbsent": true,
+    "allThreeOwnedRefsAbsent": true,
+    "mainUnchangedBeforeActivation": "14cfae18b4dfd3e0a56d2b28fcdaedcdeceea804",
+    "cancelledOnCleanup": [],
+    "allOwnedRunsTerminal": true,
+    "ownedRunCount": 13,
+    "ownedRefsAbsent": [
+      "sc-protection-8-2-20261111-base",
+      "sc-protection-8-2-20261111-candidate",
+      "sc-protection-8-2-20261111-advance"
+    ]
+  }
 }

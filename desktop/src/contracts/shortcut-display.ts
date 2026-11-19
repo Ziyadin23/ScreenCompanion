@@ -29,5 +29,5 @@ export function formatShortcut(binding: HotkeyBinding): string {
 
 export function commandsText(shortcuts: Record<AppAction, HotkeyBinding>): string {
   return SHORTCUT_FIELDS.map(({ action, label }) => `${formatShortcut(shortcuts[action])} — ${label.toLowerCase()}`).join('\n') +
-    '\n\nMouse wheel — scroll the answer\nAlt + left drag — move the panel\nDrag an edge — resize\nEnter — send; Esc — return or hide\n\nRecording/stream exclusion is best effort. Test each recorder and inspect its saved video or received stream.';
+    '\n\nMouse wheel — scroll the answer\nAlt + left drag — move the panel\nDrag an edge — resize\nEnter — send text; Ctrl+Enter in Question — send with screenshot\nEsc — return or hide\n\nRecording/stream exclusion is best effort. Test each recorder and inspect its saved video or received stream.';
 }

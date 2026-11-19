@@ -52,6 +52,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Verify Linux prerequisite installer
+        if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
+        run: node --test .github/scripts/install-bubblewrap.test.mjs
       - name: Provision fixed Linux workflow prerequisites
         if: needs.changes.result != 'success' || needs.changes.outputs.application != 'false'
         run: bash .github/scripts/agent-workflow-prerequisites.sh

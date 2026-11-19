@@ -10,7 +10,7 @@ import { makeManifest } from '../src/manifest.js';
 import { digest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { assertFrozenSource, attestVerificationDependencies, freezeCandidate, inspectCandidate, pushCandidate,
-  selectVerificationCommands, verifyCandidate,
+  observedCheckFailures, selectVerificationCommands, verifyCandidate,
   type PushTransport } from '../src/candidate.js';
 import { runOwnedProcess, type OwnedProcessResult } from '../src/process.js';
 
@@ -156,6 +156,63 @@ test('freeze commits complete owned source through private index and retains unr
   assert.throws(() => assertFrozenSource(f.manifest, frozen, f.options), { code: 'stale_source' });
 });
 
+test('a correction can update a coordinator-frozen record while hidden staged changes remain rejected', async t => {
+  const f = fixture(t); edit(f.root);
+  const path = 'openspec/changes/task-owner/tasks.md';
+  mkdirSync(join(f.root, 'openspec/changes/task-owner'), { recursive: true });
+  const first = 'First admitted checkpoint\n', corrected = 'Corrected admitted checkpoint\n';
+  writeFileSync(join(f.root, path), first);
+  const options = { ...f.options, owner: 'task-owner', administrative: { [path]: digest(first) } };
+  const before = await freezeCandidate({ ...f.freeze, ...options });
+  writeFileSync(join(f.root, path), corrected);
+  const next = { ...f.freeze, ...options, key: 'round-1', administrative: { [path]: digest(corrected) } };
+  const after = await freezeCandidate(next);
+  assert.equal(after.parent, before.head);
+  assert.equal(f.git('show', `${after.head}:${path}`), corrected.trim());
+  assert.equal(f.git('status', '--porcelain'), '');
+  assert.equal((await freezeCandidate(next)).head, after.head);
+  assert.throws(() => assertFrozenSource(f.manifest, before, options), { code: 'stale_source' });
+  writeFileSync(join(f.root, path), 'Third admitted checkpoint\n');
+  const interrupted = { ...next, key: 'round-interrupted', administrative: { [path]: digest('Third admitted checkpoint\n') } };
+  await assert.rejects(() => freezeCandidate({ ...interrupted, beforeRefUpdate: () => { throw new Error('lost repair ack'); } }),
+    /lost repair ack/);
+  const interruptedHead = f.git('rev-parse', 'HEAD');
+  assert.equal((await freezeCandidate(interrupted)).head, interruptedHead);
+  assert.equal(f.git('status', '--porcelain'), '');
+  writeFileSync(join(f.root, path), 'Checkpoint interrupted before ref advancement\n');
+  const beforeRef = { ...next, key: 'round-before-ref', administrative: { [path]: digest('Checkpoint interrupted before ref advancement\n') } };
+  await assert.rejects(() => freezeCandidate({ ...beforeRef, afterIndexUpdate: () => { throw new Error('lost before ref'); } }),
+    /lost before ref/);
+  assert.equal(f.git('rev-parse', 'HEAD'), interruptedHead);
+  const resumed = await freezeCandidate(beforeRef);
+  assert.equal(resumed.parent, interruptedHead);
+  assert.equal(f.git('rev-parse', 'HEAD'), resumed.head);
+  assert.equal(f.git('status', '--porcelain'), '');
+  writeFileSync(join(f.root, path), 'Hidden staged checkpoint\n'); f.git('add', path);
+  writeFileSync(join(f.root, path), 'Different working checkpoint\n');
+  await assert.rejects(() => freezeCandidate({ ...next, key: 'round-2',
+    administrative: { [path]: digest('Different working checkpoint\n') } }), { code: 'index_mismatch' });
+});
+
+test('a repeated freeze restores baseline bytes and removes prior additions from the committed tree', async t => {
+  const f = fixture(t); edit(f.root);
+  const path = 'openspec/changes/task-owner/tasks.md';
+  mkdirSync(join(f.root, 'openspec/changes/task-owner'), { recursive: true });
+  writeFileSync(join(f.root, path), 'First checkpoint\n');
+  const options = { ...f.options, owner: 'task-owner', administrative: { [path]: digest('First checkpoint\n') } };
+  const first = await freezeCandidate({ ...f.freeze, ...options });
+  writeFileSync(join(f.root, 'README.md'), '[user guide](bad.md)\n');
+  const reverted = await freezeCandidate({ ...f.freeze, ...options, key: 'revert-source' });
+  assert.equal(reverted.parent, first.head);
+  assert.equal(f.git('show', `${reverted.head}:README.md`), f.git('show', `${f.base}:README.md`));
+  assert.equal(f.git('status', '--porcelain'), '');
+  edit(f.root); rmSync(join(f.root, path));
+  const removed = await freezeCandidate({ ...f.freeze, ...options, key: 'remove-addition' });
+  assert.equal(f.git('ls-tree', removed.head, '--', path), '');
+  assert.equal(f.git('status', '--porcelain'), '');
+  assert.equal(assertFrozenSource(f.manifest, removed, options).sourceHash, removed.sourceHash);
+});
+
 test('lost ref acknowledgement reconciles exact commit without duplicate', async t => {
   const f = fixture(t); edit(f.root);
   let once = true;
@@ -175,7 +232,8 @@ test('verification uses fixed route, retains failure and binds unchanged source'
   const names: string[] = [];
   const runner = async (request: Parameters<typeof runOwnedProcess>[0]) => {
     names.push(request.key.split(':').at(-1)!);
-    return request.key.endsWith('workflow-docs') ? { ...passed, exitCode: 7 } : passed;
+    return request.key.endsWith('workflow-docs') ? { ...passed, exitCode: 7,
+      stderr: '\u001b[31mMissing local guide destination\u001b[0m\n' + 'x'.repeat(3000) } : passed;
   };
   const options = { ...f.options, manifest: f.manifest, frozen, store: f.store, key: 'verify-0',
     openspecBinary: '/usr/bin/node', runCheck: runner };
@@ -188,6 +246,36 @@ test('verification uses fixed route, retains failure and binds unchanged source'
   assert.equal(result.environmentIdentity.sandboxProfile.outputs, null);
   assert.ok(result.checks.every(check => check.environmentHash === result.environmentIdentity.hash));
   assert.ok(result.missingCapabilities.includes('native'));
+  const failures = observedCheckFailures(f.store, f.manifest.id, frozen, result, options.key);
+  assert.equal(failures.length, 1); assert.equal(failures[0]?.name, 'workflow-docs');
+  assert.equal(failures[0]?.exitCode, 7); assert.ok(failures[0]!.diagnostic.length <= 1800);
+  assert.equal(failures[0]!.diagnostic.includes('\u001b'), false);
+  assert.throws(() => observedCheckFailures(f.store, f.manifest.id, { ...frozen, head: f.base }, result, options.key),
+    { code: 'stale_evidence' });
+  assert.throws(() => observedCheckFailures(f.store, f.manifest.id, frozen,
+    { ...result, checks: result.checks.map(check => ({ ...check, resultHash: '0'.repeat(64) })) }, options.key),
+  { code: 'stale_evidence' });
+  assert.throws(() => observedCheckFailures(f.store, f.manifest.id, frozen, result, 'unobserved'),
+    { code: 'stale_evidence' });
+  const application = { ...frozen, checks: ['application'] };
+  const currentTest = selectVerificationCommands(application.checks, frozen.base, frozen.head)
+    .find(command => command.name === 'desktop-tests')!;
+  const legacyCommand = { ...currentTest, args: ['--prefix', 'desktop', 'test'] };
+  const legacyResult = { ...passed, exitCode: 1, stderr: 'Historical assertion: ignored non-choice normalization changed' };
+  const legacyIdentity = { head: frozen.head, sourceHash: frozen.sourceHash,
+    environmentHash: result.environmentIdentity.hash, command: legacyCommand };
+  await f.store.effect(f.manifest.id, 'verification:legacy-tests:desktop-tests', 'verification', legacyIdentity,
+    { execute: async () => legacyResult, reconcile: async () => null });
+  const legacyCheck = { ...result.checks[1]!, name: 'desktop-tests' as const,
+    commandHash: digest({ command: legacyCommand, environmentHash: result.environmentIdentity.hash }),
+    resultHash: digest(legacyResult), exitCode: 1 };
+  const historical = { ...result, checks: [legacyCheck] };
+  assert.match(observedCheckFailures(f.store, f.manifest.id, application, historical, 'legacy-tests')[0]!.diagnostic,
+    /Historical assertion/);
+  assert.equal(historical.passed, false);
+  assert.throws(() => observedCheckFailures(f.store, f.manifest.id, application,
+    { ...historical, checks: [{ ...legacyCheck, commandHash: digest({ ...legacyIdentity, command: { ...legacyCommand, args: ['untrusted'] } }) }] },
+    'legacy-tests'), { code: 'stale_evidence' });
   const replay = await verifyCandidate(options);
   assert.equal(replay.passed, false);
   assert.equal(names.length, 4);
@@ -354,6 +442,15 @@ test('application checks use fresh read-only sandboxes and build from a copied c
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 const cache = '/workspace/desktop/node_modules/.cache';
 assert.equal(existsSync(cache + '/prior-check'), false);
+if (process.argv[2] === 'test') {
+  const args = process.argv.slice(3), offset = args.indexOf('--fsModuleCachePath');
+  assert.ok(offset >= 0, 'The test runner requires a private writable module cache');
+  const path = args[offset + 1];
+  assert.ok(path.startsWith('/tmp/'));
+  assert.equal(existsSync(path), false);
+  writeFileSync(path, 'synthetic module cache');
+  assert.throws(() => writeFileSync('/workspace/desktop/node_modules/module-cache', 'changed'), { code: 'EROFS' });
+}
 if (process.argv[2] === 'build') {
   assert.deepEqual(process.argv.slice(3), ['--config', cache + '/sc-electron-vite.config.ts']);
   assert.equal(readFileSync(process.argv[4], 'utf8'), 'exact frozen config\\n');

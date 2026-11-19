@@ -7,7 +7,7 @@ import test from 'node:test';
 import { createActions } from '../src/runtime.js';
 import { preparePlan } from '../src/ownership.js';
 import { executeRun } from '../src/graph.js';
-import { digest, makeManifest } from '../src/manifest.js';
+import { digest, makeManifest, ORACLE_RUNTIME } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 import { type WorkerRequest, type WorkerResult } from '../src/worker.js';
 
@@ -32,14 +32,58 @@ function worker(role: WorkerRequest['role'], response: WorkerResult['response'])
     elapsedMs: 1, usage: { inputTokens: 1, outputTokens: 1 }, monetaryCost: 'unknown' };
 }
 
+test('revalidated observed worker result retains its prior interpretation without a second allowance', async t => {
+  const { store, manifest } = fixture(t); let interpretations = 0;
+  const actions = createActions({ executeWorker: async request => {
+    const key = 'synthetic-observed-worker'; store.reserve(manifest.id, key, 'workerInvocations');
+    return ++interpretations === 1 ? { role: request.role, operationKey: key, processDirectory: '',
+      status: 'failed', failure: 'output_oversized', elapsedMs: 1, usage: null, monetaryCost: 'unknown' } :
+      { ...worker(request.role, { status: 'complete', summary: 'Observed empty discovery', notes: [], findings: [] }), operationKey: key };
+  } });
+  assert.equal((await executeRun(store, manifest.id, actions)).status, 'failed');
+  const result = await executeRun(store, manifest.id, actions);
+  assert.equal(result.status, 'completed'); assert.equal(store.usage(manifest.id).workerInvocations, 1);
+  const current = result.data.workerResults as WorkerResult[], history = result.data.workerResultHistory as WorkerResult[];
+  assert.equal(current.length, 1); assert.equal(current[0]?.status, 'complete');
+  assert.equal(history.length, 1); assert.equal(history[0]?.failure, 'output_oversized');
+});
+
+test('old runtime receipts stop issue publication and planning before external effects', async t => {
+  for (const stage of ['issues', 'plan'] as const) {
+    const { store, manifest } = fixture(t, 'pr'); let effects = 0;
+    const oracleHash = '1'.repeat(64), contractHash = '2'.repeat(64);
+    const identity = { runId: manifest.id, source: manifest.base, workspace: manifest.root, oracleHash, contractHash };
+    const operationKey = `oracle:${digest(identity)}`;
+    await store.effect(manifest.id, operationKey, 'verification', identity, { execute: async () => ({
+      status: 'exited', exitCode: 42, signal: null, outputTruncated: false, stdout: '', stderr: '', elapsedMs: 1
+    }), reconcile: async () => null });
+    const evidence = { source: manifest.base, oracleHash, contractHash, operationKey,
+      outputHash: digest(['', '']), environment: 'linux-portable-synthetic', outcome: 'failed', exitCode: 42 };
+    store.update(manifest.id, { data: { findings: [{ id: 'old-runtime', path: 'desktop/src/providers/json.ts',
+      description: 'Duplicate keys accepted', state: 'confirmed', fingerprint: '3'.repeat(64), evidence,
+      baselineReview: { base: manifest.base, oracleHash, contractHash, findingId: 'old-runtime', clean: true } }],
+    issueReceipts: [{ number: 7, url: 'https://github.com/example/sc/issues/7', body: 'Accepted task', state: 'open', reused: false }] } });
+    const actions = createActions({ githubTransport: async () => { effects++; throw new Error('No external effect expected'); },
+      executeWorker: async () => { effects++; throw new Error('No worker expected'); } });
+    await assert.rejects(actions[stage]!({ store, run: store.get(manifest.id), signal: new AbortController().signal }),
+      { code: 'stale_oracle_runtime' });
+    assert.equal(effects, 0);
+    assert.equal(store.usage(manifest.id).writingTasks, 0);
+  }
+});
+
 test('report discovery uses separate investigation/reproduction and a real frozen baseline oracle', async t => {
   const { store, manifest } = fixture(t); const calls: string[] = [];
   const actions = createActions({ executeWorker: async request => {
     calls.push(request.role); assert.equal(request.timeReservedByStage, true);
     if (request.role === 'investigator') return worker(request.role, { status: 'complete', summary: 'Candidate', notes: [],
       findings: [{ path: 'desktop/src/providers/json.ts', description: 'Duplicate fields accepted.' }] });
-    if (request.role === 'reviewer') return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] });
+    if (request.role === 'reviewer') {
+      const review = { status: 'complete' as const, summary: 'The oracle correctly exposes the baseline defect', notes: [],
+        baseRevision: manifest.base, headRevision: manifest.base, findings: ['P1: The baseline accepts duplicate keys'],
+        baselineContract: { valid: true, concerns: [] } };
+      return worker(request.role, review);
+    }
     return worker(request.role, { status: 'complete', summary: 'Proposed oracle', notes: [], reproduced: true, evidence: [],
       oracle: { kind: 'portable-node', contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict'; const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` } });
@@ -80,7 +124,7 @@ test('issues delivery publishes only independently confirmed evidence with local
   }, executeWorker: async request => worker(request.role, request.role === 'investigator' ?
     { status: 'complete', summary: 'Candidate', notes: [], findings: [{ path: 'desktop/src/providers/json.ts', description: 'PRIVATE_LAB_IDENTIFIER duplicate keys accepted.' }] } :
     request.role === 'reviewer' ? { status: 'complete', summary: 'Confirmed contract', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] } :
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } } :
     { status: 'complete', summary: 'Contract oracle', notes: [], reproduced: false, evidence: [], oracle: {
       kind: 'portable-node', contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));`
@@ -121,7 +165,8 @@ test('material baseline review findings retain an unconfirmed private finding', 
       assert.equal(request.revision, manifest.base); assert.equal(request.reviewHead, manifest.base);
       assert.notEqual(request.write, true);
       return worker(request.role, { status: 'complete', summary: 'Contract mismatch', notes: [],
-        baseRevision: manifest.base, headRevision: manifest.base, findings: ['The assertion does not express the contract.'] });
+        baseRevision: manifest.base, headRevision: manifest.base,
+        baselineContract: { valid: false, concerns: ['The assertion does not express the contract.'] } });
     } });
   const result = await executeRun(store, manifest.id, actions);
   assert.equal(result.status, 'completed'); assert.deepEqual(roles, ['investigator', 'reproducer', 'reviewer']);
@@ -147,7 +192,7 @@ test('unrelated selected issue stops before planning, writer allocation or sourc
       contractPaths: ['docs/contract.md'], script:
         `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` } });
     return worker(request.role, { status: 'complete', summary: 'Contract confirmed', notes: [],
-      baseRevision: manifest.base, headRevision: manifest.base, findings: [] });
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
   } });
   const result = await executeRun(store, manifest.id, actions);
   assert.equal(result.status, 'awaiting_input');
@@ -156,6 +201,42 @@ test('unrelated selected issue stops before planning, writer allocation or sourc
   assert.deepEqual(mutations, []);
   assert.equal(store.usage(manifest.id).writingTasks, 0);
   }
+});
+
+test('whole-issue review receives the frozen oracle and truthful PR delivery limits without overriding rejection', async t => {
+  const { store, manifest } = fixture(t, 'pr', true); let scopeReviews = 0, mutations = 0;
+  let reviewContext: { finding: { oracle: unknown }; delivery: unknown } | undefined, scopeInstructions = '';
+  const oracle = { kind: 'portable-node' as const, contractPaths: ['docs/contract.md'], script:
+    `import assert from 'node:assert/strict';const {parseJson}=await import('/workspace/desktop/src/providers/json.ts');assert.throws(()=>parseJson('{"a":1,"a":2}'));` };
+  const issue = { number: 7, html_url: 'https://github.com/example/sc/issues/7', state: 'open',
+    title: 'Reject duplicate fields', body: 'Correct desktop/src/providers/json.ts; complete local beta handoff and unrelated renderer changes.',
+    assignees: [{ login: 'Ziyadin23' }] };
+  const actions = createActions({ githubTransport: async (method, endpoint) => {
+    if (method === 'GET' && endpoint.endsWith('/issues/7')) return issue;
+    mutations++; throw new Error('Unexpected external effect');
+  }, executeWorker: async request => {
+    const common = { status: 'complete' as const, summary: 'Synthetic contract', notes: [] };
+    if (request.role === 'investigator') return worker(request.role, { ...common,
+      findings: [{ path: 'desktop/src/providers/json.ts', description: 'Duplicate fields are accepted.' }] });
+    if (request.role === 'reproducer') return worker(request.role, { ...common, reproduced: true, evidence: [], oracle });
+    if (request.baselineContractReview) return worker(request.role, { ...common,
+      baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
+    assert.equal(request.issueOutcomeReview, true); scopeReviews++;
+    const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+    reviewContext = detail; scopeInstructions = request.instructions;
+    return worker(request.role, { ...common, baseRevision: manifest.base, headRevision: manifest.base,
+      findings: ['Renderer changes remain outside this correction.'],
+      issueOutcome: { identity: detail.identity, matched: true, complete: false } });
+  } });
+  const result = await executeRun(store, manifest.id, actions);
+  assert.deepEqual(reviewContext?.finding.oracle, oracle);
+  assert.deepEqual(reviewContext?.delivery, { mode: 'pr', sourcePullRequest: true,
+    coordinatorOwnedRecords: ['task-owner', 'application-version'],
+    betaHandoff: { required: true, qualified: false, blocks: ['completion', 'merge'] },
+    issueClosure: 'after_all_acceptance' });
+  assert.match(scopeInstructions, /coverage of the entire issue outcome, not completed delivery/);
+  assert.equal(result.status, 'awaiting_input'); assert.equal(result.error, 'issue_scope_review');
+  assert.equal(scopeReviews, 1); assert.equal(mutations, 0); assert.equal(store.usage(manifest.id).writingTasks, 0);
 });
 
 test('failed record postflight holds finalization and publishes a scoped incident without closure', async t => {
@@ -304,14 +385,28 @@ async function documentationFlow(t: { after(fn: () => void): void }, noChangeRep
           baseRevision: manifest.base, headRevision: manifest.base, findings: [],
           issueOutcome: { identity: detail.identity as never, matched: true, complete: true } });
       }
-      if (request.role === 'reviewer' && request.revision === manifest.base)
-        return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [], findings: [],
-          baseRevision: manifest.base, headRevision: manifest.base });
+      if (request.baselineContractReview)
+        return worker(request.role, { status: 'complete', summary: 'Baseline contract review', notes: [],
+          baseRevision: manifest.base, headRevision: manifest.base, baselineContract: { valid: true, concerns: [] } });
       if (request.role === 'planner') return worker(request.role, { status: 'complete', summary: 'Plan', notes: [], steps: [] });
       if (request.role === 'implementer') {
+        const detail = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+        assert.equal(detail.issue.body, remoteIssue?.body);
+        assert.equal(detail.issue.number, remoteIssue?.number);
+        assert.match(detail.oracle.script, /USER_GUIDE/);
+        if (writes > 0) {
+          const previous = JSON.parse(detail.previousFailureEvidence);
+          assert.equal(previous.head, request.revision);
+          assert.deepEqual(previous.reviewFindings, ['Synthetic material review finding']);
+          assert.ok(request.instructions.length <= 8000);
+        }
         writes++; writeFileSync(join(request.workspace, 'README.md'), '[User guide](docs/USER_GUIDE.md)\n');
         return worker(request.role, { status: 'complete', summary: 'Destination corrected', notes: [], changedPaths: ['README.md'] });
       }
+      const acceptance = JSON.parse(request.instructions.slice(request.instructions.lastIndexOf('\n') + 1));
+      assert.equal(acceptance.issue.body, remoteIssue?.body);
+      assert.equal(acceptance.delivery.issueClosure, 'after_all_acceptance');
+      assert.equal(acceptance.delivery.betaHandoff.required, false);
       return worker(request.role, { status: 'complete', summary: 'Synthetic review', notes: [], findings: noChangeRepair ? ['Synthetic material review finding'] : [],
         baseRevision: manifest.base, headRevision: request.reviewHead! });
     }
@@ -353,7 +448,12 @@ test('application setup is required before the first writer even when its only i
   const f = fixture(t, 'pr');
   const issue = { number: 7, url: 'https://github.com/example/sc/issues/7', state: 'open' as const, body: 'Synthetic task', reused: false };
   const evidence = { source: f.manifest.base, oracleHash: 'a'.repeat(64), contractHash: 'b'.repeat(64),
-    outputHash: 'c'.repeat(64), environment: 'linux-portable-synthetic', outcome: 'failed' as const };
+    outputHash: digest(['', '']), environment: 'linux-portable-synthetic', outcome: 'failed' as const };
+  const identity = { runId: f.manifest.id, source: f.manifest.base, workspace: f.root,
+    oracleHash: evidence.oracleHash, contractHash: evidence.contractHash, runtime: ORACLE_RUNTIME };
+  await f.store.effect(f.manifest.id, `oracle:${digest(identity)}`, 'verification', identity, {
+    execute: async () => ({ status: 'exited', exitCode: 42, outputTruncated: false,
+      stdout: '', stderr: '', signal: null, elapsedMs: 1 }), reconcile: async () => null });
   const failure = { ...evidence, path: 'desktop/src/providers/json.ts', problem: 'Existing contract fails',
     reproduction: 'Independent baseline assertion fails', acceptance: 'Existing contract passes',
     fingerprint: 'd'.repeat(64), dependencies: [], prerequisite: 'Scoped correction', owner: 'local', provenance: 'local' as const };

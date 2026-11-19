@@ -1,10 +1,11 @@
 import { digest, WorkflowError } from './manifest.js';
 import { GithubClient, type ChecksReceipt, type IssueReceipt } from './github.js';
-import { integrationApi, prepareFinalization, type FinalizationPreparation, type IntegrationTransport,
-  type MergeReceipt, type Postflight } from './integration.js';
+import { integrationApi, prepareFinalization, prepareScopedRecovery, ownsBetaFinalizationHold, type RecoveryPreparation,
+  type FinalizationPreparation, type IntegrationTransport, type MergeReceipt, type Postflight } from './integration.js';
 import type { PlanBundle } from './ownership.js';
 import { baselineFile } from './intake.js';
 import type { RunStore } from './store.js';
+import { requireObservedBetaHandoff } from './delivery.js';
 
 type Json = Record<string, unknown>;
 type Request = { store: RunStore; runId: string; preparation: FinalizationPreparation; transport?: IntegrationTransport };
@@ -84,6 +85,7 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   const observedIssue = store.observedEffect(runId, `issue:${digest(issueMarker)}:${manifest.base}`);
   const publishedIssue = observedIssue?.receipt as IssueReceipt | undefined;
   const reusedScope = object(data.issueOutcome ?? {});
+  const expectedIssueTitle = issue.reused ? reusedScope.title : `${problem?.slice(0, 90)} (${failurePath})`;
   const newIssueProof = issue.reused !== true && observedIssue?.kind === 'github_issue' &&
     observedIssue.requestHash === digest({ title: `${problem?.slice(0, 90)} (${failurePath})`,
       body: issue.body, regressionEvidence: null }) &&
@@ -103,6 +105,24 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
       typeof issue.body !== 'string' || !issue.body.includes(failurePath) ||
       (!newIssueProof && !reusedIssueProof))
     return wait('issue_scope_review');
+  const existingHold = store.repositoryIntegrationHold();
+  if (existingHold && (existingHold.runId !== runId ||
+      !['record_finalization_pending', 'record_postflight_pending', 'beta_handoff_unavailable'].includes(existingHold.reason) ||
+      existingHold.reason === 'beta_handoff_unavailable' && !ownsBetaFinalizationHold(store, runId, merge)))
+    return wait('repository_integration_hold');
+  const application = manifest.scope !== 'docs-links' ||
+    (data.frozen as { checks?: string[] } | undefined)?.checks?.includes('application');
+  if (application) {
+    try { await requireObservedBetaHandoff(store, runId, merge.head); }
+    catch {
+      store.update(runId, { data: { ...store.get(runId).data, integrationHold: { active: true,
+        head: merge.mergeHead, reason: 'beta_handoff_unavailable' } } });
+      return wait('beta_handoff_unavailable');
+    }
+    const previous = store.repositoryIntegrationHold();
+    if (previous?.runId === runId && ownsBetaFinalizationHold(store, runId, merge))
+      store.update(runId, { data: { ...store.get(runId).data, integrationHold: { active: false } } });
+  }
   const hold = store.repositoryIntegrationHold();
   if (hold && hold.runId !== runId) return wait('repository_integration_hold');
   if (hold && !['record_finalization_pending', 'record_postflight_pending'].includes(hold.reason))
@@ -118,7 +138,7 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
     (method, endpoint, body) => api(method, endpoint, body));
   const issueRemote = await client.selectedIssue(number(issue.number), 'any');
   if (!['open', 'closed'].includes(String(issueRemote.state)) || issueRemote.body !== issue.body ||
-      (issue.reused && issueRemote.title !== reusedScope.title) ||
+      issueRemote.title !== expectedIssueTitle ||
       !Array.isArray(issueRemote.assignees) ||
       !issueRemote.assignees.some(raw => object(raw).login === 'Ziyadin23')) return wait('issue_scope_review');
   const source = object(await api('GET', `${root}/contents/${preparation.path}?ref=${merge.head}`));
@@ -282,35 +302,68 @@ export async function publishAndFinalizeRecords(request: Request): Promise<Final
   store.update(runId, { data: { ...store.get(runId).data,
     recordIntegration: { recordPr: prNumber, recordHead, recordMerge,
       sourceHead: merge.head, sourceMerge: merge.mergeHead, marker: preparation.marker } } });
-  if (!await mainContains(api, root, manifest.branch, recordMerge)) return wait('record_main_changed', prNumber);
-  const finalContent = object(await api('GET', `${root}/contents/${preparation.path}?ref=${recordMerge}`));
-  if (decoded(finalContent) !== preparation.content) return wait('record_main_content_changed', prNumber);
-  const mainChecks = await client.checks(recordMerge, true);
+  let mainChecks: ChecksReceipt;
+  try {
+    if (!await mainContains(api, root, manifest.branch, recordMerge)) throw new Error('Record is not on main');
+    const finalContent = object(await api('GET', `${root}/contents/${preparation.path}?ref=${recordMerge}`));
+    if (decoded(finalContent) !== preparation.content) throw new Error('Record content changed');
+    mainChecks = await client.checks(recordMerge, true);
+  } catch {
+    store.update(runId, { data: { ...store.get(runId).data,
+      recordPostflight: { state: 'pending', head: recordMerge, checksHash: digest('unavailable') },
+      integrationHold: { active: true, head: recordMerge, reason: 'record_postflight_pending' } } });
+    return wait('record_postflight_pending', prNumber);
+  }
   const failed = mainChecks.gates.some(gate => gate.state === 'failure');
   const recordPostflight = { state: failed ? 'failed' : mainChecks.ready ? 'ready' : 'pending',
     head: recordMerge, checksHash: digest(mainChecks), checks: mainChecks };
-  store.update(runId, { data: { ...store.get(runId).data, recordPostflight } });
+  const firstFailure = store.get(runId).data.recordPostflightFailure;
+  store.update(runId, { data: { ...store.get(runId).data, recordPostflight,
+    ...(failed && !firstFailure ? { recordPostflightFailure: recordPostflight } : {}) } });
   if (!mainChecks.ready) {
     store.update(runId, { data: { ...store.get(runId).data,
       integrationHold: { active: true, head: recordMerge,
         reason: failed ? 'record_postflight_failed' : 'record_postflight_pending' } } });
     return wait(failed ? 'record_postflight_failed' : 'record_postflight_pending', prNumber);
   }
+  if (application) {
+    try { await requireObservedBetaHandoff(store, runId, merge.head); }
+    catch {
+      store.update(runId, { data: { ...store.get(runId).data, integrationHold: { active: true,
+        head: recordMerge, reason: 'beta_handoff_unavailable' } } });
+      return wait('beta_handoff_unavailable', prNumber);
+    }
+  }
   const canonical = object(await api('GET', `${root}/issues/${issue.number}`));
   if (!['open', 'closed'].includes(String(canonical.state)) || canonical.body !== issue.body ||
+      canonical.title !== expectedIssueTitle ||
       !Array.isArray(canonical.assignees) || !canonical.assignees.some(raw => object(raw).login === 'Ziyadin23') ||
       (issue.reused ? canonical.title !== reusedScope.title || !reusedIssueProof :
         typeof issue.body !== 'string' || !issue.body.includes(plan.provenance.fingerprint) ||
         !issue.body.includes(preparation.path))) return wait('issue_scope_review', prNumber);
   const closeKey = `record-issue-close:${preparation.marker}:${issue.number}`;
+  const closeIntent = { issue: issue.number, bodyHash: digest(issue.body), title: expectedIssueTitle, recordMerge };
+  const savedClose = store.get(runId).data.issueCloseIntent;
+  if (!savedClose) {
+    if (canonical.state !== 'open') return wait('issue_closed_outside_workflow', prNumber);
+    store.update(runId, { data: { ...store.get(runId).data, issueCloseIntent: closeIntent } });
+  } else if (digest(savedClose) !== digest(closeIntent)) return wait('issue_scope_review', prNumber);
+  const closeState = async () => {
+    const current = object(await api('GET', `${root}/issues/${issue.number}`));
+    if (current.body !== issue.body || current.title !== expectedIssueTitle ||
+        !Array.isArray(current.assignees) || !current.assignees.some(raw => object(raw).login === 'Ziyadin23'))
+      throw new WorkflowError('issue_scope_review', 'Issue acceptance or ownership changed before closure.', 2);
+    return current.state;
+  };
   try {
     await store.effect(runId, closeKey, 'github_record_issue_close', { issue: issue.number, body: issue.body,
       recordMerge }, { execute: async () => {
-      if (canonical.state !== 'open')
+      if (await closeState() !== 'open')
         throw new WorkflowError('finalization_unjournaled_close', 'Issue was closed outside this operation.', 2);
       await api('PATCH', `${root}/issues/${issue.number}`, { state: 'closed' });
-      return object(await api('GET', `${root}/issues/${issue.number}`)).state === 'closed';
-    }, reconcile: async () => object(await api('GET', `${root}/issues/${issue.number}`)).state === 'closed' ? true : null });
+      if (await closeState() !== 'closed') throw new WorkflowError('finalization_close_unknown', 'Issue closure read-back is pending.', 2);
+      return true;
+    }, reconcile: async () => await closeState() === 'closed' ? true : null });
   } catch { return wait('issue_close_unknown', prNumber); }
   const closed = object(await api('GET', `${root}/issues/${issue.number}`));
   if (closed.state !== 'closed' || closed.body !== issue.body) return wait('issue_close_readback', prNumber);
@@ -356,6 +409,18 @@ export function prepareRecordIntegrationIncident(request: { store: RunStore; run
     `Acceptance: main checks pass for a separately verified correction.`;
   return { marker: comment, title, body,
     revert: { base: mergeHead, sourceHead: head, mergeHead, action: 'reviewable_revert_pr' } };
+}
+
+export async function prepareRecordIntegrationRecovery(request: { store: RunStore; runId: string;
+  transport?: IntegrationTransport }): Promise<RecoveryPreparation> {
+  prepareRecordIntegrationIncident(request);
+  const run = request.store.get(request.runId), data = run.data;
+  const record = object(data.recordIntegration), source = data.integration as MergeReceipt;
+  const postflight = object(data.recordPostflight), preparation = data.finalization as FinalizationPreparation;
+  return prepareScopedRecovery({ manifest: run.manifest, base: source.mergeHead,
+    sourceHead: identity(record.recordHead), mergeHead: identity(record.recordMerge),
+    checksHash: String(postflight.checksHash), paths: [preparation.path],
+    transport: request.transport ?? integrationApi });
 }
 
 export async function publishRecordIntegrationIncident(request: { store: RunStore; runId: string;

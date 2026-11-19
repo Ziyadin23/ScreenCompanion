@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import type { AppAction, CaptureProtectionResult, CapturedFrame, HttpRequest, HttpResponse, NormalizedRegion, PixelBounds, ResizeEdge, VaultData, WindowsPlatform } from '../contracts';
+import type { AppAction, DesktopAction, CaptureProtectionResult, CapturedFrame, HttpRequest, HttpResponse, NormalizedRegion, PixelBounds, ResizeEdge, VaultData, WindowsPlatform } from '../contracts';
 import { SHORTCUT_FIELDS, validateShortcuts } from './shortcuts';
 export { createLinuxTransport } from './linux-transport';
 export { createLinuxPlatform } from './linux';
@@ -18,7 +18,7 @@ interface NativeBridge {
   attachPanel(handle: Buffer): void;
   detachPanel(): void;
   setHoverInputHeight(height: number): void;
-  setPanelResizeEnabled(handle: Buffer, enabled: boolean): void;
+  setPanelResizeEnabled(handle: Buffer, enabled: boolean, minimumHeight: number): void;
   beginMove(handle: Buffer): void;
   beginResize(handle: Buffer, edge: ResizeEdge): void;
   cancelPanelInteraction(handle: Buffer): void;
@@ -49,7 +49,7 @@ export function createWindowsPlatform(options: { nativePath?: string } = {}): Wi
   let native: NativeBridge | undefined;
   let disposed = false;
   let activate: (() => void) | undefined;
-  let action: ((action: AppAction) => void) | undefined;
+  let action: ((action: DesktopAction) => void) | undefined;
   let wheel: ((delta: number) => void) | undefined;
   let pendingActivation = false;
   let panelGeneration = 0;
@@ -108,10 +108,11 @@ export function createWindowsPlatform(options: { nativePath?: string } = {}): Wi
       if (!Number.isInteger(height) || height < 0 || height > 32768) throw new Error('The hover input height is invalid.');
       bridge().setHoverInputHeight(height);
     },
-    setPanelResizeEnabled(handle, enabled) {
+    setPanelResizeEnabled(handle, enabled, minimumHeight = 80) {
       handleValid(handle);
       if (typeof enabled !== 'boolean') throw new Error('The panel resize state is invalid.');
-      bridge().setPanelResizeEnabled(handle, enabled);
+      if (!Number.isInteger(minimumHeight) || minimumHeight < 80 || minimumHeight > 32768) throw new Error('The panel minimum height is invalid.');
+      bridge().setPanelResizeEnabled(handle, enabled, minimumHeight);
     },
     beginMove(handle) { handleValid(handle); bridge().beginMove(handle); },
     cancelPanelInteraction(handle) { handleValid(handle); bridge().cancelPanelInteraction(handle); },

@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { digest, makeManifest } from '../src/manifest.js';
-import { classifyDiff, decideMerge, requiredChecks } from '../src/policy.js';
+import { classifyDiff, decideMerge, requiredChecks, labFidelityFixtureCorrection } from '../src/policy.js';
+import { prepareVersionRecords, reserveCandidateVersion } from '../src/delivery.js';
+import { inspectCandidate } from '../src/candidate.js';
+import { RunStore } from '../src/store.js';
 
 const base = 'a'.repeat(40), head = 'b'.repeat(40);
 const manifest = makeManifest({ repository: 'github.com/example/sc', root: '/synthetic/repo',
@@ -16,6 +23,9 @@ test('mechanical Markdown policy preserves visible text/commands/external links 
     { ...fix, after: '[User guide](LICENSE)\n' },
     { ...fix, before: '[User guide](https://example.invalid)\n' },
     { ...fix, before: '```sh\n[User guide](broken.md)\n```\n', after: '```sh\n[User guide](docs/USER_GUIDE.md)\n```\n' },
+    { ...fix, after: '[User guide](docs/../docs/USER_GUIDE.md)\n' },
+    { ...fix, after: '[User guide](docs/USER_GUIDE.md#)\n' },
+    { ...fix, after: '[User guide](docs%2FUSER_GUIDE.md%23%23)\n' },
     { ...fix, mode: '120000' },
     { ...fix, path: 'AGENTS.md' }
   ]) assert.notEqual(classifyDiff(manifest, [change], { targetExists: () => true }).reasons.length, 0);
@@ -30,32 +40,177 @@ test('administrative allowance is exactly bound to one coordinator-owned plan an
   assert.notEqual(bound.diffHash, classifyDiff(manifest, [product], options).diffHash);
   assert.ok(classifyDiff(manifest, [product, { ...file, after: '# Authority expanded\n' }], options).reasons.length);
   assert.ok(classifyDiff(manifest, [product, { ...file, path: 'openspec/changes/linux-platform-support/tasks.md' }], options).reasons.length);
+  for (const path of ['.github/workflows/desktop.yml', 'openspec/config.yaml', 'openspec/specs/behavior/spec.md',
+    'desktop/src/storage/vault.ts', 'tools/agent-workflow/src/policy.ts', 'docs//UNKNOWN.md'])
+    assert.ok(classifyDiff(manifest, [product, { ...file, path }], options).reasons.length);
 });
 
-test('parser PR classification preserves interfaces and assertions but never grants merge purity', () => {
+test('parser category permits only primitive input normalization and preserves the frozen duplicate scanner', () => {
   const parser = makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
     base, scope: 'providers-json', delivery: 'merge-eligible' });
-  const source = { path: 'desktop/src/providers/json.ts', before: 'export function parseJson(text: string): unknown { return JSON.parse(text); }\n',
-    after: 'export function parseJson(text: string): unknown { return JSON.parse(text.trim()); }\n', mode: '100644' };
+  const baseline = readFileSync(new URL('../../../../desktop/src/providers/json.ts', import.meta.url), 'utf8');
+  const source = { path: 'desktop/src/providers/json.ts', before: baseline,
+    after: baseline.replace('const value: unknown = JSON.parse(text);', 'const value: unknown = JSON.parse(text.trim());'), mode: '100644' };
   const assertions = { path: 'desktop/tests/providers/json.agent.test.ts', before: '',
     after: "import {it,expect} from 'vitest';import{parseJson}from'../../src/providers/json';it('contract',()=>expect(parseJson('{}')).toEqual({}));\n", mode: '100644' };
   assert.deepEqual(classifyDiff(parser, [source, assertions]).reasons, []);
   for (const after of [source.after.replace('parseJson(', 'renamed('), source.after + "fetch('https://example.invalid');\n",
-    source.after + "import fs from 'node:fs';\n"])
+    source.after + "import fs from 'node:fs';\n", source.after.replace('frame.names.has(name)', 'false'),
+    source.after.replace('text.match(', "''.match("), source.after.replace('text.trim()', 'text.constructor()'),
+    source.after.replace('text.trim()', 'text.replace(/x/, (() => "")())'),
+    source.after.replace('text.trim()', 'text["trim"]()'), source.after.replace('text.trim()', 'text.trim.call(text)'),
+    source.after.replace('text.trim()', 'text.replace(/answer/, "different")'),
+    source.after.replace('value.trim().length', 'value.length'),
+    source.after.replace('text.trim()', '(JSON.parse = (() => null), text)')])
     assert.ok(classifyDiff(parser, [{ ...source, after }, assertions]).reasons.length);
   assert.ok(classifyDiff(parser, [source, { ...assertions, before: assertions.after, after: assertions.after.replace('.toEqual({})', '.toBeTruthy()') }]).reasons.length);
   const dynamic = { ...source, after: source.after.replace('JSON.parse(text.trim())',
     "Reflect.get(Reflect.get({}, 'constructor'), 'constructor')('return process')()") };
   assert.notEqual(classifyDiff(parser, [dynamic, assertions]).category, 'portable-json-parser-fix');
+  for (const appended of ["it('mutates',()=>{expect = ()=>true;});", "it('hook',()=>process.exit());",
+    "it('mocks',()=>expect.extend({}));", "it.only('skips',()=>expect(true).toBe(true));",
+    "it('getter',()=>expect({get x(){return 1;}}).toBeTruthy());"])
+    assert.notEqual(classifyDiff(parser, [source, { ...assertions, after: assertions.after + appended }]).category,
+      'portable-json-parser-fix');
+  for (const appended of [
+    "it('tagged effect', parseJson.constructor`return process.exit(0)`);",
+    "it('nested tagged effect',()=>expect(parseJson.constructor`return process.exit(0)`).toBeTruthy());",
+    "it('nested tag value',()=>expect(parseJson`${parseJson.constructor`return process.exit(0)`}`).toBeTruthy());"
+  ]) assert.notEqual(classifyDiff(parser, [source, { ...assertions, after: assertions.after + appended }]).category,
+    'portable-json-parser-fix');
+  for (const appended of [
+    "describe('suite', function(it = parseJson.constructor) { test('side effect', it('return process.exit(0)')); });",
+    "describe('suite', async function(expect = parseJson.constructor) { test('side effect', expect('return process.exit(0)')); });",
+    "test('generator', function*(it = parseJson.constructor) { it('return process.exit(0)'); });",
+    "it('ordinary callback', function() { expect(parseJson('{}')).toEqual({}); });"
+  ]) assert.notEqual(classifyDiff(parser, [source, { ...assertions, after: assertions.after + appended }]).category,
+    'portable-json-parser-fix');
   const classification = classifyDiff(parser, [source, assertions]);
   const binding = { base, head, diffHash: classification.diffHash, policyHash: classification.policyHash };
   const allGreen = { ...binding, verification: { ...binding, passed: true, environment: 'portable-application' },
     review: { ...binding, clean: true }, checks: { head, ready: true }, protection: true,
     upToDate: true, integrationHold: false,
-    regression: { baselineFailed: true, candidatePassed: true, oracleHash: 'c'.repeat(64) },
+    regression: { base, head, baselineFailed: true, candidatePassed: true, oracleHash: 'c'.repeat(64), contractHash: 'e'.repeat(64) },
     handoff: { head, qualified: true, receiptHash: 'd'.repeat(64) } };
-  assert.equal(decideMerge(parser, classification, allGreen).eligible, false);
-  assert.ok(decideMerge(parser, classification, allGreen).reasons.includes('parser_purity_policy_pending'));
+  assert.equal(decideMerge(parser, classification, allGreen).eligible, true);
+  for (const changed of [{ ...allGreen, handoff: undefined },
+    { ...allGreen, regression: { ...allGreen.regression, base: 'f'.repeat(40) } },
+    { ...allGreen, regression: { ...allGreen.regression, oracleHash: 'unknown' } },
+    { ...allGreen, handoff: { ...allGreen.handoff, head: 'f'.repeat(40) } }])
+    assert.equal(decideMerge(parser, classification, changed).eligible, false);
+});
+
+test('the lab fidelity exception changes exactly the malformed option-text fixture and preserves assertions', () => {
+  const before = "it.each(['Thorough'])('fails %s required fidelity when production normalizes an extraction the observer cannot read', async mode => {\n" +
+    "content.questions[0].options = [{ id: 'Z', text: null }];\n" +
+    '// The actual pipeline accepts/answers this non-choice extraction; missing evidence must independently fail the lab.\n' +
+    'expect(metadata.extractionFidelity).toBe(false);\n});\n';
+  const change = { path: 'desktop/tests/lab/campaign.test.ts', before,
+    after: before.replace('text: null', "text: 'Wrong option text'"), mode: '100644' };
+  assert.equal(labFidelityFixtureCorrection(change), true);
+  const accurate = { ...change, after: change.after
+    .replace('fails %s required fidelity when production normalizes an extraction the observer cannot read',
+      'fails %s required fidelity for a well-formed but incorrect extraction')
+    .replace('// The actual pipeline accepts/answers this non-choice extraction; missing evidence must independently fail the lab.',
+      '// A well-formed extraction can answer correctly; wrong transcription must independently fail the lab.') };
+  assert.equal(labFidelityFixtureCorrection(accurate), true);
+  const pipeline = makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base, scope: 'pipeline', delivery: 'pr' });
+  assert.ok(!classifyDiff(pipeline, [change]).reasons.includes('outside_scope'));
+  for (const after of [change.after.replace('toBe(false)', 'toBe(true)'), change.after.replace("id: 'Z'", "id: 'A'"),
+    change.after.replace("'Wrong option text'", "''"), `${change.after}process.exit();\n`,
+    change.after.replace("'Wrong option text'", 'String(null)'),
+    accurate.after.replace('toBe(false)', 'toBe(true)'), accurate.after.replace('wrong transcription', 'all transcription')]) {
+    assert.equal(labFidelityFixtureCorrection({ ...change, after }), false);
+    assert.ok(classifyDiff(pipeline, [{ ...change, after }]).reasons.includes('outside_scope'));
+  }
+  assert.equal(classifyDiff(pipeline, [change]).category, null);
+});
+
+test('version exceptions validate the entire five-file delta and reservation rather than trusting digests alone', () => {
+  const application = makeManifest({ repository: manifest.repository, root: manifest.root, commonDir: manifest.commonDir,
+    base, scope: 'providers-json', delivery: 'merge-eligible' });
+  const previousVersion = '0.5.0-beta.10', version = '0.5.0-beta.11';
+  const reservation = { repository: application.repository, runId: application.id, previousVersion, version };
+  const records = [
+    ['desktop/package.json', '{"name":"sc","version":"0.5.0-beta.10"}'],
+    ['desktop/package-lock.json', '{"version":"0.5.0-beta.10","packages":{"":{"version":"0.5.0-beta.10"}}}'],
+    ['README.md', '| Current source, unpublished | **0.5.0-beta.10** |'],
+    ['docs/PUBLISHING.md', 'The current source version is 0.5.0-beta.10 and is unpublished.'],
+    ['docs/STATUS.md', 'Source remains unpublished **0.5.0-beta.10**;']
+  ].map(([path, before]) => ({ path: path!, before: before!, after: before!.replaceAll(previousVersion, version), mode: '100644' }));
+  const options = { versionReservation: reservation,
+    versionRecords: Object.fromEntries(records.map(file => [file.path, digest(file.after)])) };
+  const valid = classifyDiff(application, records, options);
+  assert.ok(!valid.reasons.includes('version_record_changed'));
+  assert.equal(valid.category, null);
+  const altered = records.map(file => file.path === 'desktop/package.json' ?
+    { ...file, after: file.after.replace('"name":"sc"', '"name":"changed"') } : file);
+  assert.ok(classifyDiff(application, altered, { ...options,
+    versionRecords: Object.fromEntries(altered.map(file => [file.path, digest(file.after)])) }).reasons.includes('version_record_changed'));
+  for (const invalid of [{ ...options, versionReservation: undefined },
+    { ...options, versionReservation: { ...reservation, runId: manifest.id } },
+    { ...options, versionRecords: { [records[0]!.path]: digest(records[0]!.after) } }])
+    assert.ok(classifyDiff(application, records, invalid).reasons.includes('version_record_changed'));
+  assert.ok(classifyDiff(manifest, records, options).reasons.includes('version_record_changed'));
+  assert.notEqual(valid.diffHash, classifyDiff(application, records.slice(0, -1), options).diffHash);
+  const baseline = readFileSync(new URL('../../../../desktop/src/providers/json.ts', import.meta.url), 'utf8');
+  const product = { path: 'desktop/src/providers/json.ts', before: baseline,
+    after: baseline.replace('JSON.parse(text);', 'JSON.parse(text.trim());'), mode: '100644' };
+  const focused = { path: 'desktop/tests/providers/json.agent.test.ts', before: '',
+    after: "import {it,expect} from 'vitest';import{parseJson}from'../../src/providers/json';it('contract',()=>expect(parseJson('{}')).toEqual({}));\n", mode: '100644' };
+  const owner = { path: 'openspec/changes/agent-json-fix/tasks.md', before: '', after: '- [ ] 1.1 Preserve duplicate rejection\n', mode: '100644' };
+  const complete = classifyDiff(application, [product, focused, owner, ...records], { ...options,
+    owner: 'agent-json-fix', administrative: { [owner.path]: digest(owner.after) } });
+  assert.equal(complete.category, 'portable-json-parser-fix');
+  assert.deepEqual(complete.reasons, []);
+  assert.notEqual(complete.diffHash, classifyDiff(application, [product, focused]).diffHash);
+  for (const invalidVersion of [previousVersion, '0.5.0-beta.9', '0.5.1-beta.12', '0.5.0-beta.9007199254740992']) {
+    const invalidRecords = records.map(file => ({ ...file, after: file.after.replaceAll(version, invalidVersion) }));
+    assert.ok(classifyDiff(application, invalidRecords, {
+      versionReservation: { ...reservation, version: invalidVersion },
+      versionRecords: Object.fromEntries(invalidRecords.map(file => [file.path, digest(file.after)]))
+    }).reasons.includes('version_record_changed'));
+  }
+});
+
+test('a continuation keeps its predecessor beta reservation and inspects the next available exact version records', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'sc-policy-version-')), root = join(directory, 'repo');
+  mkdirSync(root);
+  const files: Record<string, string> = {
+    'desktop/package.json': '{"name":"sc","version":"0.5.0-beta.10"}',
+    'desktop/package-lock.json': '{"version":"0.5.0-beta.10","packages":{"":{"version":"0.5.0-beta.10"}}}',
+    'README.md': '| Current source, unpublished | **0.5.0-beta.10** |',
+    'docs/PUBLISHING.md': 'The current source version is 0.5.0-beta.10 and is unpublished.',
+    'docs/STATUS.md': 'Source remains unpublished **0.5.0-beta.10**;',
+    'desktop/src/providers/json.ts': readFileSync(new URL('../../../../desktop/src/providers/json.ts', import.meta.url), 'utf8')
+  };
+  for (const [path, text] of Object.entries(files)) { mkdirSync(dirname(join(root, path)), { recursive: true }); writeFileSync(join(root, path), text); }
+  const git = (...args: string[]) => execFileSync('/usr/bin/git', ['-C', root, '-c', 'user.name=Fixture',
+    '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8' }).trim();
+  git('init', '-b', 'main'); git('add', '.'); git('commit', '-m', 'baseline');
+  const input = { repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
+    base: git('rev-parse', 'HEAD'), scope: 'providers-json', mode: 'issue', issue: 60, delivery: 'merge-eligible' };
+  const parent = makeManifest(input), store = new RunStore(join(directory, 'state'), parent);
+  t.after(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
+  store.admit(parent);
+  const inventory = { releaseInventory: { repository: parent.repository, complete: true as const, versions: [] } };
+  assert.equal(reserveCandidateVersion(store, parent.id, inventory).version, '0.5.0-beta.11');
+  store.update(parent.id, { status: 'budget_exhausted' });
+  const continuation = makeManifest({ ...input, continuationOf: parent.id }); store.admit(continuation);
+  const reservation = reserveCandidateVersion(store, continuation.id, inventory);
+  assert.equal(reservation.version, '0.5.0-beta.12');
+  const prepared = prepareVersionRecords(root, reservation);
+  for (const file of prepared.changes) writeFileSync(join(root, file.path), file.after);
+  writeFileSync(join(root, 'desktop/src/providers/json.ts'), files['desktop/src/providers/json.ts']!.replace('JSON.parse(text);', 'JSON.parse(text.trim());'));
+  mkdirSync(join(root, 'desktop/tests/providers'), { recursive: true });
+  writeFileSync(join(root, 'desktop/tests/providers/json.agent.test.ts'),
+    "import {it,expect} from 'vitest';import{parseJson}from'../../src/providers/json';it('contract',()=>expect(parseJson('{}')).toEqual({}));\n");
+  const inspected = inspectCandidate(continuation, { workspace: root, versionRecords: prepared.versionRecords, versionReservation: reservation });
+  assert.equal(inspected.classification.category, 'portable-json-parser-fix');
+  assert.deepEqual(inspected.classification.reasons, []);
+  assert.deepEqual(store.reserveCandidateVersion(parent.id, '0.5.0-beta.10'),
+    { previousVersion: '0.5.0-beta.10', version: '0.5.0-beta.11' });
 });
 
 test('merge decision rejects stale evidence, missing protection/beta and all nonpassing checks', () => {

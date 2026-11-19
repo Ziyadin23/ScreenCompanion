@@ -85,7 +85,8 @@ export async function executeRun(store: RunStore, id: string, actions: Actions,
     const action = actions[stage];
     if (!action) throw new WorkflowError('capability_unavailable', 'Required execution capability is unavailable.', 2);
     const remainingTime = run.manifest.limits.activeMs - store.usage(id).activeMs;
-    const ceiling = Math.min(remainingTime, stage === 'checks' ? run.manifest.limits.ciWaitMs : run.manifest.limits.workerMs);
+    const ceiling = Math.min(remainingTime, stage === 'checks' ? run.manifest.limits.ciWaitMs :
+      stage === 'handoff' && run.manifest.betaProfile ? remainingTime : run.manifest.limits.workerMs);
     if (ceiling <= 0) throw new WorkflowError('budget_exhausted', 'Active run allowance exhausted.', 3);
     const timeKey = `time:${invocation}:${stepNumber++}`;
     store.reserve(id, timeKey, 'activeMs', ceiling);

@@ -53,14 +53,14 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
     expect(config.extractionMaxOutputTokens).toBe(6000);
     await ledger.finish(run.id, 1, metadata.status); jpeg.fill(0);
   });
-  it('has exactly 96 actually invoked fake transport sends after the baseline', () => expect(ledger.count).toBe(96));
+  it('has exactly 64 actually invoked fake transport sends after the baseline', () => expect(ledger.count).toBe(64));
   it('preserves a wrong-primary attempt whose explanation contains the expected number', async () => {
     await ledger.close(); ledger = await openFakeLedger(join(directory, 'ledger.jsonl'), { candidate: 'a'.repeat(64), phase: 'reserve' });
     const run = campaign().find(item => item.id === 'main-numeric-plain-direct')!;
     const transport = new FixtureTransport(run, true), cropper = new FixtureCropper();
     const metadata = await measureRun({ requiredVisuals: FAKE_REQUIRED_VISUALS, run, attempt: 2, ledger, transport, cropper, jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal: new AbortController().signal });
     expect(metadata.status).toBe('failed'); expect(metadata.canonicalPrimary).toBe(false); expect(metadata.displayedFirstLine).toBe(false);
-    expect(metadata.actualSends).toBe(1); expect(ledger.count).toBe(97);
+    expect(metadata.actualSends).toBe(1); expect(ledger.count).toBe(65);
     expect(JSON.stringify(metadata)).not.toContain('explanation');
     await ledger.finish(run.id, 2, 'failed');
     expect(ledger.latestStatus(run.id)).toBe('failed');
@@ -76,7 +76,7 @@ describe('production pipeline/provider with synthetic in-memory transport (NOT l
     finally { await results.close(); }
     expect(await fs.readFile(join(directory, 'metadata-only.jsonl'), 'utf8')).toBe('');
   });
-  it.each(['Thorough', 'Balanced'])('fails %s required fidelity when production normalizes an extraction the observer cannot read', async mode => {
+  it.each(['Thorough'])('fails %s required fidelity when production normalizes an extraction the observer cannot read', async mode => {
     const run = campaign().find(item => item.caseId === 'numeric' && item.layout === 'plain' && item.mode === mode)!;
     const fake = new FixtureTransport(run);
     const transport: HttpTransport = { async send(request) {

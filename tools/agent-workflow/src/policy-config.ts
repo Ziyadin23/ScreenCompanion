@@ -19,10 +19,12 @@ const targets: Record<string, Record<string, string>> = {
 };
 for (const map of Object.values(targets)) Object.freeze(map);
 Object.freeze(targets);
-export const POLICY_CONFIG = Object.freeze({version: 2, targets, productFiles: 8, productBytes: 64_000,
+export const POLICY_CONFIG = Object.freeze({version: 3, targets, productFiles: 8, productBytes: 64_000,
   administrativeFiles: 8, administrativeBytes: 64_000,
-  parser: 'pr-only-until-proven-purity-policy', parserAutoMerge: false,
+  parser: 'closed-input-normalization-with-frozen-duplicate-scanner-v1', parserAutoMerge: true,
+  parserScanner: '64409ab019d2551bbeab3ee9946ee96ab700e3b5e693b96f3efe51ff61356704',
+  pipelineFixture: 'campaign-exact-option-text-and-factual-title-comment-v2',
   verification: 'read-only-components-v2',
-  records: 'exact-coordinator-digests',
+  records: 'exact-coordinator-digests-and-validated-five-version-fields-v2',
   issueQualification: 'title-body-baseline-finding-task-bound-review-v2',
-  finalization: 'selected-task-and-reused-issue-proof-v2'});
+  finalization: 'selected-task-reused-issue-and-observed-windows-handoff-v3'});

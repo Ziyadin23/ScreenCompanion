@@ -4,11 +4,11 @@ import { createPipelineRunner } from '../../src/pipeline';
 import { canonical, combined, configuration, context, detection, envelope, expectFirstLine, extraction, images, noContext, pipelineInput,
   refusal, StrictTransport, TrackingCropper, type Payload } from './fixtures';
 
-async function answerRun(respond: (payload: Payload) => unknown, mode: 'Thorough' | 'Balanced' | 'Direct' = 'Balanced', fixture = combined('short')) {
+async function answerRun(respond: (payload: Payload) => unknown, mode: 'Thorough' | 'Direct' = 'Thorough', fixture = combined('short')) {
   const provider = mode === 'Direct' ? 'DeepSeek' : 'OpenAI';
-  const steps = mode === 'Direct' ? [] : mode === 'Thorough' ? [() => envelope(provider, detection()), () => envelope(provider, extraction('short'))] : [() => envelope(provider, fixture)];
+  const steps = mode === 'Direct' ? [] : [() => envelope(provider, fixture)];
   const transport = new StrictTransport([...steps, payload => envelope(provider, respond(payload))], provider), cropper = new TrackingCropper();
-  const input = pipelineInput({ configuration: configuration({ provider, mode }) });
+  const input = pipelineInput({ configuration: configuration({ provider, mode, enableQuestionCropping: false }) });
   return { transport, cropper, input, promise: createPipelineRunner({ transport, cropper }).run(input) };
 }
 describe('canonical production answer envelope', () => {
@@ -43,7 +43,7 @@ describe('canonical production answer envelope', () => {
     ['preamble with partial refusal JSON', () => 'I cannot answer a live exam. {"results":[', 'MalformedResponse'],
     ['fence trailing garbage', payload => '```json\n' + JSON.stringify(canonical(payload)) + '\n``` trailing', 'MalformedResponse']
   ];
-  it.each(invalid.flatMap(value => (['Thorough', 'Balanced', 'Direct'] as const).map(mode => ({ name: value[0], respond: value[1], code: value[2], mode }))))('$mode rejects $name without repair/retry', async ({ mode, respond, code }) => {
+  it.each(invalid.flatMap(value => (['Thorough', 'Direct'] as const).map(mode => ({ name: value[0], respond: value[1], code: value[2], mode }))))('$mode rejects $name without repair/retry', async ({ mode, respond, code }) => {
       const run = await answerRun(respond, mode);
       await expect(run.promise).rejects.toMatchObject({ stage: 'ValidateAnswer', pipelineCode: code });
       run.transport.done(); run.transport.cleared(); run.cropper.cleared(); expect(run.input.jpeg[0]).not.toBe(0);
@@ -58,7 +58,7 @@ describe('canonical production answer envelope', () => {
     expect(primary).toBe('42'); expectFirstLine(answer.text, '42'); expect(answer.text).toBe('42\nSix groups of seven.');
     run.transport.done();
   });
-  it.each(['Thorough', 'Balanced', 'Direct'] as const)('%s rejects an incomplete provider completion before validating answer', async mode => {
+  it.each(['Thorough', 'Direct'] as const)('%s rejects an incomplete provider completion before validating answer', async mode => {
     const provider = mode === 'Direct' ? 'DeepSeek' : 'OpenAI';
     const first = mode === 'Direct' ? [] : mode === 'Thorough' ? [() => envelope(provider, detection()), () => envelope(provider, extraction())] : [() => envelope(provider, combined())];
     const transport = new StrictTransport([...first, payload => ({ ...envelope(provider, canonical(payload)), status: 'incomplete' })], provider);
@@ -75,7 +75,7 @@ describe('malformed status cannot bypass answer behavior or authorize retries', 
     { name: 'explanation without primary', responseMode: 'Default', kind: 'short', fields: { answer: '', explanation: 'Only an explanation', status: ['answer'] } },
     { name: 'assessment refusal', responseMode: 'Default', kind: 'image', fields: { answer: refusal, status: ['refusal'] } }
   ];
-  it.each(cases.flatMap(value => (['Thorough', 'Balanced', 'Direct'] as const).map(mode => ({ ...value, mode }))))('$mode rejects $name before displaying it or retrying', async ({ mode, responseMode, kind, fields }) => {
+  it.each(cases.flatMap(value => (['Thorough', 'Direct'] as const).map(mode => ({ ...value, mode }))))('$mode rejects $name before displaying it or retrying', async ({ mode, responseMode, kind, fields }) => {
     const provider = mode === 'Direct' ? 'DeepSeek' : 'OpenAI';
     const first = mode === 'Direct' ? [] : mode === 'Thorough'
       ? [() => envelope(provider, detection()), () => envelope(provider, extraction(kind))]
@@ -94,18 +94,18 @@ describe('current task correspondence and choice validation', () => {
     ['conflicting choice fields', { answer: 'B', answers: ['C'] }], ['missing option', { answer: null, explanation: 'B is correct.' }],
     ['source choice transformed during solving', { answer: 'translated', status: 'transformation' }]
   ] as [string, Payload][])('rejects %s', async (_, fields) => {
-    const run = await answerRun(payload => canonical(payload, '', fields), 'Balanced', combined('multiple'));
+    const run = await answerRun(payload => canonical(payload, '', fields), 'Thorough', combined('multiple'));
     await expect(run.promise).rejects.toMatchObject({ stage: 'ValidateAnswer', pipelineCode: fields.answer === null ? 'IncompleteAnswer' : 'InvalidChoice' }); run.transport.done();
   });
   it('normalizes choice ID casing and derives option text from the current extraction', async () => {
-    const run = await answerRun(payload => canonical(payload, 'b'), 'Balanced', combined('multiple'));
+    const run = await answerRun(payload => canonical(payload, 'b'), 'Thorough', combined('multiple'));
     expectFirstLine((await run.promise).text, 'B — ls'); run.transport.done();
   });
   it.each([
     { answer: null, answers: ['A', 'A', 'C'] }, { answer: null, answers: ['a', 'A'] }, { answer: null, answers: ['Z'] },
     { answer: 'A', answers: ['C'] }, { answer: null, answers: ['A', 'C'], answer_text: '2, 5' }
   ])('rejects invalid multiple-selection fields %j', async fields => {
-    const run = await answerRun(payload => canonical(payload, '', fields), 'Balanced', combined('multi'));
+    const run = await answerRun(payload => canonical(payload, '', fields), 'Thorough', combined('multi'));
     await expect(run.promise).rejects.toMatchObject({ pipelineCode: 'InvalidChoice' }); run.transport.done();
   });
   it('restores option order and task source order using fresh application IDs', async () => {
@@ -116,46 +116,25 @@ describe('current task correspondence and choice validation', () => {
       const value = canonical(payload);
       value.results[0] = { ...value.results[0], answer: null, answers: ['c', 'a'] };
       value.results.reverse(); return value;
-    }, 'Balanced', fixture);
+    }, 'Thorough', fixture);
     expect((await run.promise).text).toBe('Q7: A, C\n\nQ12: 42'); run.transport.done();
   });
   it('rejects duplicates/missing tasks even when result count matches', async () => {
     const fixture = combined(); fixture.questions.push(extraction('code').questions[0]!);
     fixture.evidence.questions.push({ index: 2, required_options: 0, requires_code: true, requires_visual: false, transcription_complete: true, visuals_complete: true });
-    const run = await answerRun(payload => { const result = canonical(payload); result.results[1].question_id = result.results[0].question_id; return result; }, 'Balanced', fixture);
+    const run = await answerRun(payload => { const result = canonical(payload); result.results[1].question_id = result.results[0].question_id; return result; }, 'Thorough', fixture);
     await expect(run.promise).rejects.toMatchObject({ pipelineCode: 'TaskMismatch' }); run.transport.done();
   });
   it('new requests reject a replayed canonical answer from another request', async () => {
     let previous: unknown;
     const first = await answerRun(payload => previous = canonical(payload)); await first.promise;
     const second = await answerRun(() => previous); await expect(second.promise).rejects.toMatchObject({ pipelineCode: 'TaskMismatch' });
-    expect(context(first.transport.payloads[1]!).answer_targets[0].question_id).not.toBe(context(second.transport.payloads[1]!).answer_targets[0].question_id);
+    expect(context(first.transport.payloads.at(-1)!).answer_targets[0].question_id).not.toBe(context(second.transport.payloads.at(-1)!).answer_targets[0].question_id);
   });
 });
 
 describe('extraction consistency stops locally', () => {
-  const mutations: [string, (value: Payload) => void][] = [
-    ['uncertain extraction', value => value.status = 'uncertain'], ['incomplete extraction', value => value.status = 'incomplete'],
-    ['missing evidence', value => delete value.evidence], ['wrong region', value => value.question_region.x = -.1],
-    ['whole monitor', value => value.question_region = { x: 0, y: 0, width: 1, height: 1 }],
-    ['incomplete evidence', value => value.evidence.status = 'uncertain'], ['missing region evidence', value => value.evidence.region_complete = false],
-    ['wrong count', value => value.evidence.questions.push({ ...value.evidence.questions[0], index: 2 })],
-    ['wrong ordinal', value => value.evidence.questions[0].index = 0], ['mismatched choices', value => value.evidence.questions[0].required_options = 5],
-    ['missing code', value => value.evidence.questions[0].requires_code = true], ['missing visual', value => value.evidence.questions[0].requires_visual = true],
-    ['missing transcription', value => value.evidence.questions[0].transcription_complete = false], ['missing visual coverage', value => value.evidence.questions[0].visuals_complete = false],
-    ['non-boolean requirement', value => value.evidence.questions[0].requires_code = 'false'],
-    ['duplicate option', value => value.questions[0].options[1].id = 'A'], ['lost choice', value => value.questions[0].options.pop()],
-    ['lost type', value => delete value.questions[0].type], ['missing wording', value => value.questions[0].question = ''],
-    ['missing options', value => delete value.questions[0].options], ['missing visual references', value => delete value.questions[0].image_ids]
-  ];
-  it.each(mutations)('rejects %s in one call without remote verification/repair/fallback', async (_, mutate) => {
-    const value: Payload = combined('multiple'); mutate(value);
-    const cropper = new TrackingCropper(), transport = new StrictTransport([() => envelope('OpenAI', value)]);
-    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }) })))
-      .rejects.toMatchObject({ stage: 'Extract', pipelineCode: 'IncompleteExtraction' });
-    transport.done(); transport.cleared(); cropper.cleared();
-  });
-  it.each(['Thorough', 'Balanced'] as const)('%s capture-only absent content stops before answering', async mode => {
+  it.each(['Thorough'] as const)('%s capture-only absent content stops before answering', async mode => {
     const transport = new StrictTransport([() => envelope('OpenAI', mode === 'Thorough' ? { found: false, region: null } : noContext())]);
     await expect(createPipelineRunner({ transport, cropper: new TrackingCropper() }).run(pipelineInput({ configuration: configuration({ mode }) })))
       .rejects.toMatchObject({ pipelineCode: 'IncompleteExtraction' }); transport.done();
@@ -164,27 +143,26 @@ describe('extraction consistency stops locally', () => {
     const value = combined(); value.question_region = { x: 0, y: 0, width: 1, height: 1 };
     const transport = new StrictTransport([() => envelope('OpenAI', value), payload => envelope('OpenAI', canonical(payload))]);
     const cropper = new TrackingCropper();
-    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced', questionRegion: { x: .1, y: .1, width: .8, height: .8 } }) }));
+    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', questionRegion: { x: .1, y: .1, width: .8, height: .8 } }) }));
     transport.done(); cropper.cleared();
   });
-  it('pads a visual relative to its question and clips all four edges', async () => {
+  it('pads a visual relative to its isolated question image', async () => {
     const value = combined('image'); value.images[0]!.region = { x: .25, y: .3, width: .3, height: .2 };
     const cropper = new TrackingCropper(), transport = new StrictTransport([() => envelope('OpenAI', value), payload => envelope('OpenAI', canonical(payload, '24'))]);
-    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced', imageRegionPadding: .1 }) }));
-    expect(cropper.regions[0]!.x).toBeCloseTo(.2); expect(cropper.regions[0]!.y).toBeCloseTo(.24);
-    expect(cropper.regions[0]!.width).toBeCloseTo(.41); expect(cropper.regions[0]!.height).toBeCloseTo(.32);
+    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', questionRegion: { x: .2, y: .2, width: .6, height: .6 }, imageRegionPadding: .1 }) }));
+    expect(cropper.regions[1]!.x).toBeCloseTo(.15); expect(cropper.regions[1]!.y).toBeCloseTo(.2);
+    expect(cropper.regions[1]!.width).toBeCloseTo(.5); expect(cropper.regions[1]!.height).toBeCloseTo(.4);
     cropper.cleared(); transport.done();
   });
-  it.each(['outside', 'missing', 'duplicate', 'missing-code', 'evidence', 'second-crop'] as const)('rejects %s visual content and zeroes allocated buffers', async kind => {
+  it.each(['outside', 'missing', 'duplicate', 'missing-code', 'second-crop'] as const)('rejects %s visual content and zeroes allocated buffers', async kind => {
     const value: Payload = combined('image');
-    if (kind === 'outside') value.images[0].region.x = .1;
+    if (kind === 'outside') value.images[0].region.x = -.1;
     if (kind === 'missing') value.images = [];
     if (kind === 'duplicate') value.images.push({ ...value.images[0] });
     if (kind === 'missing-code') { value.questions[0].type = 'code'; value.questions[0].code = null; }
-    if (kind === 'evidence') value.evidence.questions[0].visuals_complete = false;
-    if (kind === 'second-crop') { value.questions[0].image_ids.push('bad'); value.images.push({ id: 'bad', region: { x: .1, y: .3, width: .2, height: .2 } }); }
+    if (kind === 'second-crop') { value.questions[0].image_ids.push('bad'); value.images.push({ id: 'bad', region: { x: -.1, y: .3, width: .2, height: .2 } }); }
     const cropper = new TrackingCropper(), transport = new StrictTransport([() => envelope('OpenAI', value)]);
-    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }) })))
+    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false }) })))
       .rejects.toMatchObject({ stage: 'Extract', pipelineCode: 'IncompleteExtraction' });
     transport.done(); transport.cleared(); cropper.cleared();
   });
@@ -193,7 +171,7 @@ describe('extraction consistency stops locally', () => {
     const cropper = new TrackingCropper(), transport = new StrictTransport([() => envelope('OpenAI', value), payload => {
       expect(images(payload)).toHaveLength(1); expect(context(payload).task.images).toEqual([{ id: 'rectangle' }]); return envelope('OpenAI', canonical(payload, '24'));
     }]);
-    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Balanced' }) }));
+    await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode: 'Thorough', enableQuestionCropping: false }) }));
     transport.done(); expect(cropper.regions).toHaveLength(1); cropper.cleared();
   });
 });

@@ -53,3 +53,24 @@ test('saved admission retains its identity and rejects changed policy or scope',
   ]) assert.throws(() => readManifest(JSON.stringify({ ...admitted, ...patch })));
   assert.throws(() => readManifest('not json'));
 });
+
+test('historical metadata can be inspected without upgrading or executing its policy', () => {
+  const admitted = makeManifest(input), prior = { ...admitted, policyHash: 'b'.repeat(64) };
+  assert.throws(() => readManifest(JSON.stringify(prior)), { code: 'incompatible_state' });
+  const historical = readManifest(JSON.stringify(prior), true);
+  assert.equal(historical.policyHash, prior.policyHash);
+  assert.deepEqual(historical.paths, prior.paths);
+  assert.deepEqual(historical.limits, prior.limits);
+  assert.throws(() => readManifest(JSON.stringify({ ...prior, paths: ['desktop/src/storage/'] }), true));
+  assert.throws(() => readManifest(JSON.stringify({ ...prior, version: 2 }), true));
+});
+
+test('remaining allowance is a sealed selected-issue continuation marker', () => {
+  const selected = { ...input, mode: 'issue', issue: 7, delivery: 'pr',
+    continuationOf: '11111111-1111-4111-8111-111111111111', continuationBudget: 'remaining' };
+  const manifest = makeManifest(selected);
+  assert.equal(readManifest(JSON.stringify(manifest)).continuationBudget, 'remaining');
+  for (const patch of [{ continuationOf: undefined }, { delivery: 'report' },
+    { mode: 'investigate', issue: undefined }, { continuationBudget: 'reset' }])
+    assert.throws(() => makeManifest({ ...selected, ...patch }), { code: 'invalid_manifest' });
+});

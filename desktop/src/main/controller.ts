@@ -1,6 +1,7 @@
-import type { ApiProvider, AppAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
+import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
+import { rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText } from '../contracts/shortcut-display';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
@@ -11,6 +12,9 @@ export interface DesktopHost {
   scroll(delta: number): void;
   exit(): void;
   activate?(): void;
+  isFocused?(): boolean;
+  inputAction?(submitScreenshot: boolean): void;
+  inputHeight?(height: number): void;
 }
 export interface ControllerDependencies {
   platform: WindowsPlatform; store: SettingsStore; pipeline: PipelineRunner; host: DesktopHost;
@@ -89,7 +93,7 @@ export class ApplicationController {
       await this.completeInitialization();
     } catch (error) { this.vaultState = 'failed'; throw error; }
   }
-  private async completeInitialization(): Promise<void> {
+  private async completeInitialization(showCommands = false): Promise<void> {
     if (!this.settings) return;
     try { await this.deps.platform.applyShortcuts(this.settings, false, this.onAction); }
     catch (error) {
@@ -101,9 +105,8 @@ export class ApplicationController {
     this.detachWheel = this.deps.platform.attachPanel(this.deps.host.panelHandle(), delta => this.deps.host.scroll(delta));
     this.state.ready = true; this.state.surface = 'answer';
     this.state.appearance = { ...this.settings.Appearance }; this.state.shortcuts = this.shortcuts(this.settings);
-    if (!this.settings.CommandsShown) {
-      const updated = { ...this.settings, CommandsShown: true };
-      await this.deps.store.save(updated); this.settings = updated;
+    if (!this.settings.CommandsShown || showCommands) {
+      this.settings.CommandsShown = true;
       this.state.answer = this.state.platform === 'linux' ? 'Use the window controls to capture or type a question. Configure Hyprland shortcuts with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(this.state.shortcuts); this.state.visible = true;
     }
     if (this.state.platform === 'linux' && !this.state.visible) { this.state.visible = true; this.state.surface = 'input'; }
@@ -118,14 +121,14 @@ export class ApplicationController {
     const trimmed = request.apiKey.trim();
     if (!trimmed) throw new AppError('INVALIDKEY', 'Enter an API key.');
     const candidate = defaultSettings(trimmed);
+    candidate.CommandsShown = true;
     candidate.Models = defaultModels(request.provider);
     candidate.ProviderKeys[request.provider] = trimmed;
-    if (this.deps.defaultPipelineMode === 'Direct' && request.provider !== 'DeepSeek') candidate.PipelineMode = 'Thorough';
     this.vaultState = 'saving';
     try {
       this.deps.validateSettings(candidate); this.deps.configuration(candidate); await this.deps.store.save(candidate);
       if (this.exiting) return;
-      this.settings = candidate; this.vaultState = 'loaded'; this.state.error = null; await this.completeInitialization();
+      this.settings = candidate; this.vaultState = 'loaded'; this.state.error = null; await this.completeInitialization(true);
     } catch (error) {
       if (!this.settings) this.vaultState = 'missing';
       this.fail('Credentials', error); throw new AppError('SAVEFAILED', 'SC could not save the API key. The existing file was left unchanged.');
@@ -144,9 +147,17 @@ export class ApplicationController {
     this.hiddenByUser = false;
     this.state.visible = true; this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), true); this.publish(); this.deps.host.activate?.();
   }
-  readonly onAction = (action: AppAction): void => {
+  readonly onAction = (action: DesktopAction): void => {
+    const inputAction = action === 'input' || action === 'input-with-screenshot';
+    if (inputAction && this.state.ready && this.state.surface === 'input' && this.state.visible && this.deps.host.isFocused?.()) {
+      if (!this.state.busy) {
+        const binding = this.settings!.InputShortcut;
+        this.deps.host.inputAction?.(action === 'input-with-screenshot' || (this.state.platform === 'windows' && binding.Modifiers === 2 && binding.Key === 13));
+      }
+      return;
+    }
     const commands: Record<AppAction, AppCommand> = { capture: { type: 'capture' }, test: { type: 'captureTest' }, visibility: { type: 'toggleVisibility' }, settings: { type: 'settings' }, exit: { type: 'exit' }, input: { type: 'showInput' } };
-    void this.command(commands[action]).catch(error => this.fail('Display', error));
+    void this.command(commands[action === 'input-with-screenshot' ? 'input' : action]).catch(error => this.fail('Display', error));
   };
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
@@ -167,7 +178,10 @@ export class ApplicationController {
     if (!this.state.ready) return;
     switch (command.type) {
       case 'capture': await this.request(); break;
-      case 'submit': await this.request(command.question.trim()); break;
+      case 'submit': await this.request(command.question.trim(), command.includeScreenshot); break;
+      case 'inputHeight':
+        if (this.state.surface === 'input' && !this.capturing) this.deps.host.inputHeight?.(command.height);
+        break;
       case 'settings':
         if (this.defer(() => { void this.command(command); })) return;
         if (this.state.surface !== 'settings') this.state.settingsDirty = false;
@@ -178,7 +192,7 @@ export class ApplicationController {
         if (this.defer(() => { void this.command(command); })) return;
         await this.setRecording(false); this.deps.platform.closeOwnedDialogs(this.deps.host.panelHandle());
         this.state.surface = 'input'; this.state.visible = true; this.hiddenByUser = false;
-        this.publish(); this.deps.host.activate?.(); break;
+        this.publish(); this.deps.host.activate?.(); this.deps.host.inputAction?.(false); break;
       case 'captureTest':
         if (this.defer(() => { void this.command(command); })) return;
         await this.setRecording(false);
@@ -212,7 +226,8 @@ export class ApplicationController {
     const effective = this.deps.configuration(this.settings);
     values.Models ??= { Provider: effective.provider, AnswerModel: effective.answerModel, VisionModel: effective.visionModel,
       Thinking: effective.thinking, AnswerTokenLimit: effective.provider === 'DeepSeek' ? effective.answerMaxOutputTokens : null };
-    values.PipelineMode ??= effective.mode;
+    values.PipelineMode = effective.mode;
+    values.ModelPipelines = rememberModelPipeline(values.ModelPipelines, values.Models, effective.mode);
     return { values, keyPresence: Object.fromEntries(PROVIDERS.map(provider => [provider, this.keyFor(provider).length > 0])) as Record<ApiProvider, boolean>, keyUpdates: {} };
   }
   private keyFor(provider: ApiProvider, settings = this.settings): string {
@@ -234,6 +249,7 @@ export class ApplicationController {
     for (const provider of PROVIDERS) if (draft.keyUpdates[provider] !== undefined) keys[provider] = draft.keyUpdates[provider]!.trim();
     const selected = draft.values.Models?.Provider ?? priorProvider;
     const candidate: VaultData = { ...structuredClone(draft.values), ApiKey: keys[selected], ProviderKeys: keys };
+    if (candidate.Models && candidate.PipelineMode) candidate.ModelPipelines = rememberModelPipeline(candidate.ModelPipelines, candidate.Models, candidate.PipelineMode);
     this.deps.validateSettings(candidate);
     this.deps.configuration(candidate);
     await this.deps.platform.applyShortcuts(candidate, false, this.onAction);
@@ -263,7 +279,7 @@ export class ApplicationController {
     try { return await this.deps.platform.chooseColor(this.deps.host.panelHandle(), initialColor); }
     finally { this.settingsActions--; }
   }
-  private async request(typedQuestion?: string): Promise<void> {
+  private async request(typedQuestion?: string, includeScreenshot = true): Promise<void> {
     if (!this.settings || this.state.busy || (this.state.surface === 'settings' && this.state.visible) || (typedQuestion !== undefined && !typedQuestion)) return;
     if (this.deps.mode && this.deps.mode !== 'production') {
       this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.')); return;
@@ -275,17 +291,22 @@ export class ApplicationController {
     this.cancellation = new AbortController();
     this.state.busy = true; this.state.error = null;
     let jpeg: Buffer | null = null;
-    let stage = 'Capture';
+    let stage = includeScreenshot ? 'Capture' : 'ApiRequest';
     try {
-      const bounds = this.deps.platform.captureSelection === 'portal' ? undefined :
-        typedQuestion !== undefined ? this.deps.platform.monitorForWindow(this.deps.host.panelHandle()) : this.deps.platform.activeMonitor();
-      this.capturing = true;
-      if (this.state.surface !== 'settings') this.state.surface = 'answer';
-      this.deps.platform.setHoverInputHeight(0); this.publish();
-      await new Promise<void>(resolve => setTimeout(resolve, this.deps.captureDelayMs ?? 180));
-      if (this.exiting) return;
-      const frame = await this.deps.platform.captureMonitor(bounds); jpeg = frame.jpeg;
-      this.finishCapture(); this.publish(); stage = 'ApiRequest';
+      if (includeScreenshot) {
+        const bounds = this.deps.platform.captureSelection === 'portal' ? undefined :
+          typedQuestion !== undefined ? this.deps.platform.monitorForWindow(this.deps.host.panelHandle()) : this.deps.platform.activeMonitor();
+        this.capturing = true;
+        if (this.state.surface !== 'settings') this.state.surface = 'answer';
+        this.deps.platform.setHoverInputHeight(0); this.publish();
+        await new Promise<void>(resolve => setTimeout(resolve, this.deps.captureDelayMs ?? 180));
+        if (this.exiting) return;
+        const frame = await this.deps.platform.captureMonitor(bounds); jpeg = frame.jpeg;
+        this.finishCapture(); this.publish(); stage = 'ApiRequest';
+      } else {
+        if (this.state.surface !== 'settings') this.state.surface = 'answer';
+        this.publish();
+      }
       const result = await this.deps.pipeline.run({ jpeg, ...(typedQuestion !== undefined ? { typedQuestion } : {}), apiKey: key,
         responseMode: settings.ResponseMode, customInstruction: settings.CustomInstruction, configuration,
         signal: this.cancellation.signal, onEvent: event => this.deps.diagnostics.pipeline(event) });

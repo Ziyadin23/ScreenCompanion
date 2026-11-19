@@ -10,7 +10,7 @@ export async function cancelRun(store: RunStore, id: string): Promise<RunRecord>
     const processes = store.ownedProcesses(id);
     for (const owned of processes) {
       const observed = inspectOwnedProcess(owned.stateDirectory, owned.key);
-      if (observed.state === 'exited') continue;
+      if (observed.state === 'exited' || observed.state === 'interrupted') continue;
       if (observed.state !== 'running' && observed.state !== 'pending')
         throw new WorkflowError('owner_unverifiable', 'Owned execution termination cannot be verified.');
       await cancelOwnedProcess(owned.stateDirectory, owned.key);

@@ -1,8 +1,12 @@
 import type { AppearanceSettings, ModelSelection, VaultData, ApiProvider } from './index';
 
-export const DEFAULT_APPEARANCE: AppearanceSettings = {
+export const LEGACY_APPEARANCE: AppearanceSettings = {
   TransparencyPercent: 100, TextOpacityPercent: 80, TextSizePoints: 11,
   BackgroundColor: '#1A202C', TextColor: '#EFF2F7', AccentColor: '#354052'
+};
+export const DEFAULT_APPEARANCE: AppearanceSettings = {
+  TransparencyPercent: 10, TextOpacityPercent: 100, TextSizePoints: 11,
+  BackgroundColor: '#1C1D20', TextColor: '#F2F3F5', AccentColor: '#385785'
 };
 export const PROVIDER_MODELS: Record<ApiProvider, readonly string[]> = {
   OpenAI: ['gpt-6-luna', 'gpt-6-sol', 'gpt-6-astra'], Groq: ['qwen/qwen3.8-27b'],
@@ -18,7 +22,7 @@ export function defaultSettings(apiKey: string): VaultData {
     ApiKey: apiKey, ResponseMode: 'Default', CustomInstruction: '',
     Capture: { Modifiers: 3, Key: 32 }, Visibility: { Modifiers: 2, Key: 191 }, Test: { Modifiers: 3, Key: 84 },
     SettingsShortcut: { Modifiers: 2, Key: 73 }, ExitShortcut: { Modifiers: 2, Key: 8 }, InputShortcut: { Modifiers: 2, Key: 13 },
-    Appearance: { ...DEFAULT_APPEARANCE }, CommandsShown: false, Models: null, PipelineMode: null,
+    Appearance: { ...DEFAULT_APPEARANCE }, CommandsShown: false, Models: null, PipelineMode: null, ModelPipelines: [],
     ProviderKeys: { OpenAI: '', Groq: '', Gemini: '', Mistral: '', OpenRouter: '', DeepSeek: '' }
   };
 }

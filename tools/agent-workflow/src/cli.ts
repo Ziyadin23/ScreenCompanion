@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
 import { accessSync, constants, existsSync, lstatSync, realpathSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -5,12 +6,15 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { executeRun } from './graph.js';
-import { DEFAULT_LIMITS, digest, makeManifest, WorkflowError } from './manifest.js';
+import { DEFAULT_LIMITS, WINDOWS_ACTIVE_MS, digest, makeManifest, WorkflowError } from './manifest.js';
 import { RunStore, type RunRecord } from './store.js';
 import { cancelRun } from './recovery.js';
 import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
+import { orcaExecutable } from './ownership.js';
+import { inspectBetaEnvironmentRetry, inspectBetaReportPathRetry, inspectRejectedBetaLaunch, selectBetaProfile } from './beta-profile.js';
+import { remainingOracleLimits, remainingOracleParent } from './oracle-recovery.js';
 
 type Probe = (name: string, args: string[]) => { status: number | null; stdout: string | Buffer | null };
 export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirectory: string,
@@ -18,7 +22,7 @@ export function doctor(repository: ReturnType<typeof repositoryAt>, stateDirecto
   profileAvailable?: () => boolean) {
   const names = ['node', 'git', 'gh', 'codex', 'orca-ide', 'bwrap'];
   const versions = Object.fromEntries(names.map(name => {
-    const result = probe(name, ['--version']);
+    const result = probe(name === 'orca-ide' ? orcaExecutable() : name, ['--version']);
     const version = String(result.stdout ?? '').match(/(?:^|[^0-9])(\d+)\.(\d+)(?:\.(\d+))?\b/);
     const supported = result.status === 0 && !!version &&
       (name !== 'node' || Number(version[1]) > 22 || Number(version[1]) === 22 && Number(version[2]) >= 12);
@@ -112,9 +116,15 @@ function report(run: RunRecord, store: RunStore) {
   const hold = run.data.integrationHold as { active?: boolean; reason?: string } | undefined;
   const review = run.data.pullReview as { head?: string; findings?: unknown[]; evidenceLevel?: string } | undefined;
   const usage = store.usage(run.manifest.id);
+  const cumulative = store.cumulativeUsage(run.manifest.id);
   return { runId: run.manifest.id, repository: run.manifest.repository, scope: run.manifest.scope,
     delivery: run.manifest.delivery, base: run.manifest.base, status: run.status, stage: run.stage,
     cancelRequested: run.cancelRequested, error: run.error, usage,
+    continuationOf: run.manifest.continuationOf ?? null, continuationBudget: run.manifest.continuationBudget ?? null, cumulative,
+    candidateReview: run.data.reviewReceipt ? { head: sha((run.data.reviewReceipt as { head?: unknown }).head),
+      clean: (run.data.reviewReceipt as { clean?: unknown }).clean === true,
+      findings: Array.isArray((run.data.reviewReceipt as { findings?: unknown }).findings) ?
+        (run.data.reviewReceipt as { findings: unknown[] }).findings.length : 0 } : null,
     waitingFor: safeCode(run.data.waitingFor),
     findings: { total: findings.length, confirmed: findings.filter(f => f?.state === 'confirmed').length,
       disproved: findings.filter(f => f?.state === 'disproved').length, unconfirmed: findings.filter(f => f?.state === 'unconfirmed').length },
@@ -128,13 +138,20 @@ function report(run: RunRecord, store: RunStore) {
       findings: Array.isArray(review.findings) ? review.findings.length : 0, verification: 'not_executed' } : null,
     postflight: ['ready', 'pending', 'failed'].includes(postflight?.state ?? '') ? postflight!.state : null,
     integrationHold: hold?.active === true ? { active: true, reason: safeCode(hold.reason) } : null,
-    retryCount: Array.isArray(run.data.roundHistory) ? run.data.roundHistory.length : 0,
+    retryCount: usage.repairs,
+    repairAllowance: store.repairAllowance(run.manifest.id),
+    betaEnvironmentRetryCount: Array.isArray(run.data.betaEnvironmentRetryHistory) ? run.data.betaEnvironmentRetryHistory.length : 0,
+    betaReportPathRetryCount: Array.isArray(run.data.betaReportPathRetryHistory) ? run.data.betaReportPathRetryHistory.length : 0,
+    oracleRetryCount: Array.isArray(run.data.oracleRetryHistory) ? run.data.oracleRetryHistory.length : 0,
     interventionCount: null,
-    interventionRequired: run.status === 'awaiting_input',
+    interventionRequired: run.status === 'awaiting_input' || run.status === 'quarantined',
     tokens: { observedInput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.inputTokens) ? worker.usage.inputTokens : 0), 0),
       observedOutput: workers.reduce((sum, worker) => sum + (Number.isSafeInteger(worker?.usage?.outputTokens) ? worker.usage.outputTokens : 0), 0),
       complete: workers.length === usage.workerInvocations && workers.every(worker => worker?.usage != null) },
-    costUsd: null, costStatus: 'unknown', nextAction: run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
+    costUsd: null, costStatus: 'unknown', nextAction: run.data.waitingFor === 'oracle_retry_required' ? 'resume_with_retry_oracle' : run.status === 'quarantined' ?
+      run.error === 'invalid_checkpoint' ? 'inspect_saved_state' : 'inspect_owned_execution' :
+      run.status === 'budget_exhausted' ? 'inspect_findings_and_authorize_linked_continuation' :
+        run.status.startsWith('awaiting_') ? 'inspect_and_resume' : null };
 }
 function exitFor(run: RunRecord): number {
   if (run.status === 'cancelled') return 130;
@@ -150,46 +167,80 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
     'state-dir': { type: 'string' }, 'model-profile': { type: 'string' },
     'dry-run': { type: 'boolean' }, help: { type: 'boolean' }, format: { type: 'string' },
     'retention-days': { type: 'string' }, workers: { type: 'string' },
-    'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' }
+    'worker-seconds': { type: 'string' }, 'active-minutes': { type: 'string' },
+    'continue-from': { type: 'string' }, 'beta-profile': { type: 'string' }, 'retry-oracle': { type: 'boolean' },
+    'retry-beta-environment': { type: 'boolean' }, 'preflight-evidence': { type: 'string' },
+    'retry-beta-report-path': { type: 'boolean' }, 'replacement-beta-profile': { type: 'string' }
   } });
   const command = positionals[0];
   if (values.help || !command) {
-    console.log(JSON.stringify({ commands: ['doctor', 'run', 'status <run-id>', 'report <run-id>',
-      'resume <run-id>', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
+    console.log(JSON.stringify({ commands: ['doctor', 'runs', 'run', 'status <run-id>', 'report <run-id>',
+      'resume <run-id> [--retry-oracle | --retry-beta-environment --preflight-evidence <private-file> | --retry-beta-report-path --preflight-evidence <private-file> --replacement-beta-profile <private-file>]', 'cancel <run-id>', 'backup <new-private-directory>', 'migrate <new-private-backup-directory>', 'prune --retention-days 30'],
       deliveries: ['report', 'issues', 'pr', 'merge-eligible'] }));
     return 0;
   }
-  if (!['doctor', 'run', 'status', 'report', 'resume', 'cancel', 'backup', 'migrate', 'prune'].includes(command) ||
+  if (!['doctor', 'runs', 'run', 'status', 'report', 'resume', 'cancel', 'backup', 'migrate', 'prune'].includes(command) ||
       positionals.length !== (['status', 'report', 'resume', 'cancel', 'backup', 'migrate'].includes(command) ? 2 : 1))
     throw new WorkflowError('invalid_arguments', 'Unknown command or missing run identity.');
   if (values.format && !['json', 'markdown'].includes(values.format))
     throw new WorkflowError('invalid_arguments', 'Report format must be json or markdown.');
+  if (values['retry-oracle'] && command !== 'resume')
+    throw new WorkflowError('invalid_arguments', 'Oracle retry is an explicit same-run resume action.');
+  const betaRetries = Number(!!values['retry-beta-environment']) + Number(!!values['retry-beta-report-path']);
+  if ((betaRetries || values['preflight-evidence'] || values['replacement-beta-profile']) &&
+      (command !== 'resume' || betaRetries !== 1 || !values['preflight-evidence'] || values['retry-oracle'] ||
+        !!values['replacement-beta-profile'] !== !!values['retry-beta-report-path']))
+    throw new WorkflowError('invalid_arguments', 'A separately authorized beta retry requires its explicit mode, private evidence and report-path replacement profile when applicable.');
   const retentionDays = Number(values['retention-days'] ?? 30);
   if ((values['retention-days'] && command !== 'prune') || !Number.isSafeInteger(retentionDays) ||
       retentionDays < 1 || retentionDays > 3650)
     throw new WorkflowError('invalid_arguments', 'Retention must be between 1 and 3650 days for prune.');
   const repository = repositoryAt(values.repo ? resolve(values.repo) : process.cwd());
-  function ceiling(value: string | undefined, maximum: number): number {
-    const parsed = Number(value ?? maximum);
+  const stateDirectory = values['state-dir'] ? resolve(values['state-dir']) :
+    join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
+      'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
+  let parent: RunRecord | undefined;
+  let parentUsage: ReturnType<RunStore['usage']> | undefined;
+  if (values['continue-from']) {
+    if (command !== 'run') throw new WorkflowError('invalid_arguments', 'A continuation is a new explicit run admission.');
+    const reader = new RunStore(stateDirectory, makeManifest({ ...repository, scope: 'providers-json' }), { readOnly: true });
+    try { parent = reader.get(values['continue-from']); parentUsage = reader.usage(parent.manifest.id); } finally { reader.close(); }
+  }
+  const remaining = parent && remainingOracleParent(parent) ? remainingOracleLimits(parent, parentUsage!) : undefined;
+  const betaProfile = values['beta-profile'] ? selectBetaProfile(values['beta-profile'], stateDirectory) :
+    remaining ? parent!.manifest.betaProfile : undefined;
+  function ceiling(value: string | undefined, maximum: number, fallback = maximum): number {
+    const parsed = Number(value ?? fallback);
     if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > maximum)
       throw new WorkflowError('invalid_arguments', 'A CLI resource allowance must be positive and at most the trusted default.');
     return parsed;
   }
-  const manifest = makeManifest({ ...repository, scope: values.scope ?? 'providers-json',
-    mode: values.mode ?? (values.issue ? 'issue' : values.pr ? 'review' : 'investigate'),
-    ...(values.issue ? { issue: /^\d+$/.test(values.issue) ? Number(values.issue) : -1 } : {}),
-    ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } : {}),
-    delivery: values.delivery ?? 'report', modelProfile: values['model-profile'] ?? 'selected', limits: {
+  const manifest = makeManifest({ ...repository, scope: values.scope ?? parent?.manifest.scope ?? 'providers-json',
+    mode: values.mode ?? (values.issue ? 'issue' : values.pr ? 'review' : parent?.manifest.mode ?? 'investigate'),
+    ...(values.issue ? { issue: /^\d+$/.test(values.issue) ? Number(values.issue) : -1 } :
+      parent?.manifest.issue ? { issue: parent.manifest.issue } : {}),
+    ...(values.pr ? { pr: /^\d+$/.test(values.pr) ? Number(values.pr) : -1 } :
+      parent?.manifest.pr ? { pr: parent.manifest.pr } : {}),
+    ...(parent ? { continuationOf: parent.manifest.id } : {}), ...(remaining ? { continuationBudget: 'remaining' } : {}),
+    ...(betaProfile ? { betaProfile } : {}),
+    delivery: values.delivery ?? parent?.manifest.delivery ?? 'report',
+    modelProfile: values['model-profile'] ?? parent?.manifest.modelProfile ?? 'selected', limits: remaining ? {
+      ...remaining,
+      workerInvocations: values.workers === undefined ? remaining.workerInvocations : ceiling(values.workers, remaining.workerInvocations),
+      workerMs: values['worker-seconds'] === undefined ? remaining.workerMs :
+        ceiling(values['worker-seconds'], Math.floor(remaining.workerMs / 1000)) * 1000,
+      activeMs: values['active-minutes'] === undefined ? remaining.activeMs :
+        ceiling(values['active-minutes'], Math.floor(remaining.activeMs / 60_000)) * 60_000
+    } : {
       workerInvocations: ceiling(values.workers, DEFAULT_LIMITS.workerInvocations),
       workerMs: ceiling(values['worker-seconds'], DEFAULT_LIMITS.workerMs / 1000) * 1000,
-      activeMs: ceiling(values['active-minutes'], DEFAULT_LIMITS.activeMs / 60_000) * 60_000
+      activeMs: ceiling(values['active-minutes'], (betaProfile ? WINDOWS_ACTIVE_MS : DEFAULT_LIMITS.activeMs) / 60_000,
+        DEFAULT_LIMITS.activeMs / 60_000) * 60_000
     } });
   if (command !== 'run' && Object.keys(values).some(key =>
-    ['scope', 'mode', 'issue', 'pr', 'delivery', 'model-profile', 'dry-run', 'workers', 'worker-seconds', 'active-minutes'].includes(key)))
+    ['scope', 'mode', 'issue', 'pr', 'delivery', 'model-profile', 'dry-run', 'workers', 'worker-seconds', 'active-minutes',
+      'continue-from', 'beta-profile'].includes(key)))
     throw new WorkflowError('invalid_arguments', 'Saved runs cannot receive new authority options.');
-  const stateDirectory = values['state-dir'] ? resolve(values['state-dir']) :
-    join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
-      'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));
   if (command === 'doctor') {
     const result = doctor(repository, stateDirectory);
     console.log(JSON.stringify(result));
@@ -198,10 +249,15 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   if (command === 'run' && values['dry-run']) {
     console.log(JSON.stringify({ dryRun: true, repository: manifest.repository, scope: manifest.scope,
       delivery: manifest.delivery, mode: manifest.mode, limits: manifest.limits,
+      continuationOf: manifest.continuationOf ?? null, betaProfile: manifest.betaProfile?.name ?? null,
+      continuationBudget: manifest.continuationBudget ?? null,
       policyHash: manifest.policyHash, workerCalls: 0, remoteMutations: 0 }));
     return 0;
   }
-  const inspection = command === 'status' || command === 'report';
+  const inspection = command === 'status' || command === 'report' || command === 'runs';
+  if (command === 'runs' && !existsSync(join(stateDirectory, 'journal.sqlite'))) {
+    console.log('[]'); return 0;
+  }
   if (command !== 'run' && !existsSync(join(stateDirectory, 'journal.sqlite')))
     throw new WorkflowError('run_not_found', 'No saved run exists in this repository state.');
   if (command === 'migrate') {
@@ -210,6 +266,10 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   }
   const store = new RunStore(stateDirectory, manifest, { readOnly: inspection });
   try {
+    if (command === 'runs') {
+      console.log(JSON.stringify(store.listRuns().map(run => report(run, store))));
+      return 0;
+    }
     if (command === 'backup') {
       await store.backup(resolve(positionals[1]!));
       console.log(JSON.stringify({ snapshot: 'complete', scope: 'sqlite-only', executionReceiptsRetainedAtOriginal: true }));
@@ -219,8 +279,9 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       console.log(JSON.stringify({ removedRuns: await store.prune(Date.now() - retentionDays * 86_400_000), retentionDays }));
       return 0;
     }
-    const id = command === 'run' ? manifest.id : positionals[1]!;
-    let run = command === 'run' ? store.admit(manifest) : store.get(id);
+    let run = command === 'run' ? store.admit(manifest) : store.get(positionals[1]!);
+    const id = run.manifest.id;
+    if (values['retry-oracle']) run = store.retryUnavailableOracle(id);
     if (inspection) {
       const value = report(run, store);
       console.log(values.format === 'markdown' ?
@@ -229,8 +290,11 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
         `Issues: ${value.issues.map(issue => `#${issue.number}${issue.reused ? ' (reused)' : ''}`).join(', ') || 'none'}\n` +
         `PR: ${value.pull?.url ?? 'none'}\nSource merge: ${value.sourceMerge ?? 'none'}\nPostflight: ${value.postflight ?? 'not observed'}\n` +
         (value.review ? `Source inspection: ${value.review.findings} concerns; independent commands not executed\n` : '') +
-        `Next gate: ${value.waitingFor ?? 'none'}\nRepairs: ${value.retryCount}; intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
+        `Next gate: ${value.waitingFor ?? 'none'}\nNext action: ${value.nextAction ?? 'none'}\n` +
+        `Repairs: ${value.retryCount} (original ${value.repairAllowance.original}, separately authorized ${value.repairAllowance.additional}); intervention required: ${value.interventionRequired}; human interventions: unknown\n` +
         `Workers: ${value.usage.workerInvocations}; active ms: ${value.usage.activeMs}\n` +
+        `Continuation of: ${value.continuationOf ?? 'none'}; cumulative workers: ${value.cumulative.usage.workerInvocations}; ` +
+        `cumulative active ms: ${value.cumulative.usage.activeMs}\n` +
         `Observed tokens: ${value.tokens.observedInput} input, ${value.tokens.observedOutput} output; complete: ${value.tokens.complete}\nCost: unknown\n` : JSON.stringify(value));
       return 0;
     }
@@ -239,6 +303,13 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       console.log(JSON.stringify(report(run, store)));
       return run.status === 'quarantined' ? 4 : run.cancelRequested && run.status !== 'cancelled' && run.status !== 'completed' ? 2 : 0;
     }
+    if (command === 'resume' && !betaRetries && run.status === 'failed' && run.stage === 'handoff' && run.error === 'invalid_process_request')
+      run = store.prepareRejectedBetaLaunch(id, () => inspectRejectedBetaLaunch(store, id));
+    if (values['retry-beta-environment'])
+      run = store.authorizeBetaEnvironmentRetry(id, () => inspectBetaEnvironmentRetry(store, id, resolve(values['preflight-evidence']!)));
+    if (values['retry-beta-report-path'])
+      run = store.authorizeBetaReportPathRetry(id, () => inspectBetaReportPathRetry(store, id,
+        resolve(values['preflight-evidence']!), resolve(values['replacement-beta-profile']!)));
     const controller = new AbortController();
     const stop = () => controller.abort();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
@@ -251,7 +322,7 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
   } finally { store.close(); }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && existsSync(process.argv[1]) && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   main().then(code => { process.exitCode = code; }).catch(error => {
     const failure = error instanceof WorkflowError ? error : new WorkflowError('invalid_arguments', 'Invalid command or unavailable local prerequisite.');
     console.error(JSON.stringify({ error: failure.code, message: failure.message }));

@@ -28,9 +28,9 @@ describe('update controls in Settings', () => {
     await waitFor(() => expect(f.api.update).toHaveBeenLastCalledWith('download'));
     await act(async () => f.emit({ updates: { status: 'downloading', version: '0.5.0-beta.4', progress: 42, message: 'Downloading update… 42%' } }));
     expect((screen.getByRole('progressbar', { name: 'Update download' }) as HTMLProgressElement).value).toBe(42);
-    expect((screen.getByRole('button', { name: 'Check for updates' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Check for updates' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
     await act(async () => f.emit({ updates: { status: 'downloaded', version: '0.5.0-beta.4', progress: 100, message: 'Ready to install.' }, busy: true }));
-    expect((screen.getByRole('button', { name: 'Restart and install' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Restart and install' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
     await act(async () => f.emit({ busy: false }));
     fireEvent.click(screen.getByRole('button', { name: 'Restart and install' }));
     await waitFor(() => expect(f.api.update).toHaveBeenLastCalledWith('install'));
@@ -47,8 +47,8 @@ describe('update controls in Settings', () => {
   it('retains Settings drafts and the answer across update status changes and failures', async () => {
     const f = fixture(); render(<App />); await screen.findByTestId('answer-text');
     await act(async () => window.sc.command({ type: 'settings' }));
+    fireEvent.click(await screen.findByRole('combobox', { name: 'Answer mode' })); fireEvent.click(screen.getByRole('option', { name: 'Custom' }));
     const instruction = await screen.findByRole('textbox', { name: 'Custom instruction' });
-    fireEvent.click(screen.getByRole('combobox', { name: 'Answer mode' })); fireEvent.click(screen.getByRole('option', { name: 'Custom' }));
     fireEvent.change(instruction, { target: { value: 'Temporary draft' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
     await act(async () => f.emit({ updates: { status: 'error', version: null, progress: null, message: 'Try again later.' } }));
@@ -66,14 +66,14 @@ describe('update controls in Settings', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Brief' }));
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
     const restart = screen.getByRole('button', { name: 'Restart and install' }) as HTMLButtonElement;
-    expect(restart.disabled).toBe(true); expect(restart.getAttribute('aria-describedby')).toBe('update-draft-notice');
+    expect(restart.matches(':disabled, [aria-disabled="true"]')).toBe(true); expect(restart.getAttribute('aria-describedby')).toBe('update-draft-notice');
     expect(screen.getByRole('note').textContent).toContain('Save your Settings changes or use Back');
     await act(async () => f.emit({ visible: false })); await act(async () => f.emit({ visible: true }));
     // A stale host snapshot cannot enable restart ahead of the local draft notification.
     await act(async () => f.emit({ settingsDirty: false }));
-    expect(restart.disabled).toBe(true); fireEvent.click(restart); expect(f.api.update).not.toHaveBeenCalled();
+    expect(restart.matches(':disabled, [aria-disabled="true"]')).toBe(true); fireEvent.click(restart); expect(f.api.update).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('settings-back')); await screen.findByTestId('answer-text');
-    await openUpdates(); expect((screen.getByRole('button', { name: 'Restart and install' }) as HTMLButtonElement).disabled).toBe(false);
+    await openUpdates(); expect(screen.getByRole('button', { name: 'Restart and install' }).matches(':disabled, [aria-disabled="true"]')).toBe(false);
     expect(f.api.command).toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
   });
   it('keeps restart blocked after a failed Save and allows it after a successful Save', async () => {
@@ -84,7 +84,7 @@ describe('update controls in Settings', () => {
     fireEvent.click(await screen.findByRole('combobox', { name: 'Answer mode' })); fireEvent.click(screen.getByRole('option', { name: 'Brief' }));
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByRole('alert');
     fireEvent.click(screen.getByRole('tab', { name: 'Updates' }));
-    expect((screen.getByRole('button', { name: 'Restart and install' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Restart and install' }).matches(':disabled, [aria-disabled="true"]')).toBe(true);
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
     await openUpdates(); fireEvent.click(screen.getByRole('button', { name: 'Restart and install' }));
     await waitFor(() => expect(f.api.update).toHaveBeenCalledExactlyOnceWith('install'));

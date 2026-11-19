@@ -1,6 +1,6 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.7 is unpublished and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
+Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.13 is an unpublished, undelivered qualification candidate and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
 
 ## Linux setup and controls
 
@@ -14,7 +14,8 @@ portal from a trusted repository before installing SC. The test used the
 third-party sdegler/hyprland COPR already configured on the development machine.
 Other Linux desktops and package formats are not qualified. An
 unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
-storage. Unlock the keyring and restart SC if saved settings cannot be opened;
+storage. Setup shows the unlock instruction with the API key field. Unlock the
+keyring and restart SC if saved settings cannot be opened;
 if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
 `$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
 does not migrate Windows DPAPI files.
@@ -25,8 +26,9 @@ restart that portal after changing its configuration. The captured frame uses
 its selected monitor's pixel dimensions and frame-local coordinates; global
 monitor offsets are not exposed by this capture path.
 
-After setup, use **Capture screen** or **Question**, then choose one monitor in
-the desktop screen-sharing prompt. Cancellation or failure makes no provider
+After setup, hover over the panel or focus its controls with the keyboard to reveal
+**Capture screen**, **Question**, **Settings**, **Hide** and **Exit**. Choose Capture screen, or use Ctrl+Enter / Send with screenshot from Question, then select one monitor in
+the desktop screen-sharing prompt. Enter / Send in Question sends only text and does not open the portal. Cancellation or failure makes no provider
 request and retains the prior answer and any unsent question. SC hides its window while capturing, but
 SC windows can appear in recordings or screen shares; Linux does not provide a
 recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
@@ -36,10 +38,10 @@ Hyprland users can configure their own bindings, for example:
 
 ```ini
 bind = CTRL ALT, SPACE, exec, /opt/SC/io.github.ziyadin23.sc --action=capture
-bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input
+bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input-with-screenshot
 ```
 
-Other actions are `settings`, `visibility`, `test` and `exit`. Desktop bindings
+Use `--action=input` for a custom focus-only opening binding. The explicit `input-with-screenshot` action opens input from elsewhere and submits with a screenshot only when the question field has focus. Other actions are `settings`, `visibility`, `test` and `exit`. Desktop bindings
 are managed by Hyprland, rather than the Windows shortcut editor. Native window
 decorations handle moving and resizing. In an isolated Hyprland test, returning
 from Settings sometimes left the panel at the larger Settings size; drag a window
@@ -48,15 +50,34 @@ installing a newer RPM; the Windows update feed is not used.
 
 ## Setup and migration
 
-The following setup and shortcut details describe Windows. Linux uses the
-[controls above](#linux-setup-and-controls).
+The following setup and shortcut details target **Windows 11 x64**. Windows 10
+is outside the current support target. Fresh-account/machine operation without
+installed developer tools remains unqualified; existing development-VM checks
+have the narrower scope in the [support matrix](VERIFICATION.md#platform-support).
+Linux uses the [controls above](#linux-setup-and-controls).
 
-1. Use the TypeScript beta supplied locally or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The build also produces a portable `SC-v0.5.0-beta.6.exe` and matching ZIP containing that EXE and `README.txt`. It includes its runtime and needs no .NET installation. Earlier beta builds were checked on Windows 11; beta.6 verification is in progress, and Windows 10 and fresh-machine checks remain open. The v0.4.14 download linked in the README contains the previous C# application.
+In the current source, Escape closes an open service menu first. With the menu
+closed, Escape and Cancel exit setup while it is idle. Setup stays open during
+Save so it can finish or show an error.
+
+1. Use the [published TypeScript beta](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The portable `SC-v0.5.0-beta.6.exe` is also available in a matching ZIP containing that EXE and `README.txt`. Both editions include their Electron runtime; the application does not use .NET. This packaging does not establish clean-machine operation without developer tools. The v0.4.14 download linked in the README contains the previous C# application.
 2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
-4. Commands appear once after setup or an upgrade from settings without the help marker. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to submit. Esc returns to the answer. The app captures the monitor containing the answer panel once; the typed question determines the task.
+4. Commands appear after setup. Older settings without the help marker show them on startup until an explicit Settings Save persists the marker; loading alone never rewrites the vault. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to send text only. While the question field has focus, **Ctrl+Enter** or **Send with screenshot** captures the monitor containing the panel once at send time and includes it with your text. Esc returns to the answer. The typed question determines the task; no screen is captured for a text-only send.
+
+In current source, the setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
+
+Press **Tab** or **Shift+Tab** to move through setup. A
+pale outline marks keyboard focus on **Show API key**, **Save**, and **Cancel**.
+Press **Space** on **Show API key** to toggle key visibility.
 
 The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
+
+Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, unlock your secure keyring before retrying.
+
+Setup headings and guidance follow the renderer's default font size. Scroll the
+setup form to read all guidance in a short window. Save and Cancel sit below
+the scrollable content.
 
 SC keeps one running instance per Windows user/session. Opening another copy restores the selected answer, input, or Settings surface, including hidden Settings. If there is no answer yet, it opens question input. The second process exits without re-registering shortcuts. Close the previous version before upgrading so the new EXE becomes the running instance.
 
@@ -69,13 +90,13 @@ The following shortcuts and panel controls apply to the TypeScript beta:
 | **Ctrl+Alt+T** | Open or close the capture-exclusion test panel. |
 | **Ctrl+I** | Open Settings. |
 | **Ctrl+Backspace** | Exit the app, including from Settings. |
-| **Ctrl+Enter** | Open or focus temporary question input. |
+| **Ctrl+Enter** | Open or focus temporary input; while typing in Question, send text with a fresh screenshot. |
 
-The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the selected panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. All six shortcuts can be changed: click a field and press the desired key or combination. Click elsewhere to stop recording, or use Restore shortcuts. The current visibility and exit shortcuts remain active even while recording a new shortcut. Windows may reject reserved or occupied combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps.
+The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the selected panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. Expand **Settings → Answer & shortcuts → Keyboard shortcuts** to change all six shortcuts: click a field and press the desired key or combination. Click elsewhere to stop recording, or use Restore shortcuts. The current visibility and exit shortcuts remain active even while recording a new shortcut. Windows may reject reserved or occupied combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps.
 
-The normal answer view has no header, close button, permanent input, footer, or visible scrollbar. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. Hiding the panel or switching its surface ends the current drag; release and press again to move or resize. The chosen size is saved for later launches under `%LOCALAPPDATA%\SC\window-size.json`; no answer is saved there. The tray icon indicates a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
+The compact answer view reveals Capture screen, Question, Settings, Hide and Exit controls on hover or keyboard focus. Their reserved row keeps them clear of the answer without moving the text. Question input remains temporary, and the answer has no visible scrollbar. At very small input heights, the previous answer is temporarily hidden to keep the composer usable; it returns when input closes. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. Hiding the panel or switching its surface ends the current drag; release and press again to move or resize. The chosen size is saved for later launches under `%LOCALAPPDATA%\SC\window-size.json`; no answer is saved there. The panel and tray icon indicate a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
 
-Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or pick custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the default transparent background, 80% text visibility, and 11-point text. Settings and key setup stay opaque. Existing saved colors/transparency are preserved; missing fields receive the new defaults. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
+Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or expand **Advanced appearance** for independent text visibility and custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the neutral dark background at 90% opacity (10% transparency), 100% text visibility, and 11-point text. New setups use these same defaults. Settings and key setup stay opaque. Existing saved appearance is preserved. Missing fields in older files keep their historical defaults, and loading never rewrites the vault. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
 
 ## Application updates
 
@@ -105,23 +126,23 @@ For the portable version, close SC before replacing its EXE manually.
 
 ## Service and model selection
 
-Settings groups related controls and reports unsaved changes. **Models & API** keeps the service, key and pipeline together; expand **Advanced model settings** for editable model IDs, DeepSeek reasoning and output-token limits. A validation error opens the relevant page and focuses the affected field. Settings load failures offer a retry. Save applies changes; Back discards them.
+Settings uses a sidebar for its five categories, switching to horizontal navigation in narrow windows. Save, Back and edit status stay visible while the form scrolls. It groups related controls and reports unsaved changes. Custom instructions appear in Custom answer mode; switching modes retains their draft. **Models & API** keeps the service, key and pipeline together; expand **Advanced model settings** for editable model IDs, DeepSeek reasoning and output-token limits. Advanced sections start collapsed. A validation error opens the relevant page and section and focuses the affected field. Settings load failures offer a retry. Save applies changes; Back discards them.
 
 Open **Settings → Models & API** to choose OpenAI, Groq, Google Gemini, Mistral, OpenRouter or DeepSeek. Choose an **Answer model** and a **Screen-reading model**, or type their exact model IDs. The screen-reading model must support images and structured JSON. The answer model must support structured JSON and any retained task images; DeepSeek Pro is a text-only answering option. Suggestions are editable; access, free quotas, and model availability depend on your own provider account. The app contains no shared API keys.
 
-Enter the selected service's API key and click **Save**. The service and model selection apply to subsequent capture and typed requests without restarting. Keys for each service are stored separately inside the encrypted settings file. Switching services restores that service's key; **Back** discards edits. The active model selection persists across restarts. Model drafts for other services are retained only while the Settings window remains open. Existing settings without these fields keep the previous configuration until saved.
+Enter the selected service's API key and click **Save**. The service and model selection apply to subsequent capture and typed requests without restarting. Keys for each service are stored separately inside the encrypted settings file. Switching services restores that service's key; **Back** discards edits. The active model selection persists across restarts. The screenshot pipeline is remembered separately for each service and exact answer-model ID, including after restart. New model IDs start with Thorough. Model drafts for other services are retained only while the Settings window remains open; pipeline edits across models share the same Save/Back draft. Existing settings without these fields keep the previous configuration until saved.
 
 **DeepSeek:** select **DeepSeek**, keep `deepseek-flash` in both model fields, enter a key from your [DeepSeek API account](https://platform.deepseek.com/), and click **Save**. This uses DeepSeek directly rather than OpenRouter and requires DeepSeek API credits. `deepseek-flash` supports screenshot images; `deepseek-v4-pro` does not. DeepSeek requests use the Responses API with schema-based JSON; old settings retain non-thinking mode. DeepSeek documents stateless Responses with `store: false`; this does not guarantee zero retention under its API policies. See [vision support](https://api-docs.deepseek.com/guides/vision/), [Responses behavior](https://api-docs.deepseek.com/guides/responses_api/) and [pricing](https://api-docs.deepseek.com/quick_start/pricing/). The historical C# campaign completed seven initial scenarios with six correct primary answers and one failed automatic Thorough diagram answer. A separate fixed-region follow-up passed. Those results do not establish TypeScript answer quality; see [verification limits](VERIFICATION.md#live-providers-and-model-quality).
 
-**Stronger DeepSeek models:** choose `deepseek-v4-pro` in **Answer model** for text-only tasks using Thorough or Balanced, and keep `deepseek-flash` for screen reading. Pro is not suggested for vision or accepted in Direct. If extracted task images are necessary, SC reports a readable incompatibility before sending them to Pro; it never drops images or switches models automatically. For screenshots in Direct, keep Flash and choose **DeepSeek reasoning → Low, High, or Max**. This controls answering only; extraction stays non-thinking. Off remains the compatibility default. Higher reasoning can increase latency and billed output tokens. Selecting a non-Off level suggests a visible **16,000** answer-token budget; adjust **Answer output token limit** from 256 to 32,000 before Save if needed. Reasoning and the visible answer share that budget. Model, reasoning and budget persist together; explicit saved budgets override the process answer limit. These choices do not establish a measured accuracy improvement.
+**Stronger DeepSeek models:** choose `deepseek-v4-pro` in **Answer model** for typed text or Thorough tasks without required images, and keep `deepseek-flash` for screen reading. Pro is not suggested for vision or accepted in Direct. If extracted task images are necessary, SC reports a readable incompatibility before sending them to Pro; it never drops images or switches models automatically. For screenshots in Direct, keep Flash and choose **DeepSeek reasoning → Low, High, or Max**. This controls answering only; extraction stays non-thinking. Off remains the compatibility default. Higher reasoning can increase latency and billed output tokens. Selecting a non-Off level suggests a visible **16,000** answer-token budget; adjust **Answer output token limit** from 256 to 32,000 before Save if needed. Reasoning and the visible answer share that budget. Model, reasoning and budget persist together; explicit saved budgets override the process answer limit. These choices do not establish a measured accuracy improvement.
 
-**Request pipeline:** in Models & API, choose **Thorough**, **Balanced**, or, with DeepSeek selected, **Direct screenshot (DeepSeek)**. Thorough makes three ordinary calls: locate, extract, answer; there is no separate extraction-verification request. Saved Thorough choices automatically use this flow. Balanced combines location/extraction and uses two calls. Direct sends the full captured monitor straight to the answer model in one API call, without extraction or verification. Keep `deepseek-flash` as the answer model; the screen-reading model is disabled and unused in Direct. Typed questions and response modes still apply. This mode sends all visible monitor content and does not independently verify question completeness or selected options. It never retries automatically. Save applies the pipeline to both request paths and persists it across restarts; Back discards changes. Other services do not offer Direct. Old settings without a pipeline retain the trusted process default, normally Thorough.
+**Request pipeline:** in Models & API, choose **Thorough** (default) or **Direct screenshot** for a compatible model on any supported service. Thorough makes three ordinary calls: locate, extract, answer; there is no separate extraction-verification request. Direct sends the full captured monitor and any typed question straight to the answer model in one call, without extraction, cropping, automatic retry or fallback. The answer model must accept images and structured responses; the screen-reading model is disabled and unused in Direct. Unknown custom model IDs still depend on provider/account support. Typed intent and response modes apply in both paths. Save remembers each model's pipeline and applies the active selection to screenshot requests; Back discards all unsaved edits. Text-only Enter/Send requests bypass screen reading regardless of the screenshot pipeline and use one answering call. Historical Balanced selections and process defaults resolve to Thorough without rewriting settings until Save; old numeric Direct selections keep their meaning.
 
 Saved service/model and pipeline choices take priority over process defaults. See [advanced configuration](PIPELINE.md#process-configuration) for environment variables and their precedence.
 
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
-All six provider adapters have mocked transport coverage; beta.6 passed the separately recorded Windows encrypted-settings/UI checks. Beta.7 Windows checks remain open. These tests do not establish live account/model access or a representative accuracy result for the TypeScript beta.
+All six provider adapters have mocked transport coverage. Beta.7 source passed the [full Windows 11 native/vault/UI matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03); beta.6 retains its [separately recorded checks](VERIFICATION.md#beta6-extraction-guidance). These results do not establish live account/model access, representative answer accuracy, recorder exclusion or fresh-machine readiness.
 
 ## Installed and portable updates
 
@@ -144,7 +165,7 @@ upgrading and uninstalling preserve the encrypted settings for your Windows acco
 
 If an answer fails, the panel shows the error, a diagnostic code and a report ID. `CAPTURE-...` means capture failed before the API request. Codes such as `ANSWER-NETWORK`, `ANSWER-TIMEOUT` or `ANSWER-HTTPFAILURE` identify the stage and failure class; the safe message/log metadata can include the numeric HTTP status.
 
-Stages include `LOCATE`, `CROP`, `EXTRACT`, `ANSWER` and `VALIDATEANSWER`. Stage events share a request ID and record attempts, outcomes, elapsed time and numeric HTTP status. Thorough uses location, extraction and answering; Balanced combines extraction with local consistency checks. Neither structure/crop checks nor canonical-answer validation establish that a model's answer is correct. See the [pipeline reference](PIPELINE.md).
+Stages include `LOCATE`, `CROP`, `EXTRACT`, `ANSWER` and `VALIDATEANSWER`. Stage events share a request ID and record attempts, outcomes, elapsed time and numeric HTTP status. Thorough uses location, extraction and answering; Direct and text-only sends use answering without extraction. Neither structure/crop checks nor canonical-answer validation establish that a model's answer is correct. See the [pipeline reference](PIPELINE.md).
 
 On Windows, open `%LOCALAPPDATA%\SC\diagnostics.log` using Win+R or File Explorer. On Linux, open `$XDG_CONFIG_HOME/SC/diagnostics.log` (normally `~/.config/SC/diagnostics.log`). The app writes `PROCESSSTARTED` during startup, `READY` when initialized and bounded failure/stage/usage entries. Entries contain a UTC timestamp, app version and selected technical metadata such as stage, code, report ID and numeric HTTP status. The log is capped at roughly 64 KB and contains no API key, request or response body, question, screenshot, answer, or raw exception message. If the app cannot write the log, the error still displays a diagnostic code and says the log was not saved.
 
@@ -165,8 +186,10 @@ curl.exe --connect-timeout 10 --max-time 20 --silent --show-error --output NUL -
 `HTTP 401` is expected without a key and indicates an HTTP authentication response was received; it does not verify model access, account credits, or the screenshot POST route. DNS/connection/certificate errors, a redirect, or a campus block response help IT identify where access fails. Curl can use a different proxy configuration from SC, so also provide SC's diagnostic code and matching log entry. Do not add your API key to the command.
 
 On Windows SC uses WinHTTP automatic proxy settings and standard certificate validation.
-On Linux it resolves the desktop proxy with Electron and uses curl with the
-system TLS trust store; authenticated proxy behavior needs target verification.
+On Linux SC resolves the desktop proxy route with Electron and uses curl with the
+system TLS trust store. For HTTPS API requests, SC can use Basic proxy credentials
+from the process's `https_proxy` setting (`HTTPS_PROXY` is also supported) when
+its scheme, host and port match the selected proxy.
 Ask IT to check DNS/filtering, outbound HTTPS, proxy authentication, PC date/time,
 certificate trust and approved HTTPS-inspection requirements as appropriate to the
 failure. Keep certificate validation enabled.
@@ -175,4 +198,4 @@ The TypeScript beta uses a 15-second connection setup timeout within the 90-seco
 
 ## Privacy
 
-A typed request captures one fresh monitor image; a capture-shortcut request also captures once. A vision request detects a relevant question region, the app crops it locally, and a separate vision request extracts question text, choices, code, and any necessary image regions. The answering request receives structured questions and task-relevant visual crops. In Thorough/Balanced it receives no original monitor image; explicitly selected DeepSeek Direct sends the full captured monitor to answering without extraction. For the extraction pipelines, configuring a known question region avoids sending the full monitor image even to detection; Direct ignores question-region/cropping settings. Windows capture starts without an extra confirmation; Linux asks for monitor selection through the desktop portal. The app keeps no screenshot or answer history and sends `store: false` with every OpenAI Responses request. DeepSeek uses stateless Responses; the remaining services use stateless Chat Completions. Provider retention policies still apply. Questions and screen content used for extraction leave the PC for API processing. Windows settings are encrypted for the current Windows user; Linux settings require an unlocked secure keyring.
+Text-only Enter/Send requests send the typed question without capturing the screen or opening a monitor-selection portal. Ctrl+Enter / Send with screenshot and the capture shortcut each capture one fresh monitor image. Thorough detects a relevant region, crops locally, then extracts text, choices, code and necessary image regions; answering receives structured tasks and isolated visuals, excluding the original monitor image. Explicitly selected Direct sends the full captured monitor straight to the answer model on any compatible service. A configured question region can avoid sending the full monitor even to detection in Thorough; Direct ignores crop settings. Windows capture starts without an extra confirmation; Linux screenshot sends ask for monitor selection through the portal. The app keeps no screenshot, typed-question, answer or conversation history. OpenAI Responses uses `store: false`; DeepSeek uses stateless Responses and the other services use stateless Chat Completions. Provider retention policies still apply. Windows settings are encrypted for the current Windows user; Linux settings require an unlocked secure keyring.
