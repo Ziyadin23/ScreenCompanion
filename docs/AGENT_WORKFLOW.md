@@ -4,7 +4,7 @@ For everyday issue work in Codex, follow the [contributor workflow](DEVELOPMENT.
 When a LangGraph run is requested, the tool under `tools/agent-workflow/` starts on demand and uses local SQLite state.
 The runner investigates within an agreed scope, verifies a reproduction, and can
 deliver a report, issue or reviewed PR within the selected permissions. The
-[OpenSpec task record](../openspec/changes/add-local-langgraph-workflow/tasks.md)
+[OpenSpec task record](../openspec/changes/add-local-langgraph-workflow/tasks.md#workflow-and-pilot-checkpoint--2026-11-19)
 tracks the tested revisions, issue #60 pilot results, failed attempts and pending
 qualification. Consult it before resuming a run or approving another attempt.
 
@@ -35,6 +35,10 @@ The qualified local environment instead uses a verified package/dependency runti
 snapshot outside writing worktrees, with source identity and installed-command
 checks recorded in private setup receipts. It retains the existing account and
 state; credentials are not part of that package.
+Check the installed command's recorded source before relying on a recovery flag.
+The [PR #81 checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md#tool-source-verification)
+records the integrated source, the separately prepared runtime and the earlier
+installed stable command.
 `sc-dev` accepts the same arguments as the longer npm command. For example:
 
 ```sh
@@ -330,8 +334,11 @@ manifest, selected profile, failed results and prior usage intact. Its helper
 uses fresh task directories and local reporter paths; ordinary resume reconciles
 that same operation. No time, worker or provider allowance increases, and a
 terminal result exhausts this grant. A failed UI matrix or an arbitrary missing
-file does not qualify. Facts and a prepared profile alone grant no authority;
-obtain separate approval before invoking the command.
+file does not qualify. Before invoking the command, obtain separate approval and
+verify current resource ownership, readiness and the saved candidate binding.
+The [#60 pilot checkpoint](../openspec/changes/add-local-langgraph-workflow/tasks.md#application-pilot-and-remaining-acceptance)
+records the declined retry and the later release of the shared reservation for
+queued checks. The release covers resource scheduling.
 
 Cancel records a stop request; a running coordinator observes it before further
 dispatch. It also reads the recorded wrapper identity and requests termination

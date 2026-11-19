@@ -60,6 +60,8 @@ function connectionFailure(error: unknown, signal?: AbortSignal): ProviderError 
 export function parseModelResponse(value: unknown, provider: ApiProvider): ModelResponse {
   if (!isObject(value)) throw unreadable();
   if (usesResponses(provider)) {
+    const status = Object.hasOwn(value, 'status') ? value.status : 'completed';
+    if (typeof status !== 'string') throw unreadable();
     const parts: string[] = [], refusals: string[] = [];
     if (value.output !== undefined && !Array.isArray(value.output)) throw unreadable();
     for (const item of (value.output ?? []) as unknown[]) {
@@ -74,7 +76,7 @@ export function parseModelResponse(value: unknown, provider: ApiProvider): Model
     }
     if (!parts.length && typeof value.output_text === 'string') parts.push(value.output_text);
     return { text: parts.join('\n').trim(), refusal: refusals.join('\n').trim(),
-      status: typeof value.status === 'string' ? value.status : 'completed', usage: parseUsage(value) };
+      status, usage: parseUsage(value) };
   }
   if (!Array.isArray(value.choices) || !isObject(value.choices[0]) || !isObject(value.choices[0].message))
     throw new ProviderError('The service returned no model answer. Check model access and try again.', 'MalformedResponse');
