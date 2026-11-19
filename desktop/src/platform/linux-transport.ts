@@ -14,6 +14,20 @@ export function proxyUrl(value: string): string {
   if (url.username || url.password || !url.hostname || (url.pathname !== '/' && url.pathname !== '')) throw failure('LinuxTransportError', 'network_proxy');
   return url.href;
 }
+
+function proxyCredentials(proxy: string): string | undefined {
+  const configured = process.env.https_proxy || process.env.HTTPS_PROXY;
+  if (!configured) return;
+  try {
+    // Electron's resolved route omits credentials. Match the entire proxy origin before using them.
+    const url = new URL(configured);
+    if (!url.username || url.origin !== new URL(proxy).origin) return;
+    const username = decodeURIComponent(url.username), password = decodeURIComponent(url.password);
+    if (username.includes(':') || /[\x00-\x1f\x7f]/.test(username + password)) return;
+    return `${username}:${password}`;
+  } catch { return; }
+}
+
 function headersFrom(bytes: Buffer, tunnel = false): { status: number; headers: Record<string, string>; bodyOffset: number } | null {
   let offset = 0;
   while (offset < 65536) {
@@ -83,6 +97,7 @@ export function createLinuxTransport(resolveProxy: (url: string) => Promise<stri
           let proxy: string;
           try { proxy = proxyUrl(routes[index] ?? ''); } catch { finish(failure('LinuxTransportError', 'network_proxy')); return; }
           const tunnel = url.protocol === 'https:' && (proxy.startsWith('http://') || proxy.startsWith('https://'));
+          const credentials = tunnel ? proxyCredentials(proxy) : undefined;
           const remainingConnect = connect - (Date.now() - connectStarted);
           if (remainingConnect <= 0) { finish(failure('TimeoutError', 'request_timeout')); return; }
           // Bash turns fd 3 into a real anonymous pipe curl can reopen; Node's
@@ -90,10 +105,12 @@ export function createLinuxTransport(resolveProxy: (url: string) => Promise<stri
           child = spawn('/bin/bash', ['-c', 'exec 4< <(cat <&3); exec curl "$@" --config /dev/fd/4 --data-binary @-', 'sc-curl', '--disable', '--request', 'POST', '--dump-header', '-',
             '--silent', '--no-buffer', '--proxy', proxy, '--noproxy', '',
             '--proto', '=http,https', '--connect-timeout', String(remainingConnect / 1000), '--max-time', String(total / 1000)],
-          { stdio: ['pipe', 'pipe', 'ignore', 'pipe'] });
+          { stdio: ['pipe', 'pipe', 'ignore', 'pipe'], env: { ...process.env, https_proxy: undefined, HTTPS_PROXY: undefined } });
           const quote = (s: string): string => `"${s.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n').replaceAll('\r', '\\r')}"`;
-          const config = [`url = ${quote(url.href)}`, ...Object.entries(request.headers).map(([name, header]) => `header = ${quote(`${name}: ${header}`)}`)].join('\n') + '\n';
-          child.stdio[3]!.on('error', () => {}); (child.stdio[3] as NodeJS.WritableStream).end(config);
+          const config = [`url = ${quote(url.href)}`];
+          if (credentials !== undefined) config.push(`proxy-user = ${quote(credentials)}`);
+          for (const [name, header] of Object.entries(request.headers)) config.push(`header = ${quote(`${name}: ${header}`)}`);
+          child.stdio[3]!.on('error', () => {}); (child.stdio[3] as NodeJS.WritableStream).end(config.join('\n') + '\n');
           child.stdin!.on('error', () => {}); child.stdin!.end(request.body);
           child.stdout!.on('data', (chunk: Buffer) => {
             if (done) { chunk.fill(0); return; }
