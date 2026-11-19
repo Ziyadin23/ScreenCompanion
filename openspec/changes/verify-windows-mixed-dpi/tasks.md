@@ -32,6 +32,10 @@ Owner for [W7 / issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 - Preparation source `19b34c09ebacc8cf48cb46c867410548b77d55b3` is committed and pushed on the existing issue branch in [draft PR #34](https://github.com/Ziyadin23/ScreenCompanion/pull/34), against `main` at the recorded worktree base. Only the six declared documentation/OpenSpec paths changed. The draft references #12 without closing it; the issue remains open and physical acceptance remains unverified.
 - This follow-up records publication in the same owner. Final source identity is available from Git history/PR head; no application build or new platform evidence is introduced. Keep the Orca card in review for the partial preparation, with the hardware blocker visible. Next execution is task 2.1 after hardware becomes available; no merge, archive or release is performed.
 
+## Preparation refresh on 19 November 2026
+
+The draft branch incorporated main `e8e676d` at `5fd7ff18871df32b21e2d4382a79a78a57d39027`. The status table now links the W7 procedure while retaining current evidence for the other Windows issues. The physical procedure matches the independently reviewed November text. The desktop tree matches main. The workflow self-test, documentation checks across 117 Markdown files and 514 local links and anchors, and all 12 strict OpenSpec checks passed. Readiness remains at one of four tasks. The physical Windows runs still require two monitors at different display scales.
+
 ## Workflow follow-up
 
 - Keep issue #12 open while physical acceptance is unavailable. A preparation PR is partial delivery; its review does not complete task 3.1.
