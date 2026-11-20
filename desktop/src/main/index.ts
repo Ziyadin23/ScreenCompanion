@@ -43,8 +43,7 @@ let lastCaptureProtection: AppState['captureProtection'] = 'Failed';
 let composerHeight = 96;
 let activationPending = false;
 let manualPanelSize = false;
-let settingBounds = false;
-let expectedBounds: Electron.Rectangle | null = null;
+let applyingWindowGeometry = false;
 let measurement = 0;
 let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
@@ -64,10 +63,14 @@ function clampBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   return { width, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - width)), y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height)) };
 }
 function minimumPanelHeight(): number { return surface === 'input' ? (linux ? 180 : 128) : linux ? 140 : 80; }
-function setBounds(bounds: Electron.Rectangle): void {
+function applyWindowGeometry(update: (target: BrowserWindow) => void): void {
   if (!window) return;
-  expectedBounds = bounds; settingBounds = true;
-  try { window.setBounds(bounds); } finally { settingBounds = false; }
+  applyingWindowGeometry = true;
+  try {
+    update(window);
+    // Keep the effective size for any resize notification delivered after the update.
+    if (isPanel(surface)) panelBounds = window.getBounds();
+  } finally { applyingWindowGeometry = false; }
 }
 function hidePanel(): void {
   if (!window) return;
@@ -110,8 +113,8 @@ function measurePanel(state: AppState): void {
     const frameHeight = linux ? Math.max(0, old.height - window.getContentBounds().height) : 0;
     const nextHeight = autoPanelHeight({ textHeight: result.height, controlsHeight: result.controlsHeight, inputHeight: result.inputHeight,
       frameHeight, workAreaHeight: area.height, minimumHeight: minimumPanelHeight() });
-    setBounds(clampBounds({ x: old.x + old.width - width, y: old.y + old.height - nextHeight, width, height: nextHeight }));
-    panelBounds = window.getBounds();
+    const bounds = clampBounds({ x: old.x + old.width - width, y: old.y + old.height - nextHeight, width, height: nextHeight });
+    applyWindowGeometry(target => target.setBounds(bounds));
   }).catch(() => { /* Content measurement failure keeps the usable current bounds. */ });
 }
 function publish(state: AppState, capturing: boolean): void {
@@ -128,15 +131,19 @@ function publish(state: AppState, capturing: boolean): void {
     if (isPanel(surface)) panelBounds = window.getBounds();
     const area = screen.getDisplayMatching(window.getBounds()).workArea;
     surface = state.surface;
-    window.setResizable(isPanel(state.surface));
-    if (isPanel(state.surface)) { window.setMinimumSize(Math.min(linux ? 340 : 180, area.width), Math.min(minimumPanelHeight(), area.height)); if (panelBounds) setBounds(clampBounds(panelBounds)); }
-    else {
-      const width = Math.min(state.surface === 'setup' ? 560 : 760, area.width);
-      const height = Math.min(state.surface === 'setup' ? 480 : 680, area.height);
-      window.setMinimumSize(Math.min(420, area.width), Math.min(300, area.height));
-      setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
-    }
-    surface = state.surface;
+    applyWindowGeometry(target => {
+      const panel = isPanel(surface);
+      target.setResizable(panel);
+      if (panel) {
+        target.setMinimumSize(Math.min(linux ? 340 : 180, area.width), Math.min(minimumPanelHeight(), area.height));
+        if (panelBounds) target.setBounds(clampBounds(panelBounds));
+      } else {
+        const width = Math.min(surface === 'setup' ? 560 : 760, area.width);
+        const height = Math.min(surface === 'setup' ? 480 : 680, area.height);
+        target.setMinimumSize(Math.min(420, area.width), Math.min(300, area.height));
+        target.setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
+      }
+    });
   }
   if (readyToShow) window.webContents.send('sc:state', state);
   if (platform && state.ready) {
@@ -237,9 +244,10 @@ async function boot(): Promise<void> {
   }
   window.on('close', event => { if (!closing) { event.preventDefault(); void controller?.command({ type: 'toggleVisibility' }); } });
   window.on('resize', () => {
-    if (!window || !isPanel(surface)) return;
+    if (!window || applyingWindowGeometry || !isPanel(surface)) return;
+    const previous = panelBounds;
     panelBounds = window.getBounds();
-    if (settingBounds || (expectedBounds && panelBounds.width === expectedBounds.width && panelBounds.height === expectedBounds.height)) return;
+    if (previous && panelBounds.width === previous.width && panelBounds.height === previous.height) return;
     manualPanelSize = true;
     const scale = screen.getDisplayMatching(panelBounds).scaleFactor;
     const size: PanelSize = { Width: Math.round(panelBounds.width * scale), Height: Math.round(panelBounds.height * scale) };

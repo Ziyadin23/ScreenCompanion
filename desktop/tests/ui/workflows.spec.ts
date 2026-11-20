@@ -80,12 +80,15 @@ test('temporary input sends with Enter, reports the key-free preview limit and c
 
 test('Back discards appearance and Save applies the preview without recoloring Settings', async ({ scPage: page }) => {
   await settings(page, 'Panel');
-  const original = await page.locator('.fixed-theme').evaluate((element) => getComputedStyle(element).backgroundColor);
+  const settingsSurface = page.getByRole('region', { name: 'SC settings', exact: true });
+  const fixedBackground = 'rgb(28, 29, 32)';
+  await expect(settingsSurface).toBeVisible();
+  await expect(settingsSurface).toHaveCSS('background-color', fixedBackground);
   await choice(page, 'Panel color theme', 'Light');
   await page.getByRole('slider', { name: 'Background transparency', exact: true }).fill('50');
   await page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('25');
   await expect(page.getByTestId('appearance-preview')).toHaveCSS('color', 'rgba(24, 32, 44, 0.25)');
-  await expect(page.locator('.fixed-theme')).toHaveCSS('background-color', original);
+  await expect(settingsSurface).toHaveCSS('background-color', fixedBackground);
   await page.getByTestId('settings-back').click();
   await settings(page, 'Panel');
   await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('100');
