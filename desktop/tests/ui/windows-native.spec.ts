@@ -171,19 +171,24 @@ test.describe('Windows native key-free preview', () => {
   test('native visibility preserves Settings drafts while Back discards and Save applies them', async ({ preview }) => {
     const { page } = preview;
     await settings(preview, 'Panel');
-    const palette = await page.locator('.fixed-theme').evaluate((element) => getComputedStyle(element).backgroundColor);
+    const settingsSurface = page.getByRole('region', { name: 'SC settings', exact: true });
+    const fixedBackground = 'rgb(28, 29, 32)';
+    await expect(settingsSurface).toBeVisible();
+    await expect(settingsSurface).toHaveCSS('background-color', fixedBackground);
     await page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('55');
     await globalShortcut(preview, [VK.control, VK.slash]);
     await expect.poll(async () => (await inspect(preview.panelHandle)).visible).toBe(false);
     await globalShortcut(preview, [VK.control, VK.slash]);
+    await expect.poll(async () => (await inspect(preview.panelHandle)).visible).toBe(true);
     await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('55');
-    await expect(page.locator('.fixed-theme')).toHaveCSS('background-color', palette);
+    await expect(settingsSurface).toHaveCSS('background-color', fixedBackground);
     await page.getByTestId('settings-back').click();
     await expect(page.getByTestId('answer-text')).toBeVisible();
     await settings(preview, 'Panel');
     await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('100');
     await page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('55');
     await page.getByRole('slider', { name: 'Background transparency', exact: true }).fill('50');
+    await expect(settingsSurface).toHaveCSS('background-color', fixedBackground);
     await page.getByTestId('settings-save').click();
     await expect(page.getByTestId('answer-text')).toHaveCSS('color', 'rgba(242, 243, 245, 0.55)');
     await expect(page.getByTestId('answer-panel')).toHaveCSS('opacity', '1');
