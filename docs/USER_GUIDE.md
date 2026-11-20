@@ -112,7 +112,7 @@ becomes available when the latest preferences load. If focus is still on the
 retry button, it moves to the page heading and scrolls it into view. Press
 **Escape** to use Back.
 
-Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. With large text in a short Answer panel, you can read complete lines with the keyboard and with small mouse wheel movements in either direction.
+Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. If Settings also reports a load or validation error, both messages appear above Save and Back. You can scroll longer messages in a short window. With large text in a short Answer panel, you can read complete lines with the keyboard and with small mouse wheel movements in either direction.
 
 ## Application updates
 

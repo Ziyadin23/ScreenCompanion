@@ -124,7 +124,8 @@ Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance
 scale with the renderer's default font size. A pale outline marks keyboard focus as you press **Tab** or
 **Shift+Tab**. The five Settings categories adapt to a narrow window, with Save
-and Back kept visible at the bottom. Panel appearance changes affect the answer
+and Back kept visible at the bottom. Settings keeps validation and shortcut
+recovery messages readable together in a short window. Panel appearance changes affect the answer
 panel and its preview while Settings keeps its readable palette.
 
 In current source, a Settings save that finishes after you switch surfaces

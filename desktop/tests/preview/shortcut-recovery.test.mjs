@@ -272,41 +272,94 @@ test('mixed signed native wheel deltas accumulate only for single-line recovery'
   assert.deepEqual(await completeAnswerLines(answer), [2]);
 });
 
+async function openCompactSettings(t, withRecovery = false) {
+  const page = await openRenderer(t, 420, 300);
+  await page.addInitScript(withRecovery => {
+    const shortcuts = { capture: { Modifiers: 3, Key: 32 }, test: { Modifiers: 3, Key: 84 },
+      exit: { Modifiers: 2, Key: 8 }, visibility: { Modifiers: 2, Key: 191 },
+      input: { Modifiers: 2, Key: 13 }, settings: { Modifiers: 2, Key: 73 } };
+    const appearance = { TextSizePoints: 11 };
+    let state = { surface: 'settings', platform: 'windows', visible: true, busy: false, version: 'fixture',
+      settingsSession: 1, settingsRevision: 0, settingsSaving: false, settingsDirty: false, shortcutRecovery: withRecovery ? {
+        message: 'Restart SC to restore the saved shortcuts.', code: 'SHORTCUTS-RESTOREFAILED', reportId: '000000000001'
+      } : null,
+      shortcuts, appearance, answer: 'Retained answer', error: null };
+    const draft = { session: state.settingsSession, values: { ResponseMode: 'Brief', CustomInstruction: '', Appearance: appearance,
+      Models: { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', VisionModel: 'gpt-6-luna', Thinking: 'None', AnswerTokenLimit: null },
+      ModelPipelines: [], PipelineMode: 'Thorough', CommandsShown: true, Capture: shortcuts.capture, Test: shortcuts.test,
+      ExitShortcut: shortcuts.exit, Visibility: shortcuts.visibility, InputShortcut: shortcuts.input, SettingsShortcut: shortcuts.settings },
+      keyPresence: { OpenAI: true }, keyUpdates: {}, pipelineUpdates: [] };
+    let publish;
+    let load = async () => structuredClone(draft);
+    globalThis.sc = {
+      getState: async () => state,
+      subscribe: listener => { publish = listener; return () => {}; },
+      getSettingsDraft: () => load(), command: async () => {},
+      discardSettings: async session => {
+        globalThis.discardedSession = session;
+        state = { ...state, surface: 'answer' };
+        publish(state);
+      },
+      onScroll: () => () => {}, onInputAction: () => () => {}
+    };
+    globalThis.failRefresh = () => {
+      load = async () => { throw new Error('Simulated Settings read failure'); };
+      state = { ...state, settingsRevision: state.settingsRevision + 1 };
+      publish(state);
+    };
+    globalThis.holdRetry = () => {
+      load = () => new Promise(resolve => { globalThis.finishRetry = () => resolve(structuredClone(draft)); });
+    };
+  }, withRecovery);
+  await page.goto(origin);
+  return page;
+}
+
+async function expectReadableSettingsFeedback(page, focused) {
+  const alerts = page.getByRole('alert');
+  await expect(alerts).toHaveCount(2);
+  const readable = await alerts.evaluateAll(nodes => nodes.map(node => {
+    const doc = node.ownerDocument;
+    const range = doc.createRange();
+    range.selectNodeContents(node);
+    const lines = Array.from(range.getClientRects()).filter(rect => rect.width && rect.height);
+    return lines.length > 0 && lines.every(rect =>
+      node.contains(doc.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)));
+  }));
+  assert.deepEqual(readable, [true, true], 'each alert is readable without an overlapping control');
+  await expect(focused).toBeFocused();
+  assert.ok(await focused.evaluate(node => {
+    const rect = node.getBoundingClientRect();
+    return node.contains(node.ownerDocument.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
+  }), 'the focused control is usable alongside both alerts');
+}
+
+test('keeps validation and shortcut recovery readable beside the focused key field at 420×300', async t => {
+  const page = await openCompactSettings(t, true);
+  await page.getByRole('tab', { name: 'Models & API' }).click();
+  const service = page.getByRole('combobox', { name: 'API service' });
+  await service.focus();
+  await page.keyboard.press('m');
+  await expect(service).toHaveText('Mistral');
+  await page.getByRole('button', { name: 'Save', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#settings-error')).toContainText('key');
+  await expectReadableSettingsFeedback(page, page.getByRole('textbox', { name: 'Service API key' }));
+});
+
+test('keeps load and shortcut recovery readable beside keyboard Retry at 420×300', async t => {
+  const page = await openCompactSettings(t, true);
+  await page.getByRole('combobox', { name: 'Answer mode' }).waitFor();
+  await page.evaluate(() => globalThis.failRefresh());
+  const retry = page.getByRole('button', { name: 'Try loading again' });
+  await retry.waitFor();
+  await page.keyboard.press('Tab');
+  await expectReadableSettingsFeedback(page, retry);
+});
+
 for (const moveFocus of [false, true]) {
   test(`keyboard Retry at 420×300 keeps focus visible (user moved focus: ${moveFocus})`, async t => {
-    const page = await openRenderer(t, 420, 300);
-    await page.addInitScript(() => {
-      const binding = { Modifiers: 2, Key: 13 };
-      const appearance = { TextSizePoints: 11 };
-      let state = { surface: 'settings', platform: 'windows', visible: true, busy: false, version: 'fixture',
-        settingsSession: 1, settingsRevision: 0, settingsSaving: false, settingsDirty: false, shortcutRecovery: null,
-        shortcuts: Object.fromEntries(['capture', 'visibility', 'test', 'settings', 'exit', 'input'].map(action => [action, binding])),
-        appearance, answer: 'Retained answer', error: null };
-      const draft = { session: state.settingsSession, values: { ResponseMode: 'Brief', CustomInstruction: '', Appearance: appearance,
-        Models: null, ModelPipelines: [] }, keyPresence: { OpenAI: true }, keyUpdates: {}, pipelineUpdates: [] };
-      let publish;
-      let load = async () => structuredClone(draft);
-      globalThis.sc = {
-        getState: async () => state,
-        subscribe: listener => { publish = listener; return () => {}; },
-        getSettingsDraft: () => load(),
-        discardSettings: async session => {
-          globalThis.discardedSession = session;
-          state = { ...state, surface: 'answer' };
-          publish(state);
-        },
-        onScroll: () => () => {}, onInputAction: () => () => {}
-      };
-      globalThis.failRefresh = () => {
-        load = async () => { throw new Error('Simulated Settings read failure'); };
-        state = { ...state, settingsRevision: state.settingsRevision + 1 };
-        publish(state);
-      };
-      globalThis.holdRetry = () => {
-        load = () => new Promise(resolve => { globalThis.finishRetry = () => resolve(structuredClone(draft)); });
-      };
-    });
-    await page.goto(origin);
+    const page = await openCompactSettings(t);
     const heading = page.getByRole('heading', { name: 'Answer & shortcuts' });
     const retry = page.getByRole('button', { name: 'Try loading again' });
     const mode = page.getByRole('combobox', { name: 'Answer mode' });

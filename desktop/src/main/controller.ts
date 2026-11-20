@@ -246,7 +246,8 @@ export class ApplicationController {
         if (this.ownsSettings(command.session)) { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
       case 'recordShortcut':
-        if (this.ownsSettings(command.session)) await this.setRecording(command.recording, command.session);
+        if (this.ownsSettings(command.session) && (!command.recording || this.state.visible))
+          await this.setRecording(command.recording, command.session);
         break;
       case 'beginMove': if (this.state.visible && !this.capturing) this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
       case 'beginResize':
@@ -261,6 +262,8 @@ export class ApplicationController {
   private changeShortcuts(change: { settings?: VaultData; recording?: boolean; session?: number }): Promise<void> {
     const applied = this.shortcutChanges.then(async () => {
       if (this.exiting || (change.session !== undefined && !this.ownsSettings(change.session))) return;
+      // The window may have been hidden while an earlier registration was finishing.
+      if (change.recording && !this.state.visible) return;
       const endingRecording = change.recording === false && !change.settings;
       // An in-flight Save owns its provisional bindings through persistence and rollback.
       const retrySaved = endingRecording && this.state.shortcutRecovery !== null && !this.state.settingsSaving;

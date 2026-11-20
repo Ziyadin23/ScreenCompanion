@@ -483,6 +483,44 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.saveSettings(draft); await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
   });
+  it('keeps the full shortcut set when a recording start reaches hidden Settings', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const session = f.controller.getState().settingsSession;
+    await f.controller.command({ type: 'toggleVisibility' });
+    await f.controller.onWindowBlur();
+    f.applyShortcuts.mockClear();
+
+    await f.controller.command({ type: 'recordShortcut', recording: true, session });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session });
+    expect(f.controller.getState()).toMatchObject({ visible: false, settingsDirty: true });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    await f.controller.command({ type: 'toggleVisibility' });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
+    await f.controller.onWindowBlur();
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), false, expect.any(Function));
+  });
+  it('drops a recording start when visibility changes before its registration settles', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const session = f.controller.getState().settingsSession;
+    const start = { type: 'recordShortcut', recording: true, session } as const;
+    f.applyShortcuts.mockClear();
+
+    const queued = f.controller.command(start);
+    await Promise.all([queued, f.controller.command({ type: 'toggleVisibility' })]);
+    expect(f.controller.getState().visible).toBe(false);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    const hidden = f.controller.command(start);
+    await Promise.all([hidden, f.controller.command({ type: 'toggleVisibility' })]);
+    expect(f.controller.getState().visible).toBe(true);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+  });
   it('blocks update restart while recording and releases shortcuts on native window blur', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
     const { settingsSession } = f.controller.getState();

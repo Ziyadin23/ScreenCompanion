@@ -122,6 +122,13 @@
 - The workflow self-test, documentation link check, `openspec validate --all --strict --no-interactive` and PR whitespace check exited 0. The checks covered 140 Markdown files, 581 local links and anchors, and 17 strict OpenSpec items.
 - Host verification used Fedora 44 x64, Node 22.23.1, synthetic state and isolated Chromium. Heavy checks ran under `flock /tmp/sc-20261119-desktop-verify.lock env VITEST_MAX_WORKERS=1`. Task 1.3 retains independent standards and acceptance rereview. Tasks 2.1 and 2.2 retain Windows native, encrypted vault, GUI and recorder checks, packaged startup and the numbered local beta handoff.
 
+### Compact Settings messages and hidden shortcut recording
+
+- On November 20, the five new regressions failed on draft head `dab3781c5d2735612f70af51c02ff6b27e8aea18`. At 420 × 300, shortcut recovery overlapped a validation error or a failed refresh. A recording start could arrive after Settings was hidden or wait in the registration queue until the window was hidden. The preview also accepted Save from an older draft.
+- The corrected renderer keeps both diagnostics readable above Save and Back. Longer messages scroll with the keyboard. When a successful Retry returns focus to the heading, its outline fits inside the scroll area. A user who moved focus during Retry keeps that focus. The controller checks visibility when it receives a recording start and again when it applies it. The preview rejects stale Save before changing the current draft.
+- All five regressions passed on desktop tree `fba17becb9d330c66b38d94e229de7d82c8c98bd`. The full desktop verification passed type checking, lint, 1,321 tests in 37 files and the production build. Chromium passed 19 tracked compact cases, 28 wheel and layout replays, four Settings feedback replays and one extended-message keyboard case. All 11 IPC and preview replays and 17 setup preview cases passed.
+- The built Astryx check reported 19 passes and two existing theme-font warnings. Windows UI discovery listed 38 cases in five files. Task 1.3 awaits independent standards and acceptance review of this source. Tasks 2.1 and 2.2 retain the Windows native, vault, GUI and recorder checks, packaged startup and numbered local beta handoff.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

@@ -105,6 +105,7 @@ export function Settings({ state }: { state: AppState }) {
       // Move focus before Retry disappears if the user is still on it.
       if (retryButton.current ? focused === retryButton.current : !previous && focused === document.body) {
         heading.current?.focus();
+        if (body.current) body.current.scrollTop = 0;
       }
       setLoadedRevision(state.settingsRevision);
       setLoadStatus('ready');
@@ -457,8 +458,10 @@ export function Settings({ state }: { state: AppState }) {
       </fieldset>}
     </VStack>
     </VStack>
-    {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
-    {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
+    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages">
+      {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
+      {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
+    </VStack>}
     <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
       <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked || loadedRevision !== state.settingsRevision} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
       <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>

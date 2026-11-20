@@ -131,6 +131,8 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .dialog-footer button { min-width: calc(var(--spacing-10) * 2); }
 .footer-status { margin-right: auto; color: var(--dialog-muted); font-size: var(--text-supporting-size); min-width: 0; }
 .dialog-error { color: var(--color-text-error); background: var(--color-error-muted); padding: var(--spacing-3); border-radius: var(--radius-element); margin: var(--spacing-2) var(--spacing-6) !important; flex-shrink: 0; overflow-wrap: anywhere; font-size: var(--text-supporting-size); }
+/* Keep longer diagnostics scrollable without displacing the focused Settings control. */
+.settings-feedback { flex: 0 0 auto; max-block-size: 32%; overflow-y: auto; }
 .shortcut-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-4); }
 .shortcut-row { min-width: 0; }
 .astryx-dialog .recording { background: var(--color-accent-muted); outline: var(--focus-outline-width) solid var(--color-icon-accent); }
@@ -207,6 +209,10 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 @media (max-height: 420px) {
   .dialog-header, .dialog-footer { min-height: var(--spacing-10); padding-block: var(--spacing-2); }
   .page-intro { margin-bottom: var(--spacing-5); }
+  .settings .tabs { padding-block: var(--spacing-1); }
+  .settings-body { padding-block: var(--spacing-2); }
+  .settings-feedback .dialog-error { margin-block: 0 !important; padding-block: var(--spacing-0-5); }
+  .settings-feedback .dialog-error + .dialog-error { margin-block-start: var(--spacing-1) !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }

@@ -27,6 +27,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     state = { ...state, settingsSession, ...patch };
     for (const listener of listeners) listener(structuredClone(state));
   }
+  const ownsSettings = (session: number) => state.surface === 'settings' && session === state.settingsSession;
   const api: DesktopApi = {
     getState: async () => structuredClone(state),
     setup: async () => { emit({ surface: 'answer' }); },
@@ -34,12 +35,13 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       if (command.type === 'settings') emit({ surface: 'settings' });
       if (command.type === 'showInput') emit({ surface: 'input' });
       if (command.type === 'captureTest') emit({ surface: 'captureTest' });
-      if (command.type === 'settingsDraftChanged' && state.surface === 'settings' && command.session === state.settingsSession)
+      if (command.type === 'settingsDraftChanged' && ownsSettings(command.session))
         emit({ settingsDirty: command.dirty });
       if (['escape', 'exit', 'submit', 'capture'].includes(command.type)) emit({ surface: 'answer', settingsDirty: false });
     },
     getSettingsDraft: async () => ({ ...structuredClone(draft), session: state.settingsSession }),
     saveSettings: async (next) => {
+      if (!ownsSettings(next.session)) throw new Error('This Settings draft is closed. Save from the current window.');
       const keyPresence = { ...draft.keyPresence };
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) {
         if (next.keyUpdates[provider]?.trim()) keyPresence[provider] = true;
@@ -52,7 +54,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       return 'saved';
     },
     discardSettings: async (session) => {
-      if (state.surface === 'settings' && state.settingsSession === session) emit({ surface: 'answer', settingsDirty: false });
+      if (ownsSettings(session)) emit({ surface: 'answer', settingsDirty: false });
     },
     chooseColor: async () => null,
     update: async () => {},

@@ -124,7 +124,9 @@ signed deltas and proportional scrolling on the ordinary Answer panel. At
 ±2 to a full notch and checks reversal at both scroll limits. At 420 × 300,
 it checks that a successful keyboard retry shows the heading and its focus
 outline, honors a user's focus change while the retry is pending, and keeps
-Escape available.
+Escape available. With a shortcut recovery message present, it also checks
+that every line of a validation or read error is visible and that the affected
+input or Retry button can receive keyboard focus and respond to a pointer.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

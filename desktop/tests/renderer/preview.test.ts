@@ -2,6 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { previewBridge } from '../../preview/bridge';
 
 describe('synthetic preview bridge', () => {
+  it('rejects a stale Save and preserves the current preview draft', async () => {
+    const { api } = previewBridge();
+    const stale = await api.getSettingsDraft();
+    stale.values.Appearance.TextSizePoints = 21;
+    await api.command({ type: 'showInput' });
+    await api.command({ type: 'settings' });
+    const current = await api.getSettingsDraft();
+    await api.command({ type: 'settingsDraftChanged', session: current.session, dirty: true });
+    const before = await api.getState();
+
+    await expect(api.saveSettings(stale)).rejects.toThrow();
+    expect(await api.getState()).toEqual(before);
+    expect(await api.getSettingsDraft()).toEqual(current);
+    await expect(api.saveSettings(current)).resolves.toBe('saved');
+  });
+
   it('retains only key-presence flags, previews appearance, and discards replacement values', async () => {
     const { api } = previewBridge();
     const draft = await api.getSettingsDraft();
