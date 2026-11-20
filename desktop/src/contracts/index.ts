@@ -106,13 +106,15 @@ export interface AppState {
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
   updates: UpdateState; settingsSession: number; settingsDirty: boolean;
-  settingsKeyPresence: SettingsDraft['keyPresence'] | null; shortcutRecovery: DisplayError | null;
+  settingsKeyPresence: SettingsDraft['keyPresence'] | null;
+  settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
 }
 export interface SettingsDraft {
   session: number;
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
+  pipelineUpdates: ModelPipelinePreference[];
 }
 export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
 export type AppCommand =

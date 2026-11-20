@@ -3,8 +3,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../../src/renderer/App';
 import { fixture } from './fixture';
-import { DEFAULT_APPEARANCE } from '../../src/contracts/defaults';
+import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
+import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
+import { settingsDraftSchema } from '../../src/main/validation';
+import { controllerFixture } from '../main/controller-fixture';
 import userEvent from '@testing-library/user-event';
 
 afterEach(cleanup);
@@ -47,6 +50,62 @@ describe('explicit screenshot submission', () => {
 });
 
 describe('durable model pipeline choices', () => {
+  it.each([
+    { priorPreference: false, explicit: false, expected: 'Direct' },
+    { priorPreference: false, explicit: true, expected: 'Thorough' },
+    { priorPreference: true, explicit: false, expected: 'Direct' },
+    { priorPreference: true, explicit: true, expected: 'Thorough' }
+  ])('saves $expected on retry with prior preference $priorPreference and explicit choice $explicit', async ({ priorPreference, explicit, expected }) => {
+    const original = defaultModels();
+    const selected = { ...original, AnswerModel: 'gpt-synthetic-b' };
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), Models: original, CommandsShown: true,
+      ModelPipelines: priorPreference ? rememberModelPipeline([], selected, 'Thorough') : [], PipelineMode: 'Thorough' });
+    const driver = fixture();
+    production.host.publish = driver.emit;
+    const api = production.controller.apiMethods();
+    driver.api.getState.mockImplementation(api.getState);
+    driver.api.command.mockImplementation(api.command);
+    driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
+    driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
+    await production.controller.initialize();
+    await production.controller.command({ type: 'toggleVisibility' });
+    render(<App />);
+    async function selectModel() {
+      fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+      await screen.findByRole('combobox', { name: 'Answer mode' });
+      tab('Models & API'); advanced();
+      const answerModel = screen.getByRole('combobox', { name: 'Answer model' });
+      fireEvent.change(answerModel, { target: { value: selected.AnswerModel } });
+      fireEvent.blur(answerModel);
+      expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Thorough');
+    }
+
+    await selectModel();
+    choose('Request pipeline', 'Direct screenshot');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await selectModel();
+    if (explicit) choose('Request pipeline', 'Thorough');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(production.save).toHaveBeenCalledOnce();
+
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0]).toMatchObject({ Models: selected, PipelineMode: 'Direct' });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+    const displayed = screen.getByRole('combobox', { name: 'Request pipeline' }).textContent;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    const saved = production.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: selected, PipelineMode: expected });
+    expect(modelPipeline(saved.ModelPipelines, selected)).toBe(expected);
+    expect(modelPipeline(saved.ModelPipelines, original)).toBe('Thorough');
+    expect(displayed).toBe(expected === 'Direct' ? 'Direct screenshot' : 'Thorough');
+    expect(production.run).not.toHaveBeenCalled();
+  });
   it('restores separate model preferences after Save/reopen and discards later edits on Back', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
     const selectModel = (model: string) => { const input = screen.getByRole('combobox', { name: 'Answer model' }); fireEvent.change(input, { target: { value: model } }); fireEvent.blur(input); };
@@ -55,7 +114,7 @@ describe('durable model pipeline choices', () => {
     selectModel('gpt-6-luna'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
     selectModel('another-vision-model'); choose('Request pipeline', 'Thorough');
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
-    expect(driver.saved[0]?.values.ModelPipelines).toEqual(expect.arrayContaining([
+    expect(driver.saved[0]?.pipelineUpdates).toEqual(expect.arrayContaining([
       { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', PipelineMode: 'Direct' },
       { Provider: 'OpenAI', AnswerModel: 'another-vision-model', PipelineMode: 'Thorough' }
     ]));

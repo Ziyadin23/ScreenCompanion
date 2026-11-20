@@ -77,7 +77,7 @@ function hidePanel(): void {
 function measurePanel(state: AppState): void {
   if (!window || !readyToShow || !isPanel(state.surface) || manualPanelSize || state.busy) return;
   const content = state.error ? `${state.error.message}\n${state.error.hint}\n${state.error.code}\n${state.error.reportId}` : state.answer;
-  const identity = `${state.surface}:${state.appearance.TextSizePoints}:${content}`;
+  const identity = `${state.surface}:${state.appearance.TextSizePoints}:${Boolean(state.shortcutRecovery)}:${content}`;
   if (identity === measuredContent) return;
   measuredContent = identity;
   const revision = ++measurement;

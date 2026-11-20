@@ -1,18 +1,20 @@
 import { vi } from 'vitest';
 import type { AppAction, AppState, DesktopApi, SettingsDraft, SetupRequest } from '../../src/contracts';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
+import { applyModelPipelineUpdates, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { SHORTCUT_FIELDS } from '../../src/renderer/shortcuts';
 
 export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: Partial<SettingsDraft> = {}) {
   const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
   values.Models = defaultModels(); values.PipelineMode = 'Thorough'; values.CommandsShown = true;
+  values.ModelPipelines = rememberModelPipeline([], values.Models, values.PipelineMode);
   let draft: SettingsDraft = {
     session: 0, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false },
-    keyUpdates: {}, ...draftOverrides
+    keyUpdates: {}, pipelineUpdates: [], ...draftOverrides
   };
   let state: AppState = {
     platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsDirty: false,
-    settingsKeyPresence: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
+    settingsKeyPresence: null, settingsModelPipelines: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
     captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false,
@@ -44,8 +46,10 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       saved.push(structuredClone(next));
       const keyPresence = { ...draft.keyPresence };
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) keyPresence[provider] = true;
-      draft = { ...structuredClone(next), keyPresence, keyUpdates: {} };
-      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, appearance: next.values.Appearance });
+      const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
+      draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
+      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, settingsModelPipelines: pipelines.ModelPipelines,
+        appearance: draft.values.Appearance });
       return 'saved';
     }),
     discardSettings: vi.fn(async () => { emit({ surface: 'answer', settingsDirty: false }); }),

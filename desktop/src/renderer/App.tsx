@@ -98,15 +98,17 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
       if (event.button === 0 && event.altKey) { event.preventDefault(); event.stopPropagation(); void onCommand({ type: 'beginMove' }); }
     }}>
-    <div className="panel-chrome">
-      <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
-      <nav className="panel-toolbar" aria-label="SC controls">
-        {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
-          disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
-      </nav>
-    </div>
+    <header className="panel-chrome">
+      <div className="panel-actions">
+        <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
+        <nav className="panel-toolbar" aria-label="SC controls">
+          {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
+            disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
+        </nav>
+      </div>
+      {state.shortcutRecovery && <p className="panel-recovery" role="alert">Restart SC to fix shortcuts.</p>}
+    </header>
     <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
-    {state.shortcutRecovery && <p className="panel-action-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
     {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
       <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
         disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}

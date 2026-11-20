@@ -1,5 +1,6 @@
 import type { AppState, DesktopApi, SettingsDraft, Surface } from '../src/contracts';
 import { defaultModels, defaultSettings } from '../src/contracts/defaults';
+import { applyModelPipelineUpdates, rememberModelPipeline } from '../src/contracts/model-pipelines';
 import { SHORTCUT_FIELDS } from '../src/renderer/shortcuts';
 import { version } from '../package.json';
 
@@ -7,12 +8,13 @@ import { version } from '../package.json';
 export function previewBridge(surface: Surface = 'settings', platform: AppState['platform'] = 'windows') {
   const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
   values.Models = defaultModels(); values.PipelineMode = 'Thorough';
+  values.ModelPipelines = rememberModelPipeline([], values.Models, values.PipelineMode);
   let draft: SettingsDraft = {
-    session: 0, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: {}
+    session: 0, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: {}, pipelineUpdates: []
   };
   let state: AppState = {
     platform, ready: true, surface, visible: true, busy: false, settingsSession: surface === 'settings' ? 1 : 0, settingsDirty: false,
-    settingsKeyPresence: null, shortcutRecovery: null,
+    settingsKeyPresence: null, settingsModelPipelines: null, shortcutRecovery: null,
     answer: 'The answer stays here while you adjust Settings.\n\nThis is synthetic preview text. No screen was captured and no service was contacted.',
     error: null, appearance: { ...values.Appearance },
     shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
@@ -41,8 +43,10 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) {
         if (next.keyUpdates[provider]?.trim()) keyPresence[provider] = true;
       }
-      draft = { session: next.session, values: structuredClone(next.values), keyPresence, keyUpdates: {} };
-      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, appearance: { ...draft.values.Appearance } });
+      const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
+      draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
+      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, settingsModelPipelines: pipelines.ModelPipelines,
+        appearance: { ...draft.values.Appearance } });
       return 'saved';
     },
     discardSettings: async () => { emit({ surface: 'answer', settingsDirty: false }); },

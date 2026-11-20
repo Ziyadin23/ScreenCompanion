@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
-import { modelPipeline, rememberModelPipeline } from '../contracts/model-pipelines';
+import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
 import { AppError, type Diagnostics } from './diagnostics';
@@ -44,17 +44,6 @@ function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, e
     result.Models = applyDraftEdits(current.Models, original.Models, edited.Models);
   }
 
-  const editedPreferences = edited.Models && edited.PipelineMode
-    ? rememberModelPipeline(edited.ModelPipelines, edited.Models, edited.PipelineMode) : edited.ModelPipelines;
-  result.ModelPipelines = current.ModelPipelines;
-  for (const preference of editedPreferences) {
-    if (modelPipeline(original.ModelPipelines, preference) !== preference.PipelineMode) {
-      result.ModelPipelines = rememberModelPipeline(result.ModelPipelines, preference, preference.PipelineMode);
-    }
-  }
-  if (result.Models) {
-    result.PipelineMode = modelPipeline(result.ModelPipelines, result.Models) ?? result.PipelineMode;
-  }
   return result;
 }
 
@@ -84,7 +73,7 @@ export class ApplicationController {
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
       version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsDirty: false,
-      settingsKeyPresence: null, shortcutRecovery: null };
+      settingsKeyPresence: null, settingsModelPipelines: null, shortcutRecovery: null };
   }
   getState(): AppState { return structuredClone(this.state); }
   setUpdateState(state: UpdateState): void { this.state.updates = { ...state }; this.publish(); }
@@ -295,7 +284,7 @@ export class ApplicationController {
   getSettingsDraft(): SettingsDraft {
     if (!this.settings) throw new AppError('NOTREADY', 'Finish API-key setup first.');
     const values = this.state.surface === 'settings' ? (this.settingsDraftBase ??= this.settingsValues(this.settings)) : this.settingsValues(this.settings);
-    return { session: this.state.settingsSession, values: structuredClone(values), keyPresence: this.keyPresence(), keyUpdates: {} };
+    return { session: this.state.settingsSession, values: structuredClone(values), keyPresence: this.keyPresence(), keyUpdates: {}, pipelineUpdates: [] };
   }
   private keyPresence(): SettingsDraft['keyPresence'] {
     return Object.fromEntries(PROVIDERS.map(provider => [provider, this.keyFor(provider).length > 0])) as SettingsDraft['keyPresence'];
@@ -324,8 +313,8 @@ export class ApplicationController {
     if (!keys[priorProvider]) keys[priorProvider] = previous.ApiKey;
     for (const provider of PROVIDERS) if (draft.keyUpdates[provider] !== undefined) keys[provider] = draft.keyUpdates[provider]!.trim();
     const selected = values.Models?.Provider ?? priorProvider;
-    const candidate: VaultData = { ...structuredClone(values), ApiKey: keys[selected], ProviderKeys: keys };
-    if (candidate.Models && candidate.PipelineMode) candidate.ModelPipelines = rememberModelPipeline(candidate.ModelPipelines, candidate.Models, candidate.PipelineMode);
+    const pipelineSettings = applyModelPipelineUpdates(committed, draft.pipelineUpdates, values.Models);
+    const candidate: VaultData = { ...structuredClone(values), ...pipelineSettings, ApiKey: keys[selected], ProviderKeys: keys };
     this.deps.validateSettings(candidate);
     this.deps.configuration(candidate);
     try { await this.changeShortcuts({ settings: candidate, recording: false }); }
@@ -346,6 +335,7 @@ export class ApplicationController {
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
     this.state.shortcuts = this.shortcuts(candidate);
     this.state.settingsKeyPresence = this.keyPresence();
+    this.state.settingsModelPipelines = candidate.ModelPipelines;
     this.state.shortcutRecovery = null;
     if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
     this.publish();

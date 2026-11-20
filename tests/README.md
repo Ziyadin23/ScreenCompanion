@@ -111,6 +111,11 @@ From `desktop/`, run `npx playwright install chromium` once, then run
 regression. It starts the synthetic preview on port 43290 and uses isolated
 Chromium sessions for keyboard focus, error visibility and Save retry.
 
+After `npm --prefix desktop run build`, run `node --test desktop/tests/preview/shortcut-recovery.test.mjs`
+from the repository root. Headless Chromium loads the production renderer with
+synthetic shortcut failure state at the minimum Windows panel sizes. The test
+checks the recovery text, retained answer, Question and keyboard controls.
+
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme
 artifacts together. The browser preview is excluded from Electron production

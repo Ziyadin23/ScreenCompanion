@@ -7,6 +7,8 @@ const shortcut = z.object({ Modifiers: z.number().int().min(0).max(15), Key: z.n
 const color = z.string().regex(/^#[0-9a-f]{6}$/iu);
 const model = z.string().min(1).max(160).regex(/^[A-Za-z0-9_./:-]+$/u).refine(value => !value.includes('://'));
 const pipeline = z.enum(['Thorough', 'Direct']);
+const modelPipelines = z.array(z.object({ Provider: z.enum(PROVIDERS), AnswerModel: model, PipelineMode: pipeline }))
+  .max(MAX_MODEL_PIPELINES).refine(validModelPipelines);
 export const settingsDraftSchema = z.object({
   session: z.number().int().nonnegative(),
   values: z.object({
@@ -21,11 +23,11 @@ export const settingsDraftSchema = z.object({
     Models: z.object({ Provider: z.enum(PROVIDERS), AnswerModel: model, VisionModel: model,
       Thinking: z.enum(['None', 'Low', 'High', 'Max']), AnswerTokenLimit: z.number().int().min(256).max(32000).nullable() }).nullable(),
     PipelineMode: pipeline.nullable(),
-    ModelPipelines: z.array(z.object({ Provider: z.enum(PROVIDERS), AnswerModel: model, PipelineMode: pipeline }))
-      .max(MAX_MODEL_PIPELINES).refine(validModelPipelines)
+    ModelPipelines: modelPipelines
   }),
   keyPresence: z.record(z.enum(PROVIDERS), z.boolean()),
-  keyUpdates: z.partialRecord(z.enum(PROVIDERS), key)
+  keyUpdates: z.partialRecord(z.enum(PROVIDERS), key),
+  pipelineUpdates: modelPipelines
 });
 export const setupRequestSchema = z.object({ provider: z.enum(PROVIDERS), apiKey: key.min(1).refine(value => value.trim().length > 0) });
 export const colorSchema = color;

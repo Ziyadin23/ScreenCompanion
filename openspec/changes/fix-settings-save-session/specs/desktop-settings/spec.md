@@ -31,6 +31,11 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **AND** after retrying, the second Save applies its edits against the latest saved preferences and keys
 - **AND** a key saved by the first write is available to the second draft without reentry
 
+#### Scenario: Retry with a saved pipeline for the selected model
+- **WHEN** an earlier Save changes the pipeline for the service and exact answer model in a newer draft
+- **THEN** a retry keeps that saved pipeline when the user leaves Request pipeline untouched
+- **AND** a retry applies any explicit choice in the newer draft, including Thorough
+
 #### Scenario: Shortcut registration rejected
 - **WHEN** the operating system rejects a shortcut in the proposed settings
 - **THEN** SC keeps the previous settings and shortcuts, reports the failure and leaves the active draft available for retry
@@ -41,3 +46,8 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **THEN** SC restores the previously saved shortcuts in the current recording mode before accepting another Save
 - **AND** it preserves the saved settings, retained answer and the active draft if present
 - **AND** if the previous shortcuts cannot be restored, the current surface shows restart guidance alongside its existing content
+
+#### Scenario: Recovery at a compact panel size
+- **WHEN** SC shows shortcut recovery in a compact Answer or Question panel
+- **THEN** the restart guidance fits alongside the usable panel content and controls at supported minimum sizes
+- **AND** the user can reach both Question send controls by keyboard

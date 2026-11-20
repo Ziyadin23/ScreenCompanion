@@ -98,7 +98,9 @@ The compact answer view reveals Capture screen, Question, Settings, Hide and Exi
 
 Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or expand **Advanced appearance** for independent text visibility and custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the neutral dark background at 90% opacity (10% transparency), 100% text visibility, and 11-point text. New setups use these same defaults. Settings and key setup stay opaque. Existing saved appearance is preserved. Missing fields in older files keep their historical defaults, and loading never rewrites the vault. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
 
-If you open Question while a Settings save is finishing, SC keeps the current surface open. You can reopen Settings and edit a new draft. If Save asks you to wait for the earlier write, try again when it finishes. The retry keeps earlier saved fields and keys you left unchanged. If SC reports that it could not restore the previous shortcuts, restart it to reload the saved settings.
+If you open Question while a Settings save is finishing, SC keeps the current surface open. You can reopen Settings and edit a new draft. If Save asks you to wait for the earlier write, try again when it finishes. The retry keeps saved fields and keys you left unchanged. For the same service and answer model, a new pipeline choice applies on Save, including Thorough. The saved choice applies when you leave Request pipeline untouched.
+
+If SC cannot restore the saved shortcuts, restart SC. Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID.
 
 ## Application updates
 

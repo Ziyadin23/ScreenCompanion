@@ -30,7 +30,12 @@ describe('diagnostic privacy and renderer boundaries', () => {
   it('validates IPC payload sizes and excludes credentials from drafts', () => {
     expect(commandSchema.safeParse({ type: 'submit', question: 'x'.repeat(4001) }).success).toBe(false);
     const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('synthetic');
-    expect(settingsDraftSchema.safeParse({ values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: { OpenAI: 'bad\nkey' } }).success).toBe(false);
+    const draft = { session: 1, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: {}, pipelineUpdates: [] };
+    expect(settingsDraftSchema.safeParse(draft).success).toBe(true);
+    expect(settingsDraftSchema.safeParse({ ...draft, keyUpdates: { OpenAI: 'bad\nkey' } }).success).toBe(false);
+    const update = { Provider: 'OpenAI', AnswerModel: 'synthetic-model', PipelineMode: 'Thorough' };
+    expect(settingsDraftSchema.safeParse({ ...draft, pipelineUpdates: [update] }).success).toBe(true);
+    expect(settingsDraftSchema.safeParse({ ...draft, pipelineUpdates: [update, update] }).success).toBe(false);
   });
   it('requires an explicit screenshot choice and bounds measured input geometry', () => {
     for (const includeScreenshot of [true, false]) expect(commandSchema.safeParse({ type: 'submit', question: 'Synthetic task', includeScreenshot }).success).toBe(true);

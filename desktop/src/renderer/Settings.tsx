@@ -8,7 +8,7 @@ import { Button } from '@astryxdesign/core/Button';
 import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
-import { modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
+import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
@@ -81,9 +81,6 @@ export function Settings({ state }: { state: AppState }) {
       // Saved secrets never cross the renderer boundary, even as masked text.
       copy.keyUpdates = {};
       const models = copy.values.Models ?? defaultModels();
-      const mode = modelPipeline(copy.values.ModelPipelines, models) ?? copy.values.PipelineMode ?? 'Thorough';
-      copy.values.PipelineMode = mode;
-      copy.values.ModelPipelines = rememberModelPipeline(copy.values.ModelPipelines, models, mode);
       draftRef.current = copy;
       setDraft(copy);
       setModelDrafts({ [models.Provider]: models });
@@ -145,23 +142,23 @@ export function Settings({ state }: { state: AppState }) {
   const models = draft?.values.Models ?? defaultModels();
   const provider = models.Provider;
   const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
-  const pipeline = draft?.values.PipelineMode ?? 'Thorough';
+  const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
+  const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
   function updateModels(patch: Partial<ModelSelection>) {
-    const next = { ...models, ...patch };
-    updateValues({ Models: next, ...(next.AnswerModel.trim() !== models.AnswerModel.trim() ?
-      { PipelineMode: modelPipeline(draft!.values.ModelPipelines, next) ?? 'Thorough' } : {}) });
+    updateValues({ Models: { ...models, ...patch } });
   }
   function changePipeline(mode: PipelineMode) {
     if (!draft) return;
     const preference = { Provider: provider, AnswerModel: models.AnswerModel.trim(), PipelineMode: mode };
-    updateValues({ PipelineMode: mode, ...(validModelPipelines([preference]) ?
-      { ModelPipelines: rememberModelPipeline(draft.values.ModelPipelines, models, mode) } : {}) });
+    if (validModelPipelines([preference])) {
+      modifyDraft(previous => ({ ...previous, pipelineUpdates: rememberModelPipeline(previous.pipelineUpdates, models, mode) }));
+    }
   }
   function changeProvider(selected: ApiProvider) {
     if (!draft || selected === provider) return;
     setModelDrafts((previous) => ({ ...previous, [provider]: models }));
     const next = modelDrafts[selected] ?? defaultModels(selected);
-    updateValues({ Models: next, PipelineMode: modelPipeline(draft.values.ModelPipelines, next) ?? 'Thorough' });
+    updateValues({ Models: next });
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
@@ -203,7 +200,8 @@ export function Settings({ state }: { state: AppState }) {
     if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
       (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
-    if (!validModelPipelines(rememberModelPipeline(draft.values.ModelPipelines, models, pipeline)))
+    const applied = applyModelPipelineUpdates({ ...draft.values, ModelPipelines: savedPipelines }, draft.pipelineUpdates, models);
+    if (!validModelPipelines(applied.ModelPipelines))
       return model('The saved model pipeline list is full or invalid. Choose a model with an existing preference.', 'answer-model');
     return null;
   }
@@ -222,7 +220,6 @@ export function Settings({ state }: { state: AppState }) {
     savingRef.current = true; setSaving(true); setError('');
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
-    outgoing.values.ModelPipelines = rememberModelPipeline(outgoing.values.ModelPipelines, outgoing.values.Models, pipeline);
     outgoing.values.CustomInstruction = outgoing.values.CustomInstruction.trim();
     for (const key of PROVIDERS) {
       const replacement = outgoing.keyUpdates[key]?.trim();
