@@ -11,7 +11,7 @@ let browser;
 before(async () => { browser = await chromium.launch(); });
 after(async () => { await browser?.close(); });
 
-async function openPanel(t, surface, width, height, textSizePoints, answer = 'Retained answer\n\nMore retained text.') {
+async function openRenderer(t, width, height) {
   const page = await browser.newPage({ viewport: { width, height } });
   t.after(() => page.close());
   // Serve only the production renderer from disk. No app, vault or external requests.
@@ -21,6 +21,11 @@ async function openPanel(t, surface, width, height, textSizePoints, answer = 'Re
     if (url.origin !== origin || !/^(index\.html|assets\/[\w.-]+)$/.test(path)) return route.abort();
     return route.fulfill({ path: join(renderer, path) });
   });
+  return page;
+}
+
+async function openPanel(t, surface, width, height, textSizePoints, answer = 'Retained answer\n\nMore retained text.') {
+  const page = await openRenderer(t, width, height);
   await page.addInitScript(({ initialSurface, textSizePoints, answer }) => {
     let listener, scroll;
     let state = { surface: initialSurface, visible: true, busy: false, platform: 'windows', appearance: textSizePoints ? { TextSizePoints: textSizePoints } : {}, error: null,
@@ -187,6 +192,56 @@ test('native half-notches reach every complete line after a keyboard scroll at 1
   }
 });
 
+for (const height of [80, 185]) {
+  for (const unit of [1, 2]) {
+    test(`native ±${unit} deltas scroll proportionally at 180×${height} and 28 points`, async t => {
+      const answerText = Array.from({ length: 14 }, (_, index) => `Line ${index + 1}`).join('\n');
+      const page = await openPanel(t, 'answer', 180, height, 28, answerText);
+      await showRecovery(page);
+      const answer = page.getByRole('region', { name: 'Answer' });
+      await answer.focus();
+      await answer.evaluate(element => {
+        const content = element.closest('.answer-content');
+        const viewport = element.ownerDocument.defaultView.getComputedStyle(content).overflowY === 'auto' ? content : element;
+        viewport.addEventListener('scrollend', () => { element.dataset.keyboardScrolled = 'yes'; }, { once: true });
+      });
+      await page.keyboard.press('ArrowDown');
+      await expect(answer).toHaveAttribute('data-keyboard-scrolled', 'yes');
+
+      const result = await answer.evaluate((element, unit) => {
+        const content = element.closest('.answer-content');
+        const shared = element.ownerDocument.defaultView.getComputedStyle(content).overflowY === 'auto';
+        const viewport = shared ? content : element;
+        const initial = viewport.scrollTop;
+        const limit = viewport.scrollHeight - viewport.clientHeight;
+        const wheel = (delta, count = 1) => {
+          for (let event = 0; event < count; event++) globalThis.scrollPanel(delta);
+          return viewport.scrollTop;
+        };
+        const notch = wheel(-120) - initial;
+        wheel(120);
+        const perNotch = 120 / unit;
+        const smallDown = wheel(-unit, perNotch);
+        const reverse = wheel(unit, perNotch);
+        const bottom = wheel(-unit, 32 * perNotch);
+        const leaveBottom = wheel(unit, perNotch);
+        const top = wheel(unit, 32 * perNotch);
+        const leaveTop = wheel(-unit, perNotch);
+        return { shared, initial, limit, notch, smallDown, reverse, bottom, leaveBottom, top, leaveTop };
+      }, unit);
+      t.diagnostic(JSON.stringify(result));
+      assert.equal(result.shared, height === 80);
+      assert.ok(result.initial > 0 && result.notch > 0 && result.initial + result.notch < result.limit);
+      assert.equal(result.smallDown, result.initial + result.notch, 'fine input advances by the same distance as a notch');
+      assert.equal(result.reverse, result.initial, 'opposite input cancels the movement');
+      assert.equal(result.bottom, result.limit);
+      assert.equal(result.leaveBottom, result.limit - result.notch, 'further input at the bottom leaves reversal available');
+      assert.equal(result.top, 0);
+      assert.equal(result.leaveTop, result.notch, 'further input at the top leaves reversal available');
+    });
+  }
+}
+
 test('mixed signed native wheel deltas accumulate only for single-line recovery', async t => {
   const page = await openPanel(t, 'answer', 180, 121, 28, 'One\nTwo\nThree\nFour\nFive');
   const answer = page.getByRole('region', { name: 'Answer' });
@@ -216,6 +271,82 @@ test('mixed signed native wheel deltas accumulate only for single-line recovery'
   await wheel(240);
   assert.deepEqual(await completeAnswerLines(answer), [2]);
 });
+
+for (const moveFocus of [false, true]) {
+  test(`keyboard Retry at 420×300 keeps focus visible (user moved focus: ${moveFocus})`, async t => {
+    const page = await openRenderer(t, 420, 300);
+    await page.addInitScript(() => {
+      const binding = { Modifiers: 2, Key: 13 };
+      const appearance = { TextSizePoints: 11 };
+      let state = { surface: 'settings', platform: 'windows', visible: true, busy: false, version: 'fixture',
+        settingsSession: 1, settingsRevision: 0, settingsSaving: false, settingsDirty: false, shortcutRecovery: null,
+        shortcuts: Object.fromEntries(['capture', 'visibility', 'test', 'settings', 'exit', 'input'].map(action => [action, binding])),
+        appearance, answer: 'Retained answer', error: null };
+      const draft = { session: state.settingsSession, values: { ResponseMode: 'Brief', CustomInstruction: '', Appearance: appearance,
+        Models: null, ModelPipelines: [] }, keyPresence: { OpenAI: true }, keyUpdates: {}, pipelineUpdates: [] };
+      let publish;
+      let load = async () => structuredClone(draft);
+      globalThis.sc = {
+        getState: async () => state,
+        subscribe: listener => { publish = listener; return () => {}; },
+        getSettingsDraft: () => load(),
+        discardSettings: async session => {
+          globalThis.discardedSession = session;
+          state = { ...state, surface: 'answer' };
+          publish(state);
+        },
+        onScroll: () => () => {}, onInputAction: () => () => {}
+      };
+      globalThis.failRefresh = () => {
+        load = async () => { throw new Error('Simulated Settings read failure'); };
+        state = { ...state, settingsRevision: state.settingsRevision + 1 };
+        publish(state);
+      };
+      globalThis.holdRetry = () => {
+        load = () => new Promise(resolve => { globalThis.finishRetry = () => resolve(structuredClone(draft)); });
+      };
+    });
+    await page.goto(origin);
+    const heading = page.getByRole('heading', { name: 'Answer & shortcuts' });
+    const retry = page.getByRole('button', { name: 'Try loading again' });
+    const mode = page.getByRole('combobox', { name: 'Answer mode' });
+    await expect(heading).toBeFocused();
+    await expect(mode).toBeVisible();
+    await page.evaluate(() => globalThis.failRefresh());
+    await expect(retry).toBeVisible();
+    await page.keyboard.press('Tab');
+    await expect(retry).toBeFocused();
+    await page.evaluate(() => globalThis.holdRetry());
+    await page.keyboard.press('Enter');
+    await expect.poll(() => page.evaluate(() => typeof globalThis.finishRetry)).toBe('function');
+    await expect(retry).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
+    if (moveFocus) {
+      await page.keyboard.press('Tab');
+      await expect(mode).toBeFocused();
+    }
+    await page.evaluate(() => globalThis.finishRetry());
+    await expect(retry).toHaveCount(0);
+    const focused = moveFocus ? mode : heading;
+    await expect(focused).toBeFocused();
+    if (!moveFocus) {
+      const bounds = await heading.evaluate(element => {
+        const rect = element.getBoundingClientRect();
+        const clip = element.closest('[role="tabpanel"]').getBoundingClientRect();
+        const style = element.ownerDocument.defaultView.getComputedStyle(element);
+        const outline = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
+        return { top: rect.top - outline, bottom: rect.bottom + outline, clipTop: clip.top, clipBottom: clip.bottom,
+          focusVisible: element.matches(':focus-visible') && style.outlineStyle === 'solid' && outline > 0 };
+      });
+      t.diagnostic(JSON.stringify(bounds));
+      assert.ok(bounds.focusVisible && bounds.top >= bounds.clipTop && bounds.bottom <= bounds.clipBottom,
+        'the heading and its keyboard focus outline fit inside the scroll viewport');
+    }
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('answer-text')).toHaveText('Retained answer');
+    assert.equal(await page.evaluate(() => globalThis.discardedSession), 1);
+  });
+}
 
 for (const [textSizePoints, height] of [[16, 80], [18, 80], [28, 80], [28, 173]]) {
   test(`shortcut recovery keeps ${textSizePoints}-point answer lines readable at 180×${height}`, async t => {

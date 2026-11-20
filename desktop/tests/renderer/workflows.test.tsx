@@ -6,7 +6,7 @@ import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
-import { settingsDraftSchema } from '../../src/main/validation';
+import { commandSchema, settingsDraftSchema } from '../../src/main/validation';
 import { validateShortcuts } from '../../src/platform/shortcuts';
 import { controllerFixture, deferred } from '../main/controller-fixture';
 import userEvent from '@testing-library/user-event';
@@ -27,7 +27,7 @@ async function renderController(production: ReturnType<typeof controllerFixture>
   production.host.publish = driver.emit;
   const api = production.controller.apiMethods();
   driver.api.getState.mockImplementation(api.getState);
-  driver.api.command.mockImplementation(api.command);
+  driver.api.command.mockImplementation(command => api.command(commandSchema.parse(command)));
   driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
   driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
   driver.api.discardSettings.mockImplementation(api.discardSettings);
@@ -447,6 +447,62 @@ describe('production Settings save overlap', () => {
     expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
     expect(production.save.mock.calls[0]![0].ResponseMode).toBe('Brief');
+  });
+
+  it.each(['start recording', 'stop recording', 'edit'] as const)('ignores a delayed %s command from the previous Settings session', async action => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    const command = production.controller.apiMethods().command;
+    const deliver = deferred<void>();
+    const captureShortcut = () => screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
+    await openSettingsFromPanel();
+    const oldSession = production.controller.getState().settingsSession;
+    if (action !== 'edit') disclose('Keyboard shortcuts');
+    if (action === 'stop recording') await act(async () => { fireEvent.focus(captureShortcut()); });
+    driver.api.command.mockImplementationOnce(async value => {
+      await deliver.promise;
+      await command(commandSchema.parse(value));
+    });
+    if (action === 'edit') choose('Answer mode', 'Brief');
+    else if (action === 'start recording') fireEvent.focus(captureShortcut());
+    else fireEvent.blur(captureShortcut());
+    const lateCommand = driver.api.command.mock.lastCall![0];
+    const delayed = driver.api.command.mock.results.at(-1)!.value;
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    const session = production.controller.getState().settingsSession;
+    expect(session).toBeGreaterThan(oldSession);
+    disclose('Keyboard shortcuts');
+    if (action === 'stop recording') {
+      await act(async () => { fireEvent.focus(captureShortcut()); });
+      expect(production.applyShortcuts).toHaveBeenLastCalledWith(expect.any(Object), true, production.controller.onAction);
+    }
+    production.applyShortcuts.mockClear();
+
+    await act(async () => { deliver.resolve(); await delayed; });
+    expect(production.applyShortcuts).not.toHaveBeenCalled();
+    expect(production.controller.getState()).toMatchObject({ settingsSession: session, settingsDirty: false, settingsSaving: true });
+    expect(lateCommand).toMatchObject({ session: oldSession });
+
+    choose('Answer mode', 'Summarize');
+    if (action !== 'stop recording') {
+      await act(async () => { fireEvent.focus(captureShortcut()); });
+      expect(production.applyShortcuts).toHaveBeenCalledExactlyOnceWith(expect.any(Object), true, production.controller.onAction);
+    }
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsSession: session, settingsDirty: true, settingsSaving: false });
+    expect(production.controller.canInstallUpdate()).toBe(false);
+    await act(async () => { fireEvent.blur(captureShortcut()); });
+    expect(production.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ ResponseMode: action === 'edit' ? 'Brief' : 'Default' }), false,
+      production.controller.onAction);
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].ResponseMode).toBe('Summarize');
   });
 
   it.each([
@@ -921,7 +977,7 @@ describe('settings drafts and protected controls', () => {
     await waitFor(() => expect(document.activeElement).toBe(field));
     expect(field.getAttribute('aria-invalid')).toBe('true'); expect(driver.saved).toHaveLength(0);
     fireEvent.click(screen.getByText('Keyboard shortcuts', { selector: 'summary' }));
-    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false });
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
   });
   it('adapts keyboard navigation to a narrow horizontal tab list', async () => {
     const previousWidth = window.innerWidth;
@@ -1034,12 +1090,12 @@ describe('settings drafts and protected controls', () => {
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
     expect(driver.getState().settingsDirty).toBe(true);
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'settingsDraftChanged').map(([command]) => command)).toEqual([
-      { type: 'settingsDraftChanged', dirty: true }
+      { type: 'settingsDraftChanged', dirty: true, session: driver.getState().settingsSession }
     ]);
     fireEvent.click(screen.getByTestId(action === 'Save' ? 'settings-save' : 'settings-back'));
     await screen.findByTestId('answer-text');
     expect(driver.getState().settingsDirty).toBe(false);
-    expect(driver.api.command).not.toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
+    expect(driver.api.command).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'settingsDraftChanged', dirty: false }));
     expect(driver.saved).toHaveLength(action === 'Save' ? 1 : 0);
   });
   it('shows loading, allows Back, and focuses the page heading only after hydration', async () => {
@@ -1282,12 +1338,13 @@ describe('settings drafts and protected controls', () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     disclose('Keyboard shortcuts');
     const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
-    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true });
+    const session = driver.getState().settingsSession;
+    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true, session });
     fireEvent.keyDown(capture, { key: 'F12', code: 'F12', keyCode: 123 }); expect((capture as HTMLInputElement).value).toContain('F12 is reserved');
     fireEvent.keyDown(capture, { key: 'Enter', code: 'Enter', keyCode: 13, ctrlKey: true }); expect((capture as HTMLInputElement).value).toContain('different shortcut');
     fireEvent.keyDown(capture, { key: 'k', code: 'KeyK', keyCode: 75, ctrlKey: true, shiftKey: true });
     expect((capture as HTMLInputElement).value).toBe('Ctrl+Shift+K');
-    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false });
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false, session });
     const visibility = screen.getByRole('textbox', { name: 'Show or hide panel shortcut' }); fireEvent.focus(visibility);
     await act(async () => driver.emit({ visible: false }));
     expect((visibility as HTMLInputElement).value).toBe('Ctrl+/');
@@ -1302,7 +1359,8 @@ describe('settings drafts and protected controls', () => {
     fireEvent.keyDown(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16, shiftKey: true });
     expect((field as HTMLInputElement).value).toContain('Listening');
     fireEvent.keyUp(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16 }); expect((field as HTMLInputElement).value).toBe('Right Shift');
-    fireEvent.click(field); fireEvent.blur(window); expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false });
+    fireEvent.click(field); fireEvent.blur(window);
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
   });
   it('keeps failed Save drafts editable and shows a bounded error without IPC exception details', async () => {
     const driver = fixture(); driver.api.saveSettings.mockRejectedValueOnce(new Error('private raw storage error'));

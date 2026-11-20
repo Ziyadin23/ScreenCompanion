@@ -253,7 +253,7 @@ async function boot(): Promise<void> {
     const size: PanelSize = { Width: Math.round(panelBounds.width * scale), Height: Math.round(panelBounds.height * scale) };
     void store.saveWindowSize(size);
   });
-  window.on('blur', () => { void controller?.command({ type: 'recordShortcut', recording: false }); });
+  window.on('blur', () => { void controller?.onWindowBlur(); });
   try {
     tray = new Tray(trayImage(false)); tray.setToolTip('SC');
     tray.setContextMenu(Menu.buildFromTemplate([

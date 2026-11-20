@@ -43,7 +43,7 @@ export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['capture', 'showInput', 'toggleVisibility', 'settings', 'captureTest', 'exit', 'escape', 'beginMove']) }),
   z.object({ type: z.literal('submit'), question: z.string().min(1).max(4000).refine(value => value.trim().length > 0), includeScreenshot: z.boolean() }),
   z.object({ type: z.literal('inputHeight'), height: z.number().int().min(1).max(32768) }),
-  z.object({ type: z.literal('recordShortcut'), recording: z.boolean() }),
-  z.object({ type: z.literal('settingsDraftChanged'), dirty: z.boolean() }),
+  z.object({ type: z.literal('recordShortcut'), recording: z.boolean(), session: settingsSessionSchema }),
+  z.object({ type: z.literal('settingsDraftChanged'), dirty: z.boolean(), session: settingsSessionSchema }),
   z.object({ type: z.literal('beginResize'), edge: z.enum(['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right']) })
 ]);

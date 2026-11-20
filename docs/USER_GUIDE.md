@@ -108,9 +108,11 @@ If an earlier save changes **Answer mode** while you type in **Custom instructio
 you can finish typing in that field. The latest saved mode applies unless you
 changed it in your draft. If Settings cannot load the latest preferences, choose
 **Try loading again**. You can keep editing your draft while it loads. **Save**
-becomes available when the latest preferences load. Press **Escape** to use Back.
+becomes available when the latest preferences load. If focus is still on the
+retry button, it moves to the page heading and scrolls it into view. Press
+**Escape** to use Back.
 
-Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. With large text in a short Answer panel, you can use the keyboard and the mouse wheel to read complete lines.
+Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. With large text in a short Answer panel, you can read complete lines with the keyboard and with small mouse wheel movements in either direction.
 
 ## Application updates
 

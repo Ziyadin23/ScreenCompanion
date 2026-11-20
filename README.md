@@ -129,9 +129,10 @@ panel and its preview while Settings keeps its readable palette.
 
 In current source, a Settings save that finishes after you switch surfaces
 keeps Question or a newer Settings draft open. A retry keeps the saved settings
-you leave untouched. Back discards the draft it came from and restores saved
-shortcuts when they are available. If recovery fails, the panel tells you to
-restart SC.
+you leave untouched. If focus stays on **Try loading again**, a successful retry
+brings the focused page heading into view. Back discards its draft and restores
+saved shortcuts when they are available. If recovery fails, the panel tells you
+to restart SC. Small wheel movements scroll a compact Answer in both directions.
 
 In the current source, Escape closes the setup service menu first and cancels
 idle setup when the menu is closed. Setup stays open while Save is pending.

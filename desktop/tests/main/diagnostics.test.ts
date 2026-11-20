@@ -43,4 +43,13 @@ describe('diagnostic privacy and renderer boundaries', () => {
     for (const height of [0, -1, 1.5, 32769, NaN]) expect(commandSchema.safeParse({ type: 'inputHeight', height }).success).toBe(false);
     expect(commandSchema.safeParse({ type: 'inputHeight', height: 76 }).success).toBe(true);
   });
+  it.each([
+    { type: 'recordShortcut', recording: true },
+    { type: 'settingsDraftChanged', dirty: true }
+  ] as const)('requires a Settings session for $type IPC', command => {
+    for (const session of [undefined, -1, 1.5, '1', NaN, Infinity]) {
+      expect(commandSchema.safeParse({ ...command, session }).success).toBe(false);
+    }
+    expect(commandSchema.parse({ ...command, session: 1 })).toEqual({ ...command, session: 1 });
+  });
 });

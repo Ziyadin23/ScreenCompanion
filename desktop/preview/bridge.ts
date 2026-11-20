@@ -34,7 +34,8 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       if (command.type === 'settings') emit({ surface: 'settings' });
       if (command.type === 'showInput') emit({ surface: 'input' });
       if (command.type === 'captureTest') emit({ surface: 'captureTest' });
-      if (command.type === 'settingsDraftChanged') emit({ settingsDirty: command.dirty });
+      if (command.type === 'settingsDraftChanged' && state.surface === 'settings' && command.session === state.settingsSession)
+        emit({ settingsDirty: command.dirty });
       if (['escape', 'exit', 'submit', 'capture'].includes(command.type)) emit({ surface: 'answer', settingsDirty: false });
     },
     getSettingsDraft: async () => ({ ...structuredClone(draft), session: state.settingsSession }),

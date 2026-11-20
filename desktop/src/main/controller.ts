@@ -189,6 +189,9 @@ export class ApplicationController {
     const commands: Record<AppAction, AppCommand> = { capture: { type: 'capture' }, test: { type: 'captureTest' }, visibility: { type: 'toggleVisibility' }, settings: { type: 'settings' }, exit: { type: 'exit' }, input: { type: 'showInput' } };
     void this.command(commands[action === 'input-with-screenshot' ? 'input' : action]).catch(error => this.fail('Display', error));
   };
+  onWindowBlur(): Promise<void> {
+    return this.command({ type: 'recordShortcut', recording: false, session: this.state.settingsSession });
+  }
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
     if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
@@ -240,10 +243,10 @@ export class ApplicationController {
         else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
         break;
       case 'settingsDraftChanged':
-        if (this.state.surface === 'settings') { this.state.settingsDirty = command.dirty; this.publish(); }
+        if (this.ownsSettings(command.session)) { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
       case 'recordShortcut':
-        if (this.state.surface === 'settings') await this.setRecording(command.recording, this.state.settingsSession);
+        if (this.ownsSettings(command.session)) await this.setRecording(command.recording, command.session);
         break;
       case 'beginMove': if (this.state.visible && !this.capturing) this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
       case 'beginResize':

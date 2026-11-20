@@ -128,8 +128,8 @@ export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
   | { type: 'inputHeight'; height: number }
-  | { type: 'recordShortcut'; recording: boolean }
-  | { type: 'settingsDraftChanged'; dirty: boolean }
+  | { type: 'recordShortcut'; recording: boolean; session: number }
+  | { type: 'settingsDraftChanged'; dirty: boolean; session: number }
   | { type: 'beginResize'; edge: ResizeEdge };
 export interface SetupRequest { provider: ApiProvider; apiKey: string }
 export interface DesktopApi {

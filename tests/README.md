@@ -119,7 +119,12 @@ measures complete answer lines at the default, 16-point, 18-point and 28-point
 sizes. It checks keyboard scrolling and full native wheel steps in both
 directions, including 28-point text in a 180 × 173 pixel Answer. At 180 × 121
 with 28-point text, it checks half-notches after keyboard scrolling, mixed
-signed deltas and proportional scrolling on the ordinary Answer panel.
+signed deltas and proportional scrolling on the ordinary Answer panel. At
+180 × 80 and 180 × 185 with 28-point text, it compares wheel deltas of ±1 and
+±2 to a full notch and checks reversal at both scroll limits. At 420 × 300,
+it checks that a successful keyboard retry shows the heading and its focus
+outline, honors a user's focus change while the retry is pending, and keeps
+Escape available.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

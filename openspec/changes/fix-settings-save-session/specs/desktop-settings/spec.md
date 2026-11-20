@@ -22,6 +22,10 @@ A successful Settings Save SHALL apply the saved preferences and return its own 
 - **WHEN** a Back request from a closed Settings session reaches SC after a new session has opened
 - **THEN** SC preserves the newer draft, its edit status and its owned dialogs
 
+#### Scenario: Late recording or edit command from a closed session
+- **WHEN** a shortcut recording or draft edit command reaches SC from a closed Settings session after a new session has opened
+- **THEN** SC preserves the newer session's shortcut registration and edit status
+
 #### Scenario: Save or Back in the active session
 - **WHEN** Save succeeds or Back discards edits in the session still open in Settings
 - **THEN** the session closes and returns to the retained answer while honoring the user's visibility choice
@@ -61,7 +65,8 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **WHEN** the user activates Try loading again after a Settings read fails
 - **THEN** Save stays unavailable until the latest preferences load
 - **AND** the Retry control retains focus while waiting and after a failure if the user leaves focus there
-- **AND** on success, focus moves to the page heading if Retry still has focus
+- **AND** on success, focus moves to the page heading and its focus outline is visible if Retry still has focus
+- **AND** if the user moved focus during the retry, that control keeps focus
 - **AND** Escape invokes Back from either control
 
 #### Scenario: Reasoning edit after an overlapping Save
@@ -85,4 +90,5 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **THEN** the restart guidance fits alongside the usable panel content and controls at supported minimum sizes
 - **AND** the user can read complete retained answer lines at the selected text size using scrolling as needed within the panel dimensions
 - **AND** fine-resolution native wheel input can reach every remaining line after a keyboard scroll
+- **AND** proportional scrolling retains partial movement from fine native wheel events in either direction
 - **AND** the user can reach both Question send controls by keyboard

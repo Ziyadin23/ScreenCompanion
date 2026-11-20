@@ -104,7 +104,7 @@ export function Settings({ state }: { state: AppState }) {
       const focused = document.activeElement;
       // Move focus before Retry disappears if the user is still on it.
       if (retryButton.current ? focused === retryButton.current : !previous && focused === document.body) {
-        heading.current?.focus({ preventScroll: true });
+        heading.current?.focus();
       }
       setLoadedRevision(state.settingsRevision);
       setLoadStatus('ready');
@@ -129,7 +129,7 @@ export function Settings({ state }: { state: AppState }) {
     if (dirtyRef.current) return;
     dirtyRef.current = true;
     setDirty(true);
-    void window.sc.command({ type: 'settingsDraftChanged', dirty: true }).catch(() => {
+    void window.sc.command({ type: 'settingsDraftChanged', dirty: true, session: state.settingsSession }).catch(() => {
       if (alive.current) setError('Settings edit status could not be updated. Save your changes or use Back before restarting.');
     });
   }
@@ -145,7 +145,7 @@ export function Settings({ state }: { state: AppState }) {
   function stopRecording() {
     if (!recordingRef.current) return;
     recordingRef.current = null; pendingModifier.current = null; setRecording(null); setRecordNotice('');
-    void window.sc.command({ type: 'recordShortcut', recording: false }).catch(() => {
+    void window.sc.command({ type: 'recordShortcut', recording: false, session: state.settingsSession }).catch(() => {
       if (alive.current) setError('Shortcut recording could not be stopped. Close Settings and try again.');
     });
   }
@@ -206,7 +206,7 @@ export function Settings({ state }: { state: AppState }) {
     if (recordingRef.current === field) return;
     stopRecording();
     recordingRef.current = field; setRecording(field); setRecordNotice('Listening… press a key');
-    void window.sc.command({ type: 'recordShortcut', recording: true }).catch(() => {
+    void window.sc.command({ type: 'recordShortcut', recording: true, session: state.settingsSession }).catch(() => {
       if (alive.current) { stopRecording(); setError('Shortcut recording is unavailable. Try again.'); }
     });
   }

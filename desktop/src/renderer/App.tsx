@@ -42,6 +42,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => {
     let pendingDelta = 0;
+    let fractionalScroll: { viewport: HTMLElement; top: number; remainder: number } | null = null;
     return window.sc.onScroll((delta) => {
       // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
       const answer = text.current;
@@ -60,6 +61,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
           const fullLines = Math.max(1, Math.floor(readableHeight / lineHeight) - 1);
           step = Math.min(step, fullLines * lineHeight);
           if (readableHeight < 2 * lineHeight) {
+            fractionalScroll = null;
             pendingDelta += delta;
             const notches = Math.trunc(pendingDelta / WHEEL_DELTA);
             if (!notches) return;
@@ -74,7 +76,14 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
         }
       }
       pendingDelta = 0;
-      viewport.scrollTop -= delta / WHEEL_DELTA * step;
+      const top = viewport.scrollTop;
+      const remainder = fractionalScroll?.viewport === viewport && fractionalScroll.top === top ? fractionalScroll.remainder : 0;
+      const limit = viewport.scrollHeight - viewport.clientHeight;
+      const target = Math.min(limit, Math.max(0, top + remainder - delta / WHEEL_DELTA * step));
+      viewport.scrollTop = target;
+      // Keep the fraction Chromium rounded off. A keyboard scroll or a new viewport starts from its own position.
+      const actual = viewport.scrollTop;
+      fractionalScroll = { viewport, top: actual, remainder: target - actual };
     });
   }, [state.appearance.TextSizePoints, answerRecovery, state.answer, state.error, state.surface]);
   useEffect(() => {
