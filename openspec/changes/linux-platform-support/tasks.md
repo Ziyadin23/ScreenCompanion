@@ -111,8 +111,29 @@
   separate automatic profiles and deliberate resize persistence. The independent
   production probe passed 22 checks including 530×240 restart and the remembered
   380×160 answer size below Question's minimum.
-- The coordinator owns independent review of the corrected staged tree before
-  PR publication and the combined resize review with #61.
+- Two independent reviews passed the remap correction before commit
+  `09c7f6da54bf6ae33486128f62b01c7481edac46`.
+
+### 2.6 Combined sizing checkpoint (2026-11-20)
+
+- The local issue branch combines the reviewed #19 and #61 sources by normal
+  merge. Temporary Wayland constraints apply on fit and remap. The shared
+  resize guard uses the latest effective bounds so a later manual resize to an
+  earlier size still reaches the size store. The fit and remap paths refresh
+  the Wayland size hints when releasing temporary constraints, so a native
+  drag can resize the mapped panel again. [Tested source and results](../../../docs/VERIFICATION.md#combined-settings-sizing-and-manual-resize).
+- With the shared verification lock and one Vitest worker, full desktop verify
+  and the eight focused suites exited 0. The isolated
+  [Hyprland regression](../../../tests/README.md#hyprland-panel-geometry) passed
+  all five scenarios, and the independent production probe passed 22 checks.
+  Two fresh production profiles passed the interactive pointer drag, file
+  persistence and same-profile restart checks after Back and Save.
+  Astryx reported 20 passes and two font warnings. Playwright case discovery
+  passed on Fedora, including both Windows restart cases.
+- The coordinator owns independent review of this merge. At the start of the
+  resumed verification, upstream main was `6499acc` and
+  [PR #119](https://github.com/Ziyadin23/ScreenCompanion/pull/119) was open. The
+  coordinator owns public PR preparation after the shared resize fix lands.
 - Keep 2.6 open for the Windows Settings, panel resize and restart smoke on
   the integrated candidate and the recorder check. The project owner owns the
   merge and coordinates those checks with the existing Windows queue. Task 2.7

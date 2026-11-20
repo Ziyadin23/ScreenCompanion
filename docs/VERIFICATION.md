@@ -699,6 +699,54 @@ Windows runtime, recorder, final packaged target checks and a numbered local
 beta handoff remain pending. The source candidate uses the existing beta.14
 version label and the beta.14 release reservation remains with #84.
 
+### Combined Settings sizing and manual resize
+
+On 2026-11-20 UTC, verification resumed on the local merge of the #19 correction at
+`09c7f6da54bf6ae33486128f62b01c7481edac46` with the reviewed
+[PR #119](https://github.com/Ziyadin23/ScreenCompanion/pull/119) head
+`d9b3fce8c67f660727d071c82b627832c28be642`. The tested `desktop/` tree was
+`321cd7da903b3e0b3eac72a6177ecfd87a5d2b66`. Its `src/` and `tests/` trees were
+`1586aa2c92060173cb5e449b35a7c9160f39f102` and
+`9fdb51524173f6319106c2dba1ad9a7042cdedcb`. The main bundle SHA-256 was
+`e34d3a1e16bb52c815551abf7745132ad59996b1be3f8bd6d839463cf9759d4f`.
+
+The initial staged merge passed the compositor geometry commands. A separate
+pointer test failed at the first drag. Electron reported that the fixed limit
+had been cleared, and the Wayland trace showed Hyprland still using the fixed
+size. Refreshing resizability when releasing the temporary limits publishes
+the updated size hints. In each fresh production profile, a virtual Wayland
+pointer used Hyprland's interactive resize binding after an untouched Back or
+Save. The later answer fit at 480×276 with no saved size. The drag to 530×240
+and the drag back to 480×276 each updated the size file. Restart on each
+profile restored 480×276. Both runs passed all 10 checks, exit 0.
+
+All five checked-in scenarios passed on the same isolated Fedora 44 and
+Hyprland setup, exit 0. Separate fresh production profiles kept automatic fit
+after Back and Save. The next synthetic answer fit, and each later compositor
+resize wrote 530×240. The Question minimum, Escape and delayed Settings load
+during capture also passed. The separate production entry point passed all 22
+checks, exit 0. The 480×144 answer returned from 760×680 Settings with no size
+file after either action. The 530×240 resize survived restart. A 380×160 manual
+size remained saved while Question used 380×180, and Escape restored 380×160
+before and after restart. An earlier run sampled the 420×180 startup size
+before the short answer fit at 420×140. The checked-in test now waits for the
+short answer to fit and checks that the size file is absent immediately after
+Back and Save. An earlier production probe sampled the size file before it
+appeared. The final probe waits for the file after the compositor resize.
+
+The portable production resize cases saved B, saved A after the manual return
+to A, and restored A on the same profile at simulated scales 1 and 1.25.
+Automatic fitting continued after the input minimum raised the height. The
+eight focused suites passed 187 tests. `npm --prefix desktop run verify` passed
+1,259 tests in 37 files, type checking, lint and production bundles. Both runs
+exited 0 with one Vitest worker. An earlier focused run missed a toolbar Enter
+action in the renderer tests and passed on retry. The Astryx build check
+reported 20 passes and two font warnings, exit 0. Playwright listed all 38
+Windows cases on Fedora, including both changed restart scenarios, exit 0.
+The workflow self-test, documentation links, strict OpenSpec and whitespace
+checks passed. Windows runtime, named-recorder checks, final packaging and a
+numbered local beta handoff remain open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

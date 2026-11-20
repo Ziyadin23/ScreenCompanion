@@ -113,9 +113,10 @@ capture; your typed question takes priority over unrelated visible questions.
 
 Select and copy answer text directly. On Windows, hover over the panel and use
 the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
-edges and corners. Hiding it ends the current drag. SC remembers its size.
-Linux uses native window controls for moving and resizing. Returning from
-Settings restores the answer panel at its own size.
+edges and corners. Hiding it ends the current drag. Linux uses native window
+controls for moving and resizing. SC remembers the last size you choose across
+launches. On Linux, returning from Settings restores the answer panel at its
+own size.
 
 Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance

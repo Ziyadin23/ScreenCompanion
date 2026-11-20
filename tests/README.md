@@ -163,7 +163,13 @@ windows, hooks, hotkeys and temporary vaults.
 
 Every resize edge on answer/input and the Settings competing-shortcut workflow
 have single-monitor Windows 11 evidence in the dated map above; they belong to
-the UI suite, separately from native harness contention assertions. Standalone
+the UI suite, separately from native harness contention assertions. The two
+panel persistence cases also exercise a production surface transition to size A,
+native edge drags to B and back to A, and restoration of A on a normal
+same-profile Windows restart with a synthetic vault. The portable
+`tests/main/panel-resize.test.ts` exercises the production resize callback,
+file saves and startup at two simulated scales. Use a candidate-specific Windows
+run for native input and restart evidence. Standalone
 packaged launches and different executable paths retain candidate-specific
 evidence. Pre-initialization duplicate races and mixed-DPI qualification remain
 open. Historical recorder results retain their candidate/surface limits in

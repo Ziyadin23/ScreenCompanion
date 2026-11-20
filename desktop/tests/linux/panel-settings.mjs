@@ -148,6 +148,7 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const panel = await launch('preview', '--synthetic-ui');
     const answer = panel.getByTestId('answer-text');
     await expect(answer).toHaveText('Synthetic SC answer');
+    await expect.poll(() => geometry()?.[1] ?? 180, { message: 'Wait for the short answer to fit below the initial height' }).toBeLessThan(180);
     const answerSize = await settledPanelSize(panel);
     assert.ok(answerSize[0] < 760 && answerSize[1] < 680, 'Expected a compact answer before Settings');
 
@@ -272,6 +273,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           await settings.getByRole('button', { name: action, exact: true }).click();
           await expect(answer).toBeVisible();
           await expect.poll(geometry).toEqual(initialSize);
+          assert.equal(await savedSize(profile), null, `${action} should leave the manual size file absent`);
 
           await panel.getByRole('button', { name: 'Question', exact: true }).press('Enter');
           const question = panel.getByTestId('question-input');
