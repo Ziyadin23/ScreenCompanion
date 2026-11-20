@@ -65,7 +65,7 @@ The 2026-11-02 audit findings were checked against main and filed on **2026-11-1
 | --- | --- | --- |
 | Preserve a new Settings draft when an earlier save completes | P1 | [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59) |
 | Reject malformed extracted option text before answering | P1 | [#60](https://github.com/Ziyadin23/ScreenCompanion/issues/60) remains open for Windows UI, packaged startup, runnable beta handoff and an application PR. [Frozen beta.12 pilot and remaining gates](../openspec/changes/add-local-langgraph-workflow/tasks.md#application-pilot-and-remaining-acceptance) |
-| Persist final user dimensions after returning to an old programmatic size | P2 | [#61](https://github.com/Ziyadin23/ScreenCompanion/issues/61) |
+| Persist final user dimensions after returning to an old programmatic size | P2 | [#61](https://github.com/Ziyadin23/ScreenCompanion/issues/61), [resize tasks and evidence](../openspec/changes/persist-final-panel-size/tasks.md). Windows restart and runnable beta handoff remain open. |
 | Reject present malformed Responses completion statuses | P2 | [#62](https://github.com/Ziyadin23/ScreenCompanion/issues/62), [OpenSpec owner](../openspec/changes/validate-responses-status/tasks.md) |
 
 Of the original 17 inventory issues, 12 remain open at the **2026-11-11** readback. W1/#6, W4/#9, W5/#10, W8/#13 and M1/#21 are closed for their named scopes. Follow-up #39 owns the revised W6 continuation; original #11 was closed as duplicate intake on 2026-11-15 without closing qualification; issue state, private evidence and merged-source state remain separate facts.
