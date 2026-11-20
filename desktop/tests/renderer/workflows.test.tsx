@@ -286,6 +286,85 @@ describe('answer and temporary input', () => {
 });
 
 describe('production Settings save overlap', () => {
+  it.each([
+    { initial: 'Old instruction', first: '', explicit: false },
+    { initial: '', first: 'New instruction', explicit: false },
+    { initial: 'Old instruction', first: '', explicit: true }
+  ])('validates the current Custom instruction after a save ($initial, $first, explicit=$explicit)', async ({ initial, first, explicit }) => {
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), CommandsShown: true, CustomInstruction: initial });
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Custom');
+    const instruction = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Custom instruction' });
+    fireEvent.change(instruction(), { target: { value: first } });
+    choose('Answer mode', 'Brief');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Custom');
+    if (explicit) {
+      fireEvent.change(instruction(), { target: { value: 'Temporary edit' } });
+      fireEvent.change(instruction(), { target: { value: initial } });
+    }
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    const expected = explicit ? initial : first;
+    expect(instruction().value).toBe(expected);
+    if (expected) expect(JSON.stringify(production.controller.getState())).not.toContain(expected);
+    const registrations = production.applyShortcuts.mock.calls.length;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    if (expected) {
+      await screen.findByTestId('answer-text');
+      expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Custom', CustomInstruction: expected });
+    } else {
+      expect((await screen.findByRole('alert')).textContent).toContain('Enter a custom instruction');
+      expect(document.activeElement).toBe(instruction());
+      expect(production.save).toHaveBeenCalledTimes(1);
+      expect(production.applyShortcuts).toHaveBeenCalledTimes(registrations);
+    }
+  });
+
+  it('restores all appearance defaults after an overlapping save', async () => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    tab('Panel');
+    const size = () => screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer text size' });
+    fireEvent.change(size(), { target: { value: '24' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    tab('Panel');
+    fireEvent.change(size(), { target: { value: '18' } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].Appearance.TextSizePoints).toBe(24);
+    fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
+    expect(size().value).toBe(String(DEFAULT_APPEARANCE.TextSizePoints));
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].Appearance).toEqual(DEFAULT_APPEARANCE);
+  });
+
+  it('uses the reasoning suggestion for a legacy vault with an implicit process token limit', async () => {
+    const initial = { ...defaultSettings('synthetic-key'), CommandsShown: true, Models: null };
+    const production = controllerFixture(initial, 'Direct');
+    await renderController(production);
+    await openSettingsFromPanel();
+    tab('Models & API'); advanced();
+    const budget = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer output token limit' });
+    expect(budget.value).toBe('');
+    choose('DeepSeek reasoning', 'High');
+    expect(budget.value).toBe('16000');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[0]![0].Models).toMatchObject({ Provider: 'DeepSeek', Thinking: 'High', AnswerTokenLimit: 16000 });
+  });
+
   it('keeps the earlier custom instruction on an appearance-only retry', async () => {
     const original = { ...defaultSettings('synthetic-key'), CommandsShown: true,
       ResponseMode: 'Custom' as const, CustomInstruction: '  original instruction  ' };
@@ -836,6 +915,27 @@ describe('settings drafts and protected controls', () => {
     tab('Updates'); tab('Commands');
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'settingsDraftChanged')).toEqual([]);
     expect(driver.getState().settingsDirty).toBe(false); expect(screen.queryByText('Unsaved changes')).toBeNull();
+  });
+  it('keeps edits during a failed and retried refresh before enabling Save', async () => {
+    const driver = fixture({ surface: 'settings' });
+    render(<App />);
+    await screen.findByRole('combobox', { name: 'Answer mode' });
+    choose('Answer mode', 'Custom');
+    driver.api.getSettingsDraft.mockRejectedValueOnce(new Error('simulated read failure'));
+    await act(async () => driver.emit({ settingsRevision: 1 }));
+    const retry = await screen.findByRole('button', { name: 'Try loading again' });
+    const save = screen.getByTestId('settings-save');
+    expect(save.matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    const pending = deferred<SettingsDraft>();
+    driver.api.getSettingsDraft.mockImplementationOnce(() => pending.promise);
+    fireEvent.click(retry);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom instruction' }), { target: { value: 'Keep my edit' } });
+    const latest = driver.getDraft();
+    latest.values.CustomInstruction = 'Earlier save';
+    await act(async () => pending.resolve(latest));
+    expect(value('Custom instruction')).toBe('Keep my edit');
+    fireEvent.click(save); await screen.findByTestId('answer-text');
+    expect(driver.saved[0]!.values.CustomInstruction).toBe('Keep my edit');
   });
   it.each(['Save', 'Back'])('reports actual draft edits once and clears dirty state after successful %s', async (action) => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();

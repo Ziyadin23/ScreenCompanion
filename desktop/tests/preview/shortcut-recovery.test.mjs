@@ -135,6 +135,29 @@ test('shortcut recovery leaves a readable retained answer and keyboard controls 
     'the last answer line is readable after keyboard scrolling');
 });
 
+test('native wheel scrolling keeps each line readable after a keyboard scroll at 180×185', async t => {
+  const lineNumbers = Array.from({ length: 11 }, (_, index) => index + 1);
+  const page = await openPanel(t, 'answer', 180, 185, 28, lineNumbers.map(line => `Line ${line}`).join('\n'));
+  await showRecovery(page);
+  const answer = page.getByRole('region', { name: 'Answer' });
+  await answer.focus();
+  await answer.evaluate(element => element.addEventListener('scrollend', () => { element.dataset.keyboardScrolled = 'yes'; }, { once: true }));
+  await page.keyboard.press('ArrowDown');
+  await expect(answer).toHaveAttribute('data-keyboard-scrolled', 'yes');
+  for (const delta of [-120, 120]) {
+    const readable = new Set();
+    for (let notch = 0; notch <= 2 * lineNumbers.length; notch++) {
+      const bounds = await geometry(answer);
+      bounds.lines.filter(line => line.right > line.left).forEach((line, index) => {
+        if (line.top >= bounds.top && line.bottom <= bounds.bottom) readable.add(index + 1);
+      });
+      await page.evaluate(value => globalThis.scrollPanel(value), delta);
+    }
+    const expected = delta < 0 ? lineNumbers.slice(1) : lineNumbers;
+    assert.deepEqual([...readable].sort((left, right) => left - right), expected);
+  }
+});
+
 for (const [textSizePoints, height] of [[16, 80], [18, 80], [28, 80], [28, 173]]) {
   test(`shortcut recovery keeps ${textSizePoints}-point answer lines readable at 180×${height}`, async t => {
     const lineNumbers = Array.from({ length: 11 }, (_, index) => index + 1);

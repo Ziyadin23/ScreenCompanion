@@ -8,6 +8,27 @@ import { settingsDraftSchema } from '../../src/main/validation';
 import { controllerFixture as fixture, deferred } from './controller-fixture';
 
 describe('production lifecycle with injected native boundaries', () => {
+  it('rejects Custom without a current instruction before applying shortcuts or writing settings', async () => {
+    const f = fixture({ ...defaultSettings('synthetic-key'), CommandsShown: true, CustomInstruction: 'Previous instruction' });
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.CustomInstruction = '';
+    const write = f.delaySave();
+    const pending = f.controller.saveSettings(first);
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.ResponseMode = 'Custom';
+    write.resolve(); await pending;
+    f.applyShortcuts.mockClear();
+    await expect(f.controller.saveSettings(second)).rejects.toThrow(/custom instruction/i);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledTimes(1);
+    expect(f.controller.getState().surface).toBe('settings');
+  });
+
   it('does not rewrite existing normalized settings at startup even when help has never been shown', async () => {
     const saved = { ...defaultSettings('synthetic-existing'), PipelineMode: 'Thorough' as const, CommandsShown: false };
     const f = fixture(saved); await f.controller.initialize();

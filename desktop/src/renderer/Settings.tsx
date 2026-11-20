@@ -10,6 +10,7 @@ import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
+import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
 import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
@@ -63,6 +64,7 @@ export function Settings({ state }: { state: AppState }) {
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
+  const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
   const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelDraft>>>({});
   const [showKey, setShowKey] = useState(false);
   const [recording, setRecording] = useState<ShortcutField | null>(null);
@@ -78,24 +80,30 @@ export function Settings({ state }: { state: AppState }) {
 
   useEffect(() => {
     alive.current = true;
+    return () => { alive.current = false; recordingRef.current = null; };
+  }, []);
+  useEffect(() => {
     let cancelled = false;
-    setLoadFailed(false); setError('');
+    setLoadFailed(false);
     void window.sc.getSettingsDraft().then((result) => {
       if (cancelled || result.session !== state.settingsSession) return;
-      const copy = structuredClone(result);
-      // Saved secrets never cross the renderer boundary, even as masked text.
-      copy.keyUpdates = {};
-      copy.modelEdits = [];
-      draftRef.current = copy;
-      setOriginalModels(copy.values.Models);
-      setDraft(copy);
-      setModelDrafts({});
+      const previous = draftRef.current;
+      if (previous) {
+        replaceDraft({ ...previous, values: { ...previous.values, ...applyPreferenceEdits(result.values, previous) } });
+      } else {
+        const copy = structuredClone(result);
+        copy.keyUpdates = {};
+        copy.modelEdits = [];
+        copy.responseEdits = [];
+        copy.appearanceEdits = [];
+        setOriginalModels(copy.values.Models);
+        replaceDraft(copy);
+      }
+      setLoadedRevision(state.settingsRevision);
+      setError('');
     }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
-    return () => {
-      cancelled = true; alive.current = false;
-      recordingRef.current = null;
-    };
-  }, [loadAttempt, state.settingsSession]);
+    return () => { cancelled = true; };
+  }, [loadAttempt, state.settingsSession, state.settingsRevision]);
 
   useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
   useEffect(() => {
@@ -142,8 +150,10 @@ export function Settings({ state }: { state: AppState }) {
   }, []);
   useEffect(() => { if (!state.visible) stopRecording(); }, [state.visible]);
 
-  function updateValues(patch: Partial<SettingsDraft['values']>) {
-    modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
+  function updateResponse<K extends 'ResponseMode' | 'CustomInstruction'>(field: K, value: SettingsDraft['values'][K]) {
+    if (!state.settingsSaving && loadedRevision === state.settingsRevision && draftRef.current?.values[field] === value) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, [field]: value },
+      responseEdits: [...new Set([...(previous.responseEdits ?? []), field])] }));
   }
   const shortcuts = Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) =>
     [field, draft?.shortcutEdits?.includes(field) ? draft.values[field] : state.shortcuts[action]])) as ShortcutBindings;
@@ -208,8 +218,8 @@ export function Settings({ state }: { state: AppState }) {
     if (!draft) return null;
     const answer = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Answer & shortcuts' });
     const model = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Models & API', advanced: true });
-    if (draft.values.ResponseMode === 'Custom' && !draft.values.CustomInstruction.trim()) return answer('Enter a custom instruction or choose another answer mode.', 'custom-instruction');
-    if (draft.values.CustomInstruction.length > 2000) return answer('Custom instructions must be 2,000 characters or fewer.', 'custom-instruction');
+    const instructionError = customInstructionError(draft.values);
+    if (instructionError) return answer(instructionError, 'custom-instruction');
     const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(shortcuts[field]));
     if (invalidShortcut) return answer('Choose valid shortcuts. F12 and Windows reserved combinations are unavailable.', `shortcut-${invalidShortcut.field}`);
     if (duplicateShortcut(shortcuts)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
@@ -231,7 +241,7 @@ export function Settings({ state }: { state: AppState }) {
     return null;
   }
   async function save() {
-    if (savingRef.current || choosingColor || !draft) return;
+    if (savingRef.current || choosingColor || !draft || loadedRevision !== state.settingsRevision) return;
     if (state.settingsSaving) { setError(SAVE_BUSY); setInvalidField(null); return; }
     stopRecording();
     const problem = validation();
@@ -277,13 +287,17 @@ export function Settings({ state }: { state: AppState }) {
     setChoosingColor(true); setError('');
     try {
       const color = await window.sc.chooseColor(draft.values.Appearance[field]);
-      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) modifyDraft((previous) => ({
-        ...previous, values: { ...previous.values, Appearance: { ...previous.values.Appearance, [field]: color } }
-      }));
+      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) appearance({ [field]: color });
     } catch { if (alive.current) setError('The color picker could not be opened. Try again.'); }
     finally { if (alive.current) setChoosingColor(false); }
   }
-  function appearance(patch: Partial<AppearanceSettings>) { if (draft) updateValues({ Appearance: { ...draft.values.Appearance, ...patch } }); }
+  function appearance(patch: Partial<AppearanceSettings>) {
+    const fields = Object.keys(patch) as (keyof AppearanceSettings)[];
+    const current = draftRef.current?.values.Appearance;
+    if (!state.settingsSaving && loadedRevision === state.settingsRevision && fields.every(field => current?.[field] === patch[field])) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Appearance: { ...previous.values.Appearance, ...patch } },
+      appearanceEdits: [...new Set([...(previous.appearanceEdits ?? []), ...fields])] }));
+  }
   const blocked = saving || choosingColor;
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
@@ -309,19 +323,19 @@ export function Settings({ state }: { state: AppState }) {
     </VStack>
     <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
       <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading><p className="hint">{PAGE_HINTS[page]}</p></VStack>
-      {!draft && <VStack className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
+      {(!draft || loadFailed) && <VStack className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
         {loadFailed && <Button label="Try loading again" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</Button>}</VStack>}
       {draft && <fieldset className="settings-fields" disabled={blocked}>
         <legend className="sr-only">{page} settings</legend>
         {page === 'Answer & shortcuts' && <>
           <section className="form-section" aria-labelledby="answer-behavior-heading"><Heading level={3} id="answer-behavior-heading">Answer behavior</Heading>
           <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
-            onChange={(value) => updateValues({ ResponseMode: value as SettingsDraft['values']['ResponseMode'] })} />
+            onChange={(value) => updateResponse('ResponseMode', value as SettingsDraft['values']['ResponseMode'])} />
           {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
           <TextArea id="custom-instruction" label="Custom instruction (used in Custom mode)" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} rows={4}
             ref={(input) => { if (input) input.maxLength = 2000; }} status={invalidField === 'custom-instruction' ? { type: 'error' } : undefined}
             value={draft.values.CustomInstruction}
-            isDisabled={blocked} onChange={(value) => updateValues({ CustomInstruction: value.slice(0, 2000) })} />
+            isDisabled={blocked} onChange={(value) => updateResponse('CustomInstruction', value.slice(0, 2000))} />
           <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></VStack>}</section>
           <details className="advanced-settings" open={shortcutsOpen}>
           <summary aria-disabled={blocked} onClick={(event) => {
@@ -382,7 +396,7 @@ export function Settings({ state }: { state: AppState }) {
           <VStack className="preview-checker"><VStack className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
           </VStack></VStack>
-          <Button label="Restore appearance" type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</Button></section>
+          <Button label="Restore appearance" type="button" onClick={() => appearance(DEFAULT_APPEARANCE)}>Restore appearance</Button></section>
         </>}
         {page === 'Models & API' && <>
           <section className="form-section" aria-labelledby="service-heading"><Heading level={3} id="service-heading">Service connection</Heading>
@@ -436,7 +450,7 @@ export function Settings({ state }: { state: AppState }) {
     {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
     {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
     <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
-      <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
+      <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked || loadedRevision !== state.settingsRevision} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
       <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>
   </section>;
 }

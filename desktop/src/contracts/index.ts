@@ -108,7 +108,7 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState; settingsSession: number; settingsDirty: boolean; settingsSaving: boolean;
+  updates: UpdateState; settingsSession: number; settingsRevision: number; settingsDirty: boolean; settingsSaving: boolean;
   settingsKeyPresence: SettingsDraft['keyPresence'] | null;
   settingsModels: ModelSelection | null; settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
 }
@@ -117,6 +117,8 @@ export interface SettingsDraft {
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
   modelEdits?: ModelField[];
   shortcutEdits?: ShortcutField[];
+  responseEdits?: ('ResponseMode' | 'CustomInstruction')[];
+  appearanceEdits?: (keyof AppearanceSettings)[];
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
   pipelineUpdates: ModelPipelinePreference[];

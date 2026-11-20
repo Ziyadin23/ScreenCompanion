@@ -13,7 +13,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     keyUpdates: {}, pipelineUpdates: [], ...draftOverrides
   };
   let state: AppState = {
-    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsDirty: false, settingsSaving: false,
+    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsRevision: 0, settingsDirty: false, settingsSaving: false,
     settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: shortcutsByAction(draft.values),
@@ -48,7 +48,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       for (const provider of Object.keys(next.keyUpdates) as Array<keyof SettingsDraft['keyPresence']>) keyPresence[provider] = true;
       const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
       draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
-      emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: pipelines.ModelPipelines,
+      emit({ surface: 'answer', settingsRevision: state.settingsRevision + 1, settingsDirty: false, settingsKeyPresence: keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: pipelines.ModelPipelines,
         appearance: draft.values.Appearance, shortcuts: shortcutsByAction(draft.values) });
       return 'saved';
     }),

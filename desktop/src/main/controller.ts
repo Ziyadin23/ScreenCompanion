@@ -3,6 +3,7 @@ import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, Captu
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
+import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText, SHORTCUT_FIELDS, shortcutsByAction } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
@@ -37,9 +38,10 @@ function applyDraftEdits<T extends object>(current: T, original: T, edited: T): 
   return result;
 }
 
-function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, { values: edited, modelEdits, shortcutEdits }: SettingsDraft): SettingsValues {
+function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, draft: SettingsDraft): SettingsValues {
+  const { values: edited, modelEdits, shortcutEdits } = draft;
   const result = applyDraftEdits(current, original, edited);
-  result.Appearance = applyDraftEdits(current.Appearance, original.Appearance, edited.Appearance);
+  Object.assign(result, applyPreferenceEdits(current, draft, original));
   for (const field of shortcutEdits ?? []) result[field] = edited[field];
   if (modelEdits && edited.Models) {
     result.Models = applyModelEdits(current.Models, edited.Models, modelEdits);
@@ -75,7 +77,7 @@ export class ApplicationController {
     const defaults = defaultSettings('');
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: shortcutsByAction(defaults), captureProtection: 'Failed',
-      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsDirty: false, settingsSaving: false,
+      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsRevision: 0, settingsDirty: false, settingsSaving: false,
       settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null };
   }
   getState(): AppState { return structuredClone(this.state); }
@@ -287,14 +289,15 @@ export class ApplicationController {
     const { ApiKey: _key, ProviderKeys: _keys, ...values } = settings;
     const effective = this.deps.configuration(settings);
     values.Models ??= { Provider: effective.provider, AnswerModel: effective.answerModel, VisionModel: effective.visionModel,
-      Thinking: effective.thinking, AnswerTokenLimit: effective.provider === 'DeepSeek' ? effective.answerMaxOutputTokens : null };
+      Thinking: effective.thinking, AnswerTokenLimit: null };
     values.PipelineMode = effective.mode;
     values.ModelPipelines = rememberModelPipeline(values.ModelPipelines, values.Models, effective.mode);
     return values;
   }
   getSettingsDraft(): SettingsDraft {
     if (!this.settings) throw new AppError('NOTREADY', 'Finish API-key setup first.');
-    const values = this.state.surface === 'settings' ? (this.settingsDraftBase ??= this.settingsValues(this.settings)) : this.settingsValues(this.settings);
+    const values = this.settingsValues(this.settings);
+    if (this.state.surface === 'settings') this.settingsDraftBase ??= values;
     return { session: this.state.settingsSession, values: structuredClone(values), keyPresence: this.keyPresence(), keyUpdates: {}, pipelineUpdates: [] };
   }
   private keyPresence(): SettingsDraft['keyPresence'] {
@@ -334,6 +337,8 @@ export class ApplicationController {
     const instruction = values.CustomInstruction;
     const candidate: VaultData = { ...structuredClone(values), ...pipelineSettings, ApiKey: keys[selected], ProviderKeys: keys,
       CustomInstruction: instruction === committed.CustomInstruction ? instruction : instruction.trim() };
+    const instructionError = customInstructionError(candidate);
+    if (instructionError) throw new AppError('INVALIDINSTRUCTION', instructionError);
     this.deps.validateSettings(candidate);
     const configuration = this.deps.configuration(candidate);
     const screenError = screenModelError(configuration.provider, configuration.mode === 'Direct' ? configuration.answerModel : configuration.visionModel);
@@ -354,6 +359,7 @@ export class ApplicationController {
     }
     if (this.exiting) return 'saved';
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
+    this.state.settingsRevision++;
     this.state.shortcuts = shortcutsByAction(candidate);
     this.state.settingsKeyPresence = this.keyPresence();
     this.state.settingsModels = candidate.Models;

@@ -50,8 +50,19 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
       const lineHeight = parseFloat(style.lineHeight);
       const readableHeight = answer.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       // With a shared scroll area, the first half-step reveals the first line below the header.
-      if (viewport !== answer) step = lineHeight / 2;
-      else if (readableHeight < 2 * lineHeight) step = lineHeight;
+      if (viewport !== answer && lineHeight > 0) step = lineHeight / 2;
+      else if (lineHeight > 0 && readableHeight > 0) {
+        // Leave room for a complete line even when a preceding arrow key stopped mid-line.
+        const fullLines = Math.max(1, Math.floor(readableHeight / lineHeight) - 1);
+        step = Math.min(step, fullLines * lineHeight);
+        if (readableHeight < 2 * lineHeight && Math.abs(delta) === 120) {
+          // Align a full notch to the next row when only one fits. Scroll offsets can round to a pixel.
+          const next = delta < 0 ? Math.floor((viewport.scrollTop + 0.5) / lineHeight) + 1 :
+            Math.ceil((viewport.scrollTop - 0.5) / lineHeight) - 1;
+          viewport.scrollTop = next * lineHeight;
+          return;
+        }
+      }
     }
     viewport.scrollTop -= delta / 120 * step;
   }), [state.appearance.TextSizePoints, answerRecovery]);
