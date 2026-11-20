@@ -84,6 +84,16 @@ Two separate postflight checks matched the four protected profile records, origi
 
 The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. Beta.9 remains the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/reduce-windows-package-size/tasks.md).
 
+## Windows application archive filter (2026-11-20)
+
+The Windows file matcher in electron-builder 26.18.0 implicitly included the application source tree when the Windows pattern list contained only exclusions. The corrected Windows list explicitly includes `out/**/*` and `package.json`. The packager collects runtime dependencies into `node_modules`. Both Windows package commands now inspect the resulting `app.asar`. They require exactly those three top-level entries and nonempty main, preload and renderer entry points.
+
+The archive check exited 1 on the preserved optimized beta.14 portable payload and 0 on its matched control. It also exited 1 on the Windows-built beta.15 portable and installer payloads from `96d7adc`. The two beta.15 archives matched byte for byte. Their inventory contained 191 development files, including ten with machine-specific paths. This candidate remains undelivered.
+
+On Fedora 44, two Windows x64 unpacked builds used the same application from main `4667e43`, pinned dependencies, compiled output, native bridge and locale resources. Both used `electron-builder --win --x64 --dir --publish never` with executable metadata editing and native rebuild disabled. Only the Windows file patterns differed. The exclusion-only archive was 11,447,091 bytes and failed the check. The corrected archive was 10,241,870 bytes and passed it. The private fixtures used the original Windows bridge from matching native source. They establish package composition. Windows runtime, installer and portable startup, matched download sizes and local delivery require a newly numbered build.
+
+`npm --prefix desktop ci` and `npm --prefix desktop run verify` passed on Fedora 44 with Node 22.23.1. Verification passed type checking, lint, all 1,259 tests in 37 files and production bundling. [Packaging procedure](PUBLISHING.md#distribution-build) · [Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84)
+
 ## Astryx beta.13 qualification checkpoint (2026-11-17)
 
 [Issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63) continues the [integration owner](../openspec/changes/integrate-astryx-interface/tasks.md), tasks 3.1–3.2, from shared main `545223d`. Candidate **0.5.0-beta.13** is reserved, unpublished and undelivered. Application logic, native code and tests match that baseline; only the manifest and two root lockfile version fields change. The private 165-file non-Markdown source/build/test/licensing manifest has SHA-256 `19feb82a5a91366ec341bbd63f2a6fdac6704f8eb3a4e56660b4c25e9d441855`.

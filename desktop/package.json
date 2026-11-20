@@ -24,10 +24,10 @@
     "test:ui": "node scripts/ui-tests.mjs",
     "test:windows": "node scripts/windows-tests.mjs",
     "native:build": "node scripts/build-native.mjs",
-    "package:win": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis portable --x64 --publish never",
+    "package:win": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis portable --x64 --publish never && node scripts/verify-windows-asar.mjs",
     "package:zip": "node scripts/package-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",
-    "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never",
+    "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never && node scripts/verify-windows-asar.mjs",
     "package:rpm": "npm run typecheck && npm run build && electron-builder --linux rpm --x64 --publish never",
     "test:lab": "node scripts/lab-tests.mjs",
     "test:deepseek": "node scripts/deepseek-tests.mjs"
@@ -68,6 +68,8 @@
         "ru"
       ],
       "files": [
+        "out/**/*",
+        "package.json",
         "!**/node_modules/@astryxdesign/core{,/**/*}",
         "!**/node_modules/@astryxdesign/theme-neutral{,/**/*}",
         "!**/node_modules/@formatjs/fast-memoize{,/**/*}",
@@ -151,6 +153,7 @@
   },
   "devDependencies": {
     "@astryxdesign/cli": "0.7.15",
+    "@electron/asar": "3.4.1",
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
     "@testing-library/jest-dom": "7.0.1",

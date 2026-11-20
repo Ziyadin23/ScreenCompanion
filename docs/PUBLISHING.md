@@ -65,8 +65,11 @@ resources. Question and answer text can use other languages. Renderer libraries
 are included in Vite's production bundles; Windows-specific file exclusions omit
 their redundant `node_modules` copies while retaining the main-process dependency
 graph, native bridge, Electron runtime and licensing. Keep these exclusions under
-`build.win` so Linux package composition retains its existing inputs. Validate
-changes against the actual ASAR and matched control/optimized package sizes.
+`build.win` together with the explicit `out/**/*` and `package.json` includes.
+Both Windows package commands check the resulting `app.asar` for its three
+expected top-level entries and the compiled main, preload and renderer entry
+points. Validate dependency contents and matched control/optimized package sizes
+as part of qualification.
 
 ## Local beta handoff
 
