@@ -10,11 +10,12 @@ import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
+import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
-import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
+import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, sameShortcut, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
 
 type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
@@ -144,19 +145,27 @@ export function Settings({ state }: { state: AppState }) {
   function updateValues(patch: Partial<SettingsDraft['values']>) {
     modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
   }
+  const shortcuts = Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) =>
+    [field, draft?.shortcutEdits?.includes(field) ? draft.values[field] : state.shortcuts[action]])) as ShortcutBindings;
+  function updateShortcuts(patch: Partial<ShortcutBindings>) {
+    const entries = Object.entries(patch) as [ShortcutField, HotkeyBinding][];
+    if (!state.settingsSaving && entries.every(([field, binding]) => sameShortcut(binding, shortcuts[field]))) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, ...patch },
+      shortcutEdits: [...new Set([...(previous.shortcutEdits ?? []), ...entries.map(([field]) => field)])] }));
+  }
   const savedModels = state.settingsModels ?? originalModels;
-  const models = applyModelEdits(savedModels, draft?.values.Models ?? defaultModels(), draft?.modelEdits ?? [], originalModels);
+  const draftModels = draft?.values.Models;
+  const models = applyModelEdits(savedModels, draftModels ?? defaultModels(), draft?.modelEdits ?? []);
   const provider = models.Provider;
+  const localModels = draftModels?.Provider === provider ? draftModels : models;
   const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
   const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
   const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
   function updateModels(patch: Partial<Omit<ModelSelection, 'Provider'>>) {
     const fields = Object.keys(patch) as ModelField[];
     modifyDraft(previous => {
-      const next = { ...models, ...patch };
+      const next = { ...localModels, ...patch };
       const modelEdits = [...new Set([...(previous.modelEdits ?? []), ...fields])];
-      if (patch.Thinking && patch.Thinking !== 'None' && !modelEdits.includes('AnswerTokenLimit') && (next.AnswerTokenLimit ?? 0) < 16000)
-        next.AnswerTokenLimit = 16000;
       return { ...previous, values: { ...previous.values, Models: next }, modelEdits };
     });
   }
@@ -170,10 +179,10 @@ export function Settings({ state }: { state: AppState }) {
   function changeProvider(selected: ApiProvider) {
     if (!draft || selected === provider) return;
     const fields = draft.modelEdits?.filter(field => field !== 'Provider') ?? [];
-    setModelDrafts(previous => ({ ...previous, [provider]: { models, fields } }));
+    setModelDrafts(previous => ({ ...previous, [provider]: { models: localModels, fields } }));
     const next = modelDrafts[selected];
     const modelEdits: ModelField[] = ['Provider', ...(next?.fields ?? [])];
-    const selectedModels = applyModelEdits(savedModels, next?.models ?? defaultModels(selected), modelEdits, originalModels);
+    const selectedModels = next?.models ?? defaultModels(selected);
     modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: selectedModels }, modelEdits }));
     setShowKey(false); setError('');
   }
@@ -190,10 +199,10 @@ export function Settings({ state }: { state: AppState }) {
     if (!field || !draft) return;
     const problem = shortcutProblem(binding);
     if (problem) { setRecordNotice(problem); pendingModifier.current = null; return; }
-    if (SHORTCUT_FIELDS.some((entry) => entry.field !== field && draft.values[entry.field].Key === binding.Key && draft.values[entry.field].Modifiers === binding.Modifiers)) {
+    if (SHORTCUT_FIELDS.some((entry) => entry.field !== field && sameShortcut(shortcuts[entry.field], binding))) {
       setRecordNotice('Each action needs a different shortcut; press another key.'); pendingModifier.current = null; return;
     }
-    updateValues({ [field]: binding }); stopRecording();
+    updateShortcuts({ [field]: binding }); stopRecording();
   }
   function validation(): ValidationProblem | null {
     if (!draft) return null;
@@ -201,9 +210,9 @@ export function Settings({ state }: { state: AppState }) {
     const model = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Models & API', advanced: true });
     if (draft.values.ResponseMode === 'Custom' && !draft.values.CustomInstruction.trim()) return answer('Enter a custom instruction or choose another answer mode.', 'custom-instruction');
     if (draft.values.CustomInstruction.length > 2000) return answer('Custom instructions must be 2,000 characters or fewer.', 'custom-instruction');
-    const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(draft.values[field]));
+    const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(shortcuts[field]));
     if (invalidShortcut) return answer('Choose valid shortcuts. F12 and Windows reserved combinations are unavailable.', `shortcut-${invalidShortcut.field}`);
-    if (duplicateShortcut(draft.values)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
+    if (duplicateShortcut(shortcuts)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
     const invalidModel = (value: string) => !/^[a-z0-9_./:-]{1,160}$/i.test(value.trim()) || value.includes('://');
     if (invalidModel(models.AnswerModel)) return model('Enter a valid answer model ID, without spaces or URLs.', 'answer-model');
     if (invalidModel(models.VisionModel)) return model('Enter a valid screen-reading model ID, without spaces or URLs.', pipeline === 'Direct' ? 'request-pipeline' : 'vision-model');
@@ -236,7 +245,6 @@ export function Settings({ state }: { state: AppState }) {
     savingRef.current = true; setSaving(true); setError(''); setInvalidField(null);
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
-    outgoing.values.CustomInstruction = outgoing.values.CustomInstruction.trim();
     for (const key of PROVIDERS) {
       const replacement = outgoing.keyUpdates[key]?.trim();
       if (replacement) outgoing.keyUpdates[key] = replacement;
@@ -261,7 +269,7 @@ export function Settings({ state }: { state: AppState }) {
     setError('');
     // Clear typed replacements before leaving, including when IPC fails.
     if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
-    try { await window.sc.discardSettings(); }
+    try { await window.sc.discardSettings(state.settingsSession); }
     catch { if (alive.current) setError('Could not return to the answer. Try Back again.'); }
   }
   async function chooseColor(field: typeof COLOR_FIELDS[number]['field']) {
@@ -328,7 +336,7 @@ export function Settings({ state }: { state: AppState }) {
                 controlClassName={recording === field ? 'recording' : undefined}
                 status={invalidField === `shortcut-${field}` ? { type: 'error' } : undefined}
                 {...fieldAria(`shortcut-${field}`, 'shortcut-help')}
-                isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(draft.values[field])}
+                isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(shortcuts[field])}
                 onFocus={() => startRecording(field)} onClick={() => startRecording(field)} onBlur={stopRecording}
                 onKeyDown={(event) => {
                   if (recordingRef.current !== field) return;
@@ -345,7 +353,7 @@ export function Settings({ state }: { state: AppState }) {
           </VStack>
           <VStack className="inline-actions"><Button label="Restore shortcuts" type="button" onClick={() => {
             stopRecording(); const defaults = defaultSettings('');
-            updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
+            updateShortcuts(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
           }}>Restore shortcuts</Button><Button label="Change API key" type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</Button></VStack>
           <Text className="sr-only" role="status">{recording ? recordNotice : ''}</Text></>}</VStack></details>
         </>}

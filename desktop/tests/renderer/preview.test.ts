@@ -14,7 +14,7 @@ describe('synthetic preview bridge', () => {
     expect(JSON.stringify(saved)).not.toContain('synthetic-only-key');
     expect((await api.getState()).appearance.TransparencyPercent).toBe(55);
     saved.values.Appearance.TransparencyPercent = 99;
-    await api.discardSettings();
+    await api.discardSettings(saved.session);
     expect((await api.getSettingsDraft()).values.Appearance.TransparencyPercent).toBe(55);
   });
 });

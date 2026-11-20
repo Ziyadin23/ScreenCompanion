@@ -46,10 +46,12 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     if (!viewport || !answer) return;
     let step = Math.max(1, state.appearance.TextSizePoints * 4);
     if (answerRecovery) {
-      const lineHeight = parseFloat(getComputedStyle(answer).lineHeight);
+      const style = getComputedStyle(answer);
+      const lineHeight = parseFloat(style.lineHeight);
+      const readableHeight = answer.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
       // With a shared scroll area, the first half-step reveals the first line below the header.
       if (viewport !== answer) step = lineHeight / 2;
-      else if (answer.clientHeight < 2 * lineHeight) step = lineHeight;
+      else if (readableHeight < 2 * lineHeight) step = lineHeight;
     }
     viewport.scrollTop -= delta / 120 * step;
   }), [state.appearance.TextSizePoints, answerRecovery]);

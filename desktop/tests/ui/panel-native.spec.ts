@@ -100,7 +100,10 @@ async function expectNativeVisibility(session: Session, visible: boolean, contex
 async function surface(session: Session, selected: 'answer' | 'input') {
   await session.page.evaluate(async selected => {
     if (selected === 'input') await window.sc.command({ type: 'showInput' });
-    else { await window.sc.command({ type: 'settings' }); await window.sc.discardSettings(); }
+    else {
+      await window.sc.command({ type: 'settings' });
+      await window.sc.discardSettings((await window.sc.getState()).settingsSession);
+    }
   }, selected);
   await expect.poll(() => state(session).then(value => value.surface)).toBe(selected);
 }

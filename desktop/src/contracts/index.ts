@@ -1,3 +1,5 @@
+import type { ShortcutField } from './shortcut-display';
+
 /** Shared contracts. The integration lead owns this file; coordinate changes before editing. */
 export const PROVIDERS = ['OpenAI', 'Groq', 'Gemini', 'Mistral', 'OpenRouter', 'DeepSeek'] as const;
 export type ApiProvider = typeof PROVIDERS[number];
@@ -114,6 +116,7 @@ export interface SettingsDraft {
   session: number;
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
   modelEdits?: ModelField[];
+  shortcutEdits?: ShortcutField[];
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
   pipelineUpdates: ModelPipelinePreference[];
@@ -133,7 +136,7 @@ export interface DesktopApi {
   command(command: AppCommand): Promise<void>;
   getSettingsDraft(): Promise<SettingsDraft>;
   saveSettings(draft: SettingsDraft): Promise<SettingsSaveResult>;
-  discardSettings(): Promise<void>;
+  discardSettings(session: number): Promise<void>;
   chooseColor(initialColor: string): Promise<string | null>;
   update(action: UpdateAction): Promise<void>;
   subscribe(listener: (state: AppState) => void): () => void;

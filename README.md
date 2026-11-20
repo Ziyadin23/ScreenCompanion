@@ -125,10 +125,10 @@ and Back kept visible at the bottom. Panel appearance changes affect the answer
 panel and its preview while Settings keeps its readable palette.
 
 In current source, a Settings save that finishes after you switch surfaces
-keeps Question or a newer Settings draft open. A retry keeps the saved model
-fields and pipeline that you leave untouched. Back returns to the answer and
-restores saved shortcuts when they are available. If recovery fails, the panel
-tells you to restart SC.
+keeps Question or a newer Settings draft open. A retry keeps the saved settings
+you leave untouched. Back discards the draft it came from and restores saved
+shortcuts when they are available. If recovery fails, the panel tells you to
+restart SC.
 
 In the current source, Escape closes the setup service menu first and cancels
 idle setup when the menu is closed. Setup stays open while Save is pending.

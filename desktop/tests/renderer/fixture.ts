@@ -1,8 +1,8 @@
 import { vi } from 'vitest';
-import type { AppAction, AppState, DesktopApi, SettingsDraft, SetupRequest } from '../../src/contracts';
+import type { AppState, DesktopApi, SettingsDraft, SetupRequest } from '../../src/contracts';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../../src/contracts/model-pipelines';
-import { SHORTCUT_FIELDS } from '../../src/renderer/shortcuts';
+import { shortcutsByAction } from '../../src/contracts/shortcut-display';
 
 export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: Partial<SettingsDraft> = {}) {
   const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
@@ -16,7 +16,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsDirty: false, settingsSaving: false,
     settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
-    shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
+    shortcuts: shortcutsByAction(draft.values),
     captureProtection: 'Excluded', version: '0.5.0-beta.1', setupLegacyNotice: false,
     updates: { status: 'idle', version: null, progress: null, message: 'Check for a newer version of SC.' }, ...stateOverrides
   };
@@ -49,10 +49,12 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
       draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
       emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: pipelines.ModelPipelines,
-        appearance: draft.values.Appearance });
+        appearance: draft.values.Appearance, shortcuts: shortcutsByAction(draft.values) });
       return 'saved';
     }),
-    discardSettings: vi.fn(async () => { emit({ surface: 'answer', settingsDirty: false }); }),
+    discardSettings: vi.fn<DesktopApi['discardSettings']>(async (session) => {
+      if (state.surface === 'settings' && state.settingsSession === session) emit({ surface: 'answer', settingsDirty: false });
+    }),
     chooseColor: vi.fn(async (_initial: string) => '#123456' as string | null),
     update: vi.fn(async (_action) => {}),
     subscribe: vi.fn((listener: (value: AppState) => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; }),
@@ -63,6 +65,6 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
   return { api, saved, emit, getState: () => state, getDraft,
     inputAction: (submitScreenshot: boolean) => { for (const listener of inputListeners) listener(submitScreenshot); },
     scroll: (delta: number) => { for (const listener of scrollListeners) listener(delta); },
-    actions: () => Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, draft.values[field]])) as Record<AppAction, typeof values.Capture>
+    actions: () => shortcutsByAction(draft.values)
   };
 }

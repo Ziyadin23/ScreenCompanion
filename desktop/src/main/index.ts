@@ -8,7 +8,7 @@ import { createLinuxCryptor, createSettingsStore, SettingsError, validateSetting
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
-import { commandSchema, colorSchema, settingsDraftSchema, setupRequestSchema, updateActionSchema } from './validation';
+import { commandSchema, colorSchema, settingsDraftSchema, settingsSessionSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import { createPortalCapture } from './linux-capture';
@@ -176,7 +176,7 @@ function bindIpc(): void {
     command: value => controller!.command(commandSchema.parse(value)),
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
-    discardSettings: () => controller!.discardSettings(),
+    discardSettings: value => controller!.discardSettings(settingsSessionSchema.parse(value)),
     chooseColor: value => controller!.chooseColor(colorSchema.parse(value)),
     update: value => updates!.action(updateActionSchema.parse(value))
   };

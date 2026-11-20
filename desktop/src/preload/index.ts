@@ -7,7 +7,7 @@ const api: DesktopApi = {
   command: (command: AppCommand) => ipcRenderer.invoke('sc:command', command) as Promise<void>,
   getSettingsDraft: () => ipcRenderer.invoke('sc:getSettingsDraft') as Promise<SettingsDraft>,
   saveSettings: (draft: SettingsDraft) => ipcRenderer.invoke('sc:saveSettings', draft) as Promise<SettingsSaveResult>,
-  discardSettings: () => ipcRenderer.invoke('sc:discardSettings') as Promise<void>,
+  discardSettings: session => ipcRenderer.invoke('sc:discardSettings', session) as Promise<void>,
   chooseColor: (color: string) => ipcRenderer.invoke('sc:chooseColor', color) as Promise<string | null>,
   update: (action: UpdateAction) => ipcRenderer.invoke('sc:update', action) as Promise<void>,
   subscribe(listener) {

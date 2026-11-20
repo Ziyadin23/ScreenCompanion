@@ -135,15 +135,15 @@ test('shortcut recovery leaves a readable retained answer and keyboard controls 
     'the last answer line is readable after keyboard scrolling');
 });
 
-for (const textSizePoints of [16, 18, 28]) {
-  test(`shortcut recovery keeps ${textSizePoints}-point answer lines readable at 180×80`, async t => {
+for (const [textSizePoints, height] of [[16, 80], [18, 80], [28, 80], [28, 173]]) {
+  test(`shortcut recovery keeps ${textSizePoints}-point answer lines readable at 180×${height}`, async t => {
     const lineNumbers = Array.from({ length: 11 }, (_, index) => index + 1);
-    const page = await openPanel(t, 'answer', 180, 80, textSizePoints, lineNumbers.map(line => `Line ${line}`).join('\n'));
+    const page = await openPanel(t, 'answer', 180, height, textSizePoints, lineNumbers.map(line => `Line ${line}`).join('\n'));
     const answer = page.getByRole('region', { name: 'Answer' });
     const recovery = await showRecovery(page);
     const initial = await geometry(answer);
     const fontSize = await answer.evaluate(element => parseFloat(element.ownerDocument.defaultView.getComputedStyle(element).fontSize));
-    const hasCompleteLine = (bounds, line) => line.top >= Math.max(bounds.top, 0) && line.bottom <= Math.min(bounds.bottom, 80);
+    const hasCompleteLine = (bounds, line) => line.top >= Math.max(bounds.top, 0) && line.bottom <= Math.min(bounds.bottom, height);
     const textLines = bounds => bounds.lines.filter(line => line.right > line.left);
     const completeLines = bounds => textLines(bounds).flatMap((line, index) => hasCompleteLine(bounds, line) ? [index + 1] : []);
     assert.equal(textLines(initial).length, lineNumbers.length, 'fixture lines fit the panel width');
@@ -173,16 +173,16 @@ for (const textSizePoints of [16, 18, 28]) {
     const end = await geometry(answer);
     t.diagnostic(JSON.stringify({ textSizePoints, fontSize, recovery, initialFirst: textLines(initial)[0], wheel, end: textLines(end).at(-1) }));
     assert.ok(Math.abs(fontSize - textSizePoints * 4 / 3) < 0.01, 'the requested font size applies');
-    assert.ok(recovery.lines.length && recovery.lines.every(line => fits(line, 180, 80)), 'all recovery text fits');
-    if (textSizePoints === 16) assert.ok(completeLines(initial).includes(1), 'the first line is fully visible with recovery');
+    assert.ok(recovery.lines.length && recovery.lines.every(line => fits(line, 180, height)), 'all recovery text fits');
+    if (textSizePoints === 16 || height === 173) assert.ok(completeLines(initial).includes(1), 'the first line is fully visible with recovery');
     else {
       assert.ok(wheel[0].first.complete.includes(1), 'the first native wheel notch reveals the complete first line');
-      assert.ok(wheel[0].first.recovery.lines.every(line => fits(line, 180, 80)), 'recovery text still fits at the first notch');
+      assert.ok(wheel[0].first.recovery.lines.every(line => fits(line, 180, height)), 'recovery text still fits at the first notch');
     }
     for (const { delta, readable } of wheel)
       assert.deepEqual(readable, lineNumbers, `native wheel delta ${delta} reaches every complete line`);
 
     await page.keyboard.press('Home');
-    await expect.poll(async () => fits(await geometry(page.getByRole('alert')), 180, 80)).toBe(true);
+    await expect.poll(async () => fits(await geometry(page.getByRole('alert')), 180, height)).toBe(true);
   });
 }

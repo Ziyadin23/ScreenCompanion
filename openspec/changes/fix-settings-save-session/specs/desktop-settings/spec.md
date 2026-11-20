@@ -18,6 +18,10 @@ A successful Settings Save SHALL apply the saved preferences and return its own 
 - **WHEN** a Save request from a closed Settings session reaches SC after a new session has opened
 - **THEN** SC declines the earlier request without writing settings or touching the active draft
 
+#### Scenario: Late Back request from a closed session
+- **WHEN** a Back request from a closed Settings session reaches SC after a new session has opened
+- **THEN** SC preserves the newer draft, its edit status and its owned dialogs
+
 #### Scenario: Save or Back in the active session
 - **WHEN** Save succeeds or Back discards edits in the session still open in Settings
 - **THEN** the session closes and returns to the retained answer while honoring the user's visibility choice
@@ -41,6 +45,16 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **WHEN** an earlier Save changes the pipeline for the service and exact answer model in a newer draft
 - **THEN** a retry keeps that saved pipeline when the user leaves Request pipeline untouched
 - **AND** a retry applies any explicit choice in the newer draft, including Thorough
+
+#### Scenario: Retry after changed shortcuts
+- **WHEN** an earlier Save changes shortcut bindings while a newer draft is open
+- **THEN** the newer draft displays, records and validates shortcuts using the current saved bindings and its own edits
+- **AND** Restore shortcuts can explicitly apply defaults from the newer draft
+
+#### Scenario: Reasoning edit after an overlapping Save
+- **WHEN** a newer draft selects an active DeepSeek reasoning level and leaves the budget untouched
+- **THEN** the draft displays and saves the current saved budget when one exists
+- **AND** the draft displays and saves the suggested 16,000-token budget when there is no saved budget
 
 #### Scenario: Shortcut registration rejected
 - **WHEN** the operating system rejects a shortcut in the proposed settings

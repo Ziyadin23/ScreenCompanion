@@ -177,7 +177,7 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.command({ type: 'toggleVisibility' }); f.controller.restore();
     await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
-    await f.controller.discardSettings(); await f.controller.command({ type: 'settings' });
+    await f.controller.discardSettings(f.controller.getState().settingsSession); await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
   });
   it('applies a delayed save without closing a newer Settings draft opened through the input shortcut', async () => {
@@ -583,7 +583,7 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.command({ type: 'settings' }); await f.controller.command({ type: 'toggleVisibility' });
     await f.controller.command({ type: 'settings' });
     expect(f.platform.setOwnedDialogsVisible).toHaveBeenLastCalledWith(expect.any(Buffer), true);
-    await f.controller.discardSettings(); expect(f.platform.closeOwnedDialogs).toHaveBeenCalled();
+    await f.controller.discardSettings(f.controller.getState().settingsSession); expect(f.platform.closeOwnedDialogs).toHaveBeenCalled();
   });
   it('defers Settings during capture and retains the answer behind Settings', async () => {
     const f = fixture(); await f.controller.initialize();
@@ -592,7 +592,8 @@ describe('production lifecycle with injected native boundaries', () => {
     await vi.waitFor(() => expect(f.run).toHaveBeenCalled()); expect(f.controller.getState().surface).toBe('settings');
     f.outcome.resolve({ text: 'Retained result', requestId: 'synthetic' }); await pending;
     expect(f.controller.getState()).toMatchObject({ surface: 'settings', answer: 'Retained result' });
-    await f.controller.discardSettings(); expect(f.controller.getState()).toMatchObject({ surface: 'answer', answer: 'Retained result' });
+    await f.controller.discardSettings(f.controller.getState().settingsSession);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', answer: 'Retained result' });
   });
   it('exposes key presence only and rolls back shortcuts when Save fails', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });

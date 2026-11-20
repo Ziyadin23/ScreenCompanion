@@ -1,7 +1,7 @@
 import type { AppState, DesktopApi, SettingsDraft, Surface } from '../src/contracts';
 import { defaultModels, defaultSettings } from '../src/contracts/defaults';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../src/contracts/model-pipelines';
-import { SHORTCUT_FIELDS } from '../src/renderer/shortcuts';
+import { shortcutsByAction } from '../src/contracts/shortcut-display';
 import { version } from '../package.json';
 
 /** In-memory review fixture. No filesystem, network, or credential-storage path. */
@@ -17,7 +17,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null,
     answer: 'The answer stays here while you adjust Settings.\n\nThis is synthetic preview text. No screen was captured and no service was contacted.',
     error: null, appearance: { ...values.Appearance },
-    shortcuts: Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, values[field]])) as AppState['shortcuts'],
+    shortcuts: shortcutsByAction(values),
     captureProtection: 'Failed', version, setupLegacyNotice: false,
     updates: { status: 'disabled', version: null, progress: null, message: 'Synthetic preview. Updates are disabled.' }
   };
@@ -44,12 +44,15 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
         if (next.keyUpdates[provider]?.trim()) keyPresence[provider] = true;
       }
       const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
-      draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
+      draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines,
+        CustomInstruction: next.values.CustomInstruction.trim() }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
       emit({ surface: 'answer', settingsDirty: false, settingsKeyPresence: keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: pipelines.ModelPipelines,
-        appearance: { ...draft.values.Appearance } });
+        appearance: { ...draft.values.Appearance }, shortcuts: shortcutsByAction(draft.values) });
       return 'saved';
     },
-    discardSettings: async () => { emit({ surface: 'answer', settingsDirty: false }); },
+    discardSettings: async (session) => {
+      if (state.surface === 'settings' && state.settingsSession === session) emit({ surface: 'answer', settingsDirty: false });
+    },
     chooseColor: async () => null,
     update: async () => {},
     subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },

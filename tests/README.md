@@ -113,11 +113,11 @@ Chromium sessions for keyboard focus, error visibility and Save retry.
 
 After `npm --prefix desktop run build`, run `node --test desktop/tests/preview/shortcut-recovery.test.mjs`
 from the repository root. Headless Chromium loads the production renderer with
-synthetic shortcut failure state at the minimum Windows panel sizes. The test
+synthetic shortcut failure state in compact Windows panel sizes. The test
 checks the recovery text, retained answer, Question and keyboard controls. It
 measures complete answer lines at the default, 16-point, 18-point and 28-point
 sizes. It checks keyboard scrolling and full native wheel steps in both
-directions.
+directions, including 28-point text in a 180 × 173 pixel Answer.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

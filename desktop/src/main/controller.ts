@@ -4,7 +4,7 @@ import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
-import { commandsText } from '../contracts/shortcut-display';
+import { commandsText, SHORTCUT_FIELDS, shortcutsByAction } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
@@ -27,7 +27,6 @@ export interface ControllerDependencies {
   platformName?: 'windows' | 'linux';
   executableDirectory?: string; defaultPipelineMode?: PipelineMode;
 }
-const shortcutFields = { capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut', exit: 'ExitShortcut', input: 'InputShortcut' } as const;
 type SettingsValues = SettingsDraft['values'];
 
 function applyDraftEdits<T extends object>(current: T, original: T, edited: T): T {
@@ -38,11 +37,12 @@ function applyDraftEdits<T extends object>(current: T, original: T, edited: T): 
   return result;
 }
 
-function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, { values: edited, modelEdits }: SettingsDraft): SettingsValues {
+function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, { values: edited, modelEdits, shortcutEdits }: SettingsDraft): SettingsValues {
   const result = applyDraftEdits(current, original, edited);
   result.Appearance = applyDraftEdits(current.Appearance, original.Appearance, edited.Appearance);
+  for (const field of shortcutEdits ?? []) result[field] = edited[field];
   if (modelEdits && edited.Models) {
-    result.Models = applyModelEdits(current.Models, edited.Models, modelEdits, original.Models);
+    result.Models = applyModelEdits(current.Models, edited.Models, modelEdits);
   } else if (current.Models && edited.Models && current.Models.Provider === edited.Models.Provider) {
     const initial = original.Models?.Provider === edited.Models.Provider ? original.Models : defaultModels(edited.Models.Provider);
     result.Models = applyDraftEdits(current.Models, initial, edited.Models);
@@ -74,7 +74,7 @@ export class ApplicationController {
   constructor(private readonly deps: ControllerDependencies) {
     const defaults = defaultSettings('');
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
-      appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
+      appearance: { ...defaults.Appearance }, shortcuts: shortcutsByAction(defaults), captureProtection: 'Failed',
       version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsDirty: false, settingsSaving: false,
       settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null };
   }
@@ -83,9 +83,6 @@ export class ApplicationController {
   canInstallUpdate(): boolean {
     return this.state.ready && !this.exiting && !this.state.busy && this.settingsActions === 0 && !this.state.settingsDirty && !this.recording &&
       this.state.surface === 'settings' && this.state.visible;
-  }
-  private shortcuts(settings: VaultData): AppState['shortcuts'] {
-    return Object.fromEntries(Object.entries(shortcutFields).map(([action, field]) => [action, { ...settings[field] }])) as AppState['shortcuts'];
   }
   private publish(): void { if (!this.exiting) this.deps.host.publish(this.getState(), this.capturing); }
   private defer(action: () => void): boolean {
@@ -129,12 +126,12 @@ export class ApplicationController {
     catch (error) {
       const defaults = defaultSettings(this.settings.ApiKey);
       await this.deps.platform.applyShortcuts(defaults, false, this.onAction);
-      for (const field of Object.values(shortcutFields)) this.settings[field] = defaults[field];
+      for (const { field } of SHORTCUT_FIELDS) this.settings[field] = defaults[field];
       this.state.error = this.deps.diagnostics.failure('Shortcuts', error);
     }
     this.detachWheel = this.deps.platform.attachPanel(this.deps.host.panelHandle(), delta => this.deps.host.scroll(delta));
     this.state.ready = true; this.state.surface = 'answer';
-    this.state.appearance = { ...this.settings.Appearance }; this.state.shortcuts = this.shortcuts(this.settings);
+    this.state.appearance = { ...this.settings.Appearance }; this.state.shortcuts = shortcutsByAction(this.settings);
     if (!this.settings.CommandsShown || showCommands) {
       this.settings.CommandsShown = true;
       this.state.answer = this.state.platform === 'linux' ? 'Use the window controls to capture or type a question. Configure Hyprland shortcuts with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(this.state.shortcuts); this.state.visible = true;
@@ -236,8 +233,8 @@ export class ApplicationController {
         else { this.state.surface = 'captureTest'; this.state.visible = true; }
         this.publish(); break;
       case 'escape':
-        if (this.state.surface === 'settings') await this.discardSettings();
-        else if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
+        if (this.state.surface === 'settings') break;
+        if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
         else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
         break;
       case 'settingsDraftChanged':
@@ -334,7 +331,9 @@ export class ApplicationController {
     for (const provider of PROVIDERS) if (draft.keyUpdates[provider] !== undefined) keys[provider] = draft.keyUpdates[provider]!.trim();
     const selected = values.Models?.Provider ?? priorProvider;
     const pipelineSettings = applyModelPipelineUpdates(committed, draft.pipelineUpdates, values.Models);
-    const candidate: VaultData = { ...structuredClone(values), ...pipelineSettings, ApiKey: keys[selected], ProviderKeys: keys };
+    const instruction = values.CustomInstruction;
+    const candidate: VaultData = { ...structuredClone(values), ...pipelineSettings, ApiKey: keys[selected], ProviderKeys: keys,
+      CustomInstruction: instruction === committed.CustomInstruction ? instruction : instruction.trim() };
     this.deps.validateSettings(candidate);
     const configuration = this.deps.configuration(candidate);
     const screenError = screenModelError(configuration.provider, configuration.mode === 'Direct' ? configuration.answerModel : configuration.visionModel);
@@ -355,7 +354,7 @@ export class ApplicationController {
     }
     if (this.exiting) return 'saved';
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
-    this.state.shortcuts = this.shortcuts(candidate);
+    this.state.shortcuts = shortcutsByAction(candidate);
     this.state.settingsKeyPresence = this.keyPresence();
     this.state.settingsModels = candidate.Models;
     this.state.settingsModelPipelines = candidate.ModelPipelines;
@@ -376,8 +375,8 @@ export class ApplicationController {
     this.state.surface = 'answer';
     return true;
   }
-  async discardSettings(): Promise<void> {
-    const session = this.state.settingsSession;
+  async discardSettings(session: number): Promise<void> {
+    if (!this.ownsSettings(session)) return;
     await this.setRecording(false, session);
     if (this.closeSettings(session)) this.publish();
   }
@@ -443,7 +442,7 @@ export class ApplicationController {
   apiMethods(): Pick<DesktopApi, 'getState' | 'setup' | 'command' | 'getSettingsDraft' | 'saveSettings' | 'discardSettings' | 'chooseColor'> {
     return { getState: async () => this.getState(), setup: key => this.setup(key), command: command => this.command(command),
       getSettingsDraft: async () => this.getSettingsDraft(), saveSettings: draft => this.saveSettings(draft),
-      discardSettings: () => this.discardSettings(), chooseColor: color => this.chooseColor(color) };
+      discardSettings: session => this.discardSettings(session), chooseColor: color => this.chooseColor(color) };
   }
   dispose(): void {
     if (this.exiting) return;

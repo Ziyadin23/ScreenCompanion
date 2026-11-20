@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { MAX_MODEL_PIPELINES, validModelPipelines } from '../contracts/model-pipelines';
+import { SHORTCUT_FIELDS } from '../contracts/shortcut-display';
 
 const key = z.string().max(8192).refine(value => !/[\u0000-\u001f\u007f]/u.test(value));
 const shortcut = z.object({ Modifiers: z.number().int().min(0).max(15), Key: z.number().int().min(1).max(65535) });
@@ -9,8 +10,9 @@ const model = z.string().min(1).max(160).regex(/^[A-Za-z0-9_./:-]+$/u).refine(va
 const pipeline = z.enum(['Thorough', 'Direct']);
 const modelPipelines = z.array(z.object({ Provider: z.enum(PROVIDERS), AnswerModel: model, PipelineMode: pipeline }))
   .max(MAX_MODEL_PIPELINES).refine(validModelPipelines);
+export const settingsSessionSchema = z.number().int().nonnegative();
 export const settingsDraftSchema = z.object({
-  session: z.number().int().nonnegative(),
+  session: settingsSessionSchema,
   values: z.object({
     ResponseMode: z.enum(RESPONSE_MODES), CustomInstruction: z.string().max(2000),
     Capture: shortcut, Visibility: shortcut, Test: shortcut,
@@ -26,6 +28,7 @@ export const settingsDraftSchema = z.object({
     ModelPipelines: modelPipelines
   }),
   modelEdits: z.array(z.enum(['Provider', 'AnswerModel', 'VisionModel', 'Thinking', 'AnswerTokenLimit'])).max(5).optional(),
+  shortcutEdits: z.array(z.enum(SHORTCUT_FIELDS.map(({ field }) => field))).max(SHORTCUT_FIELDS.length).optional(),
   keyPresence: z.record(z.enum(PROVIDERS), z.boolean()),
   keyUpdates: z.partialRecord(z.enum(PROVIDERS), key),
   pipelineUpdates: modelPipelines

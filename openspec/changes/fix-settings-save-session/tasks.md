@@ -74,6 +74,21 @@
 - `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs`, `openspec validate --all --strict --no-interactive` and `git diff --check` passed, exit 0. Strict OpenSpec validation passed all 13 items.
 - Task 1.3 remains open for independent standards and acceptance review and the coordinator's PR readiness decision. Task 2.1 remains open for Windows lab readiness, native shortcuts, encrypted vault, UI and named-recorder checks. Task 2.2 remains open for a new version, packaged startup and the verified local beta handoff.
 
+### Final source review corrections on 2026-11-20
+
+- Resumed [draft PR #123](https://github.com/Ziyadin23/ScreenCompanion/pull/123) at head `997ecd36131fd60da8fd018af775f0577e274c53`, tree `306c8797ea33bf2550bf4f7f71519633ecb92956`. Merge `2725f98c492baa39df41368009a4c14aa9387ded` incorporated protected main `4667e43365dd4690d111057f23d85bbd87212372`, which added only #34 documentation. The merge retained the previous desktop tree `4ce9628090eba6055b37165b65d8d3feb6657d80`. The verified correction has desktop tree `b95ccd285bc8da79925d4c429f475b7c82ef05fa`.
+- The focused Settings workflow gave eight failures and three passes on the baseline, exit 1. The failures covered the untouched custom instruction, late Back, recording two freed shortcut chords, restoring shortcut defaults and three reasoning budget cases. The same regressions gave 11 passes on the correction, exit 0. The existing cases still preserve earlier saved budgets of 8,000 or 24,000 and apply a newer explicit budget of 12,000.
+
+  ```sh
+  npm --prefix desktop test -- tests/renderer/workflows.test.tsx \
+    -t 'earlier custom instruction|late Back arrives|after an overlapping shortcut save|token limit after overlapping|draft inherits the previous save'
+  ```
+
+- `node --test --test-concurrency=1 desktop/tests/preview/shortcut-recovery.test.mjs` gave seven passes and one failure on the baseline production bundle, exit 1. At 180 × 173 with 28-point Answer text, full wheel steps reached only lines 1, 3, 5, 7, 9 and 11 in both directions. The correction uses the height inside the padding and reached all eleven lines in both directions. All eight cases passed on the corrected production bundle, exit 0.
+- Host checks ran on Fedora 44 x64 with Node 22.23.1 and npm 10.9.8. Desktop checks ran in series under `flock /tmp/sc-20261119-desktop-verify.lock env VITEST_MAX_WORKERS=1`. The affected command from the prior checkpoint passed 285 tests in 10 files, including the three #61 resize cases. `npm --prefix desktop run verify` passed type checking, lint, 1,298 tests in 37 files and production bundles. The five review probes passed when replayed with the updated Back bridge. The two production IPC probes passed on the host. They exercised stale Back and missing session rejection, and #61 recovery fitting, duplicate notification suppression and same-profile restoration of 600 × 278 physical pixels. Each check exited 0.
+- From `desktop`, `node_modules/.bin/astryx doctor --built out/renderer` passed with 19 successes, two existing theme-font warnings and zero failures. `node_modules/.bin/playwright test --config playwright.preview.config.ts --workers=1` passed 16 setup cases. `node node_modules/@playwright/test/cli.js test --list` discovered 38 Windows UI cases in five files. The #120 test files match protected main. Each command exited 0.
+- `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs`, `openspec validate --all --strict --no-interactive` and the full PR whitespace check passed, exit 0. Task 1.3 stays open for independent standards and acceptance review and hosted checks. The Windows lab owner recorded its recovery and release. Task 2.1 still needs fresh readiness for an authorized run, Windows native, encrypted vault, UI and named-recorder results. Task 2.2 still needs a numbered candidate, verified packaged startup and the local beta handoff.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

@@ -1,13 +1,12 @@
 import type { ApiProvider, ModelField, ModelSelection } from './index';
 
-export function applyModelEdits(saved: ModelSelection | null, draft: ModelSelection, fields: readonly ModelField[], original: ModelSelection | null): ModelSelection {
+export function applyModelEdits(saved: ModelSelection | null, draft: ModelSelection, fields: readonly ModelField[]): ModelSelection {
   if (!fields.length) return saved ?? draft;
-  if (!saved || saved.Provider !== draft.Provider) return draft;
-  const merged = { ...saved, ...Object.fromEntries(fields.map(field => [field, draft[field]])) };
-  // Keep the reasoning suggestion only if an earlier save did not supply a different budget.
-  if (fields.includes('Thinking') && !fields.includes('AnswerTokenLimit') &&
-      original?.Provider === saved.Provider && original.AnswerTokenLimit === saved.AnswerTokenLimit)
-    merged.AnswerTokenLimit = draft.AnswerTokenLimit;
+  const merged = saved?.Provider === draft.Provider
+    ? { ...saved, ...Object.fromEntries(fields.map(field => [field, draft[field]])) } : draft;
+  if (merged.Provider === 'DeepSeek' && merged.Thinking !== 'None' && merged.AnswerTokenLimit === null &&
+      fields.includes('Thinking') && !fields.includes('AnswerTokenLimit'))
+    return { ...merged, AnswerTokenLimit: 16000 };
   return merged;
 }
 
