@@ -24,6 +24,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | Astryx beta.13 qualification | The preserved candidate passed Windows native 54, vault 9/143, archive inspection, direct portable startup and a bounded nine-phase Edge recording. Earlier host and Linux evidence retains its original scope. | The Windows UI matrix ended with 33 passes, two stale Settings-locator failures and three unrun. Full UI and local delivery remain open in #63. See [Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) and the [host and Linux checkpoint](#astryx-beta13-qualification-checkpoint-2026-11-17). |
 | Astryx interface source integration on 15 November | [Combined source checks](#astryx-interface-integration-2026-11-15): host 1,227/34, types/lint/bundles, built doctor and eight synthetic browser views passed. | On 15 November, Windows native and UI checks, packaged startup, a named recorder check and local delivery were pending for beta.13. The [19 November continuation](#astryx-beta13-windows-continuation-2026-11-19) records the native, startup and Edge results. The complete Windows UI matrix and verified transfer of the beta.13 files remain open. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
+| SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
@@ -209,6 +210,127 @@ removed its profile. An initial private assertion expected Windows preview copy;
 the corrected Linux disclosure assertion passed with that failure retained. RPM
 metadata/resources were inspected. This is not an installation, upgrade, keyring
 or portal qualification.
+
+## SC icon source refresh (2026-11-20)
+
+The refresh combines original PR head `41ac7bb` with main `4667e43`. The
+manifest and lockfile version is **0.5.0-beta.14**. Its distribution reservation
+belongs to [issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84).
+The package configuration adds only the four icon settings. Main's package
+filters, identities, lockfile and first-run Commands wait are preserved.
+
+- On Fedora 44 x64, type checking, lint, **1,259 portable tests in 37 files**
+  and production bundles passed with one Vitest worker. The icon test first
+  failed with a missing image on the original text header. The merged renderer
+  passed all **17** browser regressions. Two font scaling cases and eight
+  service menu cases passed. Four synthetic views at 320 and 800 px loaded the
+  approved 32 px marks without clipping or page errors. The built Astryx doctor
+  passed with two theme font warnings.
+- `npm --prefix desktop run package:rpm` passed. The RPM header and payload
+  digests passed, and the extracted launcher retained its desktop identity.
+  The installed icon path and all three ASAR PNG resources contained the
+  approved source bytes. All six artwork files match the original PR, and the
+  Windows ICO has nine frames from 16 to 256 px.
+- The extracted RPM launched with a fresh key-free profile in isolated
+  Hyprland. Setup and two synthetic Settings widths showed the approved mark
+  and favicon from the ASAR. Both processes exited with code 0, and the test
+  removed both profiles. The Electron 45 tray image check used the bundled
+  512 px PNG and produced two 24 px images. The working badge changed 79 pixels
+  in the lower-right corner. Both tray PNGs match the original beta.9 evidence.
+
+Beta.9 remains the latest verified local delivery. All five delivered files
+and the latest-build record match their original digests. Both published
+website languages still reference four icon resources that match the approved
+exports. [Original beta.9 and website evidence](#sc-icon-integration-2026-11-12)
+
+The refreshed candidate still needs independent review, hosted checks, Windows
+package and UI qualification, a named recorder check, installed Linux checks and
+a separately reserved delivery version. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56),
+[OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md)
+
+## SC icon integration (2026-11-12)
+
+[Issue #52](https://github.com/Ziyadin23/ScreenCompanion/issues/52) and the
+[integration owner](../openspec/changes/archive/2026-11-13-integrate-sc-icon/tasks.md) track the
+approved artwork across the app and website. Beta.9 retains the beta.8 interface
+merged at `0627df2`; application integration is `592307f` and the final UI
+fixture correction is `4d784fb`. The final 160-file source manifest has SHA-256
+`211a49b3ff248d8556977e434059107db76ca98c02234120e6c4c27c0198df4d`.
+
+Host types, lint and production bundles passed. Portable verification passed
+**1,320 tests / 32 files** with two workers. Its first default run retained one
+empty-draft keyboard failure; both focused cases passed twice before that full
+pass. No keyboard application change or root-cause fix is claimed for that attempt.
+Windows production build/package checks passed, along with **1,296 portable tests**
+(**24 Linux-only skips**), **54 native checks** and **8 vault cases / 136 oracle
+checks**. The application bundles, native addon, EXEs and ASAR were frozen
+byte-identical through final qualification. Final Windows R3 typecheck/lint and
+**37/37 UI cases** passed, exit 0, in **1122.0 seconds**, with one worker and
+zero retries, skips or flaky cases; ZIP packaging then exited 0.
+
+Retained earlier Windows full runs each passed **35/37**, exit 1. R1 failed an
+answer corner-resize hidden-state assertion and an Alt-drag fresh press; both
+passed in a focused unchanged-source run. R2 instead retained a fixture process
+error with incomplete CLIXML diagnostics and a synthetic-vault baseline mismatch.
+All 16 non-panel workflows passed in both attempts. An unchanged beta.8 comparison
+passed the two R2 cases three times each (6/6), so it did not establish a
+pre-existing application defect. A controlled temporary-profile probe delayed
+only the final first-run vault rename by 500ms: sampling `ready` captured the
+previous cipher, while waiting for visible first-run Commands captured the final
+cipher, stable after normal exit. The fixture now waits for that visible completion
+before its baseline; process failures also retain bounded code/killed/signal data.
+Geometry/vault assertions, input timing and deadlines are unchanged. No application
+or native interaction code was changed for these test corrections. Separate startup
+and private instrumentation failures remain retained with their limits.
+
+Actual idle/working Electron tray images were checked as distinct nonempty 24px
+bitmaps with the master and upper mark preserved. Windows application, installer
+and portable embedded icons were extracted and visually reviewed. Native Shell
+extraction verified a temporary shortcut's inherited executable icon and unchanged
+target; this does not requalify an installer upgrade. All three Windows ASAR image
+resources match their source exports, and x64 payload/update-metadata hashes passed.
+The direct portable wrapper started beta.9 with an isolated key-free profile,
+passed Question-to-Settings keyboard activation, loaded the approved Settings mark,
+exited normally with code 0 and removed its profile. Actual Windows setup and
+Settings renders were visually reviewed.
+
+The Linux RPM retained its desktop identity and byte-identical installed icon.
+Isolated Hyprland packaged confirmation passed three image checks and normal exit 0;
+both Settings widths and the setup renderer fixture were reviewed. The fixture
+establishes branding rather than production setup geometry. The earlier RPM-config
+and fixture-lookup failures are retained; installed-app/portal/keyring qualification
+remains separately owned.
+
+A bounded **Microsoft Edge 157.0.4341.46** whole-monitor VP8 recording on Windows 11
+**10.0.26200** reported **1920×1080**, with 5 fps requested. Eight phases covered a
+backdrop control, capture test, answer, question, Settings, in-window service listbox,
+owned native color picker and first-run setup. Decoding yielded **101 frames at
+2 fps**; every phase had 10–17 matching marker frames. All eight local/saved pairs
+were visually reviewed: the SC surfaces and picker were visible locally while the
+saved output retained the underlying backdrop. The fixture explicitly raised SC
+at the pop-up-menu topmost level. This supplies plain-layout saved-monitor evidence
+only; receiver, OBS, proctoring and general default-topmost qualification remain open.
+Private path-separator, decoder color-conversion and exit-reporting corrections did
+not change the frozen application or recording. Independent final postflight exited
+0 with no SC/Electron/Edge/OBS processes or held input; protected vault and size-file
+hashes remained unchanged.
+
+The website is published through [PR #1](https://github.com/Ziyadin23/screencompanion-website/pull/1),
+merge `ea501f7`, with successful deployment `43293040949`. Root/project-base
+verification each passed **15 tests** with zero Astro diagnostics. All **20**
+header/footer captures across English/Russian and five widths were reviewed with
+no overflow or page errors. Both public pages exposed the new icon metadata; all four live icon assets were
+byte-identical to the approved exports. Orca screenshot capture failed; headless Chrome supplied the
+completed visual evidence.
+
+The configured local transfer folder now contains the byte-verified beta.9 EXE,
+installer, README, Linux RPM and ZIP with exactly the matching EXE plus `README.txt`;
+CRC checks and archived-byte comparisons passed. Earlier builds are retained and
+the local latest-build record advances to beta.9. Independent Standards and Spec
+reviews reported **0 findings each**, including the test correction. Application
+source is in [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56);
+no application main merge, tag or public release is claimed. Existing Windows/Linux
+qualification owners retain their limits.
 
 ## Interface beta.8 verification (2026-11-12)
 
@@ -963,21 +1085,39 @@ found two failures on the reviewed source. Both repeated on integration
 `94a5606ff8bb02628c4259275f28e2b9f3fc57ce` with protected main `e1533be`.
 When a matching 510×252 resize reply arrived after Hide and Show, SC restored
 the previous 530×240 choice on screen and on restart. A panel tiled by the
-user at 1240×860 returned floating after Settings applied a float-on-map rule.
+user at 1240×860 returned floating when Hyprland applied a float-on-map rule.
 The Hide-only comparison saved 510×252.
 
 SC keeps the latest confirmed resize across mappings. It uses the observed
 resize order so an older reply cannot overwrite a newer confirmed size. A
 queued stale notification leaves an earlier matching reply eligible to save.
 An unrelated notification also leaves the initial normal-bounds guard in
-place. The portable regression reproduced all three original failures and a
-further loss when a stale event was queued before the matching reply arrived.
+place. Three portable cases failed on `94a5606` and 16 passed. A further case
+caught a queued stale event dropping the matching reply on the first correction.
 
 Entering Settings reads the panel's placement while its toplevel is still
 mapped. This covers tiling at 1240×860 without an Electron resize event. On
 return, SC restores tiling when a rule opens that panel floating. The request
 targets the mapped SC panel. Hyprland continues to set the tiled dimensions.
-The check includes the legacy and Lua Hyprland configurations.
+
+Protected main advanced to `7d258e3` during verification. The combined source
+preserves the approved icon in panel and dialog creation and the working tray
+indicator. [Icon integration](#sc-icon-source-refresh-2026-11-20)
+
+The verified desktop tree is `c62db279af384eef67f51d3094ac98c071c27e43`.
+Desktop verification passed type checking, lint, 1,277 tests in 37 files and
+production bundling. Eight focused files passed 205 tests with one Vitest
+worker. All 14 tracked and eight independent Wayland scenarios passed in
+isolated Fedora 44, Hyprland 0.56.2, headless KWin 6.7.5 and Electron 45.0.0.
+The timing replay saved and restored 510×252 on screen and after restart.
+Both edited Settings actions restored tiling under the float rule. The
+legacy same-size and Lua placement probes passed. The first corrected
+Wayland run encountered a closing Setup page in the test fixture. The
+fixture now checks the next live page and retains the geometry assertions.
+[Isolated fixture](../tests/README.md#hyprland-panel-geometry)
+
+Windows Settings and same-profile resize verification, the named recorder
+check, final packaging and the numbered local beta handoff remain open.
 
 ## Packaged beta.6 activation investigation (2026-11-05)
 

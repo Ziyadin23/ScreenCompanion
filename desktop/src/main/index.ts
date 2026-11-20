@@ -15,6 +15,8 @@ import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import { createPortalCapture } from './linux-capture';
 import { autoPanelHeight } from './panel-size';
+import { createTrayImages } from './tray-icon';
+import appIconPath from '../../../assets/brand/sc-icon-512.png?asset';
 import packageManifest from '../../package.json';
 
 interface LinuxPanelLayout {
@@ -50,6 +52,7 @@ let window: BrowserWindow | null = null;
 let linuxDialog: { window: BrowserWindow; surface: AppState['surface']; ready: boolean } | null = null;
 let releaseLinuxPanelSize: (() => void) | null = null;
 let tray: Tray | null = null;
+let trayIcons: ReturnType<typeof createTrayImages> | undefined;
 let closing = false;
 let readyToShow = false;
 let panelBounds: Electron.Rectangle | null = null;
@@ -68,12 +71,8 @@ let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
 
 function trayImage(working: boolean): Electron.NativeImage {
-  const size = 24; const pixels = Buffer.alloc(size * size * 4);
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const at = (y * size + x) * 4;
-    if ((x - 12) ** 2 + (y - 12) ** 2 < 100) { pixels[at] = working ? 40 : 210; pixels[at + 1] = working ? 180 : 180; pixels[at + 2] = working ? 250 : 90; pixels[at + 3] = 255; }
-  }
-  return nativeImage.createFromBuffer(pixels, { width: size, height: size });
+  trayIcons ??= createTrayImages(nativeImage.createFromPath(appIconPath));
+  return working ? trayIcons.working : trayIcons.idle;
 }
 function clampBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   const area = screen.getDisplayMatching(bounds).workArea;
@@ -125,7 +124,7 @@ function activeWindow(): BrowserWindow | null {
   return linuxDialog?.surface === surface ? linuxDialog.window : null;
 }
 function createWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
-  const target = new BrowserWindow({ title: 'SC', show: false, frame: linux, transparent: true, maximizable: false,
+  const target = new BrowserWindow({ title: 'SC', icon: appIconPath, show: false, frame: linux, transparent: true, maximizable: false,
     fullscreenable: false, alwaysOnTop: true, skipTaskbar: !linux, hasShadow: linux,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true,
       contextIsolation: true, nodeIntegration: false, spellcheck: false, backgroundThrottling: false }, ...options });
@@ -350,11 +349,12 @@ function publish(state: AppState, capturing: boolean): void {
       return;
     }
   }
+  tray?.setImage(trayImage(state.busy));
+  tray?.setToolTip(state.busy ? 'SC — Working…' : 'SC');
   const surfaceChanged = state.surface !== surface;
   if (surfaceChanged) releaseLinuxPanelSize?.();
   if (linux && !isPanel(state.surface)) {
     publishLinuxDialog(state, capturing);
-    tray?.setImage(trayImage(state.busy));
     return;
   }
   let linuxPanelNeedsResize = false;
@@ -402,7 +402,6 @@ function publish(state: AppState, capturing: boolean): void {
     platform.setHoverInputHeight(state.surface === 'settings' || state.surface === 'setup'
       ? Math.ceil(window.getBounds().height * scale) : state.surface === 'input' ? Math.ceil(composerHeight * scale) : 0);
   }
-  tray?.setImage(trayImage(state.busy));
   if (capturing || !state.visible || !readyToShow) hidePanel();
   else if (linux) {
     if (!window.isVisible()) {

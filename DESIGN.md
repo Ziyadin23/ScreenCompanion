@@ -281,9 +281,11 @@ Depth comes from charcoal tonal layers and fine borders. Panel and settings sect
 
 ## Shapes
 
-The main panel has softly rounded corners using the panel radius. Astryx's element radius matches the existing control radius; fields, choice popups, privacy/error notices and the appearance preview share it. Toolbar buttons and panel errors use the compact radius; choice options use the smaller option radius. Field and container borders are thin (1px); Astryx buttons are borderless. The SC mark is a small typographic identifier inside a rounded square, rather than an illustration or new logo system.
+The main panel has softly rounded corners using the panel radius. Astryx's element radius matches the existing control radius; fields, choice popups, privacy/error notices and the appearance preview share it. Toolbar buttons and panel errors use the compact radius; choice options use the smaller option radius. Field and container borders are thin (1px); Astryx buttons are borderless.
 
-Icons are inline outline SVGs: current text color, rounded caps and joins, a consistent stroke (1.7) and a standard size (18px). Sidebar icons reduce to 16px. Icon-only actions retain accessible names and tooltips.
+The approved SC mark uses a pale-blue screen and answer bubble on a charcoal tile. Setup and Settings show the decorative artwork beside the title at Astryx's small element size. The window, tray and package icons share the same master. The tray adds a small badge during a request.
+
+Control icons are inline outline SVGs with the current text color, rounded caps and joins, a consistent stroke (1.7) and a standard size (18px). Sidebar icons reduce to 16px. Icon-only actions retain accessible names and tooltips.
 
 ## Components
 

@@ -20,6 +20,12 @@ verification snapshot associated with every already distributed build.
 The public repository retains its `ScreenCompanion` URL. Product/executable names
 use SC; historical URLs and asset names retain their actual identifiers.
 
+The approved SC icon master is [sc-icon.png](../assets/brand/sc-icon.png).
+Windows builds use the [multiresolution ICO](../assets/brand/sc-icon.ico) for
+the application and NSIS installer and uninstaller. The Linux package uses the
+[512 px PNG](../assets/brand/sc-icon-512.png). Vite includes the image resources
+for the window, tray and renderer in the application bundles.
+
 ## Distribution build
 
 1. Resolve the primary checkout through `git rev-parse --path-format=absolute --git-common-dir`, then read its parent workspace's `AGENTS.md` and private-operations route to current artifacts, lab state and unfinished checks. See [private workspace discovery](DEVELOPMENT.md#private-workspace-discovery); a linked worktree's arbitrary parent is not that workspace.

@@ -226,6 +226,14 @@
   Before hiding the panel for Settings, it checks the current compositor
   placement. When a rule floats the returning panel, SC restores the prior
   tiled mode. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+- Protected main advanced to `7d258e3` with the icon integration. The branch
+  merge uses the approved icon with the existing panel and dialog factory and
+  keeps the working tray indicator on both surfaces.
+- The combined desktop tree `c62db279af384eef67f51d3094ac98c071c27e43` passed
+  full desktop verification with 1,277 tests and 205 focused tests. All 14
+  tracked Wayland scenarios, eight independent scenarios and the targeted
+  Hide and Show restart and tiling probes passed with the shared lock and
+  one Vitest worker. Workflow, links, strict OpenSpec and whitespace passed.
 - Task 2.6 remains open for independent rereview, source integration, Windows
   Settings and same-profile resize restart, and the named recorder check.
   Task 2.7 owns final packaging and the numbered runnable beta handoff.

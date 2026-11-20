@@ -7,6 +7,7 @@ import { Button } from '@astryxdesign/core/Button';
 import type { ApiProvider, AppCommand, AppState } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { Choice } from './Choice';
+import appIcon from '../../../assets/brand/sc-icon-512.png';
 
 export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; platform: AppState['platform']; onCommand: (command: AppCommand) => void }) {
   const [provider, setProvider] = useState<ApiProvider>('OpenAI');
@@ -56,7 +57,7 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
   }
   return <VStack as="section" className="setup astryx-dialog" aria-label="Set up SC">
     <HStack as="header" className="dialog-header">
-      <HStack gap={3}><Text className="app-mark" aria-hidden="true">SC</Text><Heading level={1}>Set up SC</Heading></HStack>
+      <HStack gap={3}><img className="app-mark" src={appIcon} alt="" /><Heading level={1}>Set up SC</Heading></HStack>
     </HStack>
     <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
       <VStack className="setup-content" gap={4} aria-busy={saving}>
