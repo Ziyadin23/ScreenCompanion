@@ -188,3 +188,31 @@
   Settings and same-profile resize restart, and the named recorder check.
   Task 2.7 owns final packaging and the numbered runnable beta handoff.
   The coordinator schedules rereview and integration.
+
+### 2.6 Geometry lifecycle correction (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from `7c5271b89c24123aca1bc0f9c8fb0cc45d53e406` on shared main
+  `4667e43365dd4690d111057f23d85bbd87212372`. The Linux main entry point
+  confirms floating resize events for the mapping that received them.
+  SC schedules a repaint when showing the panel and when applying or
+  releasing temporary hints. It waits for the accepted fit before release,
+  bounded by the existing deadline.
+- The portable replay reported four failures and 11 passes on the starting
+  head. A further regression held the compositor at the previous size and
+  caught an early hint release. All 16 cases passed on the correction. The
+  404×160 Escape probe reproduced all three native failures on the starting
+  head. It took one
+  compositor command to tile in each of the three corrected runs. All 12
+  repository scenarios and five independent layout scenarios passed.
+  [Red and green evidence](../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
+- With `VITEST_MAX_WORKERS=1` and the shared lock at
+  `/tmp/sc-20261119-desktop-verify.lock`,
+  `npm --prefix desktop run verify` passed 1,272 tests in 37 files, type
+  checking, lint and production bundling. The eight focused files passed
+  200 tests. The workflow self-test, documentation links, strict OpenSpec
+  validation and whitespace checks passed.
+- The coordinator owns independent rereview and integration for 2.6.
+  Windows Settings, same-profile resize restart and the named recorder check
+  remain open. Task 2.7 owns final packaging and the numbered runnable beta
+  handoff.

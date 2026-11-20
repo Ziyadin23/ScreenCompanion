@@ -202,9 +202,17 @@ layouts leaves the manual size file intact and that one native resize to a
 previous automatic fit saves that size. A virtual Wayland pointer drives
 Hyprland's interactive resize binding to change the floating size and drag
 back to the earlier size. Each drag is checked on disk and the earlier size
-is restored on restart. The test also checks an immediate native resize
-after Escape leaves the panel at its saved size.
-[Linux panel verification](../docs/VERIFICATION.md#hyprland-layout-and-resize-follow-up).
+is restored on restart. The test checks that an immediate native resize after
+Escape is saved. It also opens Question on a saved 404×160 panel and uses
+Escape to restore 404×160. The first tiling command must work without
+further panel input or a test-driven repaint. Refloating must restore
+404×160 and preserve the size file.
+
+The portable `tests/main/panel-resize.test.ts` fixture holds the repaint,
+remap or compositor snapshot at the relevant point. It checks that a matching
+floating resize reaches disk and that a stale configure or prior map's reply
+cannot replace the current choice.
+[Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
 
 ## Installed updates
 

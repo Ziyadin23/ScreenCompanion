@@ -22,6 +22,8 @@ let measuredTextHeight: number;
 let panel: TestWindow;
 let panelFloating: boolean;
 let panelPaint: Promise<void> | null;
+let nextGeometryResponse: Promise<void> | null;
+let deferPanelConfigure: boolean;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -31,13 +33,15 @@ const app = Object.assign(new EventEmitter(), {
 });
 
 class TestWindow extends EventEmitter {
+  private readonly normalBounds: Electron.Rectangle;
   private bounds: Electron.Rectangle;
   private compositorSize: Electron.Size;
   private minimum: Electron.Size;
   private maximum = { width: Infinity, height: Infinity };
   private visible = false;
+  private hasMapped = false;
   readonly webContents = Object.assign(new EventEmitter(), {
-    mainFrame: { url: '' }, send() {}, setWindowOpenHandler() {},
+    mainFrame: { url: '' }, send() {}, setWindowOpenHandler() {}, invalidate() {},
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDisplayMediaRequestHandler() {} },
     executeJavaScript: async (script: string) => {
       if (script.includes('getBoundingClientRect')) return { height: measuredTextHeight, controlsHeight: 20, inputHeight: 0 };
@@ -47,16 +51,19 @@ class TestWindow extends EventEmitter {
   constructor({ x, y, width, height, minWidth, minHeight }: Electron.Rectangle & { minWidth: number; minHeight: number }) {
     super();
     this.bounds = { x, y, width, height };
+    this.normalBounds = this.bounds;
     this.compositorSize = { width, height };
     this.minimum = { width: minWidth, height: minHeight };
   }
   getBounds() { return { ...this.bounds }; }
+  getNormalBounds() { return { ...this.normalBounds }; }
   getContentBounds() { return this.getBounds(); }
   getNativeWindowHandle() { return Buffer.alloc(8); }
   getTitle() { return 'SC'; }
   getSize() { return { width: this.bounds.width, height: this.bounds.height }; }
   getCompositorSize() { return this.compositorSize; }
-  setBounds(bounds: Electron.Rectangle, updateCompositor = true) {
+  confirmPanelSize() { this.compositorSize = this.getSize(); }
+  setBounds(bounds: Electron.Rectangle, updateCompositor = !deferPanelConfigure) {
     const { width, height } = this.bounds;
     this.bounds = {
       ...bounds,
@@ -66,6 +73,7 @@ class TestWindow extends EventEmitter {
     if (updateCompositor) this.compositorSize = this.getSize();
     if (this.bounds.width !== width || this.bounds.height !== height) this.emit('resize');
   }
+  getMaximumSize() { return this.maximum; }
   setMinimumSize(width: number, height: number) {
     this.minimum = { width, height };
     this.setBounds(this.bounds);
@@ -74,14 +82,16 @@ class TestWindow extends EventEmitter {
     this.maximum = { width: width || Infinity, height: height || Infinity };
     this.setBounds(this.bounds);
   }
-  resizeFromDesktop(size: Electron.Size) { this.setBounds({ ...this.bounds, ...size }); }
+  resizeFromDesktop(size: Electron.Size) { this.setBounds({ ...this.bounds, ...size }, true); }
+  configureNormalBounds() { this.setBounds(this.normalBounds); }
   deliverLateConfigure(size: Electron.Size) { this.setBounds({ ...this.bounds, ...size }, false); }
   setMenu() {}
   setContentProtection() {}
   setResizable() {}
   isDestroyed() { return false; }
+  isMaximized() { return this.hasMapped; }
   isVisible() { return this.visible; }
-  show() { this.visible = true; }
+  show() { this.visible = true; this.hasMapped = true; }
   showInactive() { this.show(); }
   hide() { this.visible = false; }
   focus() {}
@@ -113,9 +123,20 @@ vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
   return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
-    readHyprlandPanelGeometry: async () => ({ ...panel.getCompositorSize(), floating: panelFloating }) };
+    readHyprlandPanelGeometry: async () => {
+      const snapshot = { ...panel.getCompositorSize(), floating: panelFloating };
+      const response = nextGeometryResponse;
+      nextGeometryResponse = null;
+      await response;
+      return snapshot;
+    } };
 });
 
+function pause() {
+  let resume!: () => void;
+  const pending = new Promise<void>(resolve => { resume = resolve; });
+  return { pending, resume };
+}
 function store() { return createSettingsStore(cryptor, profile, { platform }); }
 async function invoke(name: string, value?: unknown) {
   const handler = ipc.get(`sc:${name}`);
@@ -138,6 +159,8 @@ beforeEach(async () => {
   measuredTextHeight = 180;
   panelFloating = true;
   panelPaint = null;
+  nextGeometryResponse = null;
+  deferPanelConfigure = false;
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
@@ -249,5 +272,177 @@ it.skipIf(platform !== 'linux')('accepts a native resize immediately after Escap
     await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 380, Height: 160 }));
   } finally {
     finishPaint();
+  }
+});
+
+it.skipIf(platform !== 'linux').each([true, false])(
+  'validates a resize before the release repaint (matching compositor size: %s)', async matching => {
+    await boot();
+    await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 480, height: 200 }));
+    const constraintPaint = pause();
+    const releasePaint = pause();
+    panelPaint = constraintPaint.pending;
+    const resizable = vi.spyOn(panel, 'setResizable');
+    try {
+      measuredTextHeight = 240;
+      await invoke('command', { type: 'showInput' });
+      await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 480, height: 260 }));
+      panelPaint = releasePaint.pending;
+      constraintPaint.resume();
+      await vi.waitFor(() => expect(resizable).toHaveBeenLastCalledWith(true));
+
+      const size = { width: 500, height: 252 };
+      if (matching) panel.resizeFromDesktop(size);
+      else panel.deliverLateConfigure(size);
+      expect(panel.getSize()).toEqual(size);
+      if (matching) {
+        await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 500, Height: 252 }));
+      } else {
+        measuredTextHeight = 280;
+        await invoke('command', { type: 'escape' });
+        await vi.waitFor(() => expect(panel.getSize().height).toBe(300));
+        expect(await store().loadWindowSize()).toBeNull();
+      }
+    } finally {
+      constraintPaint.resume();
+      releasePaint.resume();
+    }
+  });
+
+it.skipIf(platform !== 'linux').each([true, false])(
+  'validates a resize during same-profile remap (matching compositor size: %s)', async matching => {
+    const previous = { Width: 530, Height: 240 };
+    await store().save({ ...defaultSettings('synthetic-panel-key'), CommandsShown: true });
+    await store().saveWindowSize(previous);
+    const paint = pause();
+    const confirmation = pause();
+    panelPaint = paint.pending;
+    try {
+      await boot();
+      expect(panel.isVisible()).toBe(true);
+      expect(panel.getSize()).toEqual({ width: 530, height: 240 });
+      nextGeometryResponse = confirmation.pending;
+      const size = { width: 500, height: 252 };
+      if (matching) panel.resizeFromDesktop(size);
+      else panel.deliverLateConfigure(size);
+      paint.resume();
+      await setImmediate();
+      confirmation.resume();
+      if (matching) {
+        await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 500, Height: 252 }));
+        expect(panel.getSize()).toEqual(size);
+      } else {
+        await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
+        expect(await store().loadWindowSize()).toEqual(previous);
+      }
+    } finally {
+      paint.resume();
+      confirmation.resume();
+    }
+  });
+
+it.skipIf(platform !== 'linux').each([true, false])(
+  'finishes checking a visible resize after Hide (matching compositor size: %s)', async matching => {
+    const previous = { Width: 530, Height: 240 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
+    const confirmation = pause();
+    nextGeometryResponse = confirmation.pending;
+    try {
+      const size = { width: 500, height: 252 };
+      if (matching) panel.resizeFromDesktop(size);
+      else panel.deliverLateConfigure(size);
+      expect(nextGeometryResponse).toBeNull();
+      await invoke('command', { type: 'toggleVisibility' });
+      expect(panel.isVisible()).toBe(false);
+      expect(await store().loadWindowSize()).toEqual(previous);
+    } finally {
+      confirmation.resume();
+    }
+    if (matching) {
+      await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 500, Height: 252 }));
+    } else {
+      await invoke('command', { type: 'toggleVisibility' });
+      await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
+      expect(await store().loadWindowSize()).toEqual(previous);
+    }
+  });
+
+it.skipIf(platform !== 'linux')('ignores the compositor accepting the remap bounds but saves a later resize to that size', async () => {
+  const previous = { Width: 530, Height: 240 };
+  await store().saveWindowSize(previous);
+  await boot();
+  await setImmediate();
+  await invoke('command', { type: 'toggleVisibility' });
+  const paint = pause();
+  panelPaint = paint.pending;
+  try {
+    await invoke('command', { type: 'toggleVisibility' });
+    panel.configureNormalBounds();
+    expect(panel.getSize()).toEqual({ width: 420, height: 180 });
+    paint.resume();
+    await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
+    expect(await store().loadWindowSize()).toEqual(previous);
+  } finally {
+    paint.resume();
+  }
+
+  await setImmediate();
+  panel.configureNormalBounds();
+  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
+});
+
+it.skipIf(platform !== 'linux')('keeps the new map resize when the prior map confirmation arrives late', async () => {
+  await store().saveWindowSize({ Width: 530, Height: 240 });
+  await boot();
+  await setImmediate();
+  const confirmation = pause();
+  nextGeometryResponse = confirmation.pending;
+  try {
+    panel.resizeFromDesktop({ width: 500, height: 252 });
+    expect(nextGeometryResponse).toBeNull();
+    await invoke('command', { type: 'toggleVisibility' });
+    await invoke('command', { type: 'toggleVisibility' });
+    panel.resizeFromDesktop({ width: 510, height: 250 });
+    const newest = { Width: 510, Height: 250 };
+    await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(newest));
+
+    confirmation.resume();
+    await setImmediate();
+    expect(await store().loadWindowSize()).toEqual(newest);
+    expect(panel.getSize()).toEqual({ width: 510, height: 250 });
+  } finally {
+    confirmation.resume();
+  }
+});
+
+it.skipIf(platform !== 'linux')('keeps fit constraints until the compositor accepts the fit', async () => {
+  await boot();
+  await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 480, height: 200 }));
+  const firstPaint = pause();
+  const nextPaint = pause();
+  const repaint = vi.spyOn(panel.webContents, 'invalidate');
+  const fit = { width: 480, height: 260 };
+  deferPanelConfigure = true;
+  panelPaint = firstPaint.pending;
+  try {
+    measuredTextHeight = 240;
+    await invoke('command', { type: 'showInput' });
+    await vi.waitFor(() => expect(panel.getSize()).toEqual(fit));
+    expect(panel.getCompositorSize()).toEqual({ width: 480, height: 200 });
+    panelPaint = nextPaint.pending;
+    firstPaint.resume();
+    await setImmediate();
+    expect(panel.getMaximumSize()).toEqual(fit);
+
+    panel.confirmPanelSize();
+    nextPaint.resume();
+    await vi.waitFor(() => expect(panel.getMaximumSize()).toEqual({ width: Infinity, height: Infinity }));
+    expect(repaint).toHaveBeenCalledTimes(2);
+    expect(await store().loadWindowSize()).toBeNull();
+  } finally {
+    firstPaint.resume();
+    nextPaint.resume();
   }
 });

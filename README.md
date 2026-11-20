@@ -115,9 +115,9 @@ Select and copy answer text directly. On Windows, hover over the panel and use
 the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
 edges and corners. Hiding it ends the current drag. Linux uses native window
 controls for moving and resizing. SC remembers the last size you choose for a
-Windows panel or a floating Linux panel. On Linux, returning from Settings
-restores the floating panel's size. Hyprland keeps control of the tiled layout
-through Settings.
+Windows panel or a floating Linux panel. When Settings closes on Linux, a
+floating panel restores your chosen size or fits the current content if you
+have never resized it. Hyprland controls the tiled layout through Settings.
 
 Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance

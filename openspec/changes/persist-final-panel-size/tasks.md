@@ -46,3 +46,8 @@ passed the portable resize, file and same-profile restore checks at scales 1
 and 1.25. The two isolated Hyprland profiles saved and restored the result of
 interactive drags to B and back to A after Settings. The merge awaits
 independent review. Tasks 2.3 and 2.4 remain open.
+
+The [#19 geometry lifecycle correction](../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
+re-ran the shared resize and restart tests at scales 1 and 1.25. The
+Hyprland fixture also saved an earlier automatic size after one compositor
+resize. Tasks 2.3 and 2.4 remain open for Windows runtime and beta delivery.

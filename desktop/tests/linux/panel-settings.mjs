@@ -111,13 +111,20 @@ test('Hyprland panel geometry and Settings visibility', async t => {
   const resize = async (panel, size) => {
     await settledPanelSize(panel);
     assert.equal(activeClient().floating, true);
+    const [{ width, height, scale }] = hypr('monitors');
+    assert.equal(scale, 1);
     dispatch('movewindowpixel', `exact 260 200,address:${activeClient().address}`);
-    await expect.poll(() => activeClient()?.at).toEqual([260, 200]);
+    // Use the compositor's actual position and leave room for the drag on this output.
+    await expect.poll(() => {
+      const client = activeClient();
+      if (!client) return false;
+      const [x, y] = client.at;
+      return x > 0 && y > 0 && x + Math.max(client.size[0], size[0]) <= width &&
+        y + Math.max(client.size[1], size[1]) <= height;
+    }).toBe(true);
     const current = activeClient();
     const start = current.at.map((axis, index) => axis + current.size[index] - 12);
     const end = start.map((axis, index) => axis + size[index] - current.size[index]);
-    const [{ width, height, scale }] = hypr('monitors');
-    assert.equal(scale, 1);
     await dragWaylandPointer(join(runtime, env.WAYLAND_DISPLAY), start, end, [width, height]);
     await expect.poll(geometry).toEqual(size);
   };
@@ -136,6 +143,11 @@ test('Hyprland panel geometry and Settings visibility', async t => {
       if (error.code !== 'ENOENT') throw error;
       return null;
     }
+  };
+  const sizeFileSnapshot = async profile => {
+    const path = join(configHome(profile), 'SC', 'window-size.json');
+    const stats = await stat(path, { bigint: true });
+    return { size: await readFile(path, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
   };
   const editAppearance = async (panel, action) => {
     await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
@@ -366,25 +378,20 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         await expect.poll(geometry).toEqual([480, 144]);
         await resize(panel, chosen);
         await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
-        const sizePath = join(configHome(profile), 'SC', 'window-size.json');
-        const snapshot = async () => {
-          const stats = await stat(sizePath, { bigint: true });
-          return { size: await readFile(sizePath, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
-        };
-        const before = await snapshot();
+        const before = await sizeFileSnapshot(profile);
         const address = activeClient().address;
         const native = await app.browserWindow(panel);
         dispatch('settiled', `address:${address}`);
         await expect.poll(() => activeClient()?.floating).toBe(false);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([1240, 860]);
         await delay(750);
-        const tiled = await snapshot();
+        const tiled = await sizeFileSnapshot(profile);
 
         dispatch('setfloating', `address:${address}`);
         await expect.poll(() => activeClient()?.floating).toBe(true);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
         await delay(750);
-        const floated = await snapshot();
+        const floated = await sizeFileSnapshot(profile);
         result.diagnostic(JSON.stringify({ before, tiled, floated, visible: geometry() }));
         assert.deepEqual(tiled, before);
         assert.deepEqual(floated, before, 'Returning to floating should leave the size file untouched');
@@ -402,6 +409,51 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         dispatch('resizewindowpixel', `exact 380 160,address:${activeClient().address}`);
         await expect.poll(geometry).toEqual([380, 160]);
         await expect.poll(() => savedSize(profile)).toEqual({ Width: 380, Height: 160 });
+      } finally {
+        await closeApp();
+      }
+    });
+
+    await t.test('A size-changing Escape lets Hyprland tile without more input', async result => {
+      const profile = 'short-manual-escape';
+      const chosen = [404, 160];
+      try {
+        const panel = await setupProduction(profile);
+        await expect.poll(geometry).toEqual([480, 144]);
+        await resize(panel, chosen);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: 404, Height: 160 });
+        const before = await sizeFileSnapshot(profile);
+        const native = await app.browserWindow(panel);
+
+        await panel.getByRole('button', { name: 'Question', exact: true }).press('Enter');
+        const question = panel.getByTestId('question-input');
+        await expect(question).toBeFocused();
+        await expect.poll(geometry).toEqual([404, 180]);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([404, 180]);
+        await expect.poll(() => native.evaluate(window => window.getMaximumSize())).toEqual([0, 0]);
+
+        await question.press('Escape');
+        await expect(question).toHaveCount(0);
+        await expect.poll(geometry).toEqual(chosen);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
+        await expect.poll(() => native.evaluate(window => window.getMaximumSize())).toEqual([0, 0]);
+
+        // Observe the idle panel without causing a renderer repaint before requesting tiling.
+        await delay(750);
+        const address = activeClient().address;
+        dispatch('settiled', `address:${address}`);
+        await expect.poll(() => activeClient()?.floating).toBe(false);
+        await expect.poll(geometry).toEqual([1240, 860]);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([1240, 860]);
+        assert.deepEqual(await sizeFileSnapshot(profile), before);
+
+        dispatch('setfloating', `address:${address}`);
+        await expect.poll(() => activeClient()?.floating).toBe(true);
+        await expect.poll(geometry).toEqual(chosen);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
+        await delay(750);
+        assert.deepEqual(await sizeFileSnapshot(profile), before);
+        result.diagnostic('404×160 → Question 404×180 → Escape 404×160 → tile 1240×860 → float 404×160');
       } finally {
         await closeApp();
       }

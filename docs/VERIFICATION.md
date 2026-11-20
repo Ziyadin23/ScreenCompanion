@@ -900,6 +900,52 @@ related font warnings.
 Windows runtime, named-recorder checks, final packaging and the numbered
 local beta handoff remain open.
 
+### Hyprland panel geometry lifecycle (2026-11-20)
+
+Both independent findings on [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+reproduced on head `7c5271b89c24123aca1bc0f9c8fb0cc45d53e406`. Three
+portable probes lost a matching 500×252 floating resize before the release
+repaint, during remap or after Hide occurred before a compositor reply. Both
+comparison cases passed. The expanded portable fixture failed four cases
+on that head and passed the 11 controls and prior cases.
+
+In independent native replay, Escape returned the panel from 404×180 to
+404×160 and Electron reported an unlimited maximum. Each first tile command
+returned `ok` and left the panel floating. Three fresh profiles failed after
+quiet waits of 750, 1,500 and 2,500 ms. Each retry failed. The trace showed
+the released size hints with no following commit on the panel surface.
+
+The fix tracks each visible mapping separately. A matching floating resize
+can finish during hint release, during remap or after Hide. A new mapping
+can accept its own resize while a reply for the prior mapping is in flight.
+SC recognizes the initial configure that repeats Electron's old normal
+bounds on remap. A deliberate later resize to those dimensions still saves.
+The first implementation attempt saved that remap configure as a user
+choice. The revised portable test covers both events. A later trace showed
+the fixed hints being cleared before Hyprland accepted the new fit. SC now
+requests a repaint when mapping the panel and when applying or releasing fixed
+hints. A fit keeps its fixed hints until Hyprland reports the new size or the
+existing deadline expires. The portable control fails if a renderer frame
+releases the hints before Hyprland confirms the fit.
+
+The verified desktop tree is `2a23f0ea5db3b330b7ec3fb74fadef169e9b9c11`.
+All 12 scenarios passed in isolated Fedora 44, Hyprland 0.56.2, KWin 6.7.5
+and Electron 45.0.0. The 404×160 panel tiled at 1240×860 on the first
+command after Escape with no further input or test-driven repaint. Refloating
+restored 404×160 and preserved the size file's bytes, inode and modification
+time. All three independent Escape replays passed. The five independent
+layout and resize scenarios also passed, including Back and Save without
+retiling and a single resize to the earlier 480×144 automatic fit followed
+by a same-profile restart. [Isolated fixture](../tests/README.md#hyprland-panel-geometry)
+
+Desktop verify passed type checking, lint, 1,272 tests in 37 files and
+production bundling. The eight focused files passed 200 tests, including
+16 resize tests. The shared resize tests covered simulated scales 1 and
+1.25. Linux tests used a temporary keyring, synthetic settings and one
+1280×900 output at scale 1. Windows Settings and resize restart, the
+named-recorder check, final packaging and the numbered beta handoff remain
+open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
