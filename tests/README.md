@@ -191,15 +191,16 @@ bwrap --unshare-pid --unshare-net --die-with-parent --clearenv \
   node --test desktop/tests/linux/panel-settings.mjs
 ```
 
-The test reads the floating window dimensions from Hyprland nested in headless
-KWin. The key-free preview checks that Settings Back and Save restore the panel
-size and that Question grows a short panel before Escape restores its size.
-The production entry point uses a temporary keyring and separate fresh profiles
-for Back and Save. Each case checks that the panel fits a later synthetic answer
-without writing a manual size, then saves a deliberate compositor resize. A
-controlled capture cancellation checks that a late Settings load keeps SC hidden.
-See the dated results for the additional restart checks.
-[Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-2026-11-19).
+The test reads window dimensions from Hyprland nested in headless KWin. The
+key-free preview checks Settings Back and Save, the Question minimum and
+restoration on Escape. A controlled capture cancellation checks that a late
+Settings load keeps SC hidden. Production checks use a temporary keyring and
+separate fresh profiles. They edit Answer text size and exercise Back and
+Save in floating and tiled layouts. They verify that the panel stays automatic
+through layout changes. A virtual Wayland pointer drives Hyprland's interactive
+resize binding to change the floating size and drag back to the earlier size.
+Each drag is checked on disk and the earlier size is restored on restart.
+[Linux panel verification](../docs/VERIFICATION.md#hyprland-resize-ownership-correction).
 
 ## Installed updates
 

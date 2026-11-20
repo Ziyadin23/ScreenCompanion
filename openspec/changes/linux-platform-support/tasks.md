@@ -139,3 +139,18 @@
   merge and coordinates those checks with the existing Windows queue. Task 2.7
   owns the final Linux package and integration checks and the numbered runnable
   beta handoff.
+
+### 2.6 Resize ownership correction (2026-11-20)
+
+- Independent review on `885d1ce` reproduced a saved tiled size after an
+  appearance edit. The correction on the issue branch retains current main
+  `22271d0` and the accepted merge as ancestors. SC tracks the sizes it
+  requests, defers to the tiled layout and checks for a floating panel before
+  saving a resize.
+- The checked-in regression rejects edited Back and Save persistence in
+  floating and tiled layouts. It also verifies an actual pointer drag to a
+  different floating size, the drag back to the earlier automatic size and
+  same-profile restart. [Source and verification](../../../docs/VERIFICATION.md#hyprland-resize-ownership-correction).
+- The coordinator owns independent review and source integration. Windows
+  Settings and resize restart, named recorder, final packaging and the
+  numbered beta handoff remain open in tasks 2.6 and 2.7.

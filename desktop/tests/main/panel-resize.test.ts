@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { AppState } from '../../src/contracts';
@@ -100,7 +101,8 @@ vi.mock('electron-updater', () => ({ default: {} }));
 vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
-  return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}) };
+  return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
+    readHyprlandPanelFloating: async () => true };
 });
 
 function store() { return createSettingsStore(cryptor, profile, { platform }); }
@@ -165,5 +167,23 @@ it('keeps fitting the panel after the input minimum raises its height', async ()
   measuredTextHeight = 240;
   await invoke('command', { type: 'showInput' });
   await vi.waitFor(() => expect(panel.getSize().height).toBe(260));
+  expect(await store().loadWindowSize()).toBeNull();
+});
+
+it.skipIf(platform !== 'linux')('ignores the Question minimum when the compositor reports it after fitting', async () => {
+  measuredTextHeight = 0;
+  await boot();
+  await vi.waitFor(() => expect(panel.getSize().height).toBe(140));
+  const { width } = panel.getSize();
+
+  measuredTextHeight = 240;
+  await invoke('command', { type: 'showInput' });
+  await vi.waitFor(() => expect(panel.getSize().height).toBe(260));
+
+  panel.resizeFromDesktop({ width, height: 180 });
+  await setImmediate();
+  measuredTextHeight = 280;
+  await invoke('command', { type: 'escape' });
+  await vi.waitFor(() => expect(panel.getSize().height).toBe(300));
   expect(await store().loadWindowSize()).toBeNull();
 });

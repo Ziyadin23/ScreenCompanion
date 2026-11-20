@@ -45,9 +45,11 @@ Use `--action=input` for a custom focus-only opening binding. The explicit `inpu
 are managed by Hyprland, rather than the Windows shortcut editor. Use the native
 window controls to move the panel or resize it from an edge or corner. Setup and
 Settings open in their own window. Back and Save return to the answer panel.
-The answer panel fits its contents automatically until you resize it. SC
-remembers the last size you choose across launches. Question grows a short
-panel to 180 logical pixels high when space allows. Escape restores the answer size.
+The floating answer panel fits its contents automatically until you resize it.
+SC remembers the last floating size you choose across launches. Hyprland sets
+the size of tiled or fullscreen windows. SC keeps the floating size through
+those layout changes. Question grows a short floating panel to 180 logical
+pixels high when space allows. Escape restores the answer size.
 Update by manually installing a newer Linux RPM.
 
 ## Setup and migration

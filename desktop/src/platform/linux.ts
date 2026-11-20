@@ -1,5 +1,21 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { DesktopAction, CapturedFrame, DesktopPlatform, HttpTransport } from '../contracts';
 import { validateShortcuts } from './shortcuts';
+
+const runHyprctl = promisify(execFile);
+
+export async function readHyprlandPanelFloating(): Promise<boolean | null> {
+  if (!process.env.HYPRLAND_INSTANCE_SIGNATURE) return null;
+  try {
+    const { stdout } = await runHyprctl('hyprctl', ['-j', 'clients'], { timeout: 500, maxBuffer: 1024 * 1024 });
+    const clients: unknown = JSON.parse(stdout);
+    if (!Array.isArray(clients)) return null;
+    const panels = clients.filter(client => client?.pid === process.pid && client.mapped === true && client.hidden === false);
+    if (panels.length !== 1) return null;
+    return panels[0].floating === true && panels[0].fullscreen === 0 && panels[0].fullscreenClient === 0;
+  } catch { return null; }
+}
 
 interface Image {
   isEmpty(): boolean; getSize(): { width: number; height: number };

@@ -769,6 +769,46 @@ The workflow self-test, documentation links, strict OpenSpec and whitespace
 checks passed. Windows runtime, named-recorder checks, final packaging and a
 numbered local beta handoff remain open.
 
+### Hyprland resize ownership correction
+
+On 2026-11-20, independent review reproduced a 1240×860 manual size file after
+changing Answer text size from 11 to 28 and choosing Save on `885d1ce`. A
+replay with an edited Back also reproduced it. The test used a fresh
+production profile and a Hyprland `float off` rule. The old candidate treated
+the layout resize as a manual choice. A later run also caught a delayed
+480×180 Question minimum being saved in a floating window.
+
+The correction tracks requested fits and minimum sizes across Wayland resize
+notifications. Hyprland's layout report controls whether SC applies the
+measured fit and whether it can save a changed size. A confirmed manual
+resize clears the earlier requests. The tested desktop tree was
+`76b88759155e7014d6a15d9091ad06ec7791c879`. Its source and test trees were
+`ba8726b9e46c77b2ed270e4a346df9fe72fde6f7` and
+`85e7263c4c4a76c63f4fcc9d307fc1f02b6c5451`. The main bundle SHA-256 was
+`95ddda5cdadb1f325654876875be1422d9cd45e18b1899bf3342d5ae6741a6c8`.
+
+The checked-in layout regression failed both tiled cases on the accepted
+bundle. The corrected bundle passed nine scenarios in isolated Hyprland, exit
+0. Edited Back retained 11 points and edited Save applied 28 points. In the
+floating layout the answer was 480×144 after Back and 480×360 after Save. Both
+tiled cases reached 1240×860 and then returned to their floating sizes. The
+size file stayed absent through each layout change. In separate fresh
+profiles, Wayland pointer events dragged the panel from an automatic 480×276
+to 530×240 and back to 480×276 after untouched Back and Save. Each new size
+reached disk and both profiles restored 480×276 on restart.
+
+The portable late-Question-minimum regression failed on `885d1ce`. The
+panel stayed at 180 logical pixels after Escape. The corrected panel refit
+to 300 logical pixels and left the size file absent.
+
+Desktop verify passed 1,260 tests in 37 files, type checking, lint and the
+production build. The eight focused suites passed 188 tests, and the separate
+production probe passed 22 checks. Playwright discovered all 38 Windows
+cases. The Astryx check reported 20 passes and two font warnings.
+
+Windows runtime, named-recorder checks, final packaging and the numbered
+local beta handoff remain open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

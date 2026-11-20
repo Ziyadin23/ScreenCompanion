@@ -7,13 +7,16 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { _electron as electron, expect } from '@playwright/test';
+import { dragWaylandPointer } from './virtual-pointer.mjs';
 
 const require = createRequire(import.meta.url);
 const entry = fileURLToPath(new URL('../../out/main/index.js', import.meta.url));
 const compositorConfig = ['monitor = ,1280x900@60,0x0,1', 'windowrule = float on, match:class .*',
-  'animations:enabled = false', 'general:border_size = 0', 'xwayland:enabled = false'];
+  'animations:enabled = false', 'general:border_size = 0', 'xwayland:enabled = false',
+  'input:follow_mouse = 1', 'bindm = , mouse:273, resizewindow'];
 
 async function stop(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
@@ -61,6 +64,8 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     return child;
   };
   const hypr = (...args) => JSON.parse(execFileSync('hyprctl', ['-j', ...args], { env, encoding: 'utf8' }));
+  const dispatch = (operation, args) => assert.equal(execFileSync('hyprctl', ['dispatch', operation, args],
+    { env, encoding: 'utf8' }).trim(), 'ok');
   const configHome = profile => join(runtime, profile, 'config');
   const fixtureBin = join(runtime, 'bin');
   let app;
@@ -79,7 +84,6 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const visible = clients();
     if (visible.length !== 1) return null;
     assert.equal(visible[0].xwayland, false);
-    assert.equal(visible[0].floating, true);
     return visible[0];
   };
   const geometry = () => activeClient()?.size ?? null;
@@ -106,9 +110,15 @@ test('Hyprland panel geometry and Settings visibility', async t => {
   };
   const resize = async (panel, size) => {
     await settledPanelSize(panel);
-    const result = execFileSync('hyprctl', ['dispatch', 'resizewindowpixel',
-      `exact ${size.join(' ')},address:${activeClient().address}`], { env, encoding: 'utf8' });
-    assert.equal(result.trim(), 'ok');
+    assert.equal(activeClient().floating, true);
+    dispatch('movewindowpixel', `exact 260 200,address:${activeClient().address}`);
+    await expect.poll(() => activeClient()?.at).toEqual([260, 200]);
+    const current = activeClient();
+    const start = current.at.map((axis, index) => axis + current.size[index] - 12);
+    const end = start.map((axis, index) => axis + size[index] - current.size[index]);
+    const [{ width, height, scale }] = hypr('monitors');
+    assert.equal(scale, 1);
+    await dragWaylandPointer(join(runtime, env.WAYLAND_DISPLAY), start, end, [width, height]);
     await expect.poll(geometry).toEqual(size);
   };
   const setupProduction = async profile => {
@@ -260,7 +270,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
 `, { mode: 0o700 });
 
     for (const action of ['Back', 'Save']) {
-      await t.test(`${action} keeps a fresh production panel automatically sized`, async () => {
+      await t.test(`${action} keeps a fresh production panel automatic and both manual sizes persist`, async result => {
         const profile = 'automatic-' + action.toLowerCase();
         try {
           const panel = await setupProduction(profile);
@@ -287,12 +297,86 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             fits: await answer.evaluate(element => element.scrollHeight <= element.clientHeight + 1)
           })).toEqual({ persistedSize: null, grew: true, fits: true });
 
+          const fitted = geometry();
           await resize(panel, [530, 240]);
           await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 240 });
+          await resize(panel, fitted);
+          const original = { Width: fitted[0], Height: fitted[1] };
+          await expect.poll(() => savedSize(profile)).toEqual(original);
+          await closeApp();
+          const restarted = await launch(profile);
+          await expect(restarted.getByTestId('question-input')).toBeFocused();
+          await expect.poll(geometry).toEqual(fitted);
+          assert.deepEqual(await savedSize(profile), original);
+          result.diagnostic(`Pointer resize ${fitted.join('×')} → 530×240 → ${fitted.join('×')} survived restart`);
         } finally {
           await closeApp();
         }
       });
+    }
+
+    for (const floating of [true, false]) {
+      if (!floating) {
+        await writeFile(config, compositorConfig.join('\n').replace('float on', 'float off') + '\n');
+        assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
+      }
+      for (const action of ['Back', 'Save']) {
+        const layout = floating ? 'floating' : 'tiled';
+        await t.test(`${action} after an appearance edit keeps ${layout} geometry out of storage`, async result => {
+          const profile = `${layout}-${action.toLowerCase()}`;
+          try {
+            const panel = await setupProduction(profile);
+            const initial = await settledPanelSize(panel);
+            assert.equal(await savedSize(profile), null);
+
+            await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
+            const settings = await showing('settings-save');
+            await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
+            await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
+            await settings.getByRole('button', { name: action, exact: true }).click();
+            await expect(panel.getByTestId('answer-text')).toBeVisible();
+            await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
+              .toBe(action === 'Save' ? 28 : 11);
+            const fittedHeight = action === 'Save' ? 360 : 144;
+            await expect.poll(() => {
+              const client = activeClient();
+              return !!client && (client.floating ? client.size[1] === fittedHeight : !floating);
+            }).toBe(true);
+            await settledPanelSize(panel);
+
+            if (!floating && activeClient().floating) {
+              // Request a tile even when Hyprland leaves the remapped fixed-size window floating.
+              dispatch('settiled', `address:${activeClient().address}`);
+            }
+            await expect.poll(() => activeClient()?.floating).toBe(floating);
+            if (!floating) {
+              await expect.poll(() => geometry()?.[0] ?? 0).toBeGreaterThan(initial[0]);
+            }
+            const native = await app.browserWindow(panel);
+            const nativeMatchesLayout = async () => {
+              const size = await native.evaluate(window => window.getSize());
+              return geometry()?.join('×') === size.join('×');
+            };
+            await expect.poll(nativeMatchesLayout).toBe(true);
+            // Give any queued size-file write time to finish after the layout change.
+            await delay(750);
+            assert.equal(await savedSize(profile), null, 'A compositor layout or fit must leave the manual size file absent');
+            result.diagnostic(`${layout} answer ${geometry().join('×')} after ${action}, size file absent`);
+            if (!floating) {
+              const tiled = geometry();
+              dispatch('setfloating', `address:${activeClient().address}`);
+              await expect.poll(() => activeClient()?.floating).toBe(true);
+              await expect.poll(geometry).not.toEqual(tiled);
+              await expect.poll(nativeMatchesLayout).toBe(true);
+              await delay(750);
+              assert.equal(await savedSize(profile), null, 'Restoring the floating layout must leave the manual size file absent');
+              result.diagnostic(`Compositor restored floating answer ${geometry().join('×')}, size file absent`);
+            }
+          } finally {
+            await closeApp();
+          }
+        });
+      }
     }
   } finally {
     try {

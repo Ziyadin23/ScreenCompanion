@@ -3,7 +3,7 @@ import electronUpdater from 'electron-updater';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
-import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform } from '../platform';
+import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelFloating } from '../platform';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
@@ -21,6 +21,7 @@ const captureTest = process.argv.includes('--capture-test-only');
 const linux = process.platform === 'linux';
 const preview = synthetic || (captureTest && process.platform !== 'win32' && !linux);
 const version = packageManifest.version;
+const afterPanelPaint = 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))';
 if (process.platform === 'win32') app.setAppUserModelId(packageManifest.build.appId);
 if (linux) {
   app.setDesktopName('io.github.ziyadin23.sc.desktop');
@@ -47,6 +48,8 @@ let composerHeight = 96;
 let activationPending = false;
 let manualPanelSize = false;
 let applyingWindowGeometry = false;
+let linuxGeometryUpdate: Promise<unknown> | null = null;
+const linuxRequestedSizes = new Set<string>();
 let measurement = 0;
 let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
@@ -66,13 +69,30 @@ function clampBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   return { width, height, x: Math.max(area.x, Math.min(bounds.x, area.x + area.width - width)), y: Math.max(area.y, Math.min(bounds.y, area.y + area.height - height)) };
 }
 function minimumPanelHeight(): number { return surface === 'input' ? (linux ? 180 : 128) : linux ? 140 : 80; }
+function sizeKey(width: number, height: number): string { return `${width}x${height}`; }
+function setLinuxMinimumSize(target: BrowserWindow, width: number, height: number): void {
+  const current = target.getBounds();
+  if (current.width < width || current.height < height) {
+    linuxRequestedSizes.add(sizeKey(Math.max(current.width, width), Math.max(current.height, height)));
+  }
+  target.setMinimumSize(width, height);
+}
 function applyWindowGeometry(update: (target: BrowserWindow) => void): void {
   if (!window) return;
   applyingWindowGeometry = true;
   try {
     update(window);
     // Keep the effective size for any resize notification delivered after the update.
-    if (isPanel(surface)) panelBounds = window.getBounds();
+    if (isPanel(surface)) {
+      panelBounds = window.getBounds();
+      if (linux) {
+        // Keep the compositor's follow-up configure in the same geometry update.
+        const pending = window.webContents.executeJavaScript(afterPanelPaint);
+        linuxGeometryUpdate = pending;
+        const finish = () => { if (linuxGeometryUpdate === pending) linuxGeometryUpdate = null; };
+        void pending.then(finish, finish);
+      }
+    }
   } finally { applyingWindowGeometry = false; }
 }
 function hidePanel(): void {
@@ -142,8 +162,9 @@ function publishLinuxDialog(state: AppState, capturing: boolean): void {
 function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangle): void {
   releaseLinuxPanelSize?.();
   // Hyprland can apply the requested size as a temporary constraint.
+  linuxRequestedSizes.add(sizeKey(bounds.width, bounds.height));
   applyWindowGeometry(target => {
-    target.setMinimumSize(bounds.width, bounds.height);
+    setLinuxMinimumSize(target, bounds.width, bounds.height);
     target.setMaximumSize(bounds.width, bounds.height);
     target.setBounds(bounds);
   });
@@ -155,7 +176,7 @@ function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangl
     const area = screen.getDisplayMatching(panel.getBounds()).workArea;
     applyWindowGeometry(target => {
       target.setMaximumSize(0, 0);
-      target.setMinimumSize(Math.min(340, area.width), Math.min(minimumPanelHeight(), area.height));
+      setLinuxMinimumSize(target, Math.min(340, area.width), Math.min(minimumPanelHeight(), area.height));
       // Refresh the mapped Wayland size hints so native drags can resize the panel again.
       target.setResizable(false);
       target.setResizable(true);
@@ -163,9 +184,7 @@ function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangl
   };
   const deadline = setTimeout(release, 1500);
   releaseLinuxPanelSize = release;
-  void panel.webContents.executeJavaScript(
-    'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))'
-  ).then(release, release);
+  void panel.webContents.executeJavaScript(afterPanelPaint).then(release, release);
 }
 function measurePanel(state: AppState): void {
   if (!window || !readyToShow || !isPanel(state.surface) || manualPanelSize || state.busy) return;
@@ -194,7 +213,12 @@ function measurePanel(state: AppState): void {
     const inputHeight = input ? input.getBoundingClientRect().height + parseFloat(inputStyle.marginTop) + parseFloat(inputStyle.marginBottom) : 0;
     copy.remove(); resolve({ height, controlsHeight, inputHeight });
   })))`;
-  void window.webContents.executeJavaScript(script).then((result: unknown) => {
+  void window.webContents.executeJavaScript(script).then(async (result: unknown) => {
+    // A tiled or fullscreen panel uses the compositor's geometry.
+    if (linux && window?.isVisible() && await readHyprlandPanelFloating() === false) {
+      if (revision === measurement) measuredContent = '';
+      return;
+    }
     if (!window || window.isDestroyed() || revision !== measurement || manualPanelSize || !isPanel(surface) || !result || typeof result !== 'object' ||
       !('height' in result) || !('controlsHeight' in result) || typeof result.height !== 'number' || !Number.isFinite(result.height) ||
       typeof result.controlsHeight !== 'number' || !Number.isFinite(result.controlsHeight) ||
@@ -245,7 +269,7 @@ function publish(state: AppState, capturing: boolean): void {
       if (preferred && (preferred.width !== currentBounds.width || preferred.height !== currentBounds.height)) {
         constrainLinuxPanelSize(window, preferred);
       } else {
-        applyWindowGeometry(target => target.setMinimumSize(Math.min(340, area.width), Math.min(minimumPanelHeight(), area.height)));
+        applyWindowGeometry(target => setLinuxMinimumSize(target, Math.min(340, area.width), Math.min(minimumPanelHeight(), area.height)));
       }
     } else {
       applyWindowGeometry(target => {
@@ -366,16 +390,33 @@ async function boot(): Promise<void> {
     window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     window.webContents.session.setPermissionCheckHandler(() => false);
   }
+  const rememberSize = (bounds: Electron.Rectangle) => {
+    manualPanelSize = true;
+    if (linux) {
+      linuxPreferredPanelBounds = bounds;
+      // A confirmed desktop resize ends the previous app request sequence.
+      linuxRequestedSizes.clear();
+    }
+    const scale = screen.getDisplayMatching(bounds).scaleFactor;
+    const size: PanelSize = { Width: Math.round(bounds.width * scale), Height: Math.round(bounds.height * scale) };
+    void store.saveWindowSize(size);
+  };
   window.on('resize', () => {
     if (!window || applyingWindowGeometry || !isPanel(surface)) return;
     const previous = panelBounds;
-    panelBounds = window.getBounds();
-    if (previous && panelBounds.width === previous.width && panelBounds.height === previous.height) return;
-    manualPanelSize = true;
-    if (linux) linuxPreferredPanelBounds = panelBounds;
-    const scale = screen.getDisplayMatching(panelBounds).scaleFactor;
-    const size: PanelSize = { Width: Math.round(panelBounds.width * scale), Height: Math.round(panelBounds.height * scale) };
-    void store.saveWindowSize(size);
+    const bounds = window.getBounds();
+    if (previous && bounds.width === previous.width && bounds.height === previous.height) {
+      if (!linux) panelBounds = bounds;
+      return;
+    }
+    panelBounds = bounds;
+    if (!linux) { rememberSize(bounds); return; }
+    if (!window.isVisible() || releaseLinuxPanelSize || linuxGeometryUpdate) return;
+    if (linuxRequestedSizes.delete(sizeKey(bounds.width, bounds.height))) return;
+    // The compositor owns the size of tiled and fullscreen windows.
+    void readHyprlandPanelFloating().then(floating => {
+      if (floating && !closing && window?.isVisible() && isPanel(surface) && panelBounds === bounds) rememberSize(bounds);
+    });
   });
   try {
     tray = new Tray(trayImage(false)); tray.setToolTip('SC');
