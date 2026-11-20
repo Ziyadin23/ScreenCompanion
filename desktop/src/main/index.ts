@@ -4,7 +4,8 @@ import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
-import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry } from '../platform';
+import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry,
+  restoreHyprlandPanelTiling, type HyprlandPanelPlacement } from '../platform';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
@@ -17,10 +18,11 @@ import { autoPanelHeight } from './panel-size';
 import packageManifest from '../../package.json';
 
 interface LinuxPanelLayout {
-  floating: boolean | null;
-  transition: object | null;
+  placement: HyprlandPanelPlacement | null;
+  transition: AbortController | null;
+  restoreTiling: boolean;
   remapBounds: Electron.Rectangle | null;
-  pendingResize: Electron.Rectangle | null;
+  pendingResize: { bounds: Electron.Rectangle; order: number } | null;
   resizeCheck: Promise<void> | null;
 }
 
@@ -59,6 +61,8 @@ let activationPending = false;
 let manualPanelSize = false;
 let applyingWindowGeometry = false;
 let linuxPanelLayout: LinuxPanelLayout | null = null;
+let linuxPanelWasTiledBeforeSettings = false;
+let linuxSettingsPlacementCheck: ReturnType<typeof readHyprlandPanelGeometry> | null = null;
 let measurement = 0;
 let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
@@ -105,7 +109,10 @@ function hidePanel(): void {
   if (!window) return;
   if (linux && window.isVisible()) {
     releaseLinuxPanelSize?.();
-    if (linuxPanelLayout) linuxPanelLayout.transition = null;
+    if (linuxPanelLayout) {
+      linuxPanelLayout.transition?.abort();
+      linuxPanelLayout.transition = null;
+    }
     measuredContent = '';
     measurement++;
   }
@@ -114,6 +121,7 @@ function hidePanel(): void {
 }
 function activeWindow(): BrowserWindow | null {
   if (!linux || isPanel(surface)) return window;
+  if (linuxSettingsPlacementCheck) return null;
   return linuxDialog?.surface === surface ? linuxDialog.window : null;
 }
 function createWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
@@ -141,11 +149,33 @@ function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog'): Promise
   }
   return target.loadFile(join(directory, '../renderer/index.html'), role ? { query: { 'window-role': role } } : undefined);
 }
+function readPlacementBeforeSettings(panel: BrowserWindow): void {
+  if (!panel.isVisible() || linuxPanelLayout?.restoreTiling) return;
+  // A user can tile the panel without changing its size or emitting a resize event.
+  const check = readHyprlandPanelGeometry(panel.getTitle());
+  linuxSettingsPlacementCheck = check;
+  void check.then(geometry => {
+    if (linuxSettingsPlacementCheck !== check) return;
+    linuxSettingsPlacementCheck = null;
+    if (closing || surface !== 'settings') return;
+    if (geometry) linuxPanelWasTiledBeforeSettings = geometry.placement === 'tiled';
+    controller?.publish();
+  });
+}
 function publishLinuxDialog(state: AppState, capturing: boolean): void {
+  if (surface !== state.surface) {
+    linuxSettingsPlacementCheck = null;
+    linuxPanelWasTiledBeforeSettings = false;
+    if (state.surface === 'settings' && isPanel(surface)) {
+      linuxPanelWasTiledBeforeSettings = linuxPanelLayout?.restoreTiling === true || linuxPanelLayout?.placement === 'tiled';
+      if (readyToShow && state.visible && !capturing && window) readPlacementBeforeSettings(window);
+    }
+  }
   if (readyToShow && isPanel(surface) && window) {
     window.webContents.send('sc:state', state);
   }
   surface = state.surface;
+  if (linuxSettingsPlacementCheck && state.visible && !capturing) return;
   hidePanel();
   if (readyToShow && state.visible && !capturing && linuxDialog?.surface !== state.surface && window) {
     // Wayland can keep a toplevel's previous size after a resize request.
@@ -205,7 +235,7 @@ function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangl
       await panel.webContents.executeJavaScript(afterPanelPaint);
       if (releaseLinuxPanelSize !== release || closing || panel.isDestroyed()) return;
       const geometry = await readHyprlandPanelGeometry(panel.getTitle());
-      if (geometry && (!geometry.floating || sameSize(bounds, geometry))) break;
+      if (geometry && (geometry.placement !== 'floating' || sameSize(bounds, geometry))) break;
     }
     release();
   })().catch(release);
@@ -225,24 +255,34 @@ async function readLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelLayo
 }
 async function refreshLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelLayout): Promise<void> {
   // Fixed size hints on map can cause Hyprland to float a tiled panel.
-  const transition = {};
+  layout.transition?.abort();
+  const transition = new AbortController();
   layout.transition = transition;
+  const isCurrent = () => linuxPanelLayout === layout && layout.transition === transition && !closing &&
+    !panel.isDestroyed() && panel.isVisible() && isPanel(surface);
   await waitForLinuxPanelPaint(panel);
   // A Wayland remap can leave the panel absent from the first compositor snapshot.
   let geometry: Awaited<ReturnType<typeof readHyprlandPanelGeometry>> = null;
-  for (let attempt = 0; attempt < 3 && layout.transition === transition && !closing; attempt++) {
+  for (let attempt = 0; attempt < 3 && isCurrent(); attempt++) {
     if (attempt) await delay(32);
-    if (layout.transition !== transition) break;
+    if (!isCurrent()) return;
     geometry = await readLinuxPanelLayout(panel, layout);
     if (geometry) break;
   }
-  if (layout.transition !== transition) return;
+  if (!isCurrent()) return;
+  if (layout.restoreTiling && geometry?.placement === 'floating') {
+    // A rule can float the toplevel as it maps again after Settings.
+    await restoreHyprlandPanelTiling(geometry.address, transition.signal);
+    if (!isCurrent()) return;
+    geometry = await readLinuxPanelLayout(panel, layout);
+    if (!isCurrent()) return;
+  }
   layout.transition = null;
+  layout.restoreTiling = false;
   layout.remapBounds = null;
-  if (closing || panel.isDestroyed() || !panel.isVisible() || !isPanel(surface)) return;
   panelBounds = panel.getBounds();
-  layout.floating = geometry?.floating ?? null;
-  if (!geometry?.floating) return;
+  layout.placement = geometry?.placement ?? null;
+  if (geometry?.placement !== 'floating') return;
   if (linuxPreferredPanelBounds) {
     const preferred = clampBounds(linuxPreferredPanelBounds);
     if (!sameSize(preferred, geometry) || !sameSize(preferred, panelBounds)) constrainLinuxPanelSize(panel, preferred);
@@ -287,8 +327,8 @@ function measurePanel(state: AppState): void {
       !('inputHeight' in result) || typeof result.inputHeight !== 'number' || !Number.isFinite(result.inputHeight)) return;
     if (layout) {
       if (linuxPanelLayout !== layout || !window.isVisible() || layout.transition) return;
-      if (geometry) layout.floating = geometry.floating;
-      if (!geometry?.floating) { measuredContent = ''; return; }
+      if (geometry) layout.placement = geometry.placement;
+      if (geometry?.placement !== 'floating') { measuredContent = ''; return; }
     }
     const old = window.getBounds();
     const frameHeight = linux ? Math.max(0, old.height - window.getContentBounds().height) : 0;
@@ -321,6 +361,8 @@ function publish(state: AppState, capturing: boolean): void {
   if (surfaceChanged) {
     const returningToPanel = !isPanel(surface);
     if (linux) {
+      linuxSettingsPlacementCheck = null;
+      if (returningToPanel && window.isVisible()) linuxPanelWasTiledBeforeSettings = false;
       linuxDialog?.window.hide();
       if (linuxDialog?.ready && returningToPanel) {
         linuxDialog.window.webContents.send('sc:state', { ...state, visible: false });
@@ -366,7 +408,9 @@ function publish(state: AppState, capturing: boolean): void {
     if (!window.isVisible()) {
       // Hyprland can initially configure a remapped window at its old normal bounds.
       const remapBounds = window.isMaximized() ? window.getNormalBounds() : null;
-      linuxPanelLayout = { floating: null, transition: null, remapBounds, pendingResize: null, resizeCheck: null };
+      const restoreTiling = linuxPanelWasTiledBeforeSettings || linuxPanelLayout?.restoreTiling === true;
+      linuxPanelWasTiledBeforeSettings = false;
+      linuxPanelLayout = { placement: null, transition: null, restoreTiling, remapBounds, pendingResize: null, resizeCheck: null };
       void refreshLinuxPanelLayout(window, linuxPanelLayout);
       window.show();
       window.webContents.invalidate();
@@ -467,27 +511,42 @@ async function boot(): Promise<void> {
     const size: PanelSize = { Width: Math.round(bounds.width * scale), Height: Math.round(bounds.height * scale) };
     void store.saveWindowSize(size);
   };
+  let resizeOrder = 0;
+  let savedResizeOrder = 0;
   const checkLinuxResize = async (panel: BrowserWindow, layout: LinuxPanelLayout) => {
     try {
       while (layout.pendingResize && !closing && linuxPanelLayout === layout && panel.isVisible()) {
-        const bounds = layout.pendingResize;
+        const resize = layout.pendingResize;
+        const { bounds } = resize;
         const title = panel.getTitle();
         let geometry = await readHyprlandPanelGeometry(title);
-        if (!geometry && bounds === layout.pendingResize && !closing && linuxPanelLayout === layout && panel.isVisible()) {
+        if (!geometry && resize === layout.pendingResize && !closing && linuxPanelLayout === layout && panel.isVisible()) {
           geometry = await readHyprlandPanelGeometry(title);
         }
-        if (bounds !== layout.pendingResize) continue;
-        layout.pendingResize = null;
-        if (!geometry || closing || panel.isDestroyed() || linuxPanelLayout !== layout) return;
-        const wasFloating = layout.floating;
-        layout.floating = geometry.floating;
-        if (!geometry.floating) { measuredContent = ''; return; }
-        if (wasFloating === false) {
-          if (panel.isVisible()) void refreshLinuxPanelLayout(panel, layout);
-        } else if (sameSize(bounds, geometry)) {
-          // A snapshot for this map can confirm the resize after Hide.
+        if (resize === layout.pendingResize) layout.pendingResize = null;
+        if (closing || panel.isDestroyed()) return;
+        if (!geometry) continue;
+        const current = linuxPanelLayout;
+        const previousPlacement = layout.placement;
+        layout.placement = geometry.placement;
+        if (geometry.placement !== 'floating') {
+          if (current === layout) measuredContent = '';
+          continue;
+        }
+        if (layout.restoreTiling) continue;
+        if (previousPlacement && previousPlacement !== 'floating') {
+          if (current === layout && panel.isVisible()) void refreshLinuxPanelLayout(panel, layout);
+        } else if (resize.order > savedResizeOrder && sameSize(bounds, geometry)) {
+          // A matching snapshot can finish after a remap, unless a newer resize has been saved.
+          savedResizeOrder = resize.order;
           rememberSize(bounds);
-          if (sameSize(bounds, panel.getBounds())) layout.transition = null;
+          if (current === layout && sameSize(bounds, panel.getBounds())) {
+            layout.transition?.abort();
+            layout.transition = null;
+          }
+          if (current && current !== layout && !current.transition && panel.isVisible()) {
+            void refreshLinuxPanelLayout(panel, current);
+          }
         }
       }
     } finally {
@@ -508,9 +567,11 @@ async function boot(): Promise<void> {
     const layout = linuxPanelLayout;
     if (!layout || closing || !window.isVisible() || releaseLinuxPanelSize) return;
     const remapBounds = layout.remapBounds;
-    layout.remapBounds = null;
-    if (remapBounds && sameSize(bounds, remapBounds) && bounds.x === remapBounds.x && bounds.y === remapBounds.y) return;
-    layout.pendingResize = bounds;
+    if (remapBounds && sameSize(bounds, remapBounds) && bounds.x === remapBounds.x && bounds.y === remapBounds.y) {
+      layout.remapBounds = null;
+      return;
+    }
+    layout.pendingResize = { bounds, order: ++resizeOrder };
     layout.resizeCheck ??= checkLinuxResize(window, layout);
   });
   try {

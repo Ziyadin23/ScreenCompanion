@@ -956,6 +956,29 @@ production bundling. The eight focused files passed 200 tests, including
 named-recorder check, final packaging and the numbered beta handoff remain
 open.
 
+### Hyprland size and tiling restoration (2026-11-20)
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+found two failures on the reviewed source. Both repeated on integration
+`94a5606ff8bb02628c4259275f28e2b9f3fc57ce` with protected main `e1533be`.
+When a matching 510×252 resize reply arrived after Hide and Show, SC restored
+the previous 530×240 choice on screen and on restart. A panel tiled by the
+user at 1240×860 returned floating after Settings applied a float-on-map rule.
+The Hide-only comparison saved 510×252.
+
+SC keeps the latest confirmed resize across mappings. It uses the observed
+resize order so an older reply cannot overwrite a newer confirmed size. A
+queued stale notification leaves an earlier matching reply eligible to save.
+An unrelated notification also leaves the initial normal-bounds guard in
+place. The portable regression reproduced all three original failures and a
+further loss when a stale event was queued before the matching reply arrived.
+
+Entering Settings reads the panel's placement while its toplevel is still
+mapped. This covers tiling at 1240×860 without an Electron resize event. On
+return, SC restores tiling when a rule opens that panel floating. The request
+targets the mapped SC panel. Hyprland continues to set the tiled dimensions.
+The check includes the legacy and Lua Hyprland configurations.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

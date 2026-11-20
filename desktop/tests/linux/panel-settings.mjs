@@ -91,9 +91,15 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     let shown;
     await expect.poll(async () => {
       for (const page of app.windows()) {
-        if (await page.getByTestId(testId).isVisible()) {
-          shown = page;
-          return true;
+        if (page.isClosed()) continue;
+        try {
+          if (await page.getByTestId(testId).isVisible()) {
+            shown = page;
+            return true;
+          }
+        } catch (error) {
+          // Opening Settings can destroy the previous Setup page during this read.
+          if (!page.isClosed()) throw error;
         }
       }
       return false;
@@ -458,6 +464,38 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         await closeApp();
       }
     });
+
+    for (const chosen of [[530, 238], [1240, 860]]) {
+      const [width, height] = chosen;
+      await t.test(`Settings preserves user tiling under a float rule after a ${width}×${height} floating size`, async () => {
+        const profile = `manually-tiled-settings-${width}`;
+        try {
+          const panel = await setupProduction(profile);
+          await expect.poll(geometry).toEqual([480, 144]);
+          await settledPanelSize(panel);
+          dispatch('resizewindowpixel', `exact ${width} ${height},address:${activeClient().address}`);
+          await expect.poll(geometry).toEqual(chosen);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: width, Height: height });
+          const before = await sizeFileSnapshot(profile);
+          const layout = () => ({ floating: activeClient()?.floating, size: geometry() });
+          const tiled = { floating: false, size: [1240, 860] };
+
+          dispatch('settiled', `address:${activeClient().address}`);
+          await expect.poll(layout).toEqual(tiled);
+          for (const action of ['Back', 'Save']) {
+            await editAppearance(panel, action);
+            await expect.poll(layout, { message: `${action} should restore tiling despite the float rule` }).toEqual(tiled);
+            assert.deepEqual(await sizeFileSnapshot(profile), before);
+          }
+
+          dispatch('setfloating', `address:${activeClient().address}`);
+          await expect.poll(layout).toEqual({ floating: true, size: chosen });
+          assert.deepEqual(await sizeFileSnapshot(profile), before);
+        } finally {
+          await closeApp();
+        }
+      });
+    }
 
     for (const floating of [true, false]) {
       if (!floating) {

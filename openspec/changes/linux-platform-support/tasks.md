@@ -216,3 +216,16 @@
   Windows Settings, same-profile resize restart and the named recorder check
   remain open. Task 2.7 owns final packaging and the numbered runnable beta
   handoff.
+
+### 2.6 Resize and tiling restoration (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from reviewed head `144b80b9` through integration `94a5606` on protected
+  main `e1533be`. Both earlier failures reproduced on the integration.
+  SC preserves matching resize results across Hide and Show in resize order.
+  Before hiding the panel for Settings, it checks the current compositor
+  placement. When a rule floats the returning panel, SC restores the prior
+  tiled mode. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+- Task 2.6 remains open for independent rereview, source integration, Windows
+  Settings and same-profile resize restart, and the named recorder check.
+  Task 2.7 owns final packaging and the numbered runnable beta handoff.

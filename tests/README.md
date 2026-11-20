@@ -197,7 +197,9 @@ restoration on Escape. A controlled capture cancellation checks that a late
 Settings load keeps SC hidden. Production checks use a temporary keyring and
 separate fresh profiles. They edit Answer text size and exercise Back and
 Save in floating and tiled layouts. They compare the actual tiled layout
-before opening Settings and after returning. They also check that switching
+before opening Settings and after returning. This includes a panel the user
+tiled under a float rule, with and without a size change when tiling. They
+also check that switching
 layouts leaves the manual size file intact and that one native resize to a
 previous automatic fit saves that size. A virtual Wayland pointer drives
 Hyprland's interactive resize binding to change the floating size and drag
@@ -210,8 +212,9 @@ further panel input or a test-driven repaint. Refloating must restore
 
 The portable `tests/main/panel-resize.test.ts` fixture holds the repaint,
 remap or compositor snapshot at the relevant point. It checks that a matching
-floating resize reaches disk and that a stale configure or prior map's reply
-cannot replace the current choice.
+floating resize reaches disk and returns on a quick Hide and Show. A stale
+configure leaves that resize intact. A newer confirmed resize takes precedence
+over an older reply.
 [Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
 
 ## Installed updates

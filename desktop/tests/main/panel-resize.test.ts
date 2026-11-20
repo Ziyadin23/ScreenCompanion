@@ -123,8 +123,9 @@ vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
   return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
+    restoreHyprlandPanelTiling: vi.fn(),
     readHyprlandPanelGeometry: async () => {
-      const snapshot = { ...panel.getCompositorSize(), floating: panelFloating };
+      const snapshot = { ...panel.getCompositorSize(), address: '0x1', placement: panelFloating ? 'floating' : 'tiled' };
       const response = nextGeometryResponse;
       nextGeometryResponse = null;
       await response;
@@ -369,29 +370,65 @@ it.skipIf(platform !== 'linux').each([true, false])(
     }
   });
 
-it.skipIf(platform !== 'linux')('ignores the compositor accepting the remap bounds but saves a later resize to that size', async () => {
-  const previous = { Width: 530, Height: 240 };
-  await store().saveWindowSize(previous);
-  await boot();
-  await setImmediate();
-  await invoke('command', { type: 'toggleVisibility' });
-  const paint = pause();
-  panelPaint = paint.pending;
-  try {
+it.skipIf(platform !== 'linux').each([false, true])(
+  'ignores the initial remap bounds and saves a later resize to that size (earlier stale event: %s)', async stale => {
+    const previous = { Width: 530, Height: 240 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
     await invoke('command', { type: 'toggleVisibility' });
-    panel.configureNormalBounds();
-    expect(panel.getSize()).toEqual({ width: 420, height: 180 });
-    paint.resume();
-    await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
-    expect(await store().loadWindowSize()).toEqual(previous);
-  } finally {
-    paint.resume();
-  }
+    const paint = pause();
+    panelPaint = paint.pending;
+    try {
+      await invoke('command', { type: 'toggleVisibility' });
+      if (stale) panel.deliverLateConfigure({ width: 503, height: 264 });
+      panel.configureNormalBounds();
+      expect(panel.getSize()).toEqual({ width: 420, height: 180 });
+      paint.resume();
+      await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
+      expect(await store().loadWindowSize()).toEqual(previous);
+    } finally {
+      paint.resume();
+    }
 
-  await setImmediate();
-  panel.configureNormalBounds();
-  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
-});
+    await setImmediate();
+    panel.configureNormalBounds();
+    await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
+  });
+
+it.skipIf(platform !== 'linux').each([
+  { painted: true, stale: false }, { painted: false, stale: false }, { painted: true, stale: true }
+])('saves and restores a matching resize after Hide and Show (painted: $painted, stale event: $stale)', async ({ painted, stale }) => {
+    const previous = { Width: 530, Height: 240 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
+    const confirmation = pause();
+    const paint = pause();
+    nextGeometryResponse = confirmation.pending;
+    const size = { width: 510, height: 252 };
+    try {
+      panel.resizeFromDesktop(size);
+      expect(nextGeometryResponse).toBeNull();
+      if (stale) panel.deliverLateConfigure({ width: 503, height: 264 });
+      await invoke('command', { type: 'toggleVisibility' });
+      expect(panel.isVisible()).toBe(false);
+      if (!painted) panelPaint = paint.pending;
+      await invoke('command', { type: 'toggleVisibility' });
+      expect(panel.isVisible()).toBe(true);
+      panel.configureNormalBounds();
+      await setImmediate();
+      expect(await store().loadWindowSize()).toEqual(previous);
+
+      confirmation.resume();
+      paint.resume();
+      await vi.waitFor(async () => expect({ visible: panel.getSize(), saved: await store().loadWindowSize() })
+        .toEqual({ visible: size, saved: { Width: 510, Height: 252 } }));
+    } finally {
+      confirmation.resume();
+      paint.resume();
+    }
+  });
 
 it.skipIf(platform !== 'linux')('keeps the new map resize when the prior map confirmation arrives late', async () => {
   await store().saveWindowSize({ Width: 530, Height: 240 });

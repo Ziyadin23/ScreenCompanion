@@ -51,3 +51,8 @@ The [#19 geometry lifecycle correction](../../../docs/VERIFICATION.md#hyprland-p
 re-ran the shared resize and restart tests at scales 1 and 1.25. The
 Hyprland fixture also saved an earlier automatic size after one compositor
 resize. Tasks 2.3 and 2.4 remain open for Windows runtime and beta delivery.
+
+The [follow-up #19 correction](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+keeps a compositor-confirmed floating size across rapid Hide and Show. A newer
+confirmed resize takes precedence over an older reply. The shared Windows
+runtime and delivery requirements remain open under tasks 2.3 and 2.4.
