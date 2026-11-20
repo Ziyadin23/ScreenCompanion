@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApiProvider, AppCommand, AppState, ResizeEdge } from '../contracts';
-import { PROVIDERS } from '../contracts';
-import { Choice } from './Choice';
+import type { AppCommand, AppState, ResizeEdge } from '../contracts';
 import { Settings } from './Settings';
+import { Setup } from './Setup';
+import { Theme } from '@astryxdesign/core/theme';
+import { themes, defaultThemeSlug } from '../astryx-themes';
 import { Icon, type IconName } from './Icon';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
-import appIcon from '../../../assets/brand/sc-icon-512.png';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
@@ -16,50 +16,6 @@ const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; reque
   { label: 'Hide', icon: 'hide', command: { type: 'toggleVisibility' } },
   { label: 'Exit', icon: 'exit', command: { type: 'exit' } }
 ];
-
-function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boolean; platform: AppState['platform']; onCommand: (command: AppCommand) => void }) {
-  const [provider, setProvider] = useState<ApiProvider>('OpenAI');
-  const [key, setKey] = useState('');
-  const [showKey, setShowKey] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const pending = useRef(false);
-  const alive = useRef(true);
-  const keyInput = useRef<HTMLInputElement>(null);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const service = provider === 'Gemini' ? 'Google Gemini' : provider;
-  async function save() {
-    if (pending.current) return;
-    if (!key.trim() || /[\u0000-\u001f\u007f]/.test(key)) {
-      setError(`Enter your ${service} API key without line breaks or control characters.`); keyInput.current?.focus(); return;
-    }
-    pending.current = true; setSaving(true); setError('');
-    try { await window.sc.setup({ provider, apiKey: key.trim() }); if (alive.current) { setKey(''); setShowKey(false); } }
-    catch { if (alive.current) setError(platform === 'linux' ? 'The key could not be saved. Unlock your secure Linux keyring and try again.' : 'The key could not be saved. Try again.'); }
-    finally { pending.current = false; if (alive.current) setSaving(false); }
-  }
-  return <section className="setup fixed-theme" aria-label="Set up SC" aria-busy={saving}>
-    <header className="dialog-header"><div className="dialog-title"><img className="app-mark" src={appIcon} width={28} height={28} alt="" /><h1>Set up SC</h1></div></header>
-    <form noValidate onSubmit={(event) => { event.preventDefault(); void save(); }}>
-      <p className="setup-intro">Choose your service and enter its API key to get started.</p>
-      <Choice id="setup-service" label="API service" value={provider} options={PROVIDERS} disabled={saving} autoFocus
-        display={(value) => value === 'Gemini' ? 'Google Gemini' : value} onChange={(value) => {
-          setProvider(value as ApiProvider); setError(''); setShowKey(false); keyInput.current?.focus();
-        }} />
-      <label htmlFor="setup-key">{service} API key</label>
-      <input ref={keyInput} id="setup-key" data-testid="setup-key" type={showKey ? 'text' : 'password'} aria-label={`${service} API key`} autoComplete="off" spellCheck={false}
-        aria-invalid={!!error} aria-describedby={`setup-privacy${error ? ' setup-error' : ''}`}
-        maxLength={8192} value={key} disabled={saving} onChange={(event) => { setKey(event.target.value); setError(''); }} />
-      <label className="checkbox-row"><input type="checkbox" checked={showKey} disabled={saving} onChange={(event) => setShowKey(event.target.checked)} />Show API key</label>
-      <p className="hint" id="setup-privacy">{platform === 'linux' ? 'Your key is encrypted using your unlocked Linux keyring.' : 'Your key is encrypted for your Windows account.'} Setup saves your service and key without contacting the service or checking access. You can change them in Settings → Models &amp; API.</p>
-      {platform === 'linux' && <p className="hint">Unlock your desktop keyring before saving. SC windows can appear in recordings and screen shares.</p>}
-      {legacyNotice && <p className="hint" role="note">An older key file was found. Enter your API key once more. The old file will be left unchanged.</p>}
-      {error && <p className="dialog-error" id="setup-error" role="alert">{error}</p>}
-      <footer className="dialog-footer"><span className="footer-status" role="status">{saving ? 'Saving setup…' : ''}</span><button className="primary-action" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-        <button type="button" disabled={saving} onClick={() => onCommand({ type: 'exit' })}>Cancel</button></footer>
-    </form>
-  </section>;
-}
 
 function captureTestText(state: AppState): string {
   if (state.platform === 'linux') return 'SC windows can appear in recordings and screen shares on Linux. Check the actual recording or received stream. Use the window controls to return or exit.';
@@ -74,8 +30,10 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
+  const composing = useRef(false);
   const text = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
@@ -92,11 +50,27 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   useEffect(() => {
     if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) { setQuestion(''); setError(''); }
   }, [state.surface, state.platform, state.busy]);
-  async function submit() {
+  useEffect(() => window.sc.onInputAction((submitScreenshot) => {
+    if (state.surface !== 'input' || !state.visible || state.busy || pending.current || composing.current) return;
+    if (!submitScreenshot || document.activeElement !== input.current) { input.current?.focus(); return; }
+    void submit(true);
+  }), [state.surface, state.visible, state.busy, question]);
+  useEffect(() => {
+    const form = composer.current;
+    if (!form) return;
+    const measure = () => {
+      const height = Math.ceil(form.getBoundingClientRect().height + (parseFloat(getComputedStyle(form).marginBottom) || 0));
+      if (height > 0) void onCommand({ type: 'inputHeight', height });
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(form); measure();
+    return () => observer?.disconnect();
+  }, [state.surface]);
+  async function submit(includeScreenshot = false) {
     const value = question.trim();
     if (!value || pending.current || state.busy) return;
     pending.current = true; setSubmitting(true); setError('');
-    const success = await onCommand({ type: 'submit', question: value.slice(0, 4000) });
+    const success = await onCommand({ type: 'submit', question: value.slice(0, 4000), includeScreenshot });
     pending.current = false;
     if (alive.current) { setSubmitting(false); if (success) setQuestion(''); else setError('The question could not be submitted. Try again.'); }
   }
@@ -116,8 +90,9 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
         selection?.removeAllRanges(); selection?.addRange(range);
         return;
       }
-      if (event.target === input.current && event.key === 'Enter' && !event.nativeEvent.isComposing && !event.defaultPrevented) {
-        event.preventDefault(); void submit();
+      if (event.target === input.current && event.key === 'Enter' && !event.nativeEvent.isComposing && !composing.current && !event.defaultPrevented) {
+        event.preventDefault();
+        if (!event.repeat && !event.altKey && !event.shiftKey && !event.metaKey) void submit(event.ctrlKey);
       }
     }}
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
@@ -131,10 +106,14 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
       </nav>
     </div>
     <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
-    {state.surface === 'input' && <form className="question-form" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-      <input ref={input} data-testid="question-input" aria-label="Question" placeholder="Ask about your screen…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
-        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))} />
-      <button type="submit" aria-label="Send" title="Send" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+    {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
+      <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
+        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
+        onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
+      <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+      <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
+        onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
+      <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
       {error && <span className="input-error" role="alert">{error}</span>}
     </form>}
     {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
@@ -166,18 +145,18 @@ export function App() {
     catch { return false; }
   }
   useEffect(() => {
+    // Setup and Settings handle Escape with their own Cancel and Back actions.
+    if (state?.surface === 'setup' || state?.surface === 'settings') return;
     function keyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
-      // Settings owns Escape so that native Back/discard semantics run first.
-      if (state?.surface === 'settings') return;
       event.preventDefault();
-      void command({ type: state?.surface === 'setup' ? 'exit' : 'escape' });
+      void command({ type: 'escape' });
     }
     document.addEventListener('keydown', keyDown);
     return () => document.removeEventListener('keydown', keyDown);
   }, [state?.surface]);
   if (!state) return error ? <div className="fixed-theme startup-error" role="alert">{error}</div> : null;
-  if (state.surface === 'setup') return <Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} />;
-  if (state.surface === 'settings') return <Settings key={snapshot!.settingsSession} state={state} />;
+  if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
+  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={snapshot!.settingsSession} state={state} /></Theme>;
   return <Answer state={state} onCommand={command} />;
 }

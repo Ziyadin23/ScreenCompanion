@@ -9,16 +9,16 @@ import { DIAGNOSTIC_IDS, PHASE_LIMITS, phaseRuns } from './campaign';
 import { FAKE_CANDIDATE } from './fakes';
 
 describe('fixed synthetic visual campaign', () => {
-  it('has the accepted2+11+96+11 schedule with fresh49 and unique stable IDs', () => {
+  it('has the current two-mode offline schedule with 33 operations and unique stable IDs', () => {
     const runs = campaign();
-    expect(runs).toHaveLength(49);
-    expect(new Set(runs.map(run => run.id)).size).toBe(49);
+    expect(runs).toHaveLength(33);
+    expect(new Set(runs.map(run => run.id)).size).toBe(33);
     expect(runs.reduce((sum, run) => sum + run.expectedCalls, 0)).toBe(BASELINE_CALLS);
     expect(Object.values(PHASE_LIMITS).reduce((sum, value) => sum + value, 0)).toBe(CAMPAIGN_CAP);
     expect(phaseRuns('diagnostic').map(run => run.id)).toEqual(DIAGNOSTIC_IDS);
     expect(phaseRuns('diagnostic').reduce((sum, run) => sum + run.expectedCalls, 0)).toBe(11);
     expect(Object.fromEntries(['main', 'typed', 'translation', 'pro', 'preflight'].map(group => [group,
-      runs.filter(run => run.group === group).reduce((sum, run) => sum + run.expectedCalls, 0)]))).toEqual({ main: 72, typed: 11, translation: 6, pro: 5, preflight: 2 });
+      runs.filter(run => run.group === group).reduce((sum, run) => sum + run.expectedCalls, 0)]))).toEqual({ main: 48, typed: 7, translation: 4, pro: 3, preflight: 2 });
     expect(runs.filter(run => run.group === 'main').every(run => run.answerModel === 'deepseek-flash' && run.thinking === 'None' && run.answerTokens === 2500)).toBe(true);
     expect(runs.filter(run => run.group === 'pro').every(run => run.answerModel === 'deepseek-v4-pro' && run.thinking === 'Low' && run.answerTokens === 16000 && run.mode !== 'Direct')).toBe(true);
   });
@@ -52,11 +52,11 @@ describe('strict independent primary and displayed-first-line oracles', () => {
     expect(matchesExpected(value, numeric.questions[0]!.expected)).toBe(false);
   });
   it('does not let explanation-only numbers repair a wrong primary', () => {
-    expect(gradeAnswer(numeric, 'Balanced', [fakeAnswer('task', '0', { explanation: '6 times 7 is 42.' })], '42')).toEqual({
+    expect(gradeAnswer(numeric, 'Thorough', [fakeAnswer('task', '0', { explanation: '6 times 7 is 42.' })], '42')).toEqual({
       canonicalPrimary: false, displayedFirstLine: true, displayedCoverage: true });
-    expect(gradeAnswer(numeric, 'Balanced', [fakeAnswer('task', '42')], '0\nThe expected answer is 42.')).toEqual({
+    expect(gradeAnswer(numeric, 'Thorough', [fakeAnswer('task', '42')], '0\nThe expected answer is 42.')).toEqual({
       canonicalPrimary: true, displayedFirstLine: false, displayedCoverage: false });
-    expect(gradeAnswer(numeric, 'Balanced', [fakeAnswer('task', '', { explanation: '42' })], '42').canonicalPrimary).toBe(false);
+    expect(gradeAnswer(numeric, 'Thorough', [fakeAnswer('task', '', { explanation: '42' })], '42').canonicalPrimary).toBe(false);
   });
   it('rejects refusals and missing information even when they mention the expected value', () => {
     for (const status of ['refusal', 'missing_information'] as const) expect(gradeAnswer(numeric, 'Direct', [fakeAnswer('task', '42', { status })], '42').canonicalPrimary).toBe(false);
@@ -79,7 +79,7 @@ describe('strict independent primary and displayed-first-line oracles', () => {
     expect(gradeAnswer(fixture, 'Thorough', [fakeAnswer('a', '25'), fakeAnswer('b', '36')], 'Q1: 25\nComputation\n\nQ2: 36').canonicalPrimary).toBe(true);
   });
   it('grades fixed translations and dimension-labelled area independently of explanation', () => {
-    expect(gradeAnswer(TRANSLATION, 'Balanced', [fakeAnswer('t', 'Red circle.', { status: 'transformation' })], 'Red circle.').canonicalPrimary).toBe(true);
+    expect(gradeAnswer(TRANSLATION, 'Thorough', [fakeAnswer('t', 'Red circle.', { status: 'transformation' })], 'Red circle.').canonicalPrimary).toBe(true);
     expect(matchesExpected('24 cm²', visualCase('diagram').questions[0]!.expected)).toBe(true);
     expect(matchesExpected('Area 0; dimensions imply 24 cm²', visualCase('diagram').questions[0]!.expected)).toBe(false);
   });

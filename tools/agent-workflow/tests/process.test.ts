@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,68 @@ async function until(predicate: () => boolean, ms = 3000) {
   while (!predicate()) { if (Date.now() > end) throw new Error('Timed out waiting for child'); await delay(20); }
 }
 
+test('wrapper starts and records an owned exit without coordinator database or compiler dependencies', async t => {
+  const f = fixture(t), op = join(f.root, 'lean-wrapper'); mkdirSync(op, { mode: 0o700 });
+  const preload = join(f.root, 'wrapper-capabilities.mjs');
+  const loader = `export async function resolve(specifier, context, next) {
+    if (specifier === 'typescript' || specifier === 'better-sqlite3' || specifier.startsWith('@langchain/'))
+      throw new Error('Coordinator-only dependency in wrapper bootstrap: ' + specifier);
+    return next(specifier, context);
+  }`;
+  writeFileSync(preload, `import {register} from 'node:module';register(${JSON.stringify(`data:text/javascript,${encodeURIComponent(loader)}`)},import.meta.url);\n`);
+  writeFileSync(join(op, 'request.json'), JSON.stringify({ command: process.execPath,
+    args: ['-e', 'process.stdout.write("owned-wrapper-ready")'], cwd: f.cwd, env: {}, timeoutMs: 3000 }));
+  const wrapper = spawn(process.execPath, ['--import', preload,
+    new URL('../src/process-entry.js', import.meta.url).pathname, op],
+  { detached: true, stdio: ['ignore', 'ignore', 'pipe'], env: {} });
+  let stderr = '';
+  wrapper.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString('utf8'); });
+  await new Promise<void>((resolve, reject) => { wrapper.once('error', reject); wrapper.once('close', () => resolve()); });
+  assert.equal(wrapper.exitCode, 0, stderr);
+  assert.equal(existsSync(join(op, 'start.json')), true);
+  const exit = JSON.parse(readFileSync(join(op, 'exit.json'), 'utf8'));
+  assert.equal(exit.status, 'exited'); assert.equal(exit.exitCode, 0);
+  assert.equal(readFileSync(join(op, 'stdout'), 'utf8'), 'owned-wrapper-ready');
+  assert.equal(existsSync(join(op, 'failure.json')), false);
+});
+
+for (const code of ['ENOENT', 'ESRCH']) {
+  test(`wrapper and coordinator tolerate a proc entry disappearing with ${code}`, async t => {
+    const f = fixture(t);
+    const preload = join(f.root, 'vanishing-proc.mjs');
+    writeFileSync(preload, `import fs from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+const list = fs.readdirSync, read = fs.readFileSync;
+fs.readdirSync = (...args) => args[0] === '/proc' ? [...list(...args), '2147483646'] : list(...args);
+fs.readFileSync = (...args) => {
+  if (args[0] === '/proc/2147483646/stat') {
+    const error = new Error('synthetic disappearing process'); error.code = '${code}'; throw error;
+  }
+  return read(...args);
+};
+syncBuiltinESMExports();\n`);
+    const op = join(f.root, 'wrapper'); mkdirSync(op, { mode: 0o700 });
+    writeFileSync(join(op, 'request.json'), JSON.stringify({ command: process.execPath,
+      args: ['-e', 'setTimeout(()=>process.exit(0),80)'], cwd: f.cwd, env: {}, timeoutMs: 3000 }));
+    const wrapper = spawn(process.execPath, ['--import', preload,
+      new URL('../src/process-entry.js', import.meta.url).pathname, op],
+    { detached: true, stdio: 'ignore', env: {} });
+    await new Promise<void>((resolve, reject) => {
+      wrapper.once('error', reject); wrapper.once('close', () => resolve());
+    });
+    assert.equal(existsSync(join(op, 'failure.json')), false);
+    assert.equal(JSON.parse(readFileSync(join(op, 'exit.json'), 'utf8')).exitCode, 0);
+    await runOwnedProcess({ ...f, key: 'inspect', command: process.execPath,
+      args: ['-e', 'process.exit(0)'], env: {}, timeoutMs: 3000 });
+    const inspected = spawnSync(process.execPath, ['--import', preload, '--input-type=module', '-e',
+      'const {inspectOwnedProcess}=await import(process.argv[1]);console.log(inspectOwnedProcess(process.argv[2],process.argv[3]).state)',
+      new URL('../src/process.js', import.meta.url).href, f.stateDirectory, 'inspect'],
+    { encoding: 'utf8', timeout: 5000, env: {} });
+    assert.equal(inspected.status, 0, inspected.stderr);
+    assert.equal(inspected.stdout.trim(), 'exited');
+  });
+}
+
 test('executes with direct arguments, explicit environment and private durable receipts', async t => {
   const f = fixture(t);
   const result = await runOwnedProcess({ ...f, key: 'normal', command: process.execPath,
@@ -31,6 +93,27 @@ test('executes with direct arguments, explicit environment and private durable r
   assert.equal(statSync(f.stateDirectory).mode & 0o777, 0o700);
   const op = join(f.stateDirectory, readdirSync(f.stateDirectory)[0]!);
   for (const name of readdirSync(op)) assert.equal(statSync(join(op, name)).mode & 0o077, 0);
+});
+
+test('retains the default owned-process deadline when none is supplied', async t => {
+  const f = fixture(t);
+  const result = await runOwnedProcess({ ...f, key: 'default-timeout', command: process.execPath,
+    args: ['-e', 'process.exit(0)'], env: {} });
+  assert.equal(result.status, 'exited'); assert.equal(result.exitCode, 0);
+  const op = join(f.stateDirectory, readdirSync(f.stateDirectory)[0]!);
+  assert.equal(JSON.parse(readFileSync(join(op, 'request.json'), 'utf8')).timeoutMs, 1_200_000);
+});
+
+test('rejects non-finite, non-integer and excessive deadlines before launch or durable receipts', async t => {
+  const f = fixture(t), marker = join(f.root, 'unexpected-launch');
+  for (const [index, timeoutMs] of [0, -1, 1.5, NaN, Infinity, 9_000_001].entries()) {
+    const key = `invalid-timeout-${index}`;
+    await assert.rejects(runOwnedProcess({ ...f, key, command: process.execPath,
+      args: ['-e', "require('fs').writeFileSync(process.argv[1],'unexpected')", marker], env: {}, timeoutMs }),
+    { code: 'invalid_process_request' });
+    assert.equal(inspectOwnedProcess(f.stateDirectory, key).state, 'absent');
+  }
+  assert.equal(existsSync(marker), false); assert.equal(existsSync(f.stateDirectory), false);
 });
 
 test('wrapper records a bounded cause when its process-group scan fails without claiming exit', async t => {

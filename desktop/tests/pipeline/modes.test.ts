@@ -4,8 +4,8 @@ import { createPipelineRunner } from '../../src/pipeline';
 import { canonical, combined, configuration, context, detection, envelope, expectFirstLine, expectPrimary, extraction,
   images, noContext, pipelineInput, StrictTransport, TrackingCropper, type FixtureCase, type Payload } from './fixtures';
 
-describe('Thorough/Balanced provider and task parity', () => {
-  const cases = PROVIDERS.flatMap(provider => (['Thorough', 'Balanced'] as const).flatMap(mode =>
+describe('Thorough provider and task parity', () => {
+  const cases = PROVIDERS.flatMap(provider => (['Thorough'] as const).flatMap(mode =>
     [false, true].flatMap(typed => (['multiple', 'multi', 'short', 'code', 'image', 'content'] as FixtureCase[]).map(kind => ({ provider, mode, typed, kind })))));
   it.each(cases)('$provider $mode typed=$typed $kind', async ({ provider, mode, typed, kind }) => {
     const config = configuration({ provider, mode, answerModel: 'answer-fixture', visionModel: 'vision-fixture' });
@@ -44,7 +44,7 @@ describe('Thorough/Balanced provider and task parity', () => {
     }
     expect(input.jpeg.toString()).toBe('ORIGINAL-MONITOR-SENTINEL ASSESSMENT_MODE=qa');
   });
-  it.each(['Thorough', 'Balanced'] as const)('%s fixed crop skips locate and is zeroed', async mode => {
+  it.each(['Thorough'] as const)('%s fixed crop skips locate and is zeroed', async mode => {
     const cropper = new TrackingCropper();
     const transport = new StrictTransport([() => envelope('OpenAI', mode === 'Thorough' ? extraction('image') : combined('image')), payload => envelope('OpenAI', canonical(payload, '24'))]);
     await createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ mode, questionRegion: { x: .1, y: .2, width: .7, height: .6 } }) }));
@@ -52,7 +52,7 @@ describe('Thorough/Balanced provider and task parity', () => {
     expect(images(transport.payloads[0]!)).toEqual([`data:image/jpeg;base64,${Buffer.from('isolated-image-1').toString('base64')}`]);
     expect(cropper.regions).toHaveLength(2);
   });
-  it.each(['Thorough', 'Balanced'] as const)('%s disabled cropping ignores fixed region and excludes monitor from answering', async mode => {
+  it.each(['Thorough'] as const)('%s disabled cropping ignores fixed region and excludes monitor from answering', async mode => {
     const cropper = new TrackingCropper();
     const transport = new StrictTransport([() => envelope('OpenAI', mode === 'Thorough' ? extraction('image') : combined('image')), payload => envelope('OpenAI', canonical(payload, '24'))]);
     const input = pipelineInput({ configuration: configuration({ mode, enableQuestionCropping: false, questionRegion: { x: 0, y: 0, width: 1, height: 1 } }) });
@@ -63,7 +63,7 @@ describe('Thorough/Balanced provider and task parity', () => {
     if (mode === 'Thorough') expect(cropper.regions[0]).toEqual({ x: .3, y: .3, width: .3, height: .2 });
     expect(JSON.stringify(transport.payloads[1])).not.toContain(input.jpeg.toString('base64'));
   });
-  it.each(['Thorough', 'Balanced'] as const)('%s typed no relevant content answers typed task only in two calls', async mode => {
+  it.each(['Thorough'] as const)('%s typed no relevant content answers typed task only in two calls', async mode => {
     const cropper = new TrackingCropper();
     const transport = new StrictTransport([() => envelope('OpenAI', mode === 'Thorough' ? { found: false, region: null } : noContext()), payload => {
       expect(context(payload).task.questions).toEqual([]); expect(images(payload)).toEqual([]);
@@ -101,10 +101,13 @@ describe('Direct screenshot', () => {
     expect(images(transport.payloads[0]!)).toEqual([`data:image/jpeg;base64,${input.jpeg.toString('base64')}`]);
     expect(events.every(event => ['Answer', 'ValidateAnswer'].includes(event.stage))).toBe(true);
   });
-  it.each(PROVIDERS.filter(provider => provider !== 'DeepSeek'))('rejects %s Direct before transport', async provider => {
-    const transport = new StrictTransport([]), cropper = new TrackingCropper();
-    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ provider, mode: 'Direct' }) }))).rejects.toThrow('only with DeepSeek');
-    transport.done();
+  it.each(PROVIDERS)('supports %s Direct with one original-image call', async provider => {
+    const transport = new StrictTransport([payload => envelope(provider, canonical(payload))], provider), cropper = new TrackingCropper();
+    const input = pipelineInput({ typedQuestion: 'Explain the visible task.', configuration: configuration({ provider, mode: 'Direct' }) });
+    expect((await createPipelineRunner({ transport, cropper }).run(input)).text).toBe('42');
+    expect(images(transport.payloads[0]!)).toEqual([`data:image/jpeg;base64,${input.jpeg!.toString('base64')}`]);
+    expect(context(transport.payloads[0]!).typed_question).toBe(input.typedQuestion);
+    expect(cropper.regions).toEqual([]); transport.done(); transport.cleared();
   });
   it.each(['None', 'Low', 'High', 'Max'] as const)('sends exact Flash reasoning %s and selected budget', async thinking => {
     const transport = new StrictTransport([payload => {
@@ -117,7 +120,7 @@ describe('Direct screenshot', () => {
 });
 
 describe('answer-only DeepSeek model options', () => {
-  it.each(['Thorough', 'Balanced'] as PipelineMode[])('%s reads with Flash non-thinking and answers with text-only Pro', async mode => {
+  it.each(['Thorough'] as PipelineMode[])('%s reads with Flash non-thinking and answers with text-only Pro', async mode => {
     const provider: ApiProvider = 'DeepSeek';
     const first = mode === 'Thorough' ? [detection(), extraction('short')] : [combined('short')];
     const transport = new StrictTransport([...first.map(value => (payload: Payload) => {
@@ -133,7 +136,7 @@ describe('answer-only DeepSeek model options', () => {
   it('preserves task visuals and fails before sending Pro an image', async () => {
     const cropper = new TrackingCropper();
     const transport = new StrictTransport([() => envelope('DeepSeek', combined('image'))], 'DeepSeek');
-    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ provider: 'DeepSeek', mode: 'Balanced', answerModel: 'deepseek-v4-pro', visionModel: 'deepseek-flash' }) })))
+    await expect(createPipelineRunner({ transport, cropper }).run(pipelineInput({ configuration: configuration({ provider: 'DeepSeek', mode: 'Thorough', enableQuestionCropping: false, answerModel: 'deepseek-v4-pro', visionModel: 'deepseek-flash' }) })))
       .rejects.toMatchObject({ stage: 'Answer', pipelineCode: 'UnsupportedModel' });
     transport.done(); transport.cleared(); cropper.cleared();
   });

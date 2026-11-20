@@ -118,6 +118,8 @@ The first executor runs installed `codex exec` with an explicit working director
 
 On the initial Linux host, validate a bubblewrap-backed execution profile with a private home/temp/proc namespace, a task workspace as the only source write mount, read-only required runtime/dependency mounts and read-only Git metadata. Do not mount the coordinator's GitHub auth, private project context, state database or other worktrees. Independent review uses a read-only candidate mount. A Git worktree alone is not isolation.
 
+Application dependency projection requires an observed successful setup bound to this source/workspace and a fresh matching dependency attestation. Only the canonical installation is mounted read-only; private caches and every other ignored source path remain hidden, with empty temporary caches for focused checks. The projection profile/hash enters the worker operation identity, so a newly usable execution does not reuse a result from the missing-dependency profile. Full credential-free verification remains coordinator-owned.
+
 For the initial Codex backend, authentication is an explicit narrow credential-file projection into the invocation's private temporary home, not a new credential broker. Project only the selected existing model account's required files; never mount the normal home or copy unrelated configuration. This credential is available to processes inside that worker sandbox, so the design does not claim to hide model auth from its tool children. Bound its lifetime/access, remove the projection at termination and document this trust boundary in the selected execution profile. An auth mode that needs broader home/keychain access is unsupported until separately qualified; do not silently change billing or provision a new account. Setup and verification sandboxes receive no model credential at all.
 
 The coordinator owns Git commits/pushes, GitHub publication/merge and private beta delivery; workers edit task-owned files and return structured results. Candidate hooks, policy files and arbitrary commands returned by a worker are not executed by the coordinator. Every candidate-controlled subprocess, including dependency lifecycle hooks, runs inside an execution sandbox without coordinator credentials. Verification uses configured command templates and no model auth; task text is never interpolated into a host command.
@@ -126,11 +128,17 @@ A launch wrapper creates a durable start receipt before worker execution and rec
 
 Raw worker/session output is private and bounded. Public output is regenerated from validated fields; credentials, private machine paths and lab data are not copied into issues or check artifacts. Default workflow tracing stays local; optional external trace export is a later explicit choice.
 
+The complete native JSONL output bound also bounds individual source-read events; final messages retain their separate schema/length limits. Explicit resume after a compatible parser correction may revalidate the same observed receipt without rerunning its process. A changed interpretation preserves its predecessor in bounded private history and updates the current per-execution result; consumed execution/time allowances remain unchanged.
+
 ### 7. Preserve issue, OpenSpec and Orca ownership
 
 For discovery, assemble a context pack from applicable guidance/contracts, selected source/tests, the accepted baseline and prior matching findings. Verify expected behavior from those sources and freeze a reproducer before implementing. A confirmed bug must fail for the stated reason on the baseline; a speculative concern or unavailable physical environment is an investigation result.
 
+Baseline contract review has a distinct strict result for oracle validity and material oracle/contract concerns, bound to the frozen source. The expected reproduced defect belongs in notes; it is not a reason to reject a sound oracle. This review cannot replace the observed failing assertion, candidate-code review or whole-issue acceptance review.
+
 Search open and closed issues by the stable finding fingerprint and equivalent outcome, not just title similarity. Reuse open tasks. A follow-up to a closed task must show a current regression/distinct remaining scope and retain the historical link. Read back newly published issues and preserve unrelated assignees/labels/body content.
+
+Whole-issue scope review receives the exact frozen oracle/contract paths and the trusted coordinator delivery boundaries. Its complete verdict means the entire issue outcome belongs to this correction, not that delivery has already passed. A reviewable source PR can retain the required beta gate and open issue; unavailable qualification cannot be substituted or silently dropped. The apply worker and final candidate reviewer receive the full issue acceptance, delivery boundaries and exact oracle rather than hashes alone.
 
 Reuse an existing OpenSpec task group where it matches. Otherwise a planning stage creates the minimal required change and publishes or explicitly transfers it before an independent worker uses it. Bug fixes preserve the existing behavioral contract; a source correction without a changed requirement can use the schema's legitimate spec-skip route. Automatic runs do not invent a new requirement to fit a generated fix.
 
@@ -189,6 +197,8 @@ Return a structured policy decision with reasons and the bound source/policy/evi
 Implement a dedicated stable `agent-workflow` CI check for the development tool, with conservative path handling and an explicit light documentation route where appropriate. Retain `portable` and `windows-build` names and their original application steps. Missing/unreadable diff baselines take the full route. A deliberate documented documentation-only skip is distinguishable from a missing, cancelled or failed required job.
 
 The trusted verifier computes requirements from the actual diff and authoritative base contracts. It runs configured commands itself, records their source/environment/exit/test identity, retains failures and ties the reviewer to the complete final diff. New assertions supplement existing checks; neither the test oracle nor the trusted verification route is rewritten to make a candidate pass.
+
+Portable Node oracles import the scoped production TypeScript entry directly. The trusted runner transforms TypeScript and resolves extensionless relative `.ts`/`index.ts` modules within `/workspace`; proposed tests cannot supply a loader, copied implementation, VM or transpiler. Application dependencies must already be prepared in the selected clean baseline. Oracle operation identities include the runtime protocol, and publication/integration validate that same identity. Older incompatible oracle proof remains stale rather than being silently accepted under a changed runtime; saved state and usage are preserved.
 
 Evidence is an immutable record of baseline, head/tree, tool/policy version, command, environment, result and retained failure references. Rebase/new head invalidates source-bound review/checks; changed base requires an up-to-date candidate and relevant revalidation. Limit base-refresh/repair loops under the same budget. If infrastructure fails, distinguish it from a product failure and do not transform retries into a clean acceptance claim.
 
@@ -260,3 +270,26 @@ Rollback is to stop dispatch, disable the local merge policy and retain worktree
 - [Codex non-interactive mode](https://learn.chatgpt.com/docs/non-interactive-mode): script/CI execution; installed CLI help verified JSON/schema/cwd capabilities.
 - [GitHub merge endpoint](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request): expected-head matching; installed `gh pr merge --help` also exposes a head guard.
 - [Contributor workflow](../../../docs/DEVELOPMENT.md), [engineering rules](../../../CODING_STANDARDS.md), [tests](../../../tests/README.md) and [verification](../../../docs/VERIFICATION.md): task ownership, check selection and evidence limits.
+
+
+### Operator-selected continuation and real Windows profile — 2026-11-16
+
+The user requested completing the remaining blocks with subagents after the exhausted pilot was explained. A new `run --continue-from <id>` admission references the exhausted, unpublished task and uses the current explicit source/policy/scope. It preserves the old manifest, worktree, receipts and consumed limits; it copies no acceptance proof. One continuation can be admitted per parent, identical retries reuse it, old dispatch is retired, and reports include cumulative linked usage/tokens. Read-only historical-policy inspection does not grant execution under that policy.
+
+Normal model limits remain12 calls/two repairs,20 minutes per worker and120 active minutes. A selected private Windows profile can explicitly request180 active minutes for the documented up-to-two-hour UI verification plus installation/build/native/package work. The helper timeout is separately fixed in the private profile (125 minutes for this qualification, maximum150), bounded again by the run's remaining active allowance. This is declared at fresh admission, never added during resume.
+
+Real capability selection binds private profile/helper/Node/resource-token identities. A credential-free coordinator launch invokes only that pinned private helper; machine credentials stay in existing private handles and unnamed-memory files, never in graph state or durable arguments. Actual exact-source Windows verify/native/vault/fullUI/package/key-free/protected-state/cleanup proof must be observed before a qualified transfer. Synthetic evidence remains unqualified. Pipeline PR delivery is separate from the narrower proven JSON-parser automatic-merge category.
+
+### Remaining resources after an unresolved oracle and source change
+
+An explicit current-source continuation of a selected issue whose portable oracle
+was invalid or unavailable can carry only the preserved parent allowance still
+remaining. The parent must have no downstream writer/delivery, unknown effects,
+active owner, integration hold or competing child, and its original source stays
+frozen. A changed source or trusted policy requires fresh evidence under a new
+manifest linked to that parent. Every aggregate counter is bounded by the
+parent limit minus its observed usage; the worker timeout stays at most the old
+ceiling. Source refresh atomically consumes one of those existing repairs. Exact
+retries reuse the same child and reservation; task/profile authority and prior
+outcomes remain immutable. An unlinked admission cannot replenish this unfinished
+task. This is bounded source revalidation within the prior authorization.

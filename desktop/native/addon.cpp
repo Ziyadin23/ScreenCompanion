@@ -84,7 +84,13 @@ class Bridge final : public Napi::ObjectWrap<Bridge> {
   Napi::Value ResizeEnabled(const Napi::CallbackInfo& info) {
     Check();
     if (!info[1].IsBoolean()) throw std::runtime_error("The panel resize state is invalid.");
-    runtime_->SetPanelResizeEnabled(Handle(info[0]), info[1].As<Napi::Boolean>().Value()); return info.Env().Undefined();
+    int minimumHeight = 80;
+    if (info.Length() > 2) {
+      if (!info[2].IsNumber()) throw std::runtime_error("The panel minimum height is invalid.");
+      auto number = info[2].As<Napi::Number>(); minimumHeight = number.Int32Value();
+      if (number.DoubleValue() != minimumHeight || minimumHeight < 80 || minimumHeight > 32768) throw std::runtime_error("The panel minimum height is invalid.");
+    }
+    runtime_->SetPanelResizeEnabled(Handle(info[0]), info[1].As<Napi::Boolean>().Value(), minimumHeight); return info.Env().Undefined();
   }
   Napi::Value Move(const Napi::CallbackInfo& info) { Check(); runtime_->BeginDrag(Handle(info[0]), 0); return info.Env().Undefined(); }
   Napi::Value CancelDrag(const Napi::CallbackInfo& info) { Check(); runtime_->CancelDrag(Handle(info[0])); return info.Env().Undefined(); }

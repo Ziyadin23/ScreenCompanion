@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { GithubClient, type ConfirmedFailure, type GithubTransport, type PullRequestInput } from '../src/github.js';
-import { digest, makeManifest } from '../src/manifest.js';
+import { digest, makeManifest, ORACLE_RUNTIME } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
 
 const source = 'a'.repeat(40), head = 'b'.repeat(40), repo = 'example/sc';
@@ -59,7 +59,7 @@ function finding(): ConfirmedFailure {
     reproduction: 'Synthetic response returns an empty answer', acceptance: 'Valid response is retained',
     dependencies: ['Published baseline contract'], prerequisite: 'Publish local planning files',
     fingerprint: '1'.repeat(64), source, oracleHash: '2'.repeat(64), contractHash: '3'.repeat(64),
-    environment: 'linux-portable-synthetic', outputHash: '4'.repeat(64), outcome: 'failed',
+    environment: 'linux-portable-synthetic', outputHash: digest(['', '']), outcome: 'failed',
     owner: 'openspec/changes/fix-json/tasks.md', provenance: 'local' };
 }
 function pull(): PullRequestInput {
@@ -67,7 +67,8 @@ function pull(): PullRequestInput {
     problem: 'Parser drops a valid response', result: 'Valid response retained', validation: 'Portable tests passed',
     limits: 'Windows unverified', provenance: 'local', marker: '5'.repeat(64) };
 }
-function confirm(f: ReturnType<typeof fixture>): void {
+async function confirm(f: ReturnType<typeof fixture>): Promise<void> {
+  await observeOracle(f, source, 42);
   const input = finding();
   f.store.update(f.manifest.id, { data: { findings: [{ path: input.path, fingerprint: input.fingerprint,
     state: 'confirmed', evidence: { source: input.source, oracleHash: input.oracleHash,
@@ -80,7 +81,7 @@ function linkIssue(f: ReturnType<typeof fixture>): void {
 async function observeOracle(f: ReturnType<typeof fixture>, revision: string, exitCode: number): Promise<string> {
   const input = finding();
   const identity = { runId: f.manifest.id, source: revision, workspace: f.manifest.root,
-    oracleHash: input.oracleHash, contractHash: input.contractHash };
+    oracleHash: input.oracleHash, contractHash: input.contractHash, runtime: ORACLE_RUNTIME };
   const key = `oracle:${digest(identity)}`;
   await f.store.effect(f.manifest.id, key, 'verification', identity, { execute: async () => ({
     status: 'exited', exitCode, outputTruncated: false, signal: null, stdout: '', stderr: '', elapsedMs: 1
@@ -110,12 +111,12 @@ test('a writing task claims only the verified configured assignee and preserves 
   await assert.rejects(fixture(t, 'report').client.claimSelectedIssue(7), { code: 'delivery_denied' });
 });
 test('confirmed issue is read back and an open equivalent is reused', async t => {
-  const f = fixture(t); confirm(f); const created = await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); const created = await f.client.publishIssue(finding());
   assert.equal(created.number, 11); assert.equal((await f.client.publishIssue(finding())).number, 11);
   assert.equal(f.posts(), 1);
 });
 test('matching unassigned issue gains the configured assignee without losing metadata', async t => {
-  const f = fixture(t); confirm(f);
+  const f = fixture(t); await confirm(f);
   const created = await f.client.publishIssue(finding());
   const row = f.issues[0]!; row.assignees = []; row.assignee = null; row.labels = [{ name: 'existing' }];
   const reused = await f.client.publishIssue(finding());
@@ -124,20 +125,20 @@ test('matching unassigned issue gains the configured assignee without losing met
   assert.deepEqual(row.assignees, [{ login: 'Ziyadin23' }]);
 });
 test('lost issue acknowledgement reconciles its journal without a second post', async t => {
-  const f = fixture(t); confirm(f); f.loseAck();
+  const f = fixture(t); await confirm(f); f.loseAck();
   await assert.rejects(f.client.publishIssue(finding()), { code: 'github_unavailable' });
   assert.equal((await f.client.publishIssue(finding())).number, 11); assert.equal(f.posts(), 1);
 });
 test('closed equivalent and conflicting owner stop publication', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
   await assert.rejects(f.client.publishIssue(finding()), { code: 'github_closed_equivalent' });
-  const fresh = fixture(t); confirm(fresh);
+  const fresh = fixture(t); await confirm(fresh);
   fresh.issues.push({ ...f.issues[0], state: 'open', assignees: [{ login: 'someone-else' }], assignee: { login: 'someone-else' } });
   await assert.rejects(fresh.client.publishIssue(finding()), { code: 'github_owner_conflict' });
   assert.equal(fresh.posts(), 0);
 });
 test('distinct regression publishes one linked follow-up', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding()); f.issues[0]!.state = 'closed';
   f.issues[0]!.body += `\nFix verified: ${head}`;
   const fixedKey = await observeOracle(f, head, 0); const currentKey = await observeOracle(f, source, 42);
   const findings = f.store.get(f.manifest.id).data.findings as Record<string, unknown>[];
@@ -167,7 +168,7 @@ test('distinct regression publishes one linked follow-up', async t => {
     { code: 'github_closed_equivalent' });
 });
 test('closed regression cannot be asserted with a forged record and failed prior oracle', async t => {
-  const f = fixture(t); confirm(f); await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); await f.client.publishIssue(finding());
   f.issues[0]!.state = 'closed'; f.issues[0]!.body += `\nFix verified: ${head}`;
   f.store.update(f.manifest.id, { data: { ...f.store.get(f.manifest.id).data,
     regressions: [{ previousIssue: 11, fixedCommit: head, ancestry: 'verified', fixedOperationKey: 'oracle:forged' }] } });
@@ -181,7 +182,7 @@ test('closed regression cannot be asserted with a forged record and failed prior
   assert.equal(f.posts(), 1);
 });
 test('partial behavior match with a different acceptance outcome is ambiguous', async t => {
-  const f = fixture(t); confirm(f);
+  const f = fixture(t); await confirm(f);
   f.issues.push({ number: 9, html_url: `https://github.com/${repo}/issues/9`, state: 'open',
     body: `Problem: ${finding().problem}\nScope: ${finding().path}\nAcceptance: Do not retain responses`,
     assignees: [{ login: 'Ziyadin23' }], assignee: { login: 'Ziyadin23' } });
@@ -189,7 +190,7 @@ test('partial behavior match with a different acceptance outcome is ambiguous', 
   assert.equal(f.posts(), 0);
 });
 test('published issue states dependencies and local planning transfer prerequisite', async t => {
-  const f = fixture(t); confirm(f); const receipt = await f.client.publishIssue(finding());
+  const f = fixture(t); await confirm(f); const receipt = await f.client.publishIssue(finding());
   assert.match(receipt.body, /Dependencies: Published baseline contract/);
   assert.match(receipt.body, /Next prerequisite: Publish local planning files/);
   assert.match(receipt.body, /publish.*transfer/i);
@@ -267,6 +268,17 @@ test('CI does not compare IDs across check runs and statuses and keeps queued ch
   runs[0]!.status = 'queued';
   assert.equal((await client.checks(head, false)).gates[0]?.state, 'pending');
 });
+test('unrecognized CI outcomes stay unavailable instead of inventing a failed regression', async t => {
+  const f = fixture(t);
+  for (const conclusion of ['neutral', 'unrecognized', 'completed', 'timed_out']) {
+    const transport: GithubTransport = async (_method, endpoint) => endpoint.includes('check-runs') ?
+      { total_count: 1, check_runs: [{ id: 1, name: 'changes', head_sha: head, conclusion }] } : [];
+    const result = await new GithubClient(f.store, f.manifest.id, transport).checks(head, false);
+    assert.equal(result.ready, false);
+    assert.equal(result.gates[0]?.state, conclusion === 'timed_out' ? 'failure' : 'missing');
+  }
+});
+
 test('missing protection yields a read-only concrete proposal', async t => {
   const f = fixture(t); const snapshot = await f.client.protection();
   assert.equal(snapshot.available, false); assert.equal(snapshot.protectedForMerge, false);

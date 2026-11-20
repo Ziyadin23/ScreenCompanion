@@ -1,5 +1,8 @@
 # Synthetic visual lab and DeepSeek campaign
 
+Current two-mode source: the offline plan contains 33 operations and 64 ordinary sends. The earlier beta.5 campaign described below authorized a frozen three-mode 49-operation/96-send schedule. Its private registry, ledger and prior failures are retained; they are not reset or reinterpreted. Live execution is disabled for the changed plan until a new campaign scope and cumulative budget are explicitly approved. The existing 120-contact cap and phase limits are unchanged.
+
+
 Run from `desktop/` with Node 22.12+ and dependencies already installed. These
 commands are portable, launch no GUI, read no vault and contact no provider:
 
@@ -33,7 +36,7 @@ required extraction evidence fails even when the final answer is correct.
 For visual extraction cases, the live renderer measures the rectangle and both
 required dimension labels. An observer tracks actual production crop calls and
 composes Thorough's question-relative subcrops into original-monitor normalized
-coordinates; Balanced crops already use supplied-monitor coordinates. It checks
+coordinates; Direct uses no local extraction crops. It checks
 that answering retains each required diagram/label in a production visual crop.
 Only `visualCoverage.observed/diagram/labels` booleans persist. Missing observer,
 invalid geometry or a cropped-away label fails independently of answer correctness.

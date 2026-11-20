@@ -7,9 +7,10 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { makeManifest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
-import { reserveCandidateVersion, prepareVersionRecords, validateVersionChanges, handoffBeta } from '../src/delivery.js';
+import { reserveCandidateVersion, prepareVersionRecords, validateVersionChanges, handoffBeta, requireObservedBetaHandoff,
+  type BetaRequest, type WindowsBetaQualification } from '../src/delivery.js';
 
-function fixture(t: { after(fn: () => void): void }) {
+function fixture(t: { after(fn: () => void): void }, currentRecords = false) {
   const temp = mkdtempSync(join(tmpdir(), 'sc-delivery-'));
   const root = join(temp, 'repo'); mkdirSync(join(root, 'desktop'), { recursive: true }); mkdirSync(join(root, 'docs'));
   writeFileSync(join(root, 'desktop/package.json'), '{"name":"sc","version":"0.5.0-beta.7","scripts":{"build":"ok"}}\n');
@@ -17,6 +18,8 @@ function fixture(t: { after(fn: () => void): void }) {
   writeFileSync(join(root, 'README.md'), 'The current source version is **0.5.0-beta.7**, not yet published.\nBuild output: `desktop/dist/SC-Setup-v0.5.0-beta.7.exe`, the portable\n`SC-v0.5.0-beta.7.exe` and its matching two-file ZIP with `README.txt`.\nDated 2026-01-01 0.5.0-beta.7 evidence.\n');
   writeFileSync(join(root, 'docs/PUBLISHING.md'), 'The current source version is 0.5.0-beta.7 and is unpublished.\nVersion 0.5.0-beta.7 historical evidence.\n');
   writeFileSync(join(root, 'docs/STATUS.md'), 'Snapshot: **2026-11-03 UTC**. Application source is **0.5.0-beta.7**; latest published beta.6.\nDated beta.7 evidence remains.\n');
+  if (currentRecords) for (const path of ['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/PUBLISHING.md', 'docs/STATUS.md'])
+    writeFileSync(join(root, path), readFileSync(new URL(`../../../../${path}`, import.meta.url)));
   const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'), base: 'a'.repeat(40), scope: 'providers-json' });
   const store = new RunStore(join(temp, 'state'), manifest); store.admit(manifest);
   t.after(() => { store.close(); rmSync(temp, { recursive: true, force: true }); });
@@ -26,9 +29,9 @@ const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).diges
 const inventory = (repository: string, versions = ['0.5.0-beta.8']) =>
   ({ releaseInventory: { repository, complete: true as const, versions } });
 async function owned(store: RunStore, manifest: { id: string; repository: string },
-  head: string, version: string, id: string, targetDirectory: string, token: string) {
+  head: string, version: string, id: string, targetDirectory: string, token: string, profile: 'synthetic' | 'real' = 'synthetic') {
   const ownership = { repository: manifest.repository, runId: manifest.id, head, version,
-    profile: 'synthetic' as const, id, targetDirectory, tokenHash: sha(token), state: 'owned' as const };
+    profile, id, targetDirectory, tokenHash: sha(token), state: 'owned' as const };
   await store.effect(manifest.id, `beta-resource:${head}:${version}`, 'beta-resource', ownership,
     { execute: async () => ownership, reconcile: async () => null });
   return ownership;
@@ -79,6 +82,44 @@ test('version preparation preserves dated evidence and validates exact JSON fiel
   assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
 });
 
+test('version preparation supports the checked-in source table and status header without changing history', t => {
+  const { root, store, manifest } = fixture(t, true);
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const prepared = prepareVersionRecords(root, reservation), { previousVersion: old, version: next } = reservation;
+  const readme = prepared.changes[2]!, status = prepared.changes[4]!;
+  assert.equal(readme.after, readme.before.replace(`| Current source, unpublished | **${old}** |`,
+    `| Current source, unpublished | **${next}** |`));
+  assert.notEqual(readme.after, readme.before);
+  assert.equal(status.after, status.before.replace(`Source remains unpublished **${old}**;`,
+    `Source remains unpublished **${next}**;`));
+  assert.notEqual(status.after, status.before);
+  assert.doesNotThrow(() => validateVersionChanges(prepared.changes, reservation));
+  writeFileSync(join(root, 'README.md'), readme.before + `\nThe current source version is **${old}**, not yet published.\n`);
+  assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+  writeFileSync(join(root, 'README.md'), readme.before);
+  writeFileSync(join(root, 'docs/STATUS.md'), status.before + `\nApplication source is **${old}**;\n`);
+  assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+});
+
+test('differently valued current records are ambiguous in both supported layouts', t => {
+  for (const current of [false, true]) {
+    const { root, store, manifest } = fixture(t, current);
+    const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+    const other = '9.9.9-beta.999'; assert.notEqual(reservation.previousVersion, other);
+    for (const [path, extra] of [
+      ['README.md', current ? `| Current source, unpublished | **${other}** | conflicting |` :
+        `The current source version is **${other}**, not yet published.`],
+      ['docs/STATUS.md', current ? `Source remains unpublished **${other}**;` : `Application source is **${other}**;`],
+      ['docs/PUBLISHING.md', `The current source version is ${other} and is unpublished.`]
+    ]) {
+      const before = readFileSync(join(root, path!), 'utf8');
+      writeFileSync(join(root, path!), `${before}\n${extra}\n`);
+      assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+      writeFileSync(join(root, path!), before);
+    }
+  }
+});
+
 test('synthetic transfer verifies artifacts, keeps paths private, and never qualifies automerge', async t => {
   const { temp, root, store, manifest } = fixture(t);
   const version = '0.5.0-beta.8', head = 'b'.repeat(40);
@@ -96,6 +137,8 @@ test('synthetic transfer verifies artifacts, keeps paths private, and never qual
   const receipt = await handoffBeta(store, manifest.id, request);
   assert.equal(receipt.public.qualified, false);
   assert.equal(receipt.public.qualificationKind, 'synthetic');
+  store.update(manifest.id, { data: { betaReceipt: receipt } });
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'beta_capability_unavailable' });
   assert.equal(JSON.stringify(receipt.public).includes(temp), false);
   assert.equal(receipt.private.targetDirectory, target);
   assert.deepEqual(await handoffBeta(store, manifest.id, request), receipt);
@@ -138,6 +181,81 @@ test('real profile waits by default even with synthetic portable evidence', asyn
   await assert.rejects(handoffBeta(store, manifest.id, { profile: 'real', head: 'a'.repeat(40), version: '0.5.0-beta.8', sourceDirectory: temp,
     source: { head: 'a'.repeat(40), version: '0.5.0-beta.8', digests: {}, qualification: { kind: 'synthetic', keyFree: true, packagedCheck: true } },
     resource: { id: 'real', token: 'owned', targetDirectory: join(temp, 'target'), ownership: {} as never } }), { code: 'beta_capability_unavailable' });
+});
+
+async function realFixture(t: { after(fn: () => void): void }) {
+  const fixtureState = fixture(t), { temp, store, manifest } = fixtureState;
+  const version = '0.5.0-beta.8', head = 'b'.repeat(40), source = join(temp, 'source'), target = join(temp, 'target');
+  mkdirSync(source); mkdirSync(target);
+  const exe = Buffer.from('simulated Windows portable'), readme = Buffer.from('matching versioned readme');
+  const names = [`SC-v${version}.exe`, `SC-v${version}.zip`, `SC-Setup-v${version}.exe`, 'README.txt'];
+  writeFileSync(join(source, names[0]!), exe); writeFileSync(join(source, names[2]!), 'simulated installer');
+  writeFileSync(join(source, 'README.txt'), readme); writeFileSync(join(source, names[1]!), zip([[names[0]!, exe], ['README.txt', readme]]));
+  const digests = Object.fromEntries(names.map(name => [name, sha(readFileSync(join(source, name)))]));
+  const ownership = await owned(store, manifest, head, version, 'private-windows-resource', target, 'token', 'real');
+  const proof: WindowsBetaQualification = { repository: manifest.repository, runId: manifest.id, head, version,
+    environmentId: ownership.id, sourceDirectory: source, sourceManifestDigest: sha('source manifest'), digests,
+    checks: { verify: { exitCode: 0, evidenceDigest: sha('verify') }, native: { exitCode: 0, evidenceDigest: sha('native') },
+      vault: { exitCode: 0, evidenceDigest: sha('vault') }, ui: { exitCode: 0, evidenceDigest: sha('ui') },
+      packaged: { exitCode: 0, evidenceDigest: sha('packaged') } },
+    keyFree: true, protectedStateUnchanged: true, cleanup: true, state: 'qualified' };
+  const request: BetaRequest = { profile: 'real', head, version, sourceDirectory: source,
+    source: { head, version, digests, qualification: { kind: 'windows', keyFree: true, packagedCheck: true } },
+    windowsQualification: proof, resource: { id: ownership.id, token: 'token', targetDirectory: target, ownership } };
+  const recordProof = async (value = proof) => store.effect(manifest.id, `beta-qualification:${head}:${version}`, 'beta-qualification', value,
+    { execute: async () => value, reconcile: async () => null });
+  return { ...fixtureState, head, version, source, target, request, proof, recordProof };
+}
+
+test('real adapter needs exact observed qualification and preserves older delivery files', async t => {
+  const { temp, store, manifest, head, version, source, target, request, proof, recordProof } = await realFixture(t);
+  writeFileSync(join(target, 'README.txt'), 'older unversioned README');
+  writeFileSync(join(target, 'SC-v0.5.0-beta.7.exe'), 'older beta');
+  await assert.rejects(handoffBeta(store, manifest.id, request), { code: 'beta_capability_unavailable' });
+  assert.equal(existsSync(join(target, 'latest-build.json')), false);
+  await recordProof();
+  for (const altered of [
+    { ...proof, head: 'c'.repeat(40) }, { ...proof, sourceManifestDigest: '' }, { ...proof, cleanup: false },
+    { ...proof, keyFree: false }, { ...proof, protectedStateUnchanged: false }, { ...proof, environmentId: 'another' },
+    { ...proof, sourceDirectory: temp }, { ...proof, checks: { ...proof.checks, ui: { exitCode: 1, evidenceDigest: sha('ui') } } }
+  ]) await assert.rejects(handoffBeta(store, manifest.id, { ...request, windowsQualification: altered }), { code: 'beta_capability_unavailable' });
+  const receipt = await handoffBeta(store, manifest.id, request);
+  assert.equal(receipt.public.qualified, true); assert.equal(receipt.public.qualificationKind, 'windows');
+  assert.equal(JSON.stringify(receipt.public).includes(temp), false);
+  assert.deepEqual(readFileSync(join(target, `SC-v${version}-README.txt`)), readFileSync(join(source, 'README.txt')));
+  assert.equal(readFileSync(join(target, 'README.txt'), 'utf8'), 'older unversioned README');
+  assert.equal(readFileSync(join(target, 'SC-v0.5.0-beta.7.exe'), 'utf8'), 'older beta');
+  assert.match(readFileSync(join(target, 'SC-LATEST.txt'), 'utf8'), new RegExp(head));
+  for (const [name, hash] of Object.entries(receipt.public.digests)) {
+    assert.match(readFileSync(join(target, 'SC-LATEST.txt'), 'utf8'), new RegExp(name.replaceAll('.', '\\.')));
+    assert.match(readFileSync(join(target, 'SC-LATEST.txt'), 'utf8'), new RegExp(hash));
+  }
+  store.update(manifest.id, { data: { betaReceipt: receipt } });
+  assert.deepEqual(await requireObservedBetaHandoff(store, manifest.id, head), receipt);
+  assert.deepEqual(await handoffBeta(store, manifest.id, request), receipt);
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, 'c'.repeat(40)), { code: 'beta_capability_unavailable' });
+  writeFileSync(join(target, 'SC-LATEST.txt'), 'stale beta');
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'transfer_mismatch' });
+  await assert.rejects(handoffBeta(store, manifest.id, request), { code: 'transfer_mismatch' });
+});
+
+test('handoff consumer rejects fabricated state and missing proof or transfer receipts', async t => {
+  const { store, manifest, head, request, recordProof } = await realFixture(t);
+  await recordProof();
+  const receipt = await handoffBeta(store, manifest.id, request);
+  store.update(manifest.id, { data: { betaReceipt: { ...receipt, public: { ...receipt.public, digests: {} } } } });
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'beta_capability_unavailable' });
+  store.update(manifest.id, { data: { betaReceipt: receipt } });
+  const db = new Database(join(store.directory, 'journal.sqlite')); t.after(() => db.close());
+  db.prepare("UPDATE operations SET state='unknown' WHERE run_id=? AND kind='beta-qualification'").run(manifest.id);
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'beta_capability_unavailable' });
+  db.prepare("UPDATE operations SET state='observed' WHERE run_id=? AND kind='beta-qualification'").run(manifest.id);
+  db.prepare("UPDATE operations SET state='unknown' WHERE run_id=? AND kind='beta-transfer'").run(manifest.id);
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'beta_capability_unavailable' });
+  assert.deepEqual(await handoffBeta(store, manifest.id, request), receipt);
+  assert.deepEqual(await requireObservedBetaHandoff(store, manifest.id, head), receipt);
+  writeFileSync(join(receipt.private.targetDirectory, `SC-v${receipt.public.version}.exe`), 'changed copied executable');
+  await assert.rejects(requireObservedBetaHandoff(store, manifest.id, head), { code: 'transfer_mismatch' });
 });
 
 test('partial transfer reconciles and lost acknowledgement reuses verified bytes', async t => {

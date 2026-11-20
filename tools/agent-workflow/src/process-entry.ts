@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, existsSync, openSync, readFileSync, readdirSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { durableJson } from './process.js';
-import { processIdentity } from './store.js';
+import { processIdentity } from './process-identity.js';
 
 interface Request {
   command: string; args: string[]; cwd: string; env: Record<string, string>;
@@ -27,7 +27,7 @@ function groupMembers(): number[] {
       if (Number(fields[2]) === process.pid && fields[0] !== 'Z' && fields[0] !== 'X')
         members.push(Number(name));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
     }
   }
   if (!members.includes(process.pid)) throw new Error('Wrapper is not its own process-group leader');

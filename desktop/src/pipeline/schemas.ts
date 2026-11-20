@@ -11,17 +11,6 @@ export const extractionSchema = (): JsonObject => object({
     question: text(), options: array(object({ id: text(), text: text() })), code: nullableText(), additional_context: nullableText(), image_ids: array(text()) })),
   images: array(object({ id: text(), region: regionSchema() }))
 });
-export const evidenceSchema = (): JsonObject => object({
-  status: { type: 'string', enum: ['complete', 'incomplete', 'uncertain'] }, region_complete: { type: 'boolean' },
-  questions: array(object({ index: { type: 'integer', minimum: 1, description: 'One-based question ordinal, starting at 1 in reading order.' },
-    required_options: { type: 'integer', minimum: 0 }, requires_code: { type: 'boolean' }, requires_visual: { type: 'boolean' },
-    transcription_complete: { type: 'boolean' }, visuals_complete: { type: 'boolean' } }))
-});
-export const combinedSchema = (): JsonObject => {
-  const fields = extractionSchema().properties as JsonObject;
-  return object({ ...fields, status: { type: 'string', enum: ['complete', 'incomplete', 'uncertain', 'no_relevant_content'] },
-    question_region: { anyOf: [regionSchema(), { type: 'null' }] }, evidence: evidenceSchema() });
-};
 export const answerSchema = (targetIds: string[]): JsonObject => object({ results: array(object({
   question_id: { type: 'string', enum: targetIds }, answer: nullableText(), answers: array(text()), answer_text: nullableText(),
   explanation: text(), confidence: { type: ['number', 'null'] },

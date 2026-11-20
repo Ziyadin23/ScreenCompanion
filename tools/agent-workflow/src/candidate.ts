@@ -4,6 +4,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { userInfo } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 import { digest, WorkflowError, type Manifest } from './manifest.js';
 import { classifyDiff, requiredChecks, type Change, type Classification, type InspectionOptions } from './policy.js';
 import { durableJson, inspectOwnedProcess, type OwnedProcessRequest, type OwnedProcessResult, runOwnedProcess } from './process.js';
@@ -77,7 +78,7 @@ export function inspectCandidate(manifest: Manifest, options: CandidateOptions):
   const branch = git(root, ['symbolic-ref', '--short', 'HEAD']).toString().trim();
   if (!oid.test(parent) || !oid.test(manifest.base)) throw new WorkflowError('invalid_source', 'Invalid source revision.');
   git(root, ['merge-base', '--is-ancestor', manifest.base, parent]);
-  const base = treeEntries(root, manifest.base), index = tracked(root);
+  const base = treeEntries(root, manifest.base), parentTree = treeEntries(root, parent), index = tracked(root);
   const untracked = lines(git(root, ['ls-files', '--others', '--exclude-standard', '-z']));
   const ignored = lines(git(root, ['ls-files', '--others', '--ignored', '--exclude-standard', '--directory', '-z'])).sort();
   if (ignored.some(path => !allowedIgnored(root, path)))
@@ -103,18 +104,21 @@ export function inspectCandidate(manifest: Manifest, options: CandidateOptions):
     }
     const prior = before ? git(root, ['cat-file', 'blob', before.hash]) : Buffer.alloc(0);
     const currentHash = present ? git(root, ['hash-object', '--stdin', '--no-filters'], after).toString().trim() : null;
+    const parentEntry = parentTree.get(path);
     const sameIndexAsBase = indexed?.hash === before?.hash && indexed?.mode === before?.mode;
+    const sameIndexAsParent = indexed?.hash === parentEntry?.hash && indexed?.mode === parentEntry?.mode;
     const sameIndexAsWorktree = (!indexed && !present) ||
       (indexed?.hash === currentHash && indexed?.mode === (present ? '100644' : undefined));
-    if (!sameIndexAsBase && !sameIndexAsWorktree && (indexed || before))
-      throw new WorkflowError('index_mismatch', 'Staged source differs from both baseline and working candidate.');
+    if (!sameIndexAsBase && !sameIndexAsParent && !sameIndexAsWorktree && (indexed || before || parentEntry))
+      throw new WorkflowError('index_mismatch', 'Staged source differs from baseline, current commit and working candidate.');
     if (before && before.mode !== '100644') throw new WorkflowError('unsafe_file', 'Baseline contains an unsupported file mode.');
     if (present && before && prior.equals(after)) continue;
     if (!present && !before) continue;
     changes.push({ path, before: validBytes(prior), after: validBytes(after), mode: present ? mode : '100644' });
   }
   const classification = classifyDiff(manifest, changes, options);
-  const denied = classification.reasons.filter(reason => ['outside_scope', 'unsafe_file', 'administrative_record_changed', 'empty_or_duplicate_diff'].includes(reason));
+  const denied = classification.reasons.filter(reason => ['outside_scope', 'unsafe_file', 'administrative_record_changed',
+    'version_record_changed', 'empty_or_duplicate_diff'].includes(reason));
   if (denied.length) throw new WorkflowError('scope_denied', `Candidate scope inspection denied: ${denied.join(', ')}.`);
   const sourceHash = digest({ base: manifest.base, changes });
   return { base: manifest.base, parent, branch, sourceHash, ignored, changes, classification,
@@ -125,7 +129,7 @@ export interface FrozenCandidate {
   indexHash: string; diffHash: string; policyHash: string; paths: string[]; ignored: string[]; checks: string[];
 }
 export interface FreezeOptions extends CandidateOptions { store: RunStore; manifest: Manifest; issue: number; key: string;
-  timestamp: number; message: string; branch: string; beforeRefUpdate?: () => void }
+  timestamp: number; message: string; branch: string; beforeRefUpdate?: () => void; afterIndexUpdate?: () => void }
 export async function freezeCandidate(options: FreezeOptions): Promise<FrozenCandidate> {
   const { manifest, store } = options;
   if (!Number.isSafeInteger(options.issue) || options.issue <= 0 ||
@@ -154,6 +158,17 @@ export async function freezeCandidate(options: FreezeOptions): Promise<FrozenCan
         if (now.sourceHash !== receipt.sourceHash || ![receipt.parent, receipt.head].includes(now.parent))
           throw new WorkflowError('stale_source', 'Candidate changed before freeze.');
         if (now.parent === receipt.parent) {
+          if (git(root, ['write-tree']).toString().trim() !== receipt.tree) {
+            if (digest(git(root, ['ls-files', '--stage', '-z']).toString('hex')) !== receipt.indexHash)
+              throw new WorkflowError('stale_source', 'Candidate index changed before freeze.');
+            // Align the admitted index before advancing HEAD, so an old candidate index
+            // cannot become unexplained staged content relative to the new commit.
+            git(root, ['read-tree', receipt.head]);
+            const aligned = inspectCandidate(manifest, options);
+            if (aligned.sourceHash !== receipt.sourceHash || aligned.parent !== receipt.parent)
+              throw new WorkflowError('stale_source', 'Candidate changed before branch advancement.');
+            options.afterIndexUpdate?.();
+          }
           git(root, ['update-ref', ref, receipt.head, receipt.parent]);
           options.beforeRefUpdate?.();
         }
@@ -161,7 +176,14 @@ export async function freezeCandidate(options: FreezeOptions): Promise<FrozenCan
       },
       async reconcile() {
         const current = git(root, ['rev-parse', ref]).toString().trim();
-        return current === receipt.head ? receipt : null;
+        if (current === receipt.head) return receipt;
+        if (current !== receipt.parent || git(root, ['write-tree']).toString().trim() !== receipt.tree) return null;
+        const aligned = inspectCandidate(manifest, options);
+        if (aligned.sourceHash !== receipt.sourceHash || aligned.parent !== receipt.parent) return null;
+        // A crash can leave the exact admitted index in place before the CAS. Complete
+        // only this proven local transition; a changed HEAD, index or source stays unknown.
+        git(root, ['update-ref', ref, receipt.head, receipt.parent]);
+        return git(root, ['rev-parse', ref]).toString().trim() === receipt.head ? receipt : null;
       }
     });
     if (git(root, ['rev-parse', ref]).toString().trim() !== receipt.head)
@@ -193,7 +215,9 @@ export async function freezeCandidate(options: FreezeOptions): Promise<FrozenCan
   const privateIndex = join(indexDir, 'index');
   try {
     const env = { GIT_INDEX_FILE: privateIndex };
-    git(root, ['read-tree', snapshot.parent], undefined, env);
+    // changes describes the complete baseline-to-working delta, including reversions
+    // and deletion of files added by an earlier coordinator-owned correction.
+    git(root, ['read-tree', manifest.base], undefined, env);
     for (const change of snapshot.changes) {
       const absolute = join(root, change.path);
       if (!existsSync(absolute)) git(root, ['update-index', '--force-remove', '--', change.path], undefined, env);
@@ -258,7 +282,8 @@ export function selectVerificationCommands(checks: string[], base: string, head:
   if (checks.includes('application')) docs.push(
     { name: 'desktop-typecheck', program: '/usr/bin/npm', args: ['--prefix', 'desktop', 'run', 'typecheck'], environment: 'portable-application' },
     { name: 'desktop-lint', program: '/usr/bin/npm', args: ['--prefix', 'desktop', 'run', 'lint'], environment: 'portable-application' },
-    { name: 'desktop-tests', program: '/usr/bin/npm', args: ['--prefix', 'desktop', 'test'], environment: 'portable-application' },
+    { name: 'desktop-tests', program: '/usr/bin/npm',
+      args: ['--prefix', 'desktop', 'test', '--', '--fsModuleCachePath', '/tmp/sc-vitest-modules'], environment: 'portable-application' },
     { name: 'desktop-build', program: '/usr/bin/node', args: ['-e', desktopBuildScript], environment: 'portable-application' }
   );
   if (checks.includes('agent-workflow'))
@@ -357,6 +382,34 @@ export interface VerifyOptions extends CandidateOptions { manifest: Manifest; fr
   store: RunStore; key: string; runCheck?: CheckRunner; openspecBinary?: string;
   trustedDependencies?: DependencyAttestation;
   signal?: AbortSignal; timeoutMs?: number }
+export function observedCheckFailures(store: RunStore, id: string, frozen: FrozenCandidate,
+  verification: VerificationReceipt, key: string) {
+  if (verification.head !== frozen.head || verification.base !== frozen.base || verification.tree !== frozen.tree ||
+      verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash ||
+      verification.policyHash !== frozen.policyHash)
+    throw new WorkflowError('stale_evidence', 'Repair diagnostics do not belong to this frozen candidate.');
+  const commands = selectVerificationCommands(frozen.checks, frozen.base, frozen.head);
+  return verification.checks.filter(check => !check.passed).map(check => {
+    const current = commands.find(item => item.name === check.name);
+    // Historical failed output is useful for a repair; it never authorizes a current pass.
+    const legacy = current?.name === 'desktop-tests' ? { ...current, args: ['--prefix', 'desktop', 'test'] } : undefined;
+    const command = [current, legacy].find(item => item &&
+      check.commandHash === digest({ command: item, environmentHash: check.environmentHash }));
+    const operation = store.observedEffect(id, `verification:${key}:${check.name}`);
+    if (!command || check.commandHash !== digest({ command, environmentHash: check.environmentHash }) ||
+        check.environmentHash !== verification.environmentIdentity.hash || operation?.kind !== 'verification' ||
+        operation.requestHash !== digest({ head: frozen.head, sourceHash: frozen.sourceHash,
+          environmentHash: check.environmentHash, command }) || digest(operation.receipt) !== check.resultHash)
+      throw new WorkflowError('stale_evidence', 'Repair diagnostics require the observed exact-source check receipt.');
+    const result = operation.receipt as OwnedProcessResult;
+    // Keep the error heading and final assertion; never copy the private journal or unrelated output.
+    const output = stripVTControlCharacters(`${result.stderr}\n${result.stdout}`)
+      .replace(/\p{Cc}/gu, character => ['\n', '\t'].includes(character) ? character : '');
+    const diagnostic = output.length <= 1800 ? output : `${output.slice(0, 1400)}\n[excerpt truncated]\n${output.slice(-350)}`;
+    return { name: check.name, status: check.status, exitCode: check.exitCode,
+      outputTruncated: check.outputTruncated, diagnostic };
+  });
+}
 export async function verifyCandidate(options: VerifyOptions): Promise<VerificationReceipt> {
   const { manifest, frozen, store } = options;
   const snapshot = assertFrozenSource(manifest, frozen, options);

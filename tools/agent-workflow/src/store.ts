@@ -1,10 +1,17 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { SqliteSaver } from '@langchain/langgraph-checkpoint-sqlite';
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
-import { digest, readManifest, WorkflowError, type Manifest } from './manifest.js';
+import { digest, readManifest, ORACLE_RUNTIME, WorkflowError, type Manifest, type Limits } from './manifest.js';
+import { requireFrozenSource } from './intake.js';
+import { inspectOwnedProcess, type OwnedProcessRequest } from './process.js';
+import { currentOracleRetry, oracleRetryKey, retryableOracleFinding, remainingOracleLimits, remainingOracleParent, type OracleRetryEntry } from './oracle-recovery.js';
+import { processIdentity } from './process-identity.js';
+import { trustedBetaHelperEnvironment } from './beta-environment.js';
+export { processIdentity } from './process-identity.js';
 
 export type RunStatus = 'ready' | 'running' | 'awaiting_external' | 'awaiting_input' |
   'budget_exhausted' | 'completed' | 'cancelled' | 'failed' | 'quarantined';
@@ -12,6 +19,26 @@ export type Counter = 'findings' | 'issues' | 'writingTasks' | 'workerInvocation
 export interface RunRecord {
   manifest: Manifest; status: RunStatus; stage: string;
   data: Record<string, unknown>; cancelRequested: boolean; error: string | null;
+}
+export interface BetaLaunchBinding {
+  identity: { repository: string; runId: string; workspace: string; head: string; version: string;
+    profileHash: string; sourceManifestDigest: string;
+    reportPathProfile?: { path: string; hash: string };
+    processEnvironment?: { version: 'effective-user-v1'; principal: string; digest: string } };
+  processRequest: OwnedProcessRequest;
+  helperRequest: Record<string, unknown>;
+}
+export interface BetaPrelaunchBinding extends BetaLaunchBinding {
+  legacySourceBlobs: Record<string, string>;
+  historicalRuntimeIdentity: 'not-attested-by-source-blobs';
+}
+export interface BetaEnvironmentRetryBinding {
+  legacy: BetaLaunchBinding; next: BetaLaunchBinding;
+  evidencePath: string; evidenceDigest: string; evidence: Record<string, unknown>;
+}
+export interface BetaReportPathRetryBinding extends BetaEnvironmentRetryBinding {
+  replacementProfile: { path: string; hash: string };
+  candidateProofDigest: string;
 }
 const statuses = z.enum(['ready', 'running', 'awaiting_external', 'awaiting_input',
   'budget_exhausted', 'completed', 'cancelled', 'failed', 'quarantined']);
@@ -55,23 +82,12 @@ function canonical(path: string): string {
   while (!existsSync(parent)) { parts.unshift(basename(parent)); parent = dirname(parent); }
   return resolve(realpathSync(parent), ...parts);
 }
-export function processIdentity(pid = process.pid): string | null {
-  if (process.platform !== 'linux') throw new WorkflowError('unsupported_host', 'Live execution requires Linux process identity.');
-  try {
-    const value = readFileSync(`/proc/${pid}/stat`, 'utf8');
-    const start = value.slice(value.lastIndexOf(')') + 2).split(' ')[19];
-    if (!start) throw new Error('Missing start identity');
-    return `${readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()}:${start}`;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw new WorkflowError('owner_unverifiable', 'Execution ownership cannot be verified.');
-  }
-}
-
 export class RunStore {
   private readonly db: Database.Database;
+  private readonly inspectionOnly: boolean;
   readonly directory: string;
   constructor(directory: string, private readonly repository: Manifest, options: { readOnly?: boolean } = {}) {
+    this.inspectionOnly = options.readOnly ?? false;
     this.directory = canonical(directory);
     if ([repository.root, dirname(repository.commonDir)].some(root => inside(canonical(root), this.directory)))
       throw new WorkflowError('unsafe_state_path', 'Workflow state must be outside source and Git metadata.');
@@ -156,7 +172,67 @@ export class RunStore {
       throw new WorkflowError('foreign_repository', 'Admission targets a different repository.');
     const serialized = JSON.stringify(manifest);
     readManifest(serialized);
+    let admittedId = manifest.id;
     this.guardedWrite(() => {
+      const latestTask = manifest.mode === 'issue' ? this.db.prepare(`SELECT id,status FROM runs WHERE repository=?
+        AND json_extract(manifest,'$.mode')='issue' AND json_extract(manifest,'$.issue')=?
+        ORDER BY created_at DESC,rowid DESC LIMIT 1`).get(manifest.repository, manifest.issue) as
+          { id: string; status: RunStatus } | undefined : undefined;
+      const latestUnlinked = !manifest.continuationOf && latestTask && latestTask.id !== manifest.id ? this.inspect(latestTask.id) : undefined;
+      if (latestUnlinked && (latestUnlinked.status === 'budget_exhausted' ||
+          latestUnlinked.manifest.continuationBudget === 'remaining' || remainingOracleParent(latestUnlinked)))
+        throw new WorkflowError('continuation_required', 'The unfinished issue has preserved history; use an explicit linked continuation.');
+      let refreshed: RunRecord | undefined;
+      if (manifest.continuationOf) {
+        const parent = this.inspect(manifest.continuationOf);
+        const remaining = manifest.continuationBudget === 'remaining';
+        if (parent.manifest.id === manifest.id || (!remaining && parent.status !== 'budget_exhausted') || parent.cancelRequested ||
+            parent.manifest.commonDir !== manifest.commonDir || parent.manifest.mode !== manifest.mode ||
+            parent.manifest.issue !== manifest.issue || parent.manifest.pr !== manifest.pr ||
+            parent.data.pull || parent.data.integration)
+          throw new WorkflowError('continuation_denied', 'Continuation requires an exhausted unpublished task in this repository.');
+        const child = this.db.prepare(`SELECT id FROM runs WHERE repository=?
+          AND json_extract(manifest,'$.continuationOf')=?`).get(manifest.repository, parent.manifest.id);
+        if (child) {
+          const previous = this.inspect(z.object({ id: z.uuid() }).parse(child).id);
+          if (digest({ ...previous.manifest, id: undefined }) !== digest({ ...manifest, id: undefined }))
+            throw new WorkflowError('continuation_conflict', 'An admitted continuation already owns this task; inspect it first.');
+          if (remaining) {
+            const reserved = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?')
+              .get(previous.manifest.id, `repair:${previous.manifest.id}:1`) as { counter?: string; amount?: number } | undefined;
+            if (reserved?.counter !== 'repairs' || reserved.amount !== 1)
+              throw new WorkflowError('invalid_state', 'The source-refresh repair reservation is unavailable.');
+          }
+          admittedId = previous.manifest.id; return;
+        }
+        if (latestTask && latestTask.id !== parent.manifest.id)
+          throw new WorkflowError('continuation_conflict', 'Continue the latest admission of this issue, preserving its cumulative history.');
+        if (this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM operations WHERE run_id=?
+          AND state!='observed' LIMIT 1`).get(parent.manifest.id))
+          throw new WorkflowError('continuation_denied', 'Reconcile outstanding execution or integration before continuation.');
+        for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+          const owner = leaseSchema.parse(raw);
+          if (processIdentity(owner.pid) === owner.identity)
+            throw new WorkflowError('repository_owned', 'Active coordination must stop before continuation admission.');
+        }
+        if (remaining) {
+          const sameAuthority = (value: Manifest) => ({ repository: value.repository, commonDir: value.commonDir,
+            branch: value.branch, scope: value.scope, paths: value.paths, mode: value.mode, issue: value.issue,
+            delivery: value.delivery, modelProfile: value.modelProfile, betaProfile: value.betaProfile ?? null });
+          if (!remainingOracleParent(parent) || digest(sameAuthority(parent.manifest)) !== digest(sameAuthority(manifest)) ||
+              parent.manifest.base === manifest.base && parent.manifest.policyHash === manifest.policyHash)
+            throw new WorkflowError('continuation_denied', 'Remaining allowance requires changed source or policy with unchanged task authority.', 2);
+          const usage = this.assertOracleRecoveryOwnership(parent, 'continuation_denied');
+          this.observedOracleFailure(parent, 'continuation_denied');
+          const limits = remainingOracleLimits(parent, usage);
+          if ((Object.keys(limits) as (keyof Limits)[]).some(counter => manifest.limits[counter] > limits[counter]))
+            throw new WorkflowError('continuation_denied', 'Continuation limits exceed the original remaining allowance.', 2);
+          if (manifest.limits.workerInvocations < 2 || manifest.limits.repairs < 1)
+            throw new WorkflowError('budget_exhausted', 'Remaining continuation cannot fund fresh reproduction and source repair.', 3);
+          requireFrozenSource(manifest, manifest.root, manifest.base);
+          refreshed = parent;
+        }
+      }
       const previous = this.db.prepare('SELECT manifest FROM runs WHERE id=?').get(manifest.id);
       if (previous && z.object({ manifest: z.string() }).parse(previous).manifest !== serialized)
         throw new WorkflowError('admission_conflict', 'Run identity already belongs to another admission.');
@@ -164,21 +240,364 @@ export class RunStore {
       this.db.prepare(`INSERT OR IGNORE INTO runs
         (id,repository,manifest,status,stage,created_at,updated_at) VALUES (?,?,?,'ready','preflight',?,?)`)
         .run(manifest.id, manifest.repository, serialized, now, now);
+      if (refreshed) {
+        this.reserve(manifest.id, `repair:${manifest.id}:1`, 'repairs');
+        this.update(manifest.id, { data: { sourceRefresh: { parent: refreshed.manifest.id,
+          source: refreshed.manifest.base, policyHash: refreshed.manifest.policyHash } } });
+      }
     });
-    return this.get(manifest.id);
+    return this.get(admittedId);
   }
   get(id: string): RunRecord {
+    return this.readRun(id, this.inspectionOnly);
+  }
+  inspect(id: string): RunRecord { return this.readRun(id, true); }
+  private assertOracleRecoveryOwnership(run: RunRecord, code: 'oracle_retry_denied' | 'continuation_denied') {
+      const { manifest, data } = run, id = manifest.id;
+      const denied = () => new WorkflowError(code,
+        'Oracle retry requires one unresolved portable oracle in the unchanged selected issue, with no owned delivery or uncertain effects.', 2);
+      if (manifest.mode !== 'issue' || manifest.delivery === 'report' || run.cancelRequested ||
+          !data.selectedIssue || (data.selectedIssue as { number?: unknown }).number !== manifest.issue ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND (state!='observed' OR kind NOT IN ('worker','verification')) LIMIT 1").get(id))
+        throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity) throw denied();
+      }
+      if (this.checkedOwnedProcesses(run).some(entry => inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited')) throw denied();
+      const usage = this.readUsage(id);
+      if (usage.issues || usage.writingTasks || ['allocation', 'plan', 'taskAuthority', 'trustedPlan', 'pull', 'selectedPull',
+        'integration', 'push', 'frozen', 'verification', 'reviewReceipt', 'beta', 'betaReceipt', 'recordPublication',
+        'recordIntegration', 'recordFinalization', 'candidateOracle', 'issueOutcome', 'finalization', 'setup'].some(key => data[key]) ||
+        (data.issueReceipts !== undefined && (!Array.isArray(data.issueReceipts) || data.issueReceipts.length))) throw denied();
+      requireFrozenSource(manifest, manifest.root, manifest.base);
+      return usage;
+  }
+  private observedOracleFailure(run: RunRecord, code: 'oracle_retry_denied' | 'continuation_denied') {
+      const { manifest, data } = run, id = manifest.id;
+      const denied = () => new WorkflowError(code, 'A terminal observed unavailable or invalid portable oracle is required.', 2);
+      const finding = retryableOracleFinding(run);
+      if (!finding) throw denied();
+      const workers = z.array(z.object({ role: z.enum(['investigator', 'reproducer']), operationKey: z.string(),
+        status: z.literal('complete'), response: z.record(z.string(), z.unknown()) }).passthrough())
+        .max(manifest.limits.workerInvocations).safeParse(data.workerResults);
+      const proposer = workers.success && workers.data.filter(worker => worker.role === 'reproducer').at(-1);
+      if (!proposer || digest(proposer.response.oracle ?? null) !== digest(finding.oracle) ||
+          this.readObservedEffect(id, proposer.operationKey)?.kind !== 'worker') throw denied();
+      if (finding.evidence) {
+        const evidence = finding.evidence, operation = this.readObservedEffect(id, evidence.operationKey);
+        const result = z.object({ status: z.literal('exited'), exitCode: z.number(), stdout: z.string(), stderr: z.string(),
+          outputTruncated: z.literal(false) }).passthrough().safeParse(operation?.receipt);
+        const identity = { runId: id, source: manifest.base, workspace: manifest.root,
+          oracleHash: evidence.oracleHash, contractHash: evidence.contractHash, runtime: ORACLE_RUNTIME };
+        if (!result.success || [0, 42].includes(result.data.exitCode) || result.data.exitCode !== evidence.exitCode ||
+            operation?.kind !== 'verification' || operation.requestHash !== digest(identity) ||
+            evidence.operationKey !== `oracle:${digest(identity)}` || evidence.outputHash !== digest([result.data.stdout, result.data.stderr])) throw denied();
+      }
+      return finding;
+  }
+  retryUnavailableOracle(id: string): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('oracle_retry_denied', 'An explicit retry requires an unresolved portable oracle.', 2);
+      const usage = this.assertOracleRecoveryOwnership(run, 'oracle_retry_denied');
+      const active = currentOracleRetry(run);
+      const candidates = Array.isArray(data.findings) ? data.findings : [];
+      if (active && run.stage === 'reproduce' && ['ready', 'running', 'awaiting_input', 'failed'].includes(run.status) &&
+          candidates.length === 1 && candidates[0]?.state === 'candidate' && candidates[0]?.id === active.diagnostics.findingId) {
+        const reserved = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?')
+          .get(id, `repair:${id}:${active.number}`) as { counter?: string; amount?: number } | undefined;
+        if (reserved?.counter !== 'repairs' || reserved.amount !== 1) throw denied();
+        return run;
+      }
+      const legacy = run.status === 'completed' && run.stage === 'done';
+      const waiting = run.status === 'awaiting_input' && run.stage === 'reproduce' && data.waitingFor === 'oracle_retry_required';
+      if (!legacy && !waiting) throw denied();
+      const finding = this.observedOracleFailure(run, 'oracle_retry_denied');
+      if (usage.workerInvocations + 2 > manifest.limits.workerInvocations || usage.activeMs >= manifest.limits.activeMs ||
+          usage.repairs >= manifest.limits.repairs)
+        throw new WorkflowError('budget_exhausted', 'Original oracle repair or worker/time allowance is exhausted.', 3);
+      const number = usage.repairs + 1;
+      const entry: OracleRetryEntry = { number, key: oracleRetryKey(manifest, number, finding), manifestHash: digest(manifest),
+        previous: { status: run.status, stage: run.stage, error: run.error, waitingFor: data.waitingFor ?? null, finding },
+        diagnostics: { findingId: finding.id, oracleHash: digest(finding.oracle), scriptLength: finding.oracle.script.length,
+          outcome: finding.evidence ? 'unavailable' : 'invalid', exitCode: finding.evidence?.exitCode ?? null } };
+      const history = Array.isArray(data.oracleRetryHistory) ? data.oracleRetryHistory : [];
+      if (history.length >= manifest.limits.repairs) throw denied();
+      this.reserve(id, `repair:${id}:${number}`, 'repairs');
+      this.update(id, { status: 'ready', stage: 'reproduce', error: null, data: { ...data,
+        oracleRetryHistory: [...history, entry], oracleRetry: { number, key: entry.key }, waitingFor: null,
+        findings: [{ id: finding.id, path: finding.path, description: finding.description, state: 'candidate' }] } });
+      return this.get(id);
+    });
+  }
+  prepareRejectedBetaLaunch(id: string, inspectBinding: () => BetaPrelaunchBinding): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('beta_prelaunch_retry_denied', 'Only the retained beta timeout rejection before launch may be prepared again.', 2);
+      if (run.status !== 'failed' || run.stage !== 'handoff' || run.error !== 'invalid_process_request' || run.cancelRequested ||
+          manifest.mode !== 'issue' || !['pr', 'merge-eligible'].includes(manifest.delivery) || !manifest.betaProfile ||
+          manifest.root !== this.repository.root || manifest.commonDir !== this.repository.commonDir || manifest.base !== this.repository.base ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          ['beta', 'betaReceipt', 'pull', 'push', 'integration', 'recordPublication', 'recordIntegration', 'finalization']
+            .some(key => Object.hasOwn(data, key))) throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity) throw denied();
+      }
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND id!=? AND
+        (status='quarantined' OR EXISTS(SELECT 1 FROM operations WHERE operations.run_id=runs.id
+        AND kind IN ('worker','process','setup','verification') AND state!='observed')) LIMIT 1`).get(manifest.repository, id)) throw denied();
+      const binding = inspectBinding(), { identity, processRequest } = binding;
+      const frozen = data.frozen as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; checks?: string[] } | undefined;
+      const verification = data.verification as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; passed?: boolean } | undefined;
+      const review = data.reviewReceipt as { base?: string; head?: string; diffHash?: string; policyHash?: string; clean?: boolean; findings?: unknown[] } | undefined;
+      if (identity.repository !== manifest.repository || identity.runId !== id || identity.profileHash !== manifest.betaProfile.hash ||
+          identity.head !== frozen?.head || frozen.base !== manifest.base || frozen.policyHash !== manifest.policyHash ||
+          !frozen.checks?.includes('application') || !/^[a-f0-9]{64}$/.test(frozen.sourceHash ?? '') || !/^[a-f0-9]{64}$/.test(frozen.diffHash ?? '') ||
+          !verification?.passed || verification.base !== manifest.base || verification.head !== identity.head ||
+          verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash || verification.policyHash !== manifest.policyHash ||
+          !review?.clean || review.base !== manifest.base || review.head !== identity.head || review.diffHash !== frozen.diffHash ||
+          review.policyHash !== manifest.policyHash || !Array.isArray(review.findings) || review.findings.length ||
+          processRequest.timeoutMs === undefined || processRequest.timeoutMs <= 7_200_000 || processRequest.timeoutMs > 9_000_000) throw denied();
+      const key = `beta-process:${digest(identity)}`, stateDirectory = join(this.directory, 'runs', id, 'processes');
+      if (processRequest.key !== key || processRequest.stateDirectory !== stateDirectory ||
+          processRequest.cwd !== join(this.directory, 'runs', id, 'beta', digest(identity))) throw denied();
+      const entries = this.checkedOwnedProcesses(run);
+      if (entries.filter(entry => entry.key === key && entry.stateDirectory === stateDirectory).length !== 1 ||
+          entries.some(entry => entry.key !== key && inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited') ||
+          inspectOwnedProcess(stateDirectory, key).state !== 'absent') throw denied();
+      try { lstatSync(join(stateDirectory, digest(key))); throw denied(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw denied(); }
+      const operation = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?').get(id, key) as {
+        run_id: string; key: string; kind: string; request_hash: string; state: string; receipt: string | null;
+      } | undefined;
+      if (!operation || operation.kind !== 'process' || operation.request_hash !== digest(identity) || operation.receipt !== null ||
+          this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND key!=? AND (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1")
+            .get(id, key)) throw denied();
+      const bindingHash = digest({ manifest, binding }), history = data.betaPrelaunchRetryHistory;
+      if (history !== undefined) {
+        if (!Array.isArray(history) || history.length !== 1 || history[0]?.bindingHash !== bindingHash || operation.state !== 'prepared') throw denied();
+        const reserved = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?')
+          .get(id, `repair:${id}:${history[0].number}`) as { counter?: string; amount?: number } | undefined;
+        if (reserved?.counter !== 'repairs' || reserved.amount !== 1) throw denied();
+        return run;
+      }
+      if (operation.state !== 'unknown') throw denied();
+      const usage = this.readUsage(id);
+      if (usage.repairs >= manifest.limits.repairs || usage.activeMs >= manifest.limits.activeMs)
+        throw new WorkflowError('budget_exhausted', 'Original beta repair or active-time allowance is exhausted.', 3);
+      const number = usage.repairs + 1;
+      const entry = { number, bindingHash, manifestHash: digest(manifest), binding, previous: {
+        status: run.status, stage: run.stage, error: run.error, operation, usage } };
+      this.reserve(id, `repair:${id}:${number}`, 'repairs');
+      this.update(id, { data: { ...data, betaPrelaunchRetryHistory: [entry] } });
+      if (this.db.prepare("UPDATE operations SET state='prepared' WHERE run_id=? AND key=? AND state='unknown' AND receipt IS NULL")
+        .run(id, key).changes !== 1) throw denied();
+      return this.get(id);
+    });
+  }
+  private assertBetaRetryState(run: RunRecord, denied: () => WorkflowError, executing = false): void {
+      const { manifest, data } = run, id = manifest.id;
+      if (run.status !== (executing ? 'running' : 'awaiting_input') || run.stage !== 'handoff' || run.error !== null || data.waitingFor !== 'beta_capability_unavailable' || run.cancelRequested ||
+          manifest.mode !== 'issue' || !['pr', 'merge-eligible'].includes(manifest.delivery) || !manifest.betaProfile ||
+          manifest.root !== this.repository.root || manifest.commonDir !== this.repository.commonDir || manifest.base !== this.repository.base ||
+          this.repositoryIntegrationHold() || this.db.prepare(`SELECT 1 FROM runs WHERE repository=?
+            AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`).get(manifest.repository, id) ||
+          ['beta', 'betaReceipt', 'pull', 'push', 'integration', 'recordPublication', 'recordIntegration', 'finalization']
+            .some(key => Object.hasOwn(data, key))) throw denied();
+      for (const raw of this.db.prepare('SELECT * FROM leases WHERE repository=?').all(manifest.repository)) {
+        const owner = leaseSchema.parse(raw);
+        if (processIdentity(owner.pid) === owner.identity && !(executing && owner.run_id === id && this.ownsCoordinator(id))) throw denied();
+      }
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND id!=? AND
+        (status='quarantined' OR EXISTS(SELECT 1 FROM operations WHERE operations.run_id=runs.id
+        AND kind IN ('worker','process','setup','verification') AND state!='observed')) LIMIT 1`).get(manifest.repository, id)) throw denied();
+  }
+  private assertBetaRetrySource(run: RunRecord, identity: BetaLaunchBinding['identity'], denied: () => WorkflowError): void {
+      const { manifest, data } = run;
+      const frozen = data.frozen as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; checks?: string[] } | undefined;
+      const verification = data.verification as { base?: string; head?: string; sourceHash?: string; diffHash?: string; policyHash?: string; passed?: boolean } | undefined;
+      const review = data.reviewReceipt as { base?: string; head?: string; diffHash?: string; policyHash?: string; clean?: boolean; findings?: unknown[] } | undefined;
+      if (identity.repository !== manifest.repository || identity.runId !== manifest.id || identity.profileHash !== manifest.betaProfile?.hash ||
+          identity.head !== frozen?.head || frozen.base !== manifest.base ||
+          frozen.policyHash !== manifest.policyHash || !frozen.checks?.includes('application') ||
+          !/^[a-f0-9]{64}$/.test(frozen.sourceHash ?? '') || !/^[a-f0-9]{64}$/.test(frozen.diffHash ?? '') ||
+          !verification?.passed || verification.base !== manifest.base || verification.head !== identity.head ||
+          verification.sourceHash !== frozen.sourceHash || verification.diffHash !== frozen.diffHash || verification.policyHash !== manifest.policyHash ||
+          !review?.clean || review.base !== manifest.base || review.head !== identity.head || review.diffHash !== frozen.diffHash ||
+          review.policyHash !== manifest.policyHash || !Array.isArray(review.findings) || review.findings.length) throw denied();
+  }
+  authorizeBetaEnvironmentRetry(id: string, inspectBinding: () => BetaEnvironmentRetryBinding): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('beta_environment_retry_denied', 'One explicit additional repair requires the exact attested host-only beta preflight failure.', 2);
+      this.assertBetaRetryState(run, denied);
+      const binding = inspectBinding(), { legacy, next } = binding;
+      this.assertBetaRetrySource(run, legacy.identity, denied);
+      if (legacy.identity.processEnvironment !== undefined || legacy.identity.reportPathProfile !== undefined) throw denied();
+      const { processEnvironment, ...nextBase } = next.identity, expectedEnvironment = trustedBetaHelperEnvironment();
+      const directory = join(this.directory, 'runs', id, 'processes');
+      if (digest(nextBase) !== digest(legacy.identity) || processEnvironment?.version !== 'effective-user-v1' ||
+          processEnvironment.principal !== expectedEnvironment.USER || processEnvironment.digest !== digest(next.processRequest.env) ||
+          Object.keys(legacy.processRequest.env).sort().join('|') !== 'HOME|PATH' ||
+          !isDeepStrictEqual(next.processRequest.env, expectedEnvironment) ||
+          next.processRequest.env.PATH !== legacy.processRequest.env.PATH || next.processRequest.env.HOME !== legacy.processRequest.env.HOME ||
+          next.processRequest.timeoutMs !== legacy.processRequest.timeoutMs || next.processRequest.command !== legacy.processRequest.command ||
+          next.processRequest.args[0] !== legacy.processRequest.args[0] || next.processRequest.args[1] !== '--request') throw denied();
+      for (const item of [legacy, next]) {
+        if (item.processRequest.key !== `beta-process:${digest(item.identity)}` || item.processRequest.stateDirectory !== directory ||
+            item.processRequest.cwd !== join(this.directory, 'runs', id, 'beta', digest(item.identity)) ||
+            item.processRequest.args[2] !== join(item.processRequest.cwd, 'request.json')) throw denied();
+      }
+      const entries = this.checkedOwnedProcesses(run);
+      if (entries.filter(entry => entry.key === legacy.processRequest.key && entry.stateDirectory === directory).length !== 1 ||
+          entries.some(entry => ![legacy.processRequest.key, next.processRequest.key].includes(entry.key) &&
+            inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited')) throw denied();
+      const operation = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?')
+        .get(id, legacy.processRequest.key) as { state?: string; kind?: string; request_hash?: string; receipt?: string } | undefined;
+      const receipt = this.readObservedEffect(id, legacy.processRequest.key);
+      const observed = inspectOwnedProcess(directory, legacy.processRequest.key);
+      if (!operation || operation.state !== 'observed' || receipt?.kind !== 'process' || receipt.requestHash !== digest(legacy.identity) ||
+          observed.state !== 'exited' || !observed.result || observed.result.status !== 'exited' || observed.result.exitCode !== 2 ||
+          digest(receipt.receipt) !== digest(observed.result)) throw denied();
+      if (this.db.prepare("SELECT 1 FROM operations WHERE run_id=? AND key NOT IN (?,?) AND (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1")
+        .get(id, legacy.processRequest.key, next.processRequest.key)) throw denied();
+      const key = `repair:${id}:beta-environment-once`, history = data.betaEnvironmentRetryHistory;
+      const bindingHash = digest({ manifest, binding });
+      if (history !== undefined) {
+        if (!Array.isArray(history) || history.length !== 1 || history[0]?.bindingHash !== bindingHash) throw denied();
+        const reservation = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?').get(id, key) as { counter?: string; amount?: number } | undefined;
+        if (reservation?.counter !== 'repairs' || reservation.amount !== 1) throw denied();
+        const nextOperation = this.db.prepare('SELECT state FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) as { state?: string } | undefined;
+        if (nextOperation?.state === 'observed') throw new WorkflowError('beta_environment_retry_exhausted', 'The one separately authorized beta attempt already has an observed result.', 2);
+        return run;
+      }
+      const usage = this.readUsage(id);
+      if (usage.repairs !== manifest.limits.repairs || usage.activeMs >= manifest.limits.activeMs ||
+          this.db.prepare('SELECT 1 FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) ||
+          entries.some(entry => entry.key === next.processRequest.key)) throw denied();
+      try { lstatSync(join(directory, digest(next.processRequest.key))); throw denied(); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw denied(); }
+      const entry = { bindingHash, manifestHash: digest(manifest), binding, authorization: {
+        kind: 'explicit-beta-environment-once', additionalRepairs: 1, reservationKey: key }, previous: {
+        status: run.status, stage: run.stage, error: run.error, waitingFor: data.waitingFor, operation, usage } };
+      this.db.prepare("INSERT INTO reservations(run_id,key,counter,amount) VALUES (?,?,'repairs',1)").run(id, key);
+      this.update(id, { data: { ...data, betaEnvironmentRetryHistory: [entry] } });
+      return this.get(id);
+    });
+  }
+  authorizeBetaReportPathRetry(id: string, inspectBinding: () => BetaReportPathRetryBinding): RunRecord {
+    return this.guardedWrite(() => {
+      const run = this.get(id), { manifest, data } = run;
+      const denied = () => new WorkflowError('beta_report_path_retry_denied', 'One explicit report-path repair requires its retained failed environment attempt and complete cleanup.', 2);
+      this.assertBetaRetryState(run, denied);
+      const binding = inspectBinding(), { legacy, next } = binding;
+      this.assertBetaRetrySource(run, legacy.identity, denied);
+      const environment = data.betaEnvironmentRetryHistory as { binding?: BetaEnvironmentRetryBinding }[] | undefined;
+      if (environment?.length !== 1 || !isDeepStrictEqual(environment[0]?.binding?.next, legacy)) throw denied();
+      const { profileHash: nextProfile, reportPathProfile, ...nextIdentity } = next.identity;
+      const { profileHash: oldProfile, ...oldIdentity } = legacy.identity;
+      const directory = join(this.directory, 'runs', id, 'processes');
+      if (!legacy.identity.processEnvironment || legacy.identity.reportPathProfile || nextProfile === oldProfile ||
+          !isDeepStrictEqual(nextIdentity, oldIdentity) || !isDeepStrictEqual(reportPathProfile, binding.replacementProfile) ||
+          !isDeepStrictEqual(next.processRequest.env, trustedBetaHelperEnvironment()) ||
+          !isDeepStrictEqual(next.processRequest.env, legacy.processRequest.env) ||
+          next.processRequest.command !== legacy.processRequest.command || next.processRequest.args[0] === legacy.processRequest.args[0] ||
+          !next.processRequest.timeoutMs || next.processRequest.timeoutMs > (legacy.processRequest.timeoutMs ?? 0)) throw denied();
+      for (const item of [legacy, next]) {
+        if (item.processRequest.key !== `beta-process:${digest(item.identity)}` || item.processRequest.stateDirectory !== directory ||
+            item.processRequest.cwd !== join(this.directory, 'runs', id, 'beta', digest(item.identity)) ||
+            item.processRequest.args.length !== 3 || item.processRequest.args[1] !== '--request' ||
+            item.processRequest.args[2] !== join(item.processRequest.cwd, 'request.json')) throw denied();
+      }
+      const entries = this.checkedOwnedProcesses(run);
+      if (entries.filter(entry => entry.key === legacy.processRequest.key && entry.stateDirectory === directory).length !== 1 ||
+          entries.some(entry => entry.key !== next.processRequest.key && inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited')) throw denied();
+      const operation = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?').get(id, legacy.processRequest.key);
+      const receipt = this.readObservedEffect(id, legacy.processRequest.key), owned = inspectOwnedProcess(directory, legacy.processRequest.key);
+      if (!receipt || receipt.kind !== 'process' || receipt.requestHash !== digest(legacy.identity) || owned.state !== 'exited' ||
+          !owned.result || owned.result.status !== 'exited' || owned.result.exitCode !== 2 || owned.result.outputTruncated ||
+          digest(receipt.receipt) !== digest(owned.result) || this.db.prepare(`SELECT 1 FROM operations WHERE run_id=? AND key!=? AND
+            (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1`)
+            .get(id, next.processRequest.key)) throw denied();
+      const key = `repair:${id}:beta-report-path-once`, history = data.betaReportPathRetryHistory;
+      const bindingHash = digest({ manifest, binding }), allowance = this.repairAllowance(id);
+      if (history !== undefined) {
+        if (!Array.isArray(history) || history.length !== 1 || history[0]?.bindingHash !== bindingHash || allowance.additional !== 2 ||
+            allowance.used !== allowance.original + 2) throw denied();
+        const nextOperation = this.db.prepare('SELECT state FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) as { state?: string } | undefined;
+        if (nextOperation?.state === 'observed') throw new WorkflowError('beta_report_path_retry_exhausted', 'The separately authorized report-path attempt already has an observed result.', 2);
+        return run;
+      }
+      const usage = this.readUsage(id);
+      if (allowance.additional !== 1 || allowance.used !== allowance.original + 1 ||
+          next.processRequest.timeoutMs > manifest.limits.activeMs - usage.activeMs ||
+          this.db.prepare('SELECT 1 FROM operations WHERE run_id=? AND key=?').get(id, next.processRequest.key) ||
+          entries.some(entry => entry.key === next.processRequest.key)) throw denied();
+      for (const path of [join(directory, digest(next.processRequest.key)), next.processRequest.cwd]) {
+        try { lstatSync(path); throw denied(); }
+        catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw denied(); }
+      }
+      const entry = { bindingHash, manifestHash: digest(manifest), binding, authorization: {
+        kind: 'explicit-beta-report-path-once', additionalRepairs: 1, reservationKey: key }, previous: {
+        status: run.status, stage: run.stage, error: run.error, waitingFor: data.waitingFor, operation, usage } };
+      this.db.prepare("INSERT INTO reservations(run_id,key,counter,amount) VALUES (?,?,'repairs',1)").run(id, key);
+      this.update(id, { data: { ...data, betaReportPathRetryHistory: [entry] } });
+      return this.get(id);
+    });
+  }
+  repairAllowance(id: string): { original: number; additional: number; used: number } {
+    const run = this.get(id); let additional = 0;
+    for (const [suffix, field] of [['beta-environment-once', 'betaEnvironmentRetryHistory'], ['beta-report-path-once', 'betaReportPathRetryHistory']] as const) {
+      const key = `repair:${id}:${suffix}`;
+      const reservation = this.db.prepare('SELECT counter,amount FROM reservations WHERE run_id=? AND key=?').get(id, key) as { counter?: string; amount?: number } | undefined;
+      const history = run.data[field];
+      if (reservation || history !== undefined) {
+        if (reservation?.counter !== 'repairs' || reservation.amount !== 1 || !Array.isArray(history) || history.length !== 1 ||
+            history[0]?.authorization?.kind !== `explicit-${suffix}` || history[0]?.authorization?.additionalRepairs !== 1 ||
+            history[0]?.authorization?.reservationKey !== key || suffix === 'beta-report-path-once' && additional !== 1)
+          throw new WorkflowError('invalid_state', 'Additional beta repair authorization is inconsistent.');
+        additional++;
+      }
+    }
+    return { original: run.manifest.limits.repairs, additional, used: this.readUsage(id).repairs };
+  }
+  assertBetaReportPathExecution(id: string, identity: BetaLaunchBinding['identity']): void {
+    const run = this.get(id), denied = () => new WorkflowError('beta_report_path_retry_denied', 'The report-path attempt requires its unchanged authorization and active coordinator ownership.', 2);
+    this.assertBetaRetryState(run, denied, true);
+    const history = run.data.betaReportPathRetryHistory as { bindingHash?: string; binding?: BetaReportPathRetryBinding }[] | undefined;
+    const saved = history?.length === 1 ? history[0] : undefined, allowance = this.repairAllowance(id);
+    if (!this.ownsCoordinator(id) || !saved?.binding || saved.bindingHash !== digest({ manifest: run.manifest, binding: saved.binding }) ||
+        !isDeepStrictEqual(saved.binding.next.identity, identity) || allowance.additional !== 2 || allowance.used !== allowance.original + 2) throw denied();
+    this.assertBetaRetrySource(run, saved.binding.legacy.identity, denied);
+    const next = saved.binding.next.processRequest;
+    if (inspectOwnedProcess(next.stateDirectory, next.key).state !== 'absent' ||
+        this.checkedOwnedProcesses(run).some(entry => entry.key !== next.key && inspectOwnedProcess(entry.stateDirectory, entry.key).state !== 'exited') ||
+        this.db.prepare(`SELECT 1 FROM operations WHERE run_id=? AND key!=? AND
+          (state!='observed' OR kind IN ('beta-qualification','beta-resource','beta-transfer','github_pr','github_merge')) LIMIT 1`).get(id, next.key)) throw denied();
+  }
+  private readRun(id: string, inspectionOnly: boolean): RunRecord {
     const raw = this.db.prepare('SELECT * FROM runs WHERE id=? AND repository=?').get(id, this.repository.repository);
     if (!raw) throw new WorkflowError('run_not_found', 'No saved run with this identity in this repository.');
     try {
       const row = rowSchema.parse(raw);
-      return { manifest: readManifest(row.manifest), status: row.status, stage: row.stage,
+      return { manifest: readManifest(row.manifest, inspectionOnly), status: row.status, stage: row.stage,
         data: z.record(z.string(), z.unknown()).parse(JSON.parse(row.data)),
         cancelRequested: row.cancel_requested === 1, error: row.error };
     } catch (error) {
       if (error instanceof WorkflowError) throw error;
       throw new WorkflowError('invalid_state', 'Saved run data is invalid and has been preserved.');
     }
+  }
+  listRuns(limit = 20): RunRecord[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 1000)
+      throw new WorkflowError('invalid_arguments', 'Run list limit must be between 1 and 1000.');
+    return this.db.prepare('SELECT id FROM runs WHERE repository=? ORDER BY updated_at DESC, id LIMIT ?')
+      .all(this.repository.repository, limit).map(raw => this.get(z.object({ id: z.uuid() }).parse(raw).id));
   }
   repositoryIntegrationHold(): { runId: string; head: string; reason: string } | null {
     let active: { runId: string; head: string; reason: string } | null = null;
@@ -280,9 +699,13 @@ export class RunStore {
   }
   claim(id: string): void {
     const run = this.get(id);
+    readManifest(JSON.stringify(run.manifest));
     const identity = processIdentity();
     if (!identity) throw new WorkflowError('owner_unverifiable', 'Current execution identity is unavailable.');
     this.guardedWrite(() => {
+      if (this.db.prepare(`SELECT 1 FROM runs WHERE repository=? AND json_extract(manifest,'$.continuationOf')=? LIMIT 1`)
+        .get(run.manifest.repository, id))
+        throw new WorkflowError('continuation_superseded', 'This preserved run has an admitted continuation; inspect that run.');
       const hold = this.repositoryIntegrationHold();
       if (hold && hold.runId !== id)
         throw new WorkflowError('repository_owned', 'Another run has unresolved integration; resume it first.');
@@ -323,7 +746,10 @@ export class RunStore {
     return lease.pid === process.pid && lease.identity === processIdentity();
   }
   ownedProcesses(id: string): z.infer<typeof ownedSchema> {
-    const data = this.get(id).data;
+    return this.checkedOwnedProcesses(this.get(id));
+  }
+  private checkedOwnedProcesses(run: RunRecord): z.infer<typeof ownedSchema> {
+    const { data, manifest: { id } } = run;
     const parsed = ownedSchema.safeParse(Object.hasOwn(data, 'ownedProcesses') ? data.ownedProcesses : []);
     if (!parsed.success) throw new WorkflowError('owner_unverifiable', 'Owned execution registry cannot be verified.');
     const entries = parsed.data;
@@ -366,12 +792,15 @@ export class RunStore {
         throw new WorkflowError('owner_unverifiable', 'Owned execution has no supported registered receipt.');
       const inspected = inspectOwnedProcess(entry.stateDirectory, entry.key);
       if (inspected.state === 'exited' && inspected.result) this.observe(id, op.key, inspected.result);
+      else if (inspected.state === 'interrupted' && this.get(id).cancelRequested)
+        this.observe(id, op.key, { status: 'interrupted', reason: inspected.reason, result: 'unknown' });
       else if (inspected.state !== 'absent' || op.state !== 'prepared')
         throw new WorkflowError('owner_unverifiable', 'Owned execution has not been reconciled.');
     }
     for (const entry of entries) {
       const inspected = inspectOwnedProcess(entry.stateDirectory, entry.key);
-      if (inspected.state === 'running' || inspected.state === 'pending' || inspected.state === 'unverifiable')
+      if (inspected.state === 'running' || inspected.state === 'pending' || inspected.state === 'unverifiable' ||
+          inspected.state === 'interrupted' && !this.get(id).cancelRequested)
         throw new WorkflowError('owner_unverifiable', 'Owned execution remains active or uncertain.');
       if (inspected.state === 'absent' && rows.some(op => op.key === entry.key && op.state !== 'prepared'))
         throw new WorkflowError('owner_unverifiable', 'Owned execution receipt is absent.');
@@ -396,6 +825,9 @@ export class RunStore {
   }
   usage(id: string): Record<Counter, number> {
     this.get(id);
+    return this.readUsage(id);
+  }
+  private readUsage(id: string): Record<Counter, number> {
     const result: Record<Counter, number> = { findings: 0, issues: 0, writingTasks: 0, workerInvocations: 0, repairs: 0, activeMs: 0 };
     for (const raw of this.db.prepare(`SELECT counter,SUM(COALESCE(timings.spent_ms,reservations.amount)) AS amount
       FROM reservations LEFT JOIN timings USING(run_id,key) WHERE run_id=? GROUP BY counter`).all(id)) {
@@ -403,6 +835,31 @@ export class RunStore {
       result[row.counter] = row.amount;
     }
     return result;
+  }
+  cumulativeUsage(id: string): { usage: Record<Counter, number>; inputTokens: number; outputTokens: number;
+    tokensComplete: boolean; runs: number } {
+    const usage: Record<Counter, number> = { findings: 0, issues: 0, writingTasks: 0,
+      workerInvocations: 0, repairs: 0, activeMs: 0 };
+    let inputTokens = 0, outputTokens = 0, tokensComplete = true;
+    const seen = new Set<string>(); let next: string | undefined = id;
+    while (next) {
+      if (seen.has(next) || seen.size >= 100)
+        throw new WorkflowError('invalid_state', 'Continuation history is cyclic or exceeds its bound.');
+      seen.add(next);
+      const run = this.inspect(next), spent = this.readUsage(next);
+      for (const counter of counterNames) usage[counter] += spent[counter];
+      const workers = Array.isArray(run.data.workerResults) ? run.data.workerResults : [];
+      tokensComplete &&= workers.length === spent.workerInvocations;
+      for (const worker of workers) {
+        const counts = worker?.usage;
+        if (Number.isSafeInteger(counts?.inputTokens) && counts.inputTokens >= 0 &&
+            Number.isSafeInteger(counts?.outputTokens) && counts.outputTokens >= 0) {
+          inputTokens += counts.inputTokens; outputTokens += counts.outputTokens;
+        } else tokensComplete = false;
+      }
+      next = run.manifest.continuationOf;
+    }
+    return { usage, inputTokens, outputTokens, tokensComplete, runs: seen.size };
   }
   settleTime(id: string, key: string, spent: number): void {
     if (!Number.isSafeInteger(spent) || spent < 0)
@@ -459,7 +916,23 @@ export class RunStore {
       data: z.record(z.string(), z.unknown()).optional(), cancelRequested: z.boolean().optional(),
       error: z.string().regex(/^[a-z0-9_]+$/).nullable().optional() }).strict().parse(patch);
     this.guardedWrite(() => {
-      const value = { ...this.get(id), ...validated };
+      const previous = this.get(id), value = { ...previous, ...validated };
+      if (previous.data.oracleRetryHistory !== undefined &&
+          (!Array.isArray(value.data.oracleRetryHistory) || !Array.isArray(previous.data.oracleRetryHistory) ||
+            digest(value.data.oracleRetryHistory.slice(0, previous.data.oracleRetryHistory.length)) !== digest(previous.data.oracleRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior oracle retry evidence is immutable.');
+      if (previous.data.betaPrelaunchRetryHistory !== undefined &&
+          (!Array.isArray(value.data.betaPrelaunchRetryHistory) || !Array.isArray(previous.data.betaPrelaunchRetryHistory) ||
+            digest(value.data.betaPrelaunchRetryHistory) !== digest(previous.data.betaPrelaunchRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior beta prelaunch rejection evidence is immutable.');
+      if (previous.data.betaEnvironmentRetryHistory !== undefined &&
+          (!Array.isArray(value.data.betaEnvironmentRetryHistory) || !Array.isArray(previous.data.betaEnvironmentRetryHistory) ||
+            digest(value.data.betaEnvironmentRetryHistory) !== digest(previous.data.betaEnvironmentRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior beta environment authorization and failure evidence are immutable.');
+      if (previous.data.betaReportPathRetryHistory !== undefined &&
+          (!Array.isArray(value.data.betaReportPathRetryHistory) || !Array.isArray(previous.data.betaReportPathRetryHistory) ||
+            digest(value.data.betaReportPathRetryHistory) !== digest(previous.data.betaReportPathRetryHistory)))
+        throw new WorkflowError('invalid_state', 'Prior beta report-path authorization and failure evidence are immutable.');
       const data = JSON.stringify(value.data);
       if (Buffer.byteLength(data) > 2_000_000) throw new WorkflowError('oversized_state', 'Run state exceeds its bound.');
       this.db.prepare(`UPDATE runs SET status=?,stage=?,data=?,
@@ -476,6 +949,9 @@ export class RunStore {
 
   observedEffect(id: string, key: string): { kind: string; requestHash: string; receipt: unknown } | null {
     this.get(id);
+    return this.readObservedEffect(id, key);
+  }
+  private readObservedEffect(id: string, key: string): { kind: string; requestHash: string; receipt: unknown } | null {
     const raw = this.db.prepare('SELECT * FROM operations WHERE run_id=? AND key=?').get(id, key);
     if (!raw) return null;
     const operation = operationSchema.parse(raw);

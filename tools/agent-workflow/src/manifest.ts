@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { POLICY_CONFIG } from './policy-config.js';
 
 export const WORKFLOW_VERSION = '0.1.0';
+export const ORACLE_RUNTIME = 'node-typescript-relative-v1';
+export const WINDOWS_ACTIVE_MS = 10_800_000;
 export const deliverySchema = z.enum(['report', 'issues', 'pr', 'merge-eligible']);
 export type Delivery = z.infer<typeof deliverySchema>;
 
@@ -28,7 +30,8 @@ export type Limits = z.infer<typeof limitsSchema>;
 
 export const SCOPES = Object.freeze({
   'providers-json': Object.freeze(['desktop/src/providers/json.ts', 'desktop/tests/providers/']),
-  pipeline: Object.freeze(['desktop/src/pipeline/', 'desktop/tests/pipeline/', 'desktop/tests/providers/']),
+  pipeline: Object.freeze(['desktop/src/pipeline/', 'desktop/tests/pipeline/', 'desktop/tests/providers/',
+    'desktop/tests/lab/campaign.test.ts']),
   'docs-links': Object.freeze(['README.md', 'desktop/REWRITE.md'])
 });
 export type Scope = keyof typeof SCOPES;
@@ -37,7 +40,8 @@ export function digest(value: unknown): string {
 }
 export const POLICY_HASH = digest({
   version: 1, scopes: SCOPES, defaults: DEFAULT_LIMITS,
-  mergePolicy: POLICY_CONFIG,
+  mergePolicy: POLICY_CONFIG, windowsActiveMs: WINDOWS_ACTIVE_MS,
+  oracleSourceContinuation: 'remaining-parent-allowance-with-charged-refresh-v1',
   delivery: 'immediate-protected-head-match', modelAuth: 'temporary-file-projection'
 });
 
@@ -58,6 +62,10 @@ const inputSchema = z.object({
   mode: z.enum(['investigate', 'issue', 'review']).default('investigate'),
   issue: z.number().int().positive().optional(),
   pr: z.number().int().positive().optional(),
+  continuationOf: z.uuid().optional(),
+  continuationBudget: z.literal('remaining').optional(),
+  betaProfile: z.object({ name: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/),
+    hash: z.string().regex(/^[a-f0-9]{64}$/) }).strict().optional(),
   delivery: deliverySchema.default('report'),
   modelProfile: z.string().regex(/^[A-Za-z0-9_-]+$/).optional(),
   limits: limitsSchema.partial().optional()
@@ -68,6 +76,8 @@ const inputSchema = z.object({
     ctx.addIssue({ code: 'custom', message: 'Review requires a PR and report delivery.' });
   if ((value.mode !== 'issue' && value.issue) || (value.mode !== 'review' && value.pr))
     ctx.addIssue({ code: 'custom', message: 'Reference does not match mode.' });
+  if (value.continuationBudget && (!value.continuationOf || value.mode !== 'issue' || value.delivery === 'report'))
+    ctx.addIssue({ code: 'custom', message: 'Remaining allowance requires an explicit selected-issue continuation.' });
 });
 
 export function makeManifest(input: unknown) {
@@ -80,7 +90,9 @@ export function makeManifest(input: unknown) {
     id: String(randomUUID()), repository: value.repository.toLowerCase(),
     root: value.root, commonDir: value.commonDir, base: value.base,
     branch: value.branch, scope: value.scope, mode: value.mode,
-    issue: value.issue, pr: value.pr, delivery: value.delivery,
+    issue: value.issue, pr: value.pr, delivery: value.delivery, continuationOf: value.continuationOf,
+    continuationBudget: value.continuationBudget,
+    betaProfile: value.betaProfile ? Object.freeze(value.betaProfile) : undefined,
     paths: Object.freeze([...SCOPES[value.scope]]),
     modelProfile: value.modelProfile, limits: Object.freeze(limits),
     policyHash: POLICY_HASH
@@ -88,15 +100,21 @@ export function makeManifest(input: unknown) {
 }
 export type Manifest = ReturnType<typeof makeManifest>;
 
-export function readManifest(serialized: string): Manifest {
+export function readManifest(serialized: string, inspectionOnly = false): Manifest {
   let raw: Record<string, unknown>;
   try { raw = z.record(z.string(), z.unknown()).parse(JSON.parse(serialized)); }
   catch { throw new WorkflowError('invalid_state', 'Saved manifest cannot be read.'); }
-  if (raw.version !== 1 || raw.workflowVersion !== WORKFLOW_VERSION || raw.policyHash !== POLICY_HASH)
+  if (raw.version !== 1 || raw.workflowVersion !== WORKFLOW_VERSION ||
+      !z.string().regex(/^[a-f0-9]{64}$/).safeParse(raw.policyHash).success ||
+      !inspectionOnly && raw.policyHash !== POLICY_HASH)
     throw new WorkflowError('incompatible_state', 'Saved workflow or policy requires explicit revalidation.');
   const { version: _version, workflowVersion: _workflow, id, policyHash: _hash, paths, ...input } = raw;
   const value = makeManifest(input);
-  if (!z.uuid().safeParse(id).success || digest(paths) !== digest(value.paths))
+  const savedPaths = z.array(z.string()).min(1).max(50).safeParse(paths);
+  const historical = inspectionOnly && raw.policyHash !== POLICY_HASH;
+  if (!z.uuid().safeParse(id).success || !savedPaths.success ||
+      (historical ? savedPaths.data.some(path => !value.paths.includes(path)) : digest(paths) !== digest(value.paths)))
     throw new WorkflowError('invalid_state', 'Saved scope does not match its trusted manifest.');
-  return Object.freeze({ ...value, id: id as string });
+  return Object.freeze({ ...value, id: id as string, policyHash: raw.policyHash as string,
+    paths: Object.freeze(savedPaths.data) });
 }

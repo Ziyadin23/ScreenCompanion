@@ -7,7 +7,7 @@ questions; captured content and real credentials stay outside fixtures and outpu
 
 ## Portable verification
 
-Requires Node.js 22.12 or later:
+Requires Node.js 22.13 or later:
 
 ```sh
 npm ci
@@ -21,6 +21,12 @@ lifecycle and React workflows. Fake transports reject unexpected requests.
 Injected crop fixtures do not establish real JPEG/monitor behavior.
 
 Historical suite counts and failed attempts are preserved in [test-run history](../docs/history/test-runs.md#portable-suite-history). Current-candidate results and their limits are owned by [verification](../docs/VERIFICATION.md).
+
+With the [Astryx preview](#electron-workflows-and-preview) running and Playwright
+Chromium installed, run `node --test desktop/tests/preview/setup-menu-fit.test.mjs`
+from the repository root. Set `SC_PREVIEW_PORT` if the preview uses a different
+port. These checks exercise setup scroll padding and keyboard navigation while
+the pointer rests on the service list.
 
 ## Windows native and legacy vault checks
 
@@ -36,10 +42,12 @@ npm run test:windows
 The native harness runs **54 checks** for real JPEG capture/crops, DPAPI,
 loopback WinHTTP/proxy-interception/timeout/cancellation, activation, real OS
 shortcut contention/rollback/reclamation and cleanup.
-The following **8 interoperability cases** check C#/TypeScript SSK3 settings,
+The following **9 interoperability cases** check C#/TypeScript SSK3 settings,
 atomic migration, existing-vault priority and damaged-byte preservation, using
-isolated temporary profiles. The C# fixture reports **136 checks**. Both commands
-previously passed on Windows 11, exit 0. Nonfatal compiler warnings remain.
+isolated temporary profiles, including model-specific pipeline preferences and
+legacy-reader compatibility. The earlier eight-case suite reported **136 C#
+fixture checks** and passed on Windows 11, exit 0. Current-candidate results
+belong in the verification record. Nonfatal compiler warnings remain.
 
 The [dated native evidence map](../desktop/native/VERIFICATION.md#native-evidence-reconciliation-2026-11-05)
 separates native assertions from UI geometry and packaged-launch results. The
@@ -52,7 +60,7 @@ The [vault oracle](../desktop/tests/windows/interop/README.md) links fourteen fr
 byte-identical source files from v0.4.14 under its own `legacy/` directory. Its
 source manifest records the original release commit and SHA-256 digests. It does
 not depend on a C# application project in the repository root. To run just these
-eight cases after building the native bridge:
+nine cases after building the native bridge:
 
 ```powershell
 npx vitest run --config vitest.windows.config.ts
@@ -63,6 +71,61 @@ checks. Portable success and native compilation do not substitute for real DPAPI
 
 ## Electron workflows and preview
 
+The local Astryx review surface runs the real renderer with an in-memory synthetic
+bridge, independently of Electron:
+
+```sh
+npm --prefix desktop run preview:astryx
+```
+
+Open `http://127.0.0.1:43155/` for Settings or add `?surface=setup` for setup.
+Add `&platform=linux` to inspect Linux notices. Use only synthetic input: this
+preview does not store keys, capture a screen, call a provider or run an updater.
+Save/Back operate on its in-memory draft; reload restores the fixture. The review
+toolbar opens Settings and setup.
+
+With the preview running, use these commands from the repository root to check
+the setup service control at 320px in LTR and RTL. Install the Playwright browser
+once if needed.
+
+```sh
+npm --prefix desktop exec -- playwright install chromium
+node --test desktop/tests/preview/setup-service.mjs
+```
+
+Set `SC_PREVIEW_PORT` if the preview is running on a different port. Stop the
+server with Ctrl+C when finished.
+
+With the preview running and Google Chrome installed, verify setup font scaling
+from `desktop/`:
+
+```sh
+npx playwright test --config tests/preview/playwright.config.ts
+```
+
+The tests use isolated, key-free Chrome profiles. Set `SC_PREVIEW_PORT` to the
+port passed to Vite if you run the preview on a different port.
+
+From `desktop/`, run `npx playwright install chromium` once, then run
+`npx playwright test --config playwright.preview.config.ts` for the compact setup
+regression. It starts the synthetic preview on port 43290 and uses isolated
+Chromium sessions for keyboard focus, error visibility and Save retry.
+
+The compact theme extends the installed Neutral package. After editing its
+source, run `npm --prefix desktop run theme:build` and retain the generated theme
+artifacts together. The browser preview is excluded from Electron production
+entry points; it cannot establish native, secure-storage or recorder evidence.
+
+With the Astryx preview running, check wheel containment and keyboard navigation
+in the setup service menu with headless Playwright Chromium. From `desktop/`:
+
+```sh
+npx playwright install chromium --only-shell
+node --test tests/preview/setup-menu-wheel.test.mjs
+```
+
+Set `SC_PREVIEW_PORT` to the Vite port if it differs from 43155.
+
 Run Windows GUI checks/previews only inside the Windows VM with its headless frontend:
 
 ```powershell
@@ -71,9 +134,9 @@ npm run preview:ui
 ```
 
 Allow up to **two hours** for an outer job running the complete Windows UI
-matrix. The 37 cases run serially: 21 panel/store cases allow 240 seconds each,
+matrix. The 38 cases run serially: 22 panel/store cases allow 240 seconds each,
 six native-preview cases allow 90 seconds each, and ten other cases use the
-30-second default. Their combined case budgets are **98 minutes**, before
+30-second default. Their combined case budgets are **102 minutes**, before
 runner startup and cleanup. A 20-minute outer deadline previously interrupted
 an otherwise passing beta.6 run after 31 cases; see the
 [retained attempts](../docs/VERIFICATION.md#beta6-extraction-guidance).
@@ -100,7 +163,13 @@ windows, hooks, hotkeys and temporary vaults.
 
 Every resize edge on answer/input and the Settings competing-shortcut workflow
 have single-monitor Windows 11 evidence in the dated map above; they belong to
-the UI suite, separately from native harness contention assertions. Standalone
+the UI suite, separately from native harness contention assertions. The two
+panel persistence cases also exercise a production surface transition to size A,
+native edge drags to B and back to A, and restoration of A on a normal
+same-profile Windows restart with a synthetic vault. The portable
+`tests/main/panel-resize.test.ts` exercises the production resize callback,
+file saves and startup at two simulated scales. Use a candidate-specific Windows
+run for native input and restart evidence. Standalone
 packaged launches and different executable paths retain candidate-specific
 evidence. Pre-initialization duplicate races and mixed-DPI qualification remain
 open. Historical recorder results retain their candidate/surface limits in
@@ -157,7 +226,9 @@ static indicators. It does not activate camera/microphone monitoring or connect
 to OES. Native capture/crop checks, model quality and named-recorder output are
 separate results.
 
-Live execution requires explicit `--live`, `--phase` and an executed `--candidate`
+The current two-mode source disables live execution because the frozen beta.5 authorization includes retired Balanced runs. Its earlier 49-operation/96-send plan and private counters remain historical; the current offline plan has 33 operations/64 ordinary sends and needs separate approval before any new live campaign.
+
+The historical runner contract required explicit `--live`, `--phase` and an executed `--candidate`
 identity, the coordinator-initialized fixed private registry, and the existing
 Windows-user encrypted DeepSeek key. Run `npm run test:deepseek -- --identity`
 on Windows after the native build. The [lab reference](../desktop/tests/lab/README.md#fixed-beta5-registry-and-executed-identity)

@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.9**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.14**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -14,17 +14,229 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-This icon-integration branch carries beta.9, based on the beta.8 interface merged through PR #53. The earlier shared-main baseline was beta.7, with Linux source merged in PR #23 and full Windows UI evidence merged in PR #24. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners; imported evidence below retains its candidate and environment.
+Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
+
+Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and unfinished Windows gates. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
-| SC icon beta.9 | [Final checks and retained attempts](#sc-icon-integration-2026-11-12): host 1,320; Windows native 54/vault 8/136/UI 37/37; packaged icons, portable/Linux previews, bounded Edge recording and verified local handoff. Website icon is published. | Application source in [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56); application release and broader qualification remain separate. |
-| Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Application release unpublished; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
+| Windows package size beta.14 | Matched Windows builds saved 99.26 MiB unpacked. Windows native 54, vault 9/143, installed and portable startup, and locale checks passed. | The optimized ASAR contains development files. The UI matrix passed 35 cases, failed the native color picker case and left two cases unrun. Package acceptance, full UI and local delivery remain open in [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). See the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20). |
+| Astryx beta.13 qualification | The preserved candidate passed Windows native 54, vault 9/143, archive inspection, direct portable startup and a bounded nine-phase Edge recording. Earlier host and Linux evidence retains its original scope. | The Windows UI matrix ended with 33 passes, two stale Settings-locator failures and three unrun. Full UI and local delivery remain open in #63. See [Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) and the [host and Linux checkpoint](#astryx-beta13-qualification-checkpoint-2026-11-17). |
+| Astryx interface source integration on 15 November | [Combined source checks](#astryx-interface-integration-2026-11-15): host 1,227/34, types/lint/bundles, built doctor and eight synthetic browser views passed. | On 15 November, Windows native and UI checks, packaged startup, a named recorder check and local delivery were pending for beta.13. The [19 November continuation](#astryx-beta13-windows-continuation-2026-11-19) records the native, startup and Edge results. The complete Windows UI matrix and verified transfer of the beta.13 files remain open. |
+| Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
+| SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
+| Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
 | Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
-The sections below are dated evidence, followed by support procedures and historical limits. No new application regression was run by the workflow organization change.
+The sections below are dated evidence, followed by support procedures and historical limits.
+
+## Windows package size benchmark (2026-11-17)
+
+[Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and its [OpenSpec owner](../openspec/changes/reduce-windows-package-size/tasks.md) track Windows-only package pruning on main `e7a844f`, reserved source **0.5.0-beta.14**. Dependency versions, application/native logic and bundler configuration are unchanged. Windows retains `en-US` and `ru` Chromium locales and omits separate renderer-library copies; Linux composition settings retain their original inputs.
+
+The user authorized source integration while runtime and handoff remain pending. [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) squash-merged at `6c8d67116f3b4855759fac80402445917eda7bcb` on **2026-11-17T16:42:25Z**, with a Git tree identical to reviewed head `b6920027549d0b4b1b5e9b19b0690d1093260e15`. Both [PR](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44124269171) and [push](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44124143229) passed all five exact-head jobs, including workflow **316/316** and hosted Windows build/vault/package. Protection is unchanged and issue #84 remains open. This source integration adds no local Windows runtime or runnable-beta delivery result.
+
+`npm --prefix desktop ci` and `npm --prefix desktop run verify` exited 0 on Node 22.23.1/npm 10.9.8: **1,227 tests / 34 files**, types, lint and production bundles. The pinned electron-builder filter/graph audit passed. The existing 11-case workflow delivery suite passed after building the tool, including its checked-in version-document compatibility case; no test source changed.
+
+The Fedora host built two **private, non-deliverable composition fixtures** with electron-builder 26.18.0 and the pinned official Electron 45.0.0 Windows x64 archive. Both use the same beta.14 compiled application, dependency installation, licensing, compression and benchmark overrides. Both deliberately **omit the unavailable native Windows bridge and disable executable metadata editing**. Only the new Windows locale and dependency filters differ. These are packaging measurements, not runnable-candidate or installed-footprint qualification.
+
+| Measured bytes | Control fixture | Optimized fixture |
+| --- | ---: | ---: |
+| Unpacked payload | 448,721,900 | 335,049,510 |
+| Application ASAR | 74,519,149 | 10,237,588 |
+| Portable EXE | 115,549,124 | 103,546,784 |
+| Exact EXE/README ZIP | 115,569,243 | 103,562,783 |
+| NSIS installer | 129,885,082 | 114,078,630 |
+
+This saves **113,672,390 bytes / 108.41 MiB / 25.33%** of unpacked fixture bytes; portable EXE and ZIP save **11.45 MiB**, and the installer saves **15.07 MiB**. These directory sizes were measured after both packaging targets finished adding their resources. Actual final Windows-native artifact sizes remain to be measured. Default packaging already omits the two type-only packages in the 14-name frontend closure; all 14 names are absent from the optimized archive. The largest redundant copies were Astryx core (26,900,114 bytes), Lucide React (26,003,420) and React DOM (8,066,435).
+
+Archive integrity, exact ZIP entries/EXE/README bytes and installer-feed sizes/SHA-512 passed. The optimized package retains exactly two locale packs; unchanged runtime files and licensing match the control byte for byte, except the ASAR integrity field in the equal-sized application executable. All compiled application files and retained dependency files inside ASAR match the control. All 17 main dependency names remain present; an extracted-archive resolver checked 16 declared dependency edges without falling back to the development installation, and executed packaged Zod/YAML successfully. This establishes composition and module availability, not Electron/Windows runtime behavior or Unicode rendering.
+
+Retained private fixture failures: an initial symlinked dependency installation produced an incomplete control graph and was excluded; real isolated dependency copies corrected it. The first inspection also incorrectly expected two type-only packages in the control; correcting that diagnostic assumption passed the complete inspection without changing application code. Earlier measurements remain preserved separately.
+
+On 17 November, Windows native, UI, locale, packaged startup and local delivery checks were pending. The benchmark used no VM or paid provider requests. See the later [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
+
+## Beta.14 Windows package comparison (2026-11-20)
+
+The Windows pair used frozen optimized source `6c8d67116f3b4855759fac80402445917eda7bcb` and the `e7a844f28e81316d141275816d2aeb2c7c5442a5` control manifest set to the same beta.14 version. Both x64 packages used the same Windows 11 checkout, pinned dependencies, Electron 45.0.0, compiled application and native bridge. Both builds and ZIP commands exited 0. Copied package and unpacked files matched their original sizes and SHA-256 digests. [Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84)
+
+| Measured bytes | Control | Optimized | Reduction |
+| --- | ---: | ---: | ---: |
+| Unpacked payload | 449,055,684 | 344,971,251 | 104,084,433 |
+| Application ASAR | 74,519,109 | 19,825,505 | 54,693,604 |
+| Portable EXE | 116,030,794 | 105,026,847 | 11,003,947 |
+| EXE/README ZIP | 116,050,910 | 105,042,020 | 11,008,890 |
+| NSIS installer | 130,012,459 | 115,510,923 | 14,501,536 |
+
+The unpacked payload decreased by **99.26 MiB (23.18%)**. The first archive audit stopped when it found a difference involving the NSIS helper `resources/elevate.exe` in the control package. After the audit accounted for the helper, it verified the SHA-256 hashes of files common to the embedded and unpacked payloads. It also confirmed the exact two ZIP entries and their bytes, installer metadata and blockmap, and the embedded x64 application payloads. Both portable and installer EXEs and both inner app executables recorded product `SC` and file version `0.5.0-beta.14`. The optimized package retains `en-US.pak` and `ru.pak`, the native bridge, Electron and Chromium components and licenses. Compiled application files and retained dependency files match the control. All 17 main runtime dependency names and 16 declared dependency edges resolved from the extracted ASAR. The 14 renderer-only dependency names are absent from the optimized ASAR.
+
+**The optimized package failed the ASAR inventory audit.** Its main application file matcher started with `**/*`. It included 175 extra development files totaling 9,541,825 bytes. Ten native build files contain machine-specific paths. An isolated probe of electron-builder 26.18.0 reproduced this matcher from the frozen configuration. With explicit application include patterns in the Windows matcher, the probe omitted the catch-all and retained the dependency exclusions. The probe exercised the matcher alone.
+
+On the exact frozen source, Fedora verification passed 1,227 tests in 34 files. In the 4 GiB Windows 11 development VM, `npm ci`, pinned Electron setup and verification exited 0. The Windows portable suite passed 1,203 tests with 24 Linux-only skips. The native verifier passed 54 checks. All nine vault cases passed with 143 fixture assertions. The exact portable EXE opened key-free setup. In separate isolated launches, Chromium showed English and Russian form validation text and English fallback for a `de-DE` locale request. Unicode input and Settings round trips passed in all three locale cases. Displaying Unicode answer text in the packaged app still needs verification.
+
+For the Windows UI matrix, Playwright launched Electron with `out/main/index.js` built from the frozen development checkout. The original suite listed 38 cases. Its first wrapper exited 1 because a Playwright compiler cache remained after discovery. After cache cleanup, the wrapper exited 0. The first full run with the corrected tests was interrupted. The resumed run used the two Settings test files reviewed at `0ef247012cfdd6f1780be46704baaac55721cab6`. It retained the same 38 cases and passed both corrected tests. In 42.7 minutes, the run reported **35 passed, 1 failed and 2 unrun**, with one worker, zero retries and exit 1. A separate native test timed out after five seconds waiting for the color picker to become visible. The two following cases in that serial group did not run. The original test files were restored and checked by hash. [Settings test correction](https://github.com/Ziyadin23/ScreenCompanion/pull/120)
+
+The exact optimized NSIS installer and its installed app passed a startup check in a disposable standard-user profile. Installation registered beta.14 and created both per-user shortcuts. The installed `SC.exe` had the same SHA-256 digest as `SC.exe` extracted from the installer. The app opened visible setup with a blank key field and exited normally. The check used a loopback proxy. The uninstaller exited 0 and removed the registration, application and shortcuts. The disposable profile was removed, and the original installed files matched their baseline. The first private wrapper failed on its registry count check. The same installer passed after the wrapper counted the registry entries as an array.
+
+Two separate postflight checks matched the four protected profile records, original installation registration and shortcut files. The Windows guest shut down normally at 4 GiB. The original device filter, snapshots and hardware settings matched before release to the first-run setup queue.
+
+The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. Beta.9 remains the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/reduce-windows-package-size/tasks.md).
+
+## Astryx beta.13 qualification checkpoint (2026-11-17)
+
+[Issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63) continues the [integration owner](../openspec/changes/integrate-astryx-interface/tasks.md), tasks 3.1–3.2, from shared main `545223d`. Candidate **0.5.0-beta.13** is reserved, unpublished and undelivered. Application logic, native code and tests match that baseline; only the manifest and two root lockfile version fields change. The private 165-file non-Markdown source/build/test/licensing manifest has SHA-256 `19feb82a5a91366ec341bbd63f2a6fdac6704f8eb3a4e56660b4c25e9d441855`.
+
+Source integration on **2026-11-17** used the reviewed head `2a43f035a19bb432907fd353b42f64d06ff872d6`, squash-merged as `f8fecd198384b4b5e1d6f9585ef269b73e4b5e32`. Both trees are `fcbbdfe9a3947e97cf1f5c91c506146c89f2ab2a`. [Exact-head PR CI](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44095638047) passed all five jobs, including **316/316** workflow tests with no skips/cancellations and hosted Windows build/vault/package checks. The earlier `b2772d3` attempts failed **315/316** because new documentation wording removed required version markers; restoring the two existing markers passed the 11-case delivery suite locally and the full hosted suite without tool/test changes. Those failed runs remain retained. Protection is unchanged. The [main postflight](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44098078969) was started and remains pending at this receipt; no main-postflight success is claimed. Source integration adds no target UI/recorder or local delivery result.
+
+`npm --prefix desktop ci` and `npm --prefix desktop run verify` exited 0 on Node 22.23.1/npm 10.9.8: **1,227 tests / 34 files**, types, lint and production bundles. Installation reported 14 moderate advisories; no dependencies were upgraded. `npx astryx doctor --built out/renderer` from `desktop/` exited 0 with **20 passes / 2 related system-font advisories / 0 failures**. An earlier invocation from the repository root checked the bundle only and is retained separately; neither built-output scan inspects JSX purity.
+
+`npm --prefix desktop run package:rpm`, using privately extracted cached Fedora build prerequisites, exited 0. The x86-64 RPM is **95,747,381 bytes**, SHA-256 `569c5dab5ec0174d60f3cccbe092a5171752b0f84fb62233f51e362a144206b9`. Metadata, dependencies, desktop identity and licensing resources were inspected. All **76** unpacked application files match the actual RPM payload byte for byte. No RPM was installed or delivered.
+
+A separate network namespace, session bus, temporary profile and headless Hyprland nested in virtual KWin established these narrower results, each script exit 0:
+
+- **8 pipeline/composer checks:** text-only makes no capture and one synthetic answer call; Ctrl+Enter makes one capture and three Thorough calls; cancelled synthetic capture retains draft/answer with no provider-boundary calls; text-only remains usable when capture fails; Direct uses one capture/answer; Linux input actions remain distinct; composer controls fit at **420×240** and **180×128**.
+- **3 production key-free packaged-preview checks:** packaged identity/version, both composer actions and keyboard hint, and keyboard Settings entry with the two-mode selector.
+- **8 Astryx checks:** keyboard tab/focus behavior; all five Settings pages and fixed footer at **760×680** and **420×480**; appearance Save/Back; exact-model pipeline drafts and disabled screen reading in Direct; all six service selectors; injected setup validation/focus, disabled pending controls, one synthetic save and key clearing. Setup uses the packaged renderer with an injected in-memory bridge, not production keyring storage.
+
+Seven synthetic captures were visually inspected. The final reports contain no page errors; application processes exited 0, synthetic profiles and runtime directories were removed, and a separate process scan found no surviving processes from any isolated session. Both compositor processes were observed exited. The prior lab claim and latest-build record were rehashed unchanged.
+
+Failed attempts remain retained: first, the test runtime's lazy download failed inside the blocked network namespace before any application check; explicit pinned-runtime installation then succeeded outside it. Next, the extended setup harness expected an exact sentence fragment instead of the full Linux notice; seven checks passed before that private selector failed. Correcting the selector completed all eight, without source or assertion-policy changes. Earlier passing pipeline/package checks were retained rather than rerun after the selector-only change.
+
+At this checkpoint the shared Windows lab still had an unreleased workflow recovery hold. No Windows checks or runnable handoff had run for beta.13. The latest verified local delivery was beta.9. #57's earlier beta.10 37/38 attempt and interrupted corrected matrix stay unresolved. Broader recorder #7, installed Linux #14–#20, clean-machine, mixed-DPI and live-model requirements retain their separate owners. The integration change remained active at **6/8**. See the [later Windows continuation](#astryx-beta13-windows-continuation-2026-11-19).
+
+## Astryx beta.13 Windows continuation (2026-11-19)
+
+[Issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63) resumed the preserved beta.13 source on Windows 11 x64. All 165 application, build, test and licensing files matched the [original candidate manifest](#astryx-beta13-qualification-checkpoint-2026-11-17) in the preserved source and the staged guest checkout. The documentation branch starts from main `9caa0c2`. The runnable candidate comes from the preserved beta.13 source, with its matching README.
+
+After the prior owner released the shared lab, #63 took an exclusive claim. A normal shutdown and restart applied the approved 4 GiB memory cap. Fresh interactive readiness matched the four protected files and found no held inputs or running test applications. The existing per-user installation and shortcuts were recorded for restoration checks. Windows dependency installation and the pinned Electron 45.0.0 setup passed on Node 22.23.1. Verification runs under the cap with one Vitest worker and one Playwright worker.
+
+`npm run verify` exited 0. Type checking, lint and production builds passed. Vitest passed **1,203 tests in 32 files** and skipped 24 Linux-only tests in two files. The built Astryx doctor reported **18 passes, two system-font advisories and zero failures**. `npm run native:build` and `npm run test:windows` exited 0, with **54 native checks and nine vault cases covering 143 C# fixture checks**.
+
+The first UI attempt discovered all 38 cases but stopped before any ran. Its private launch wrapper passed literal quotes in the Playwright output directory argument, which prevented worker initialization. The recovery retains that failed attempt and uses a fresh local report and output directory with the same application and test sources.
+
+`npm run package:win` and `npm run package:zip` exited 0. Packaging rebuilt the native addon. The native and vault suites passed again against the final addon before the full UI rerun. Independent extraction found matching x64 application, ASAR and native payloads in the actual installer and portable wrapper. The audit confirmed the embedded beta.13 version, bundled licenses, installer feed metadata, SHA-512 and blockmap structure. The portable ZIP contains exactly the verified EXE and its matching `README.txt`. The scoped Windows startup check uses the portable wrapper and leaves the existing per-user installation in place.
+
+The second UI attempt discovered **38 cases** and ended after **39.4 minutes**, exit 1, with **33 passed, two failed, three unrun and zero retries**. Both Settings appearance cases waited for `.fixed-theme`, a class that the frozen renderer uses only on the startup error surface. The native failure stopped three subsequent serial cases. A separate filtered repeat reproduced the same locator timeout and confirmed the application, test and built payload hashes. The complete matrix gate remains open.
+
+The exact portable EXE launched with an isolated key-free profile. The preview reported beta.13, both submit controls were enabled for unsent synthetic input, and Settings opened by keyboard with the version visible. The wrapper exited 0, its hash matched the audited copy, and the temporary profile was removed. The first metadata probe failed before launch because it used Unix separators for a nested ASAR lookup on Windows. The corrected probe and launch used the unchanged package.
+
+Microsoft Edge **157.0.4341.60** saved a **1920×1080 whole-monitor VP8 WebM** through `getDisplayMedia` and `MediaRecorder` on Windows 11 build **26200**. The job exited 0. All nine phase markers were present across 155 decoded samples, and each paired local and saved observation was reviewed. After the backdrop control, the capture-test panel, answer, composer, Settings, pipeline listbox, owned native color picker, setup and service listbox were visible locally and absent from their paired saved frames. The backdrop and recorder interface remained visible. This evidence uses explicit fixture window raises and covers the named Edge saved-monitor path. Wider recorder and receiver qualification stays with [issue #7](https://github.com/Ziyadin23/ScreenCompanion/issues/7).
+
+Independent postflight matched the protected files, installed application registration and shortcuts. The guest had zero held inputs and test processes. Normal shutdown completed, the temporary hardware filter was restored, and the saved snapshot list matched. The lab was released for #84 at the approved 4 GiB setting.
+
+**Beta.13 is a partial candidate.** Its Windows artifacts and byte checks are retained privately. The original RPM was unavailable at its recorded digest. A replacement built from the frozen source has SHA-256 `37b2cda459301e2051e2fa7155269efdb856b6c8a5a1c42e26998f31c08e5ee7`. All 83 extracted payload entries matched the retained original, and all 11 isolated Linux checks passed on the replacement. It is retained for the local handoff. The latest verified local handoff remains beta.9. A two-test correction now checks the visible Settings background. On the frozen renderer, its host probe rejected both a transparent background and one changed to the panel color. Task 3.1 still needs independent review of the test correction and a fully passing Windows matrix. Task 3.2 needs the qualified artifact set and copied-byte verification. Beta.10 remains tied to its earlier interrupted matrix under [issue #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57).
+
+## Astryx interface integration (2026-11-15)
+
+[PR #64](https://github.com/Ziyadin23/ScreenCompanion/pull/64) merged the completed Astryx setup/Settings preview into main at `a6258db` on 2026-11-15, closing source issue #55. The baseline was `3b29e41`. The [active owner](../openspec/changes/integrate-astryx-interface/tasks.md) retains unfinished runtime/delivery tasks under [issue #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63). The source preserves Thorough/Direct, per-model preferences and separate text-only/screenshot sends. Main/controller/native/storage/provider/pipeline/preload files have no diff from the main baseline.
+
+Combined `npm --prefix desktop run verify` passed **1,227 tests / 34 files**, types, lint and production bundles, exit 0. The initial attempt stopped at type checking because the development-only preview bridge lacked the new input-action subscription; its no-op fixture subscription was added and no behavioral assertion was weakened. `npx astryx doctor --built out/renderer` passed **20 checks / 0 failures**, exit 0, with two related system-font advisories; no external fonts are fetched. Independent Standards and Spec reviews each found zero substantive issues against head `2f24543`.
+
+Eight synthetic browser views/checks passed with zero page errors and zero external requests, including wide/narrow Settings, current Direct selection, Panel/Commands, setup validation/focus, Linux notices and retained-answer input with both send actions. All captures were inspected. The embedded Orca screenshot timed out before drawing a frame, while DOM/layout checks passed; isolated headless Chrome supplied the visual evidence. An earlier private harness attempt used the wrong input label and is retained separately from the corrected full eight-view result.
+
+Exact-head PR and push CI and the [main postflight](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/43741042629) each passed all five jobs, including hosted Windows verification, native compilation, actual vault interoperability and packaging. Those hosted jobs do not establish target GUI, recorder or runnable delivery.
+
+The local host/browser checks do not run a provider, real capture/keyring, native application, VM, packaged startup or recorder. Published releases and prior local deliveries remain unchanged. Windows/runtime/recorder and the next versioned runnable handoff are still required; no new beta delivery or platform compatibility result is claimed.
+
+## Pipeline beta.10 verification (2026-11-14)
+
+[Issue #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57) and its
+[OpenSpec owner](../openspec/changes/simplify-pipelines-screen-submit/tasks.md)
+track the unreleased two-mode and explicit screenshot-send candidate. The user
+requested source integration while remaining qualification and runnable delivery
+stay open in issue #57; source merge does not complete these gates. Its
+155-file key-free source manifest has SHA-256
+`d9922f1d773191aa67559dc2837fbfb4f6929962fd0b58e9a37c3cb3dded3407`.
+The corrected 155-file UI-fixture snapshot has SHA-256
+`69b1cb3ccac82236f93339dbff0549d9735ea6a1099ed137ab46cf4b359ac4fd`;
+it changes only one current UI option label and the source-only oracle README.
+Application/native/build inputs and binaries are unchanged. Later documentation
+and checkpoint updates do not change application bytes.
+
+Host `npm --prefix desktop run verify` passed **1,226 tests in 33 files**, type
+checking, lint and production bundles, exit 0. `test:lab` passed **241 tests in
+11 files**, exit 0. The offline DeepSeek plan passed with **33 operations / 64
+ordinary sends**, zero actual requests. Live execution stays blocked because the
+frozen historical campaign includes retired Balanced runs; its original ledger
+and authorization limits are unchanged. Mocked all-six-provider Direct/text-only
+checks do not establish account access or live answer quality.
+
+The isolated headless Hyprland fixture passed **8 checks**, exit 0, using the real
+production renderer/controller/pipeline with injected synthetic capture and
+transport. It checked text-only without capture, Thorough and Direct screen
+submissions, cancelled capture retaining draft/answer with zero provider calls,
+text-only while capture was unavailable, distinct Linux input actions and
+normal/compact composer bounds. One batched inspection confirmed the two buttons
+and Ctrl+Enter hint, including **180×128** input. The compositor retained an
+enlarged normal window after Settings; Linux issue #19 remains open. This fixture
+does not qualify an actual portal, physical monitors, real vault or installed
+desktop. Two fixture-startup failures remain retained.
+
+One earlier full portable attempt passed every test but exited 1 on an unhandled
+loopback `ECONNRESET` in unchanged Linux transport coverage. The isolated 22-case
+transport diagnostic and final full verification passed; no transport root-cause
+fix is claimed. Earlier corrected fixture expectations remain recorded in the
+task checkpoint. Windows checks, packaged startup, named-recorder output and
+copied runnable delivery remain pending for this candidate.
+
+Windows compilation, packaging, **54 native checks** and **9 vault cases / 143
+oracle checks** passed, exit 0. Windows portable tests passed **1,202**, with
+**24 Linux-only skips**. The first full UI attempt finished **37 passed / 1
+failed**, zero skips/retries, exit 1 in **1,435.0 seconds**. Its sole failure waited
+for the obsolete `Direct screenshot (DeepSeek)` option label. The corrected
+fixture's second full 38-case run was interrupted after 14 recorded passes, with
+no final matrix or cleanup verdict. It used the same verified application/native/
+package bytes; both attempts remain retained for issue #57. A fresh completed run
+and independent postflight are still required.
+The new real-OS Ctrl+Enter case passed in the first attempt, intercepting submit
+at IPC to verify the screenshot flag without making a model request.
+
+The x86-64 Linux RPM built, exit 0. Its unpacked payload passed isolated
+production key-free preview checks for packaged identity/version, both composer
+actions, keyboard Settings entry and the two-mode selector, then exited 0 and
+removed its profile. An initial private assertion expected Windows preview copy;
+the corrected Linux disclosure assertion passed with that failure retained. RPM
+metadata/resources were inspected. This is not an installation, upgrade, keyring
+or portal qualification.
+
+## SC icon source refresh (2026-11-20)
+
+The refresh combines original PR head `41ac7bb` with main `4667e43`. The
+manifest and lockfile version is **0.5.0-beta.14**. Its distribution reservation
+belongs to [issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84).
+The package configuration adds only the four icon settings. Main's package
+filters, identities, lockfile and first-run Commands wait are preserved.
+
+- On Fedora 44 x64, type checking, lint, **1,259 portable tests in 37 files**
+  and production bundles passed with one Vitest worker. The icon test first
+  failed with a missing image on the original text header. The merged renderer
+  passed all **17** browser regressions. Two font scaling cases and eight
+  service menu cases passed. Four synthetic views at 320 and 800 px loaded the
+  approved 32 px marks without clipping or page errors. The built Astryx doctor
+  passed with two theme font warnings.
+- `npm --prefix desktop run package:rpm` passed. The RPM header and payload
+  digests passed, and the extracted launcher retained its desktop identity.
+  The installed icon path and all three ASAR PNG resources contained the
+  approved source bytes. All six artwork files match the original PR, and the
+  Windows ICO has nine frames from 16 to 256 px.
+- The extracted RPM launched with a fresh key-free profile in isolated
+  Hyprland. Setup and two synthetic Settings widths showed the approved mark
+  and favicon from the ASAR. Both processes exited with code 0, and the test
+  removed both profiles. The Electron 45 tray image check used the bundled
+  512 px PNG and produced two 24 px images. The working badge changed 79 pixels
+  in the lower-right corner. Both tray PNGs match the original beta.9 evidence.
+
+Beta.9 remains the latest verified local delivery. All five delivered files
+and the latest-build record match their original digests. Both published
+website languages still reference four icon resources that match the approved
+exports. [Original beta.9 and website evidence](#sc-icon-integration-2026-11-12)
+
+The refreshed candidate still needs independent review, hosted checks, Windows
+package and UI qualification, a named recorder check, installed Linux checks and
+a separately reserved delivery version. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56),
+[OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md)
 
 ## SC icon integration (2026-11-12)
 
@@ -530,6 +742,47 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+## Linux authenticated proxy qualification (2026-11-19)
+
+[Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) uses a Fedora
+44 x86-64 harness with Hyprland 0.56.2 nested under headless KWin, Electron
+45.0.0 and curl 8.18.0. It calls the production Linux transport through
+`session.defaultSession.resolveProxy` and overrides only the destination when
+exercising provider error handling. The sandbox has its own user, profile,
+D-Bus session and loopback-only network. The origin and proxy fixtures accept
+only test endpoints. They use synthetic credentials and a per-process CA
+bundle for the trusted-certificate cases. The host trust store is read-only.
+
+| Source exercised | Real loopback cases | Outcome |
+| --- | --- | --- |
+| Pinned beta.7, `d304f2e57725f1244f8de46120731b59b9ca2eca` | 12/14, exit 1 | Electron resolved the proxy, but curl omitted the supplied Basic credentials in both valid- and wrong-password cases. |
+| Main baseline, `9caa0c26af6670363b6991a78939d3c991a2b0c0` | 12/14, exit 1 | Same authentication failures as beta.7. |
+| Issue branch application commit, `211d2eda7b8d0ef8e3d6e51b9b68011a465a0374` | 14/14, exit 0 | Valid credentials enabled one HTTPS POST with intact bytes. Wrong, missing and different-proxy credentials produced 407 with no origin POST or fallback. |
+| Issue branch updated with main `ee6ed7c`, `5eeeba59598aa0293e77bdee743a13f603ad26cf` | 14/14, exit 0 | The same transport and provider cases passed with zero fallback attempts. |
+
+On both fixed candidates, the provider key reached only the TLS origin and
+proxy credentials reached only CONNECT. All four candidates
+accepted the trusted certificate, rejected untrusted and wrong-name
+certificates before a POST, and rejected a 302, HTML login and 511 with the
+response bodies discarded. The redirect destination received zero requests.
+All four stopped a stalled CONNECT at the connection deadline, stopped and
+closed a response stalled past the total deadline, cancelled during response
+reading, and reported a dropped connection after one POST with zero route
+fallbacks. At `211d2ed`, the 600 ms and 1,000 ms deadline cases completed
+in 621 ms and 1,021 ms respectively, including observation of socket closure.
+
+Earlier fixture attempts encountered compositor startup, module argument and
+socket-observation problems. The stalled-CONNECT fixture needed to finish its
+own side after receiving the peer close. The passing issue-branch run used
+Electron's in-process GPU flag to avoid a startup timeout under host load.
+
+Portable regression evidence is [recorded in task 2.5](../openspec/changes/linux-platform-support/tasks.md#25-authenticated-proxy-checkpoint-2026-11-19).
+This scope covers Basic authentication to a loopback HTTP CONNECT proxy using
+matching process credentials. Pinned beta.7 remains affected. Repeat the
+applicable checks on the selected integrated candidate under task 2.7.
+Installed desktop, Windows lab qualification and verified runnable beta
+delivery remain pending for the changed application.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only
@@ -992,6 +1245,64 @@ and the [earlier visibility failure](#beta5-implementation-and-verification)
 retain their original limits. Native harness counts alone do not establish UI
 geometry or uncovered account/startup races. See [Linux port status](#linux-port-status)
 for its separate runtime evidence and qualification gaps.
+
+### Physical Windows mixed-DPI qualification
+
+**2026-11-05 readiness:** [issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/12)
+targets unchanged published Windows beta.6. The user confirmed that no physical
+Windows setup is available. No physical layout/scales, placement, movement,
+resize or monitor-transition result was collected. All three issue criteria
+remain open in the [OpenSpec owner](../openspec/changes/verify-windows-mixed-dpi/tasks.md).
+Earlier single-monitor resize checks and the beta.7 Windows UI matrix retain
+their original scope; neither establishes mixed-DPI support or a mixed-DPI defect.
+
+When hardware is available, use this procedure:
+
+1. Match the downloaded beta.6 portable or installer SHA-256 to the published
+   release artifact. Record the running application's version and executable
+   SHA-256 separately; an installed executable has different bytes from its
+   installer. Record installation provenance, Windows version/build and whether
+   the run is installed or portable. Do not substitute a beta.7 build or rebuild
+   beta.6 silently. Close other SC instances with the owner's agreement and use
+   an isolated synthetic profile; preserve existing vault bytes before/after.
+2. At the physical console, confirm at least two connected monitors in extended
+   mode with different Windows scale settings. Assign public labels A/B and
+   record each resolution, scale percentage, orientation, desktop bounds, work
+   area, primary display and relative arrangement. Record geometry units
+   explicitly: native physical pixels and application DIPs are different at
+   non-100% scale. Keep machine/monitor identifiers and raw receipts private.
+   A remote session or virtual display must not replace the physical topology.
+3. Use `--capture-test-only` for the key-free panel. Use isolated synthetic
+   settings/content for answer/input and Settings checks; setup/Save makes no
+   model request. Submit no question and invoke no screenshot/provider workflow.
+   Record initial placement, hide/restore and Settings open/Back on each monitor:
+   surfaces and controls must remain visible, reachable and usable within the
+   observed work area. Record the actual startup monitor without assuming saved
+   position is a supported feature.
+4. On each monitor, Alt-drag the answer and input panels within its work area.
+   Grow and shrink each of left, right, top, bottom, top-left, top-right,
+   bottom-left and bottom-right. Check pointer hit targets, intended edge motion,
+   stationary opposite edges, minimum size, text/control fit and release of
+   held drag/resize input. Record unexpected motion, clipping or inaccessible
+   controls, with before/after geometry and scale.
+5. Move each panel across every connected boundary in both directions, including
+   pausing while it straddles the boundary and releasing on the destination.
+   Check for jumps, off-screen placement, incorrect pointer offset, clipping or
+   stuck drag state. Repeat all eight resize handles after each transition and
+   exercise resizing while the panel crosses the boundary. Open Settings and
+   return on the destination, then hide/restore and verify the panel can still
+   move/resize. Account for DPI scaling when interpreting physical dimensions.
+6. Record one result per surface, monitor, edge/corner and transition direction;
+   include steps, expected/observed behavior and technical geometry for failures.
+   Mark unperformed cases explicitly. Exit normally, verify owned processes and
+   held input are cleared, compare original vault bytes, and restore any changed
+   display configuration. Keep raw synthetic evidence in the private workspace.
+
+Publish the exact candidate, topology, scales, completed cases, failures and
+supported limits. A pass covers only that observed setup. Retain partial and
+failed attempts; unavailable hardware remains an evidence gap. If a source defect
+is demonstrated, update the plan before changing application bytes and follow
+versioning, regression and local beta-handoff requirements.
 
 ## Capture-exclusion checks
 

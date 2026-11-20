@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { makeManifest } from '../src/manifest.js';
 import { RunStore } from '../src/store.js';
-import { preparePlan, resolveExistingOwner, materializePlan, OrcaClient, runSetup } from '../src/ownership.js';
+import { preparePlan, resolveExistingOwner, materializePlan, OrcaClient, orcaTransport, runSetup } from '../src/ownership.js';
 
 function fixture(t: { after(fn: () => void): void }, setup?: 'isolation' | 'failure') {
   const directory = mkdtempSync(join(tmpdir(), 'sc-owner-'));
@@ -63,6 +63,9 @@ test('plan requires verified issue and confirmed bounded existing-contract failu
   assert.ok(plan.files.every(file => /^[a-f0-9]{64}$/.test(file.hash)));
   assert.ok(plan.files.some(file => file.path.endsWith('/tasks.md') && file.content.includes('- [ ]')));
   assert.ok(!plan.files.some(file => file.path.includes('linux-platform-support')));
+  const withTests = preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure,
+    steps: [{ path: f.failure.path, text: 'Add provider regressions for duplicate fields and unchanged valid input behavior' }] });
+  assert.ok(withTests.files.some(file => file.path.endsWith('/tasks.md') && file.content.includes('Add provider regressions')));
   for (const text of ['Run curl https://evil.invalid', 'Add new product requirement', 'Set delivery merge-eligible'])
     assert.throws(() => preparePlan({ manifest: f.manifest, issue: f.issue, failure: f.failure,
       steps: [{ path: f.failure.path, text }] }), { code: 'plan_scope_denied' });
@@ -196,6 +199,55 @@ test('unchanged-contract plan uses the installed OpenSpec strict spec-skip route
   assert.match(output, /valid/i);
 });
 
+test('continued issue preserves the exact frozen parent and allocates only one fresh owned worktree', async t => {
+  const f = fixture(t), oldPath = join(f.directory, 'preserved');
+  const oldBranch = `sc-agent/issue-28-${f.manifest.id.slice(0, 8)}`;
+  const oldMarker = `sc-agent:${f.manifest.id}:issue-28`;
+  f.git('worktree', 'add', '-b', oldBranch, oldPath, f.manifest.base);
+  execFileSync('/usr/bin/git', ['-C', oldPath, '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+    'commit', '--allow-empty', '-m', 'Frozen failed candidate'], { stdio: 'pipe' });
+  const oldHead = execFileSync('/usr/bin/git', ['-C', oldPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const old = { id: `fixture::${oldPath}`, path: oldPath, branch: `refs/heads/${oldBranch}`,
+    displayName: `issue-28-agent-${f.manifest.id.slice(0, 8)}`, linkedIssue: 28,
+    reference: f.issue.url, comment: oldMarker, head: oldHead };
+  f.store.update(f.manifest.id, { status: 'budget_exhausted', data: {
+    allocation: { id: old.id, path: oldPath, branch: oldBranch, marker: oldMarker, issue: 28, head: f.manifest.base },
+    frozen: { head: oldHead }, issueReceipts: [f.issue]
+  } });
+  f.git('commit', '--allow-empty', '-m', 'New trusted source');
+  const manifest = makeManifest({ repository: f.manifest.repository, root: f.root, commonDir: f.manifest.commonDir,
+    base: f.git('rev-parse', 'HEAD'), scope: f.manifest.scope, continuationOf: f.manifest.id });
+  f.store.admit(manifest); const before = f.store.get(f.manifest.id);
+  const path = join(f.directory, 'continued'), branch = `sc-agent/issue-28-${manifest.id.slice(0, 8)}`;
+  let created = 0; let current: Record<string, unknown> | undefined, unrelated: Record<string, unknown> | undefined;
+  const transport = async (args: string[]) => {
+    if (args[1] === 'list') return { result: { complete: true,
+      worktrees: [old, ...(current ? [current] : []), ...(unrelated ? [unrelated] : [])] } };
+    if (args[1] === 'show') return { result: { worktree: args.includes(`id:${old.id}`) ? old : current } };
+    if (args[1] === 'create') {
+      created++; f.git('worktree', 'add', '-b', branch, path, manifest.base);
+      current = { id: `fixture::${path}`, path, branch, head: manifest.base, linkedIssue: 28,
+        displayName: `issue-28-agent-${manifest.id.slice(0, 8)}`, reference: f.issue.url,
+        comment: `sc-agent:${manifest.id}:issue-28` };
+      return { result: { worktree: current } };
+    }
+    throw new Error('Unexpected mutation of preserved task');
+  };
+  const client = new OrcaClient(f.store, manifest.id, transport);
+  await client.verifyContinuation(f.issue); assert.equal(created, 0);
+  assert.equal((await client.allocate(f.issue)).path, path);
+  assert.equal((await client.allocate(f.issue)).path, path); assert.equal(created, 1);
+  assert.deepEqual(f.store.get(f.manifest.id), before);
+  assert.equal(execFileSync('/usr/bin/git', ['-C', oldPath, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), oldHead);
+  assert.equal(execFileSync('/usr/bin/git', ['-C', oldPath, 'status', '--porcelain'], { encoding: 'utf8' }), '');
+  unrelated = { id: 'foreign', path: '/unrelated', linkedIssue: 28 };
+  await assert.rejects(client.verifyContinuation(f.issue), { code: 'workspace_conflict' });
+  unrelated = undefined;
+  old.comment = 'Another task now owns this workspace';
+  await assert.rejects(client.verifyContinuation(f.issue), { code: 'workspace_conflict' });
+  assert.equal(created, 1);
+});
+
 test('Orca allocation is issue-first, skips host setup and autoagent, and reconciles lost acknowledgement', async t => {
   const f = fixture(t); const work = join(f.directory, 'work'); let created = 0;
   const branch = `sc-agent/issue-28-${f.manifest.id.slice(0, 8)}`;
@@ -230,6 +282,37 @@ test('Orca allocation is issue-first, skips host setup and autoagent, and reconc
   for (const flag of ['--setup', 'skip', '--no-parent', '--base-branch', f.manifest.base,
     '--reference', f.issue.url]) assert.ok(create.includes(flag));
   for (const flag of ['--agent', '--prompt', '--run-hooks', '--activate']) assert.ok(!create.includes(flag));
+});
+
+test('Orca allocation from linked source selects the registered primary repository', async t => {
+  const f = fixture(t), source = join(f.directory, 'source');
+  f.git('worktree', 'add', '--detach', source, f.manifest.base);
+  const manifest = makeManifest({ repository: f.manifest.repository, root: source, commonDir: f.manifest.commonDir,
+    base: f.manifest.base, scope: f.manifest.scope, delivery: 'pr' });
+  f.store.admit(manifest); const requests: string[][] = [];
+  const client = new OrcaClient(f.store, manifest.id, async args => {
+    requests.push(args);
+    if (args[1] === 'list') return { result: { worktrees: [], complete: true } };
+    throw new Error('No actual create in this fixture');
+  });
+  await assert.rejects(client.allocate(f.issue), { code: 'effect_unknown' });
+  assert.ok(requests.some(args => args[1] === 'create'));
+  assert.ok(requests.every(args => args[args.indexOf('--repo') + 1] === `path:${f.root}`));
+});
+
+test('Orca transport uses the configured session executable without a shell', async t => {
+  const f = fixture(t), binary = join(f.directory, 'selected Orca');
+  writeFileSync(binary, '#!/usr/bin/env node\nprocess.stdout.write(JSON.stringify({args:process.argv.slice(2)}));\n', { mode: 0o700 });
+  writeFileSync(join(f.directory, 'orca-ide'), '#!/usr/bin/env node\nprocess.exit(9);\n', { mode: 0o700 });
+  const previous = process.env.ORCA_CLI_COMMAND;
+  const previousPath = process.env.PATH;
+  process.env.PATH = `${f.directory}:${previousPath ?? '/usr/bin:/bin'}`;
+  process.env.ORCA_CLI_COMMAND = binary;
+  t.after(() => {
+    if (previous === undefined) delete process.env.ORCA_CLI_COMMAND; else process.env.ORCA_CLI_COMMAND = previous;
+    if (previousPath === undefined) delete process.env.PATH; else process.env.PATH = previousPath;
+  });
+  assert.deepEqual(await orcaTransport(['worktree', 'list', '--json']), { args: ['worktree', 'list', '--json'] });
 });
 
 test('Orca refuses dirty, stale and foreign issue workspace identities', async t => {

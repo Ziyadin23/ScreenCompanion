@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { POLICY_CONFIG } from './policy-config.js';
 import { posix } from 'node:path';
 import { digest, POLICY_HASH, type Manifest } from './manifest.js';
+import { validateVersionChanges, type VersionReservation } from './delivery.js';
 
 export interface Change { path: string; before: string; after: string; mode: string }
 export interface Classification {
@@ -10,6 +11,7 @@ export interface Classification {
 }
 export interface InspectionOptions {
   owner?: string; administrative?: Record<string, string>; versionRecords?: Record<string, string>;
+  versionReservation?: VersionReservation;
   targetExists?: (canonicalTarget: string) => boolean;
 }
 const targets = POLICY_CONFIG.targets;
@@ -40,9 +42,11 @@ function linkRepair(change: Change, exists?: InspectionOptions['targetExists']):
     try {
       const destination = decodeURIComponent(link.destination);
       if (destination.startsWith('/') || destination.includes('\\')) return false;
+      if (/[\s\0?]/.test(destination) || destination.split('#').length > 2) return false;
       const [path, fragment] = destination.split('#');
       const canonical = `${posix.normalize(posix.join(posix.dirname(change.path), path!))}${fragment ? `#${fragment}` : ''}`;
-      return targets[change.path]?.[link.label.toLowerCase()] === canonical && exists(canonical);
+      const relative = `${posix.relative(posix.dirname(change.path), canonical.split('#')[0]!)}${fragment ? `#${fragment}` : ''}`;
+      return destination === relative && targets[change.path]?.[link.label.toLowerCase()] === canonical && exists(canonical);
     } catch { return false; }
   }) && changed > 0;
 }
@@ -62,26 +66,70 @@ function boundary(text: string): string[] {
 }
 function conservativeParserShape(change: Change): boolean {
   if (digest(boundary(change.before)) !== digest(boundary(change.after))) return false;
-  const forbidden = new Set(['process', 'global', 'globalThis', 'window', 'document', 'fetch', 'require', 'eval', 'Reflect', 'Proxy',
-    'Function', 'WebSocket', 'XMLHttpRequest', 'Deno', 'console', 'Date', 'setTimeout', 'setInterval', 'Promise', 'constructor', '__proto__']);
-  let safe = true;
-  function visit(node: ts.Node) {
-    if ((ts.isIdentifier(node) && forbidden.has(node.text)) ||
-        (ts.isStringLiteral(node) && ['constructor', '__proto__', 'prototype'].includes(node.text)) ||
-        node.kind === ts.SyntaxKind.ImportKeyword ||
-        node.kind === ts.SyntaxKind.AwaitExpression || node.kind === ts.SyntaxKind.YieldExpression) safe = false;
-    ts.forEachChild(node, visit);
-  }
-  const source = parsed(change.after); visit(source);
-  return safe && !source.statements.some(statement => ts.isExpressionStatement(statement) || ts.isImportDeclaration(statement));
+  const before = parsed(change.before), after = parsed(change.after);
+  if (before.statements.length !== after.statements.length) return false;
+  let changed = 0;
+  return after.statements.every((node, index) => {
+    const previous = before.statements[index]!;
+    if (node.getText(after) === previous.getText(before)) return true;
+    changed++;
+    if (!ts.isFunctionDeclaration(node) || !ts.isFunctionDeclaration(previous) ||
+        node.name?.text !== 'parseJson' || previous.name?.text !== 'parseJson' || !node.body || !previous.body) return false;
+    const scanner = (body: ts.Block) => body.statements.slice(1).map(statement => statement.getText());
+    if (digest(scanner(previous.body)) !== POLICY_CONFIG.parserScanner ||
+        digest(scanner(node.body)) !== POLICY_CONFIG.parserScanner) return false;
+    const first = node.body.statements[0];
+    if (!first || !ts.isVariableStatement(first) || first.declarationList.flags !== ts.NodeFlags.Const ||
+        first.declarationList.declarations.length !== 1) return false;
+    const value = first.declarationList.declarations[0]!;
+    if (value.name.getText() !== 'value' || value.type?.kind !== ts.SyntaxKind.UnknownKeyword ||
+        !value.initializer || !ts.isCallExpression(value.initializer) ||
+        value.initializer.expression.getText() !== 'JSON.parse' || value.initializer.arguments.length !== 1 ||
+        value.initializer.typeArguments?.length) return false;
+    // The accepted subset only normalizes the primitive input before the frozen JSON/duplicate checks.
+    function input(expression: ts.Expression): boolean {
+      if (ts.isIdentifier(expression)) return expression.text === 'text';
+      if (!ts.isCallExpression(expression) || expression.typeArguments?.length ||
+          !ts.isPropertyAccessExpression(expression.expression) || expression.questionDotToken ||
+          expression.expression.questionDotToken || !input(expression.expression.expression)) return false;
+      const args = expression.arguments, method = expression.expression.name.text;
+      if (method === 'trim') return args.length === 0;
+      return method === 'replace' && args.length === 2 && args[0]!.kind === ts.SyntaxKind.RegularExpressionLiteral &&
+        ['/^\\uFEFF/', '/^```(?:json)?\\s*|\\s*```$/g'].includes(args[0]!.getText()) &&
+        ts.isStringLiteral(args[1]!) && args[1]!.text === '';
+    }
+    return input(value.initializer.arguments[0]!);
+  }) && changed === 1;
 }
 function additiveTests(change: Change): boolean {
   if (!change.after.startsWith(change.before)) return false;
   const addition = parsed(change.after.slice(change.before.length));
   let valid = true;
+  const names = new Set(['it', 'test', 'describe', 'expect', 'assert', 'parseJson', 'isObject', 'hasFields', 'nonblank']);
+  const matchers = new Set(['toEqual', 'toStrictEqual', 'toBe', 'toThrow', 'toMatchObject', 'toBeNull', 'toBeUndefined', 'toBeTruthy', 'toBeFalsy']);
   function visit(node: ts.Node) {
-    if (ts.isIdentifier(node) && ['beforeAll', 'beforeEach', 'afterAll', 'afterEach', 'vi', 'jest'].includes(node.text)) valid = false;
-    if (ts.isPropertyAccessExpression(node) && ['skip', 'only', 'todo', 'mock'].includes(node.name.text)) valid = false;
+    if (ts.isIdentifier(node) && !names.has(node.text) &&
+        !(ts.isPropertyAssignment(node.parent) && node.parent.name === node) &&
+        !(ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)) valid = false;
+    if (ts.isVariableDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isMethodDeclaration(node) ||
+        ts.isGetAccessor(node) || ts.isSetAccessor(node) || ts.isNewExpression(node) || ts.isDeleteExpression(node) ||
+        ts.isElementAccessExpression(node) || ts.isTaggedTemplateExpression(node) || ts.isAwaitExpression(node) || ts.isYieldExpression(node) ||
+        ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node) &&
+          [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator) ||
+        ts.isBinaryExpression(node) && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+          node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) valid = false;
+    if (ts.isArrowFunction(node) && (node.parameters.length !== 0 || node.modifiers?.length)) valid = false;
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      if (ts.isIdentifier(callee)) {
+        if (!names.has(callee.text)) valid = false;
+      } else if (ts.isPropertyAccessExpression(callee)) {
+        let receiver = callee.expression;
+        if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === 'not') receiver = receiver.expression;
+        if (!(matchers.has(callee.name.text) && ts.isCallExpression(receiver) && receiver.expression.getText() === 'expect') &&
+            !(callee.expression.getText() === 'assert' && ['equal', 'deepEqual', 'strictEqual', 'deepStrictEqual', 'throws'].includes(callee.name.text))) valid = false;
+      } else valid = false;
+    }
     ts.forEachChild(node, visit);
   }
   visit(addition);
@@ -93,21 +141,56 @@ function additiveTests(change: Change): boolean {
   });
 }
 
+/** This existing lab case must retain its fidelity assertions when option text becomes mandatory. */
+export function labFidelityFixtureCorrection(change: Change): boolean {
+  if (change.path !== 'desktop/tests/lab/campaign.test.ts' || change.mode !== '100644') return false;
+  const literal = "content.questions[0].options = [{ id: 'Z', text: null }];";
+  if (change.before.split(literal).length !== 2) return false;
+  const corrected = change.before.replace(literal, "content.questions[0].options = [{ id: 'Z', text: 'Wrong option text' }];");
+  if (change.after === corrected) return true;
+  const title = 'fails %s required fidelity when production normalizes an extraction the observer cannot read';
+  const comment = '// The actual pipeline accepts/answers this non-choice extraction; missing evidence must independently fail the lab.';
+  return change.before.split(title).length === 2 && change.before.split(comment).length === 2 &&
+    change.after === corrected.replace(title, 'fails %s required fidelity for a well-formed but incorrect extraction')
+      .replace(comment, '// A well-formed extraction can answer correctly; wrong transcription must independently fail the lab.');
+}
+
 export function classifyDiff(manifest: Manifest, changes: Change[], options: InspectionOptions = {}): Classification {
   const reasons: string[] = [], product: Change[] = [], administrative: Change[] = [];
   const paths = changes.map(change => change.path).sort();
   if (!changes.length || new Set(paths).size !== paths.length) reasons.push('empty_or_duplicate_diff');
   const ownerRoot = options.owner && /^[a-z0-9][a-z0-9-]*$/.test(options.owner) ? `openspec/changes/${options.owner}/` : null;
+  const versionPaths = ['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/PUBLISHING.md', 'docs/STATUS.md'];
+  const versionChanges = changes.filter(change => Object.hasOwn(options.versionRecords ?? {}, change.path));
+  if (Object.keys(options.versionRecords ?? {}).length) {
+    try {
+      const previousVersion = /^(\d+\.\d+\.\d+)-beta\.(\d+)$/.exec(options.versionReservation?.previousVersion ?? '');
+      const version = /^(\d+\.\d+\.\d+)-beta\.(\d+)$/.exec(options.versionReservation?.version ?? '');
+      if (manifest.scope === 'docs-links' || !options.versionReservation ||
+          options.versionReservation.repository !== manifest.repository || options.versionReservation.runId !== manifest.id ||
+          !previousVersion || !version || previousVersion[1] !== version[1] ||
+          !Number.isSafeInteger(Number(previousVersion[2])) || !Number.isSafeInteger(Number(version[2])) ||
+          Number(version[2]) <= Number(previousVersion[2]) ||
+          digest(Object.keys(options.versionRecords!).sort()) !== digest([...versionPaths].sort())) throw new Error('Invalid version authority');
+      validateVersionChanges(versionPaths.map(path => {
+        const change = versionChanges.find(file => file.path === path);
+        if (!change || change.mode !== '100644' || options.versionRecords![path] !== digest(change.after)) throw new Error('Invalid version record');
+        return { ...change, mode: '100644' as const };
+      }), options.versionReservation);
+    } catch { reasons.push('version_record_changed'); }
+  }
   for (const change of changes) {
     if (!/^[A-Za-z0-9_./-]+$/.test(change.path) || change.path.startsWith('/') || change.path.split('/').includes('..') ||
-        change.mode !== '100644' || change.before.includes('\0') || change.after.includes('\0')) { reasons.push('unsafe_file'); continue; }
+        posix.normalize(change.path) !== change.path || change.mode !== '100644' || change.before.includes('\0') || change.after.includes('\0')) { reasons.push('unsafe_file'); continue; }
     if (ownerRoot && change.path.startsWith(ownerRoot)) {
       if (!/^(?:proposal\.md|design\.md|tasks\.md|\.openspec\.yaml|specs\/[a-z0-9-]+\/spec\.md)$/.test(change.path.slice(ownerRoot.length)) ||
           options.administrative?.[change.path] !== digest(change.after)) reasons.push('administrative_record_changed');
       administrative.push(change); continue;
     }
-    if (['desktop/package.json', 'desktop/package-lock.json', 'README.md', 'docs/STATUS.md', 'docs/PUBLISHING.md'].includes(change.path) &&
+    if (versionPaths.includes(change.path) &&
         options.versionRecords?.[change.path] === digest(change.after)) continue;
+    if (manifest.scope === 'pipeline' && change.path === 'desktop/tests/lab/campaign.test.ts' && !labFidelityFixtureCorrection(change))
+      reasons.push('outside_scope');
     if (!manifest.paths.some(path => path.endsWith('/') ? change.path.startsWith(path) : change.path === path)) reasons.push('outside_scope');
     product.push(change);
   }
@@ -135,7 +218,7 @@ export interface MergeEvidence extends Binding {
   verification: Binding & { passed: boolean; environment: string };
   review: Binding & { clean: boolean }; checks: { head: string; ready: boolean };
   protection: boolean; upToDate: boolean; integrationHold: boolean;
-  regression?: { baselineFailed: boolean; candidatePassed: boolean; oracleHash: string };
+  regression?: { base: string; head: string; baselineFailed: boolean; candidatePassed: boolean; oracleHash: string; contractHash: string };
   handoff?: { head: string; qualified: boolean; receiptHash: string };
 }
 export function decideMerge(manifest: Manifest, classification: Classification, evidence: MergeEvidence) {
@@ -148,6 +231,8 @@ export function decideMerge(manifest: Manifest, classification: Classification, 
   if (!evidence.protection || !evidence.upToDate || evidence.integrationHold) reasons.push('integration_not_ready');
   if (classification.category === 'portable-json-parser-fix' &&
       (!evidence.regression?.baselineFailed || !evidence.regression.candidatePassed || !evidence.regression.oracleHash ||
+        evidence.regression.base !== evidence.base || evidence.regression.head !== evidence.head ||
+        !/^[a-f0-9]{64}$/.test(evidence.regression.oracleHash) || !/^[a-f0-9]{64}$/.test(evidence.regression.contractHash) ||
         evidence.verification.environment !== 'portable-application' || evidence.handoff?.head !== evidence.head ||
         !evidence.handoff.qualified || !/^[a-f0-9]{64}$/.test(evidence.handoff.receiptHash))) reasons.push('application_evidence_missing');
   if (classification.category === 'portable-json-parser-fix' && !POLICY_CONFIG.parserAutoMerge)

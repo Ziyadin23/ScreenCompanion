@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -27,6 +27,14 @@ function invoke(root: string, ...args: string[]) {
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: join(root, 'no-credentials'), LANGSMITH_TRACING: 'false' } });
 }
 
+test('installed command runs through the package bin symlink', t => {
+  const { root } = fixture(t);
+  const link = join(root, 'sc-dev'); symlinkSync(cli, link);
+  const result = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8', timeout: 5000, env: {} });
+  assert.equal(result.status, 0, result.stderr);
+  assert.ok(JSON.parse(result.stdout).commands.includes('runs'));
+});
+
 test('doctor checks capabilities beyond executable presence without claiming live authentication', t => {
   const { root, git } = fixture(t);
   const repository = { root, commonDir: join(root, '.git'), repository: 'github.com/example/sc',
@@ -45,6 +53,26 @@ test('doctor checks capabilities beyond executable presence without claiming liv
   assert.equal(isolated.ready, true); assert.equal(isolated.protectedForMerge, false);
   assert.equal(isolated.mergeEligible, false);
   assert.equal(doctor(repository, join(root, 'state'), probe, () => true).stateAccess, false);
+});
+
+test('doctor probes the configured Orca executable for both ready and missing sessions', t => {
+  const { root, state, git } = fixture(t);
+  const repository = { root, commonDir: join(root, '.git'), repository: 'github.com/example/sc',
+    base: git('rev-parse', 'HEAD').trim(), branch: 'main' };
+  const selected = '/synthetic/selected-orca', previous = process.env.ORCA_CLI_COMMAND;
+  process.env.ORCA_CLI_COMMAND = selected;
+  t.after(() => { if (previous === undefined) delete process.env.ORCA_CLI_COMMAND; else process.env.ORCA_CLI_COMMAND = previous; });
+  for (const available of [true, false]) {
+    const calls: string[] = [];
+    const result = doctor(repository, state, (name, args) => {
+      calls.push(name);
+      if (args[0] === '--version') return { status: name === selected ? Number(!available) :
+        name === 'orca-ide' ? Number(available) : 0, stdout: name === 'node' ? 'v22.12.0' : 'v1.2.3' };
+      return { status: name === 'bwrap' ? 0 : 1, stdout: '' };
+    }, () => true);
+    assert.equal(result.tools['orca-ide'], available); assert.equal(result.ready, available);
+    assert.ok(calls.includes(selected)); assert.equal(calls.includes('orca-ide'), false);
+  }
 });
 
 test('dry-run resolves trusted scope without creating state or dispatching work', t => {
@@ -75,25 +103,78 @@ test('CLI rejects malformed references and authority options before state creati
   }
 });
 
+test('exhausted issue reports its review and previews an explicit linked continuation without dispatch', t => {
+  const { root, state, git } = fixture(t);
+  const manifest = makeManifest({ repository: 'github.com/example/sc', root, commonDir: join(root, '.git'),
+    base: git('rev-parse', 'HEAD').trim(), scope: 'pipeline', mode: 'issue', issue: 60, delivery: 'pr' });
+  const store = new RunStore(state, manifest); store.admit(manifest);
+  store.update(manifest.id, { status: 'budget_exhausted', stage: 'review', error: 'budget_exhausted',
+    data: { reviewReceipt: { head: manifest.base, clean: false, findings: ['Synthetic private review detail'] } } });
+  store.close();
+  const report = invoke(root, 'status', manifest.id, '--state-dir', state);
+  assert.equal(report.status, 0, report.stderr);
+  const value = JSON.parse(report.stdout);
+  assert.equal(value.nextAction, 'inspect_findings_and_authorize_linked_continuation');
+  assert.equal(value.candidateReview.findings, 1); assert.equal(value.candidateReview.clean, false);
+  assert.equal(report.stdout.includes('Synthetic private review detail'), false);
+  const preview = invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state, '--dry-run');
+  assert.equal(preview.status, 0, preview.stderr);
+  const next = JSON.parse(preview.stdout);
+  assert.equal(next.continuationOf, manifest.id); assert.equal(next.scope, 'pipeline');
+  assert.equal(next.delivery, 'pr'); assert.equal(next.workerCalls, 0);
+  const reader = new RunStore(state, manifest, { readOnly: true }); t.after(() => reader.close());
+  assert.equal(reader.listRuns().length, 1);
+  mkdirSync(join(state, 'profiles'), { mode: 0o700 });
+  const helper = join(state, 'helper.mjs'), token = join(state, 'resource-token');
+  writeFileSync(helper, 'export {};\n', { mode: 0o600 });
+  writeFileSync(token, 'synthetic-resource', { mode: 0o600 });
+  writeFileSync(join(state, 'profiles/local.json'), JSON.stringify({ version: 1,
+    environmentId: 'synthetic', targetDirectory: `${state}-target`, helperPath: helper,
+    timeoutMs: 7_500_000, resourceTokenFile: token }), { mode: 0o600 });
+  const allowed = invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state,
+    '--beta-profile', 'local', '--active-minutes', '180', '--dry-run');
+  assert.equal(allowed.status, 0, allowed.stderr);
+  assert.equal(JSON.parse(allowed.stdout).limits.activeMs, 10_800_000);
+  assert.equal(invoke(root, 'run', '--continue-from', manifest.id, '--state-dir', state,
+    '--beta-profile', 'local', '--active-minutes', '181', '--dry-run').status, 4);
+  assert.equal(reader.listRuns().length, 1);
+});
+
 test('status and reports never start a missing run or disclose raw private state', t => {
   const { root, state, git } = fixture(t);
   const absent = invoke(root, 'status', 'absent', '--state-dir', state);
   assert.equal(absent.status, 4); assert.equal(existsSync(state), false);
+  const empty = invoke(root, 'runs', '--state-dir', state);
+  assert.equal(empty.status, 0); assert.deepEqual(JSON.parse(empty.stdout), []);
+  assert.equal(existsSync(state), false);
   const manifest = makeManifest({ repository: 'github.com/example/sc', root,
     commonDir: join(root, '.git'), base: git('rev-parse', 'HEAD').trim(), scope: 'providers-json' });
   const store = new RunStore(state, manifest); store.admit(manifest);
+  store.reserve(manifest.id, `repair:${manifest.id}:1`, 'repairs');
   store.update(manifest.id, { status: 'awaiting_input', data: { rawWorkerOutput: 'SYNTHETIC_PRIVATE_CONTENT',
     privatePath: root, roundHistory: [{ number: 0, reason: 'synthetic_failed_check' }] } });
   store.close();
-  for (const command of ['status', 'report']) {
-    const result = invoke(root, command, manifest.id, '--state-dir', state);
+  for (const command of ['status', 'report', 'runs']) {
+    const result = invoke(root, command, ...(command === 'runs' ? [] : [manifest.id]), '--state-dir', state);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).status, 'awaiting_input');
-    assert.equal(JSON.parse(result.stdout).retryCount, 1);
-    assert.equal(JSON.parse(result.stdout).interventionRequired, true);
-    assert.equal(JSON.parse(result.stdout).interventionCount, null);
+    const value = command === 'runs' ? JSON.parse(result.stdout)[0] : JSON.parse(result.stdout);
+    assert.equal(value.status, 'awaiting_input');
+    assert.equal(value.retryCount, 1);
+    assert.equal(value.interventionRequired, true);
+    assert.equal(value.interventionCount, null);
     assert.equal(result.stdout.includes('SYNTHETIC_PRIVATE_CONTENT'), false);
     assert.equal(result.stdout.includes(root), false);
+  }
+  const writer = new RunStore(state, manifest); t.after(() => writer.close());
+  for (const [error, action] of [['owner_unverifiable', 'inspect_owned_execution'],
+    ['invalid_checkpoint', 'inspect_saved_state']]) {
+    writer.update(manifest.id, { status: 'quarantined', error });
+    const structured = invoke(root, 'status', manifest.id, '--state-dir', state);
+    assert.equal(structured.status, 0, structured.stderr);
+    assert.equal(JSON.parse(structured.stdout).nextAction, action);
+    const markdown = invoke(root, 'report', manifest.id, '--state-dir', state, '--format', 'markdown');
+    assert.equal(markdown.status, 0, markdown.stderr);
+    assert.ok(markdown.stdout.includes(`Next action: ${action}`));
   }
 });
 

@@ -46,7 +46,7 @@ export const TRANSLATION: VisualCase = { id: 'translation', title: 'Source text'
     expected: { kind: 'text', alternatives: ['Red circle.', 'A red circle.', 'The red circle.'] } }] };
 export const ALL_CASES = [...CAPTURE_CASES, TYPED_DEPENDENT, TYPED_INDEPENDENT, TRANSLATION] as const;
 export const LAYOUTS: readonly Layout[] = ['plain', 'proctoring'];
-export const MODES: readonly PipelineMode[] = ['Thorough', 'Balanced', 'Direct'];
+export const MODES: readonly PipelineMode[] = ['Thorough', 'Direct'];
 export function visualCase(id: string): VisualCase {
   const found = ALL_CASES.find(item => item.id === id);
   if (!found) throw new Error('Unknown synthetic case ID.');
@@ -58,7 +58,7 @@ export interface CampaignRun {
   answerModel: 'deepseek-flash' | 'deepseek-v4-pro'; thinking: DeepSeekReasoning;
   answerTokens: number; expectedCalls: number;
 }
-const calls: Record<PipelineMode, number> = { Thorough: 3, Balanced: 2, Direct: 1 };
+const calls: Record<PipelineMode, number> = { Thorough: 3, Direct: 1 };
 function run(group: CampaignRun['group'], fixture: VisualCase, layout: Layout, mode: PipelineMode): CampaignRun {
   return { id: `${group}-${fixture.id}-${layout}-${mode.toLowerCase()}`, group, caseId: fixture.id, layout, mode,
     answerModel: group === 'pro' ? 'deepseek-v4-pro' : 'deepseek-flash', thinking: group === 'pro' ? 'Low' : 'None',
@@ -77,7 +77,7 @@ export function campaign(): CampaignRun[] {
   return [...preflights, ...main,
     ...[TYPED_DEPENDENT, TYPED_INDEPENDENT].flatMap(fixture => MODES.map(mode => run('typed', fixture, 'proctoring', mode))),
     ...MODES.map(mode => run('translation', TRANSLATION, 'proctoring', mode)),
-    ...(['Thorough', 'Balanced'] as const).map(mode => run('pro', CAPTURE_CASES[0]!, 'proctoring', mode))];
+    ...(['Thorough'] as const).map(mode => run('pro', CAPTURE_CASES[0]!, 'proctoring', mode))];
 }
-export const BASELINE_CALLS = 96;
+export const BASELINE_CALLS = 64;
 export const CAMPAIGN_CAP = 120;

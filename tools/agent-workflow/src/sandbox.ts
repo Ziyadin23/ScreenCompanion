@@ -10,6 +10,7 @@ export interface SandboxOptions {
   nativeHelpers?: { codeModeHost: string; execServer: string };
   openspecBinary?: string;
   verificationOutputs?: 'application' | 'tool' | 'both';
+  modelDependencies?: 'application';
 }
 export interface Sandbox {
   request(program: string, args: string[]): Pick<OwnedProcessRequest, 'command' | 'args' | 'cwd' | 'env'>;
@@ -23,6 +24,8 @@ export function prepareSandbox(options: SandboxOptions): Sandbox {
   const workspace = realpathSync(options.workspace);
   if (options.verificationOutputs && (options.writable || options.authFile))
     throw new WorkflowError('invalid_sandbox', 'Trusted verification output mounts require a credential-free read-only source.');
+  if (options.modelDependencies && (!options.authFile || options.verificationOutputs))
+    throw new WorkflowError('invalid_sandbox', 'Model dependency projection requires its separate model profile.');
   const state = realpathSync(options.stateDirectory);
   const stateInfo = lstatSync(state);
   if (!stateInfo.isDirectory() || (stateInfo.mode & 0o077) || state === workspace || state.startsWith(`${workspace}/`))
@@ -62,6 +65,16 @@ export function prepareSandbox(options: SandboxOptions): Sandbox {
     base.push(options.writable ? '--bind' : '--ro-bind', workspace, '/workspace',
       '--ro-bind', seed, '/run/sc-git', '--ro-bind', objects, '/run/sc-source-objects');
     base.push('--ro-bind', lstatSync(join(workspace, '.git')).isDirectory() ? seed : pointer, '/workspace/.git');
+    const isolatedOutput = (path: string) => {
+      const host = join(workspace, path);
+      if (realpathSync(dirname(host)) !== dirname(host))
+        throw new WorkflowError('unsafe_output_path', 'Generated output has an external parent.');
+      if (!existsSync(host)) mkdirSync(host);
+      const info = lstatSync(host);
+      if (!info.isDirectory() || info.isSymbolicLink() || realpathSync(host) !== host)
+        throw new WorkflowError('unsafe_output_path', 'Generated output is not a local directory.');
+      base.push('--tmpfs', `/workspace/${path}`);
+    };
     if (options.verificationOutputs) {
       if (options.verificationOutputs !== 'tool')
         base.push('--dir', '/opt', '--setenv', 'OPENSSL_CONF', '/dev/null');
@@ -71,18 +84,7 @@ export function prepareSandbox(options: SandboxOptions): Sandbox {
         ...(options.verificationOutputs === 'application' ? [] :
           ['tools/agent-workflow/dist', 'tools/agent-workflow/.cache', 'tools/agent-workflow/node_modules/.cache'])
       ];
-      for (const path of outputs) {
-        const host = join(workspace, path);
-        if (realpathSync(dirname(host)) !== dirname(host))
-          throw new WorkflowError('unsafe_output_path', 'Generated verification output has an external parent.');
-        if (!existsSync(host)) mkdirSync(host);
-        if (existsSync(host)) {
-          const info = lstatSync(host);
-          if (!info.isDirectory() || info.isSymbolicLink() || realpathSync(host) !== host)
-            throw new WorkflowError('unsafe_output_path', 'Generated verification output is not a local directory.');
-        }
-        base.push('--tmpfs', `/workspace/${path}`);
-      }
+      for (const path of outputs) isolatedOutput(path);
     }
     if (options.authFile) {
       const ignored = execFileSync('/usr/bin/git', ['-C', workspace, 'ls-files', '--others', '--ignored',
@@ -94,6 +96,14 @@ export function prepareSandbox(options: SandboxOptions): Sandbox {
         if (path.endsWith('/')) base.push('--tmpfs', `/workspace/${path.slice(0, -1)}`);
         else base.push('--ro-bind', empty, `/workspace/${path}`);
       }
+    }
+    if (options.modelDependencies) {
+      const dependencies = join(workspace, 'desktop/node_modules');
+      if (!existsSync(dependencies) || !lstatSync(dependencies).isDirectory() ||
+          lstatSync(dependencies).isSymbolicLink() || realpathSync(dependencies) !== dependencies)
+        throw new WorkflowError('unsafe_dependency_path', 'Model dependencies are not a canonical local installation.', 2);
+      base.push('--ro-bind', dependencies, '/workspace/desktop/node_modules');
+      for (const cache of ['.vite', '.vite-temp', '.cache']) isolatedOutput(`desktop/node_modules/${cache}`);
     }
     if (options.authFile) {
       const auth = realpathSync(options.authFile);

@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { constants } from 'node:os';
 import { z } from 'zod';
 import { WorkflowError } from './manifest.js';
-import { processIdentity } from './store.js';
+import { processIdentity } from './process-identity.js';
 
 const OUTPUT_LIMIT = 2_000_000;
 const REQUEST_LIMIT = 1_000_000;
 const POLL_MS = 25;
+export const MAX_PROCESS_TIMEOUT_MS = 9_000_000;
 export interface OwnedProcessRequest {
   stateDirectory: string; key: string; command: string; args: string[]; cwd: string;
   env: Record<string, string>; stdin?: string; timeoutMs?: number; signal?: AbortSignal;
@@ -21,8 +22,9 @@ export interface OwnedProcessResult {
   outputTruncated: boolean; elapsedMs: number;
 }
 export interface OwnedProcessInspection {
-  state: 'absent' | 'pending' | 'running' | 'exited' | 'unverifiable';
+  state: 'absent' | 'pending' | 'running' | 'exited' | 'interrupted' | 'unverifiable';
   pid?: number; identity?: string; processGroup?: number; result?: OwnedProcessResult;
+  reason?: 'host_restarted';
 }
 interface SavedRequest {
   key: string; command: string; args: string[]; cwd: string; env: Record<string, string>;
@@ -101,7 +103,7 @@ function processGroupMembers(group: number): number[] {
         const stat = raw.slice(raw.lastIndexOf(')') + 2).split(' ');
         if (Number(stat[2]) === group && stat[0] !== 'Z' && stat[0] !== 'X') members.push(Number(name));
       } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        if (!['ENOENT', 'ESRCH'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
       }
     }
   } catch { throw new WorkflowError('owner_unverifiable', 'Process group cannot be verified.'); }
@@ -139,10 +141,20 @@ export function inspectOwnedProcess(stateDirectory: string, key: string): OwnedP
       return { state: 'unverifiable' };
     const exit = safeRead(join(op, 'exit.json'), exitSchema);
     const final = safeRead(join(op, 'outcome.json'), outcomeSchema);
-    const members = processGroupMembers(start.processGroup);
-    const identity = processIdentity(start.pid);
-    if (identity && identity !== start.identity) return { state: 'unverifiable', pid: start.pid, identity: start.identity, processGroup: start.processGroup };
     if (exit && (exit.identity !== start.identity || exit.endedAt < start.startedAt)) return { state: 'unverifiable' };
+    let boot: string;
+    try { boot = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim(); }
+    catch { return { state: 'unverifiable' }; }
+    const previousBoot = start.identity.split(':')[0]!;
+    if (!z.uuid().safeParse(boot).success || !z.uuid().safeParse(previousBoot).success)
+      return { state: 'unverifiable' };
+    const restarted = previousBoot !== boot;
+    // A host restart proves termination, but cannot supply the lost command result.
+    if (restarted && !exit) return { state: 'interrupted', reason: 'host_restarted',
+      pid: start.pid, identity: start.identity, processGroup: start.processGroup };
+    const members = restarted ? [] : processGroupMembers(start.processGroup);
+    const identity = restarted ? null : processIdentity(start.pid);
+    if (identity && identity !== start.identity) return { state: 'unverifiable', pid: start.pid, identity: start.identity, processGroup: start.processGroup };
     if (members.length === 0 && exit) {
       const observed = result(op, start, exit);
       if (final && (final.status !== observed.status || final.exitCode !== observed.exitCode ||
@@ -171,13 +183,16 @@ function checkedRequest(request: OwnedProcessRequest): SavedRequest {
       Object.entries(request.env).some(([name, value]) => !name || name.includes('=') || typeof value !== 'string'))
     throw new WorkflowError('invalid_process_request', 'Process command, arguments and environment must be explicit.');
   const timeoutMs = request.timeoutMs ?? 1_200_000;
-  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > 7_200_000)
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > MAX_PROCESS_TIMEOUT_MS)
     throw new WorkflowError('invalid_process_request', 'Process timeout must be finite and bounded.');
   const saved = { key: request.key, command: request.command, args: request.args, cwd,
     env: request.env, stdin: request.stdin, timeoutMs };
   if (Buffer.byteLength(JSON.stringify(saved)) > REQUEST_LIMIT)
     throw new WorkflowError('oversized_process_request', 'Process request exceeds its bound.');
   return saved;
+}
+export function validateOwnedProcessRequest(request: OwnedProcessRequest): void {
+  checkedRequest(request);
 }
 async function waitForExit(stateDirectory: string, key: string, signal?: AbortSignal): Promise<OwnedProcessResult> {
   const pendingDeadline = Date.now() + 2000;
@@ -186,6 +201,8 @@ async function waitForExit(stateDirectory: string, key: string, signal?: AbortSi
     if (signal?.aborted) return cancelOwnedProcess(stateDirectory, key);
     const current = inspectOwnedProcess(stateDirectory, key);
     if (current.state === 'exited') return current.result!;
+    if (current.state === 'interrupted')
+      throw new WorkflowError('execution_interrupted', 'The host restarted before a terminal result; cancel this run before new dispatch.', 2);
     if (current.state === 'absent')
       throw new WorkflowError('owner_unverifiable', 'Owned process state disappeared.');
     if (current.state === 'unverifiable') {

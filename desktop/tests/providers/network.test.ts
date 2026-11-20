@@ -12,7 +12,7 @@ describe('network interception and provider failures', () => {
     { status: 301, headers: { location: 'https://portal.invalid/' }, guidance: 'sign-in' },
     { status: 302, headers: {}, guidance: 'sign-in' }, { status: 303, headers: {}, guidance: 'sign-in' },
     { status: 307, headers: {}, guidance: 'sign-in' }, { status: 308, headers: {}, guidance: 'sign-in' },
-    { status: 407, headers: {}, guidance: 'proxy' }, { status: 511, headers: {}, guidance: 'sign-in' },
+    { status: 407, headers: {}, guidance: 'system proxy settings' }, { status: 511, headers: {}, guidance: 'sign-in' },
     { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' }, guidance: 'web page' },
     { status: 200, headers: { 'Content-Type': 'APPLICATION/XHTML+XML; charset=UTF-8' }, guidance: 'web page' },
     { status: 403, headers: { 'content-type': 'text/html' }, guidance: 'web page' }
@@ -35,7 +35,7 @@ describe('network interception and provider failures', () => {
   });
   it.each([
     { code: 'network_dns', expected: 'DNS' }, { code: 'network_tls', expected: 'TLS' }, { code: 'network_proxy', expected: 'proxy' },
-    { code: 'PRIVATE-CODE', expected: 'connection failed' }
+    { code: 'PRIVATE-CODE', expected: 'system proxy settings' }
   ])('uses only fixed $code network guidance without raw transport exception', async ({ code, expected }) => {
     const transport = new StrictTransport([() => { throw Object.assign(new Error('PRIVATE-TRANSPORT-DETAIL'), { code }); }]);
     let error: unknown;
@@ -79,7 +79,7 @@ describe('all-provider incomplete successes stop without extraction repair or fa
     };
     const transport = new StrictTransport(stage === 'Extract' ? [first] : [first, answer], provider);
     const cropper = new TrackingCropper();
-    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Balanced', assessmentMode: 'qa' }) });
+    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) });
     await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({
       stage, pipelineCode: stage === 'Extract' ? 'IncompleteExtraction' : 'IncompleteResponse'
     });
@@ -102,7 +102,7 @@ describe('all-provider incomplete successes stop without extraction repair or fa
     };
     const extractionFailed = kind.startsWith('extraction');
     const transport = new StrictTransport(extractionFailed ? [first] : [first, answer]), cropper = new TrackingCropper();
-    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Balanced', assessmentMode: 'qa' }) });
+    const input = pipelineInput({ configuration: configuration({ provider, mode: 'Thorough', enableQuestionCropping: false, assessmentMode: 'qa' }) });
     await expect(createPipelineRunner({ transport, cropper }).run(input)).rejects.toMatchObject({
       stage: extractionFailed ? 'Extract' : kind === 'answer-incomplete' ? 'Answer' : 'ValidateAnswer',
       pipelineCode: extractionFailed ? 'IncompleteExtraction' : kind === 'answer-incomplete' ? 'IncompleteResponse' : 'MalformedResponse'

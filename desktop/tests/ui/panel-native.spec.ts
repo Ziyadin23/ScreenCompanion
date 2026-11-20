@@ -10,6 +10,7 @@ import type { NativeWindow } from './windows-events';
 
 // Windows only, with the production store and native bridge. Never submit a
 // question or invoke capture: setup/Save and these UI actions make zero API calls.
+// The screenshot-shortcut case intercepts typed submit at IPC after exercising real OS hotkeys.
 interface Session {
   app: ElectronApplication; page: Page; handle: string; local: string;
   restart(): Promise<void>;
@@ -44,7 +45,6 @@ const test = base.extend<{ session: Session }>({
       await session.page.getByTestId('setup-key').fill('synthetic-native-panel-store-key');
       await session.page.getByRole('button', { name: 'Save', exact: true }).click();
       await expect.poll(() => state(session).then(value => value.ready)).toBe(true);
-      // The ready flag precedes the final first-run CommandsShown vault save.
       await expect(session.page.getByTestId('answer-text')).toContainText('Ctrl+Alt+Space');
       await use(session);
       const log = await readFile(join(local, 'SC', 'diagnostics.log'), 'utf8');
@@ -60,18 +60,19 @@ const edges: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-
 const inspect = (session: Session) => windowsEvent<NativeWindow>({ type: 'inspect', handle: session.handle });
 const state = (session: Session): Promise<AppState> => session.page.evaluate(() => window.sc.getState());
 const geometry = (value: NativeWindow) => ({ left: value.left, top: value.top, right: value.right, bottom: value.bottom });
+const physicalSize = (value: NativeWindow) => ({ Width: value.right - value.left, Height: value.bottom - value.top });
 const keys = (value: number[]) => windowsEvent({ type: 'keys', keys: value });
 function point(value: NativeWindow, edge: ResizeEdge) {
   return { x: edge.includes('left') ? value.left + 2 : edge.includes('right') ? value.right - 3 : Math.round((value.left + value.right) / 2),
     y: edge.includes('top') ? value.top + 2 : edge.includes('bottom') ? value.bottom - 3 : Math.round((value.top + value.bottom) / 2) };
 }
-async function resetBounds(session: Session) {
-  await session.app.evaluate(({ BrowserWindow, screen }) => {
+async function resetBounds(session: Session, size = { width: 360, height: 220 }) {
+  await session.app.evaluate(({ BrowserWindow, screen }, { width, height }) => {
     const panel = BrowserWindow.getAllWindows()[0]!;
     const area = screen.getDisplayMatching(panel.getBounds()).workArea;
     if (area.width < 700 || area.height < 500) throw new Error('The resize fixture requires a work area of at least 700 by 500 DIPs.');
-    panel.setBounds({ x: Math.round(area.x + (area.width - 360) / 2), y: Math.round(area.y + (area.height - 220) / 2), width: 360, height: 220 });
-  });
+    panel.setBounds({ x: Math.round(area.x + (area.width - width) / 2), y: Math.round(area.y + (area.height - height) / 2), width, height });
+  }, size);
   await windowsEvent({ type: 'focus', handle: session.handle });
   return inspect(session);
 }
@@ -104,8 +105,7 @@ async function surface(session: Session, selected: 'answer' | 'input') {
   await expect.poll(() => state(session).then(value => value.surface)).toBe(selected);
 }
 async function expectSavedSize(session: Session) {
-  const current = await inspect(session);
-  const expected = { Width: current.right - current.left, Height: current.bottom - current.top };
+  const expected = physicalSize(await inspect(session));
   await expect.poll(async () => {
     try { return JSON.parse(await readFile(join(session.local, 'SC', 'window-size.json'), 'utf8')) as unknown; }
     catch { return null; }
@@ -114,6 +114,29 @@ async function expectSavedSize(session: Session) {
 }
 
 test.describe('production Windows panel/store and shortcut contention', () => {
+  test('Ctrl+Enter restores input from another window and sends with screenshot from focused input once', async ({ session }) => {
+    await session.page.evaluate(() => window.sc.command({ type: 'showInput' }));
+    await session.page.getByTestId('question-input').fill('Synthetic shortcut question');
+    const foreign = await session.app.evaluate(({ BrowserWindow, ipcMain }) => {
+      const submissions: { includeScreenshot: boolean; length: number }[] = [];
+      Reflect.set(globalThis, 'scShortcutSubmissions', submissions);
+      ipcMain.removeHandler('sc:command');
+      ipcMain.handle('sc:command', (_event, command: { type: string; question?: string; includeScreenshot?: boolean }) => {
+        if (command.type === 'submit') submissions.push({ includeScreenshot: command.includeScreenshot === true, length: command.question?.length ?? 0 });
+      });
+      const other = new BrowserWindow({ width: 280, height: 180, title: 'Synthetic focus target', show: true });
+      other.focus();
+      return other.id;
+    });
+    await expect.poll(() => session.app.evaluate(({ BrowserWindow }, id) => BrowserWindow.getFocusedWindow()?.id === id, foreign)).toBe(true);
+    await keys([VK.control, VK.enter]);
+    await expect(session.page.getByTestId('question-input')).toBeFocused();
+    await expect(session.page.getByTestId('question-input')).toHaveValue('Synthetic shortcut question');
+    expect(await session.app.evaluate(() => Reflect.get(globalThis, 'scShortcutSubmissions'))).toEqual([]);
+    await keys([VK.control, VK.enter]);
+    await expect.poll(() => session.app.evaluate(() => Reflect.get(globalThis, 'scShortcutSubmissions'))).toEqual([{ includeScreenshot: true, length: 27 }]);
+    await session.app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.close(), foreign);
+  });
   test.skip(process.platform !== 'win32', 'Requires an interactive Windows desktop and built application/native bridge.');
   // One worker still serializes OS input, but a failed edge must not skip the
   // remaining independent edges, lifetime checks or persistence cases.
@@ -146,7 +169,7 @@ test.describe('production Windows panel/store and shortcut contention', () => {
 
       await resetBounds(session);
       const minimumBefore = await resize(session, edge, -1000 * horizontal, -1000 * vertical);
-      const minimum = geometry(minimumBefore), width = Math.round(180 * minimumBefore.dpi / 96), height = Math.round(80 * minimumBefore.dpi / 96);
+      const minimum = geometry(minimumBefore), width = Math.round(180 * minimumBefore.dpi / 96), height = Math.round((selected === 'input' ? 128 : 80) * minimumBefore.dpi / 96);
       if (horizontal < 0) minimum.left = minimum.right - width;
       if (horizontal > 0) minimum.right = minimum.left + width;
       if (vertical < 0) minimum.top = minimum.bottom - height;
@@ -209,15 +232,38 @@ test.describe('production Windows panel/store and shortcut contention', () => {
         expect(await readFile(join(session.local, 'SC', 'sc.user.key'))).toEqual(vault);
       });
     }
-    test(`${selected}: saved physical dimensions survive a normal same-profile restart`, async ({ session }) => {
-      await surface(session, selected);
+    test(`${selected}: restores the final size after returning to programmatic dimensions`, async ({ session }) => {
       const vault = await readFile(join(session.local, 'SC', 'sc.user.key'));
-      await resetBounds(session); await resize(session, 'bottom-right', 67, 43);
-      const saved = await expectSavedSize(session);
+      await resetBounds(session, { width: 180, height: 80 });
+      await expectSavedSize(session);
+      await session.page.evaluate(() => window.sc.command({ type: 'settings' }));
+      await expect.poll(() => state(session).then(value => value.surface)).toBe('settings');
+      const settingsSize = physicalSize(await inspect(session));
+
+      // The surface transition applies A. Using the minimum makes a native drag
+      // back to A exact even when SendInput coordinates round to nearby pixels.
+      await surface(session, selected);
+      await expectNativeVisibility(session, true, `${selected}/programmatic-size`);
+      const programmatic = await inspect(session);
+      const sizeA = physicalSize(programmatic);
+      const minHeight = selected === 'input' ? 128 : 80;
+      expect(sizeA).toEqual({ Width: Math.round(180 * programmatic.dpi / 96), Height: Math.round(minHeight * programmatic.dpi / 96) });
+      expect(settingsSize.Width).toBeGreaterThan(sizeA.Width);
+      expect(settingsSize.Height).toBeGreaterThan(sizeA.Height);
+
+      await windowsEvent({ type: 'focus', handle: session.handle });
+      await resize(session, 'bottom-right', 64, 40);
+      const sizeB = await expectSavedSize(session);
+      expect(sizeB.Width).toBeGreaterThan(sizeA.Width);
+      expect(sizeB.Height).toBeGreaterThan(sizeA.Height);
+
+      await resize(session, 'bottom-right', -1000, -1000);
+      await expectGeometry(session, geometry(programmatic), `${selected}/back-to-programmatic-size`);
+      expect(await expectSavedSize(session)).toEqual(sizeA);
       expect(await readFile(join(session.local, 'SC', 'sc.user.key'))).toEqual(vault);
+
       await session.restart(); await surface(session, selected);
-      const restored = await inspect(session);
-      expect({ Width: restored.right - restored.left, Height: restored.bottom - restored.top }).toEqual(saved);
+      expect(physicalSize(await inspect(session))).toEqual(sizeA);
       expect(await readFile(join(session.local, 'SC', 'sc.user.key'))).toEqual(vault);
     });
     test(`${selected}: held Alt-drag ends at hide or surface change and rearms on a fresh press`, async ({ session }) => {

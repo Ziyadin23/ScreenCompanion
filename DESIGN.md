@@ -5,16 +5,15 @@ colors:
   ui-bg: "#1c1d20"
   ui-rail: "#18191c"
   ui-input: "#25262b"
-  ui-hover: "#303239"
   ui-text: "#f2f3f5"
   ui-muted: "#a9acb5"
   ui-border: "#36383f"
   ui-accent: "#9ab9ed"
   ui-primary: "#385785"
-  ui-primary-hover: "#42679b"
-  ui-interactive-border: "#51545f"
-  ui-primary-border: "#5d7fae"
-  ui-primary-border-hover: "#7897c3"
+  ui-neutral: "light-dark(#0000000F, #ffffff1A)"
+  ui-overlay-hover: "light-dark(#0000000D, #ffffff0D)"
+  ui-overlay-pressed: "light-dark(#0000001A, #ffffff1A)"
+  ui-interactive-border: "#6f727d"
   ui-selected-bg: "#2b303b"
   ui-selected-text: "#d9e6fb"
   ui-white: "#fff"
@@ -35,17 +34,32 @@ typography:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "15px"
     fontWeight: 600
-    lineHeight: 1.5
+    lineHeight: 1.4
+  connection-heading:
+    fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
+    fontSize: "20px"
+    fontWeight: 600
+    lineHeight: 1.4118
   section:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "13px"
     fontWeight: 600
-    lineHeight: 1.5
+    lineHeight: 1.6
   body:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "13px"
     fontWeight: 400
+    lineHeight: 1.5385
+  dialog-body:
+    fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
+    fontSize: "13px"
+    fontWeight: 400
     lineHeight: 1.5
+  supporting:
+    fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
+    fontSize: "12px"
+    fontWeight: 400
+    lineHeight: 1.4545
   hint:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "12px"
@@ -54,13 +68,18 @@ typography:
   label:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "12px"
-    fontWeight: 400
-    lineHeight: 1.5
+    fontWeight: 500
+    lineHeight: 1.5385
+  field-label:
+    fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
+    fontSize: "13px"
+    fontWeight: 500
+    lineHeight: 1.5385
   button-primary:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "13px"
-    fontWeight: 600
-    lineHeight: 1.5
+    fontWeight: 500
+    lineHeight: 1.5385
   panel-answer:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "11pt"
@@ -73,7 +92,7 @@ typography:
   disclosure:
     fontFamily: '"Segoe UI", "Noto Sans", sans-serif'
     fontSize: "13px"
-    fontWeight: 550
+    fontWeight: 600
     lineHeight: 1.5
 rounded:
   control: "8px"
@@ -85,45 +104,59 @@ spacing:
   sm: "8px"
   md: "12px"
   lg: "16px"
+  form: "20px"
   xl: "24px"
+  page: "32px"
 components:
   button-primary:
     backgroundColor: "{colors.ui-primary}"
     textColor: "{colors.ui-white}"
     typography: "{typography.button-primary}"
     rounded: "{rounded.control}"
-    padding: "7px 12px"
-  button-primary-hover:
-    backgroundColor: "{colors.ui-primary-hover}"
+    padding: "8px 12px"
+    height: "36px"
   button-secondary:
-    backgroundColor: "{colors.ui-input}"
+    backgroundColor: "{colors.ui-neutral}"
     textColor: "{colors.ui-text}"
-    typography: "{typography.body}"
+    typography: "{typography.button-primary}"
     rounded: "{rounded.control}"
-    padding: "7px 12px"
-  button-secondary-hover:
-    backgroundColor: "{colors.ui-hover}"
+    padding: "8px 12px"
+    height: "36px"
+  button-ghost:
+    backgroundColor: "transparent"
+    textColor: "{colors.ui-text}"
+    typography: "{typography.button-primary}"
+    rounded: "{rounded.control}"
+    padding: "8px 12px"
+    height: "36px"
   field:
     backgroundColor: "{colors.ui-input}"
     textColor: "{colors.ui-text}"
     typography: "{typography.body}"
     rounded: "{rounded.control}"
-    padding: "8px 10px"
+    padding: "4px 8px"
+    height: "36px"
   navigation-tab:
     backgroundColor: "transparent"
     textColor: "{colors.ui-muted}"
     typography: "{typography.label}"
     rounded: "{rounded.control}"
-    padding: "8px 10px"
+    padding: "8px 12px"
   navigation-tab-selected:
     backgroundColor: "{colors.ui-selected-bg}"
     textColor: "{colors.ui-selected-text}"
   choice:
     backgroundColor: "{colors.ui-input}"
     textColor: "{colors.ui-text}"
-    typography: "{typography.body}"
+    typography: "{typography.dialog-body}"
     rounded: "{rounded.control}"
-    padding: "7px 34px 7px 12px"
+    padding: "8px 32px 8px 12px"
+  checkbox:
+    backgroundColor: "{colors.ui-input}"
+    textColor: "{colors.ui-muted}"
+    typography: "{typography.field-label}"
+    rounded: "{rounded.option}"
+    size: "20px"
   answer-panel-default:
     backgroundColor: "{colors.panel-default-bg}"
     textColor: "{colors.ui-text}"
@@ -153,7 +186,7 @@ components:
   advanced-disclosure:
     textColor: "{colors.ui-text}"
     typography: "{typography.disclosure}"
-    padding: "14px 2px"
+    padding: "16px 0"
 ---
 
 # Design System: SC
@@ -164,12 +197,14 @@ components:
 
 SC uses the user-approved compact panel and restrained settings direction: neutral charcoal layers, readable off-white system text, subtle rounded corners, fine borders and quiet blue interaction states. Density supports reading an answer alongside another application. Controls reveal on approach, while settings present one category at a time.
 
-The shared renderer uses authored CSS and a consistent outline SVG vocabulary. The fixed, opaque setup and settings palette stays readable while users change panel colors, background transparency and text visibility independently. This document records the implemented system in [styles](desktop/src/renderer/styles.css), [panel appearance](desktop/src/renderer/appearance.ts), [defaults](desktop/src/contracts/defaults.ts), [panel/setup](desktop/src/renderer/App.tsx), [settings](desktop/src/renderer/Settings.tsx), [choices](desktop/src/renderer/Choice.tsx) and [icons](desktop/src/renderer/Icon.tsx). The [surface contract](.impeccable/surfaces/desktop-src-renderer-app-tsx.md) owns the selected surface direction; [OpenSpec tasks](openspec/changes/archive/2026-11-12-redesign-desktop-interface/tasks.md) own progress.
+Setup and Settings extend this world through the built **SC Compact** theme, inheriting Astryx Neutral (0.7.15). Astryx supplies layout stacks, headings/text, buttons, text inputs/textareas and checkboxes; local styles retain the existing shell and DOM choices. The fixed, opaque palette stays readable while users change panel colors, background transparency and text visibility independently. The answer panel keeps its authored CSS and outline SVG vocabulary.
+
+This records the Astryx Settings/setup interface from the reviewed preview on `Ziyadin23/issue-55-astryx-settings`, now being integrated through the [active owner](openspec/changes/integrate-astryx-interface/tasks.md). Synthetic browser evidence adds no shipped beta, native, secure-storage or recorder qualification. Sources are the [theme](desktop/src/themes/sc-compact/scCompactTheme.ts), [generated registry](desktop/src/astryx-themes.ts), [styles](desktop/src/renderer/styles.css), [panel appearance](desktop/src/renderer/appearance.ts), [defaults](desktop/src/contracts/defaults.ts), [panel](desktop/src/renderer/App.tsx), [setup](desktop/src/renderer/Setup.tsx), [settings](desktop/src/renderer/Settings.tsx), [choices](desktop/src/renderer/Choice.tsx), [updates](desktop/src/renderer/Updates.tsx) and [icons](desktop/src/renderer/Icon.tsx). The [surface contract](.impeccable/surfaces/desktop-src-renderer-app-tsx.md) owns the selected direction; [archived OpenSpec tasks](openspec/changes/archive/2026-11-13-preview-dark-astryx-theme/tasks.md) retain preview evidence. The [earlier redesign](openspec/changes/archive/2026-11-12-redesign-desktop-interface/tasks.md) remains the panel's implementation history.
 
 **Key Characteristics:**
 
 - Charcoal tonal layers with off-white primary text and muted supporting text.
-- Compact controls, restrained blue selection and visible keyboard focus.
+- Compact Astryx controls, restrained blue selection and visible keyboard focus.
 - Reserved panel chrome that reveals without moving the answer.
 - Advanced settings disclosed only when requested or needed for validation.
 - Configurable panel appearance with a fixed readable settings palette.
@@ -180,23 +215,26 @@ The palette is neutral and low-chroma; blue identifies actions, focus and select
 
 ### Primary
 
-- **Muted action blue** (`ui-primary`, `ui-primary-hover`): Save and the default panel's Send action; hover brightens the settings action.
-- **Pale focus blue** (`ui-accent`): keyboard outlines, carets, range/checkbox accents and progress.
+- **Muted action blue** (`ui-primary`): Astryx Save and the default panel's Send action. Astryx hover/press states layer the inherited interaction overlays over the base color.
+- **Pale focus blue** (`ui-accent`): panel/native-control and field-wrapper keyboard outlines, carets, range accents and progress. Astryx buttons and checked checkboxes retain the primary accent role.
 - **Selection blue** (`ui-selected-bg`, `ui-selected-text`): the active settings category; the light text also identifies selected choice options.
-- **Action borders** (`ui-primary-border`, `ui-primary-border-hover`): fine edges around the primary settings action.
-- **Text selection** (`selection`): translucent blue behind selected text.
+- **Text selection** (`selection`): translucent blue behind selected panel text. Dialog selection uses the selected surface/text pair.
 
 ### Neutral
 
 - **Charcoal canvas** (`ui-bg`): opaque setup and settings background.
 - **Deep rail** (`ui-rail`): sidebar separation without a card or shadow.
-- **Raised control charcoal** (`ui-input`): fields and ordinary settings buttons.
-- **Hover charcoal** (`ui-hover`): interactive emphasis and the active choice row.
+- **Raised control charcoal** (`ui-input`): fields and choice controls/popups.
+- **Neutral action layer** (`ui-neutral`): the inherited translucent secondary-button fill over the dialog canvas.
+- **Interaction overlays** (`ui-overlay-hover`, `ui-overlay-pressed`): inherited Astryx button states; the hover overlay also marks the active choice row. Their canonical values retain Astryx's light/dark form; dialogs explicitly use dark mode.
 - **Off-white** (`ui-text`) and **muted gray** (`ui-muted`): primary content and supporting copy. White (`ui-white`) is reserved for blue primary actions.
-- **Fine border** (`ui-border`) and **interactive border** (`ui-interactive-border`): section/control separation and hovered controls or popup edges.
+- **Fine border** (`ui-border`): section and control separation.
+- **Interactive border** (`ui-interactive-border`): emphasized field boundaries, unchecked checkbox indicators, hovered choice controls and popup edges. The default field and checkbox borders exceed 3:1 contrast against both the dialog canvas and the control fill.
 - **Default panel surface** (`panel-default-bg`) and **default panel control** (`panel-default-input`): resolved fresh appearance, including quantized background alpha and the input color mixed toward the foreground.
 
 Validation uses warm, readable error text (`ui-error-text`) on a dark warm surface (`ui-error-bg`), with a separate invalid-field border (`ui-invalid-border`). Keep the written error and field association alongside the color.
+
+The retained `ui-*` documentation names map to SC Compact's `--color-*` roles: canvas/body, rail/muted, input/surface, primary/accent, selected/accent-muted and focus/icon-accent. Change the theme source and rebuild through the registry when extending dialogs; panel preferences continue to use their existing appearance tokens.
 
 **The Independent Appearance Rule.** Panel preferences change the panel and its preview. Setup and Settings retain the fixed opaque palette. Fresh setup and explicit Restore appearance use 10% background transparency, 100% text visibility and the default panel type role. Existing saved appearance and frozen historical missing-field fallbacks remain authoritative; loading does not rewrite them.
 
@@ -208,13 +246,20 @@ Validation uses warm, readable error text (`ui-error-text`) on a dark warm surfa
 
 ### Hierarchy
 
-- **Headline:** the selected settings page heading, with a compact line height and slight negative tracking.
+- **Headline:** the selected settings page heading, with a compact line height and slight negative tracking. Setup's connection heading uses the separate connection-heading role inherited from Astryx.
 - **Title:** the application/settings header.
 - **Section:** headings inside a settings category.
-- **Body:** form content, labels, ordinary buttons and explanatory text.
-- **Hint:** supporting guidance with more line spacing; small status/navigation labels use the denser label role.
+- **Body:** Astryx body text and text entry. Native choices and plain paragraphs inherit the dialog's line height (1.5).
+- **Field label:** the Astryx label role; choice labels remain ordinary dialog text. Buttons share the medium-weight button role.
+- **Hint:** supporting guidance with more line spacing. Astryx supporting text uses its own denser role; navigation uses the small label role.
 - **Panel answer:** the fresh default only. Answer size remains user-adjustable from 8–28 points; preserve line height, selection, whitespace and wrapping.
 - **Panel composer:** readable question entry independent of the answer's chosen size. Panel status is smaller (11px) and truncates rather than pushing controls out.
+
+Setup's title, connection heading and supporting text use setup-scoped
+`rem` sizes of `0.9375rem`, `1.25rem` and `0.75rem`. They render at
+15px, 20px and 12px with a 16px root and scale with the renderer's default
+font size. Instructions and privacy copy wrap in the scrolling form above
+Save and Cancel.
 
 ## Layout
 
@@ -222,43 +267,51 @@ The panel is a full-window vertical flex surface. Reserve the toolbar row (36px)
 
 Question input is temporary. Its normal bottom composer occupies 52px: controls (40px) plus bottom margin (12px), with an inter-control gap (8px) and side margins (12px). At window heights of 120px or less, the composer occupies 44px: controls (36px) plus bottom margin (8px), with side margins (8px); answer content is hidden while the composer is present. The reserved toolbar remains available. Invisible resize edges are narrow (7px).
 
-Settings uses a left rail (176px) beside a flexible, independently scrolling form. The header and footer sit outside that scroll area; both normally have a minimum height (64px). Form padding is generous relative to controls (24px), with section spacing and fine dividers. Save, Back and edit status remain in the footer.
+Settings uses a left rail (176px) beside a flexible, independently scrolling form. The header and footer sit outside that scroll area; both normally have a minimum height (64px). Form padding is generous relative to controls (24px), with section spacing and fine dividers. Save, Back and edit status remain in the footer. Shortcut fields form two equal columns with visible labels above Astryx inputs; model-budget fields also use two columns. Saved/replacement-key feedback and the Show API key checkbox share a wrapping row.
 
-Below 600px wide, the rail becomes wrapping horizontal navigation, tab icons disappear, form padding reduces to 20px vertically and 16px horizontally, and shortcut/model-budget grids become one column. Keyboard arrows follow the visible orientation. At heights of 420px or less, header/footer minimum heights reduce to 44px/48px and their vertical padding reduces to 8px.
+Below 600px wide, the rail becomes wrapping horizontal navigation, tab icons disappear, form padding reduces to 20px vertically and 16px horizontally, and shortcut/model-budget grids become one column. Keyboard arrows follow the visible orientation. At heights of 420px or less, header/footer minimum heights reduce to 40px and their vertical padding reduces to 8px; content still determines their final height.
 
-The recurring spacing steps are in frontmatter; component-specific padding remains local. Use one clear form column rather than nested decorative containers. Setup uses the same fixed theme, a scrolling form and a sticky footer within that form.
+The recurring spacing steps in frontmatter are resolved sizes at the default root size; Astryx spacing uses rem-based theme tokens. The panel retains its existing pixel geometry. Use one clear form column rather than nested decorative containers. Setup uses the same fixed theme: a connection heading, grouped service/key fields, a separate bordered privacy notice, scrolling content and persistent footer actions outside that content.
 
 ## Elevation & Depth
 
-Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. The only shadow vocabulary is the choice popup (`0 8px 24px #0005`): a local overlay above its field. The popup sits 4px below its control, can open upward near the window bottom, and scrolls at a maximum height (200px).
+Depth comes from charcoal tonal layers and fine borders. Panel and settings sections have no decorative shadows. Choice lists use Astryx's inherited medium shadow (`--shadow-med`), with layered dark ambient shadows and an inset edge. Fields use inherited inset hover/focus feedback. These token values are recorded in the sidecar.
 
-**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve the existing shadow for the choice overlay; use tonal changes and borders for navigation and control states.
+**The Local Depth Rule.** Keep ordinary surfaces flat. Reserve ambient shadow for open choice lists. Use tonal changes, borders and Astryx's inset feedback for control states.
 
 ## Shapes
 
-The main panel has softly rounded corners using the panel radius. Most controls, fields, choice popups and the appearance preview share the control radius. Toolbar buttons and compact error surfaces use the compact radius; choice options use the smaller option radius. Borders are thin (1px). The approved SC mark is a pale-blue screen/chat outline with two off-white answer strokes on a charcoal tile, sourced from `assets/brand/`. Setup and Settings use it as a decorative 28px image beside the title. Application, tray and distribution icons derive from the same master; the tray adds a small badge while working.
+The main panel has softly rounded corners using the panel radius. Astryx's element radius matches the existing control radius; fields, choice popups, privacy/error notices and the appearance preview share it. Toolbar buttons and panel errors use the compact radius; choice options use the smaller option radius. Field and container borders are thin (1px); Astryx buttons are borderless.
 
-Icons are inline outline SVGs: current text color, rounded caps and joins, a consistent stroke (1.7) and a standard size (18px). Sidebar icons reduce to 16px. Icon-only actions retain accessible names and tooltips.
+The approved SC mark uses a pale-blue screen and answer bubble on a charcoal tile. Setup and Settings show the decorative artwork beside the title at Astryx's small element size. The window, tray and package icons share the same master. The tray adds a small badge during a request.
+
+Control icons are inline outline SVGs with the current text color, rounded caps and joins, a consistent stroke (1.7) and a standard size (18px). Sidebar icons reduce to 16px. Icon-only actions retain accessible names and tooltips.
 
 ## Components
 
 ### Buttons
 
-Compact, quiet controls use the control radius, fine borders and a minimum height (36px). Ordinary buttons use the raised control surface; hover changes the surface and border. Save uses the primary action color and stronger text weight. Footer actions have a minimum width (78px). Disabled buttons and inputs halve opacity and use the default cursor.
+Compact Astryx buttons use the control radius, medium-weight labels, no border and the medium element height (36px). Ordinary secondary actions use the inherited neutral layer; Back and Cancel use transparent ghost buttons. Save uses the primary action color. Footer actions have a minimum width (80px). Disabled controls halve opacity and use the default cursor; retain Astryx's disabled behavior, including its `aria-disabled` form.
 
-Global keyboard focus uses an accent outline (2px) with an offset (2px), including buttons, fields, disclosures and focusable content. Settings button background/border transitions take 120ms with ease-out. Reduced-motion preference disables all transitions and animations.
+Astryx buttons retain the library's keyboard outline (2px, 3px offset), inherited hover/press overlays and slight press scale (0.98). In setup, Save, Cancel and Show API key use the same pale focus color as the key field. Button state transitions use the fast theme duration (125ms) and standard easing. Native dialog controls, disclosures and focusable page content use the pale focus outline (2px, 2px offset). The legacy panel focus rule is scoped to the answer panel. Reduced-motion preference disables transitions and animations, and Astryx suppresses press scaling.
 
 ### Inputs / Fields
 
-Fields share the control surface, border and radius, with distinct muted placeholders and an accent caret. Textareas grow vertically up to 180px. Labels remain visible above fields; hint and error associations remain programmatic. Read-only fields use muted text, and invalid fields receive the warm border alongside a readable error. Range and checkbox controls reuse the pale focus blue.
+Astryx TextInput and TextArea share the control surface, emphasized border, radius, muted placeholders and pale accent caret. TextInput's wrapper is 36px high with compact internal padding (4px 8px); textareas retain vertical resize and start at four rows for custom instructions. Labels remain visible above fields; hint and error associations remain programmatic. Shortcut inputs remain read-only while recording keys. Invalid fields use Astryx's error status, warm border and status icon alongside the associated written error. Native number, range and color controls remain token-styled.
+
+Keyboard focus belongs to the complete rounded TextInput/TextArea wrapper: `:has(:focus-visible)` adds a pale blue outline (2px, 2px offset). The inner native input/textarea has no outline. Preserve the warm invalid border while focused, so keyboard focus and validation remain distinct. The inherited inset focus feedback remains inside this wrapper.
+
+Show API key uses Astryx CheckboxInput with a small indicator and muted field-label text. Keep the label attached to its input, the library's checked/focus/disabled states, and the Settings feedback/reveal row's wrapping behavior.
 
 ### Choices
 
-Choices are full-width controls with a small chevron and a bordered local popup. Editable choices keep suggestions behind a separate chevron button. The active option receives the hover surface; the saved option receives selected text and stronger weight. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+Choices are full-width controls with a small chevron and a bordered local popup. Their DOM-only list stays inside the protected Electron window. Editable choices keep suggestions behind a separate chevron button. The active option receives the inherited hover overlay. In the setup API service list, a 2px pale blue inset outline follows the active option. The current selection keeps its accent text and stronger weight while the outline moves to another row. Arrow keys, Home/End, Enter/Space, Escape and Tab retain the component's existing navigation and dismissal behavior.
+
+In Setup, the service list opens 4px below **API service** in the form's normal flow. The control and list fit within the scrolling content, and the list scrolls independently to reveal the active option. In Settings, choice popups overlay the form 4px below the control and can open upward near the window bottom. Choice lists have a maximum height of 200px at the default text size.
 
 ### Navigation
 
-Five settings categories use muted icon-and-label tabs. The selected category receives the blue-toned surface and lighter text; hover brightens the label. Only the selected tab joins the normal tab sequence. Up/Down navigate the rail; Left/Right navigate the narrow layout; Home/End work in both orientations.
+Five settings categories use muted icon-and-label Astryx ghost buttons with tab semantics. The selected category receives the blue-toned surface and lighter text; hover uses Astryx's interaction overlay. Only the selected tab joins the normal tab sequence. Up/Down navigate the rail; Left/Right navigate the narrow layout; Home/End work in both orientations.
 
 ### Answer panel and toolbar
 
@@ -268,7 +321,7 @@ The panel's background alpha and answer text alpha are independent. Inputs stay 
 
 ### Temporary composer
 
-The question field and square Send action sit below the answer with no overlay. Enter submits from question input; Enter on a focused toolbar button invokes that button. Empty or busy input disables Send. Errors sit above the composer in a compact readable surface. Keep the normal and compact geometry described in Layout aligned with native input exclusion and window sizing.
+The question field and distinct Send and Send with screenshot actions sit below the answer with no overlay. Enter sends text only; Ctrl+Enter from focused input includes one fresh screen capture. The visible shortcut hint and measured composer height keep the screen-send action discoverable and native hover exclusion aligned. Enter on a focused toolbar button invokes that button. Empty or busy input disables both send actions. Errors sit above the composer in a compact readable surface. Keep the normal and compact geometry described in Layout aligned with native input exclusion and window sizing.
 
 ### Advanced disclosures and feedback
 
@@ -285,6 +338,7 @@ Loading, saving, busy, empty and failure states use concise text in their owning
 - **Do** retain visible keyboard focus and honor reduced motion.
 - **Do** keep the settings palette fixed while previewing configurable panel appearance.
 - **Do** use labeled fields, restrained SVG icons and explicit Save/Back actions.
+- **Do** extend dialogs through SC Compact tokens and Astryx component props, keeping wrapper focus visible alongside errors.
 - **Do** reveal advanced controls when requested or required to correct validation.
 
 ### Don't:
