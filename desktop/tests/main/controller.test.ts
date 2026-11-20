@@ -4,6 +4,7 @@ import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { ShortcutRestoreError } from '../../src/platform/shortcuts';
 import { canResizePanel } from '../../src/main/controller';
+import { settingsDraftSchema } from '../../src/main/validation';
 import { controllerFixture as fixture, deferred } from './controller-fixture';
 
 describe('production lifecycle with injected native boundaries', () => {
@@ -322,6 +323,40 @@ describe('production lifecycle with injected native boundaries', () => {
     expect(saved).toMatchObject({ Models: { AnswerModel: 'gpt-synthetic-answer', VisionModel: 'gpt-synthetic-vision' }, PipelineMode: 'Thorough' });
     expect(modelPipeline(saved.ModelPipelines, originalModel)).toBe('Direct');
     expect(modelPipeline(saved.ModelPipelines, saved.Models!)).toBe('Thorough');
+  });
+  it('rejects an incompatible screen model inherited by a stale Settings retry before registering or writing', async () => {
+    const f = fixture();
+    const flash = defaultModels('DeepSeek');
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.Models = { ...flash, VisionModel: 'DEEPSEEK-V4-PRO' };
+    first.keyUpdates.DeepSeek = 'synthetic-deepseek-key';
+    first.pipelineUpdates = rememberModelPipeline([], flash, 'Direct');
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(settingsDraftSchema.parse(first));
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Models = flash;
+    second.modelEdits = ['Provider'];
+    second.pipelineUpdates = rememberModelPipeline([], flash, 'Thorough');
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    write.resolve();
+    await expect(saving).resolves.toBe('saved');
+    const committed = f.controller.getState();
+    f.applyShortcuts.mockClear();
+
+    await expect(f.controller.saveSettings(settingsDraftSchema.parse(second))).rejects.toMatchObject({ code: 'INVALIDMODEL' });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledOnce();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true,
+      settingsModels: first.values.Models, settingsModelPipelines: committed.settingsModelPipelines });
+
+    second.modelEdits.push('VisionModel');
+    await expect(f.controller.saveSettings(settingsDraftSchema.parse(second))).resolves.toBe('saved');
+    expect(f.save.mock.calls[1]![0]).toMatchObject({ Models: flash, PipelineMode: 'Thorough' });
   });
   it('waits for shortcut rollback and keeps a newer draft and recording active after a write failure', async () => {
     const f = fixture();

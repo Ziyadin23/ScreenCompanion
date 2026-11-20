@@ -29,6 +29,7 @@ async function renderController(production: ReturnType<typeof controllerFixture>
   driver.api.command.mockImplementation(api.command);
   driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
   driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
+  driver.api.discardSettings.mockImplementation(api.discardSettings);
   await production.controller.initialize();
   await production.controller.command({ type: 'toggleVisibility' });
   render(<App />);
@@ -337,6 +338,128 @@ describe('production Settings save overlap', () => {
     });
     expect(displayed).toEqual({ AnswerModel: answer, VisionModel: vision });
     expect(production.run).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { saved: 24000, explicit: undefined, expected: 24000 },
+    { saved: 8000, explicit: undefined, expected: 8000 },
+    { saved: 24000, explicit: '12000', expected: 12000 }
+  ])('uses a $expected token limit after overlapping a save of $saved with a reasoning edit', async ({ saved, explicit, expected }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true };
+    original.ProviderKeys.DeepSeek = 'synthetic-deepseek-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel(); tab('Models & API'); advanced(); choose('API service', 'DeepSeek');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer output token limit' }), { target: { value: String(saved) } });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel(); tab('Models & API'); advanced(); choose('API service', 'DeepSeek');
+    choose('DeepSeek reasoning', 'High');
+    const budget = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer output token limit' });
+    expect(budget.value).toBe('16000');
+    if (explicit) fireEvent.change(budget, { target: { value: explicit } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(budget.value).toBe(String(expected));
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].Models).toMatchObject({ Thinking: 'High', AnswerTokenLimit: expected });
+  });
+
+  it('validates an appearance-only retry against the service committed by the earlier save', async () => {
+    const pro = { ...defaultModels('DeepSeek'), AnswerModel: 'deepseek-v4-pro' };
+    const original = { ...defaultSettings('synthetic-deepseek-key'), Models: pro, CommandsShown: true };
+    original.ProviderKeys.OpenAI = 'synthetic-openai-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+
+    await openSettingsFromPanel(); tab('Models & API'); advanced();
+    choose('Request pipeline', 'Direct screenshot');
+    choose('API service', 'OpenAI');
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel(); tab('Panel');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '18' } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(modelPipeline(production.save.mock.calls[0]![0].ModelPipelines, pro)).toBe('Direct');
+
+    tab('Models & API');
+    const displayedService = screen.getByRole('combobox', { name: 'API service' }).textContent;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('text answering only');
+      expect(production.save).toHaveBeenCalledTimes(2);
+    });
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ Models: defaultModels(), PipelineMode: 'Thorough',
+      Appearance: { TextSizePoints: 18 }, ApiKey: 'synthetic-openai-key' });
+    expect(displayedService).toBe('OpenAI');
+  });
+
+  it.each([
+    { field: 'Visibility', label: 'Show or hide panel shortcut' },
+    { field: 'Capture', label: 'Capture and answer shortcut' }
+  ] as const)('returns from Settings and restores the saved $field shortcut once it becomes available', async ({ field, label }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true };
+    const production = controllerFixture(original);
+    const savedBinding = original[field];
+    let occupied = false;
+    let registered: typeof savedBinding | null = null;
+    production.platform.applyShortcuts = async (settings, recording) => {
+      const binding = recording && field === 'Capture' ? null : settings[field];
+      if (occupied && binding?.Key === savedBinding.Key && binding.Modifiers === savedBinding.Modifiers)
+        throw new Error('Synthetic occupied shortcut');
+      registered = binding;
+    };
+    const driver = await renderController(production);
+    await act(async () => {
+      const answering = production.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+      production.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+      await answering;
+    });
+    await openSettingsFromPanel();
+    disclose('Keyboard shortcuts');
+    const edited = screen.getByRole('textbox', { name: label });
+    fireEvent.focus(edited);
+    fireEvent.keyDown(edited, { key: 'F9', code: 'F9', keyCode: 120, ctrlKey: true, shiftKey: true });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+    expect(registered).toEqual({ Key: 120, Modifiers: 6 });
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    disclose('Keyboard shortcuts');
+    const recording = screen.getByRole('textbox', { name: label });
+    await act(async () => fireEvent.focus(recording));
+    expect((recording as HTMLInputElement).value).toContain('Listening');
+    occupied = true;
+    await act(async () => {
+      write.reject(new Error('Synthetic storage failure'));
+      await Promise.allSettled([driver.api.saveSettings.mock.results[0]!.value]);
+    });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, answer: 'Retained answer' });
+    expect(production.controller.getSettingsDraft().values[field]).toEqual(savedBinding);
+    if (field === 'Visibility') {
+      expect((await screen.findByRole('alert')).textContent).toMatch(/SHORTCUTS-RESTOREFAILED.*report [\da-f]{12}/);
+      occupied = false;
+    }
+
+    fireEvent.click(screen.getByTestId('settings-back'));
+    expect((await screen.findByTestId('answer-text')).textContent).toBe('Retained answer');
+    if (field === 'Capture') {
+      expect(registered).toBeNull();
+      expect(screen.getByRole('alert').textContent).toContain('Restart SC');
+      await openSettingsFromPanel();
+      expect((await screen.findByRole('alert')).textContent).toMatch(/SHORTCUTS-RESTOREFAILED.*report [\da-f]{12}/);
+      occupied = false;
+      fireEvent.click(screen.getByTestId('settings-back'));
+      expect((await screen.findByTestId('answer-text')).textContent).toBe('Retained answer');
+    }
+    expect(registered).toEqual(savedBinding);
+    expect(production.controller.getState()).toMatchObject({ shortcutRecovery: null, settingsDirty: false, error: null });
+    expect(production.save).toHaveBeenCalledOnce();
   });
 
   it.each(['succeeds', 'fails'])('offers a busy retry before the earlier provider key write %s', async outcome => {

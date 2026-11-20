@@ -63,7 +63,7 @@ The 2026-11-02 audit findings were checked against main and filed on **2026-11-1
 
 | Outcome | Priority | Intake |
 | --- | --- | --- |
-| Preserve a new Settings draft when an earlier save completes | P1 | Host verification covers overlapping provider and key saves and compact shortcut recovery. Independent review, Windows qualification and local beta delivery remain open. [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59), [source checkpoint](../openspec/changes/fix-settings-save-session/tasks.md#provider-overlap-and-large-answer-text-on-2026-11-20) |
+| Preserve a new Settings draft when an earlier save completes | P1 | Host verification covers shortcut recovery on Back, overlapping model and key saves, and compact wheel scrolling. Independent review, Windows qualification and local beta delivery remain open. [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59), [source checkpoint](../openspec/changes/fix-settings-save-session/tasks.md#shortcut-recovery-and-effective-save-validation-on-2026-11-20) |
 | Reject malformed extracted option text before answering | P1 | [#60](https://github.com/Ziyadin23/ScreenCompanion/issues/60) remains open for Windows UI, packaged startup, runnable beta handoff and an application PR. [Frozen beta.12 pilot and remaining gates](../openspec/changes/add-local-langgraph-workflow/tasks.md#application-pilot-and-remaining-acceptance) |
 | Persist final user dimensions after returning to an old programmatic size | P2 | [#61](https://github.com/Ziyadin23/ScreenCompanion/issues/61) |
 | Reject present malformed Responses completion statuses | P2 | [#62](https://github.com/Ziyadin23/ScreenCompanion/issues/62), [OpenSpec owner](../openspec/changes/validate-responses-status/tasks.md) |

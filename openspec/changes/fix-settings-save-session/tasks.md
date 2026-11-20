@@ -38,6 +38,25 @@
 - The affected portable suites passed 267 tests across nine files. `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` passed type checking, lint, all 1,280 portable tests across 36 files and production bundles. The built Astryx doctor reported 19 passes and two existing theme-font warnings. The setup Chromium preview passed all 16 cases. Each check exited 0.
 - The host checks use synthetic keys, storage and shortcut state. The #19 and #61 work retains ownership of native panel sizing and persistence. Task 1.3 still requires the independent reviews and source PR. The project owner coordinates those steps, then Windows qualification and local beta handoff in tasks 2.1 and 2.2.
 
+### Shortcut recovery and effective save validation on 2026-11-20
+
+- Work resumed on `Ziyadin23/issue-59-settings-save-ownership` at `c3af3d0c347a5493c6c3ac09b929a3bc7b283b99`, tree `1caea602755c941047b33e1cc32ad35eab122bf7`. The verified `desktop` subtree is `2e6285b287e90d91d96eac19dafe880b4f36076f`. It identifies the controller, model merge, Settings and Answer code together with the exact controller, renderer and Chromium regressions.
+- On an extracted copy of the baseline, the same seven overlap cases produced six failures and one pass, exit 1. Back could leave the rejected visibility chord active or could stay in Settings when Capture was held. An appearance-only retry failed validation against the old service. Reasoning replaced newly saved limits of 24,000 and 8,000 with 16,000. A schema-valid stale draft saved Pro for active screen reading. The same command passed all seven cases on the correction, exit 0.
+
+  ```sh
+  npm --prefix desktop test -- tests/main/controller.test.ts tests/renderer/workflows.test.tsx -t 'incompatible screen model inherited|token limit after overlapping|appearance-only retry|becomes available'
+  ```
+
+- The baseline build passed, then `node --test --test-concurrency=1 desktop/tests/preview/shortcut-recovery.test.mjs` passed four cases and failed three, exit 1. The same test passed all seven on the corrected production renderer, exit 0. Full ±120 wheel steps reach all eleven lines in each direction at 16, 18 and 28 points in a 180×80 Answer. At 18 points the first down step shows the complete line at y=30–63 and the recovery text at y=12–29. The 180×128 Question retains its input and both keyboard Send controls. The measured header, window selection, native sizing and persistence stay under their existing owners.
+- All resource-heavy commands used `flock /tmp/sc-20261119-desktop-verify.lock env VITEST_MAX_WORKERS=1` on Fedora 44 x64 with Node 22.23.1. The affected suites passed 274 tests in nine files. `npm --prefix desktop run verify` passed type checking, lint, 1,287 tests in 36 files and production bundles. From `desktop`, `node_modules/.bin/astryx doctor --built out/renderer` reported 19 passes, two existing theme-font warnings and zero failures. `node_modules/.bin/playwright test --config playwright.preview.config.ts --workers=1` passed 16 setup cases. All exited 0.
+
+  ```sh
+  npm --prefix desktop test -- tests/main/controller.test.ts tests/main/diagnostics.test.ts tests/main/panel-size.test.ts tests/renderer/workflows.test.tsx tests/renderer/preview.test.ts tests/renderer/updates.test.tsx tests/pipeline/configuration.test.ts tests/platform/platform.test.ts tests/storage
+  ```
+
+- `node .github/scripts/workflow-checks.mjs selftest` passed. The same script's `docs` check passed for 118 Markdown files and 513 local links and anchors. `openspec validate --all --strict --no-interactive` passed all 12 items. `git diff --check` passed. Each command exited 0.
+- Verification used synthetic keys, storage, shortcut registration and isolated headless Chromium. Task 1.3 remains open for the coordinator's fresh independent standards and acceptance review, PR publication and integration. The #84 lab owner recorded release on 2026-11-20. Task 2.1 still requires fresh readiness and Windows native, encrypted vault, UI and recorder verification. Task 2.2 still requires packaged startup and a verified local beta handoff.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

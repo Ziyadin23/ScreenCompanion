@@ -9,7 +9,7 @@ import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, Hotk
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
-import { applyModelEdits } from '../contracts/model-selection';
+import { applyModelEdits, screenModelError } from '../contracts/model-selection';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
@@ -48,6 +48,7 @@ const DATA_NOTICE: Record<ApiProvider, string> = {
 export function Settings({ state }: { state: AppState }) {
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
   const draftRef = useRef<SettingsDraft | null>(null);
+  const [originalModels, setOriginalModels] = useState<ModelSelection | null>(null);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const [page, setPage] = useState<Page>('Answer & shortcuts');
@@ -85,6 +86,7 @@ export function Settings({ state }: { state: AppState }) {
       copy.keyUpdates = {};
       copy.modelEdits = [];
       draftRef.current = copy;
+      setOriginalModels(copy.values.Models);
       setDraft(copy);
       setModelDrafts({});
     }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
@@ -142,15 +144,21 @@ export function Settings({ state }: { state: AppState }) {
   function updateValues(patch: Partial<SettingsDraft['values']>) {
     modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
   }
-  const models = applyModelEdits(state.settingsModels, draft?.values.Models ?? defaultModels(), draft?.modelEdits ?? []);
+  const savedModels = state.settingsModels ?? originalModels;
+  const models = applyModelEdits(savedModels, draft?.values.Models ?? defaultModels(), draft?.modelEdits ?? [], originalModels);
   const provider = models.Provider;
   const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
   const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
   const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
   function updateModels(patch: Partial<Omit<ModelSelection, 'Provider'>>) {
     const fields = Object.keys(patch) as ModelField[];
-    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: { ...models, ...patch } },
-      modelEdits: [...new Set([...(previous.modelEdits ?? []), ...fields])] }));
+    modifyDraft(previous => {
+      const next = { ...models, ...patch };
+      const modelEdits = [...new Set([...(previous.modelEdits ?? []), ...fields])];
+      if (patch.Thinking && patch.Thinking !== 'None' && !modelEdits.includes('AnswerTokenLimit') && (next.AnswerTokenLimit ?? 0) < 16000)
+        next.AnswerTokenLimit = 16000;
+      return { ...previous, values: { ...previous.values, Models: next }, modelEdits };
+    });
   }
   function changePipeline(mode: PipelineMode) {
     if (!draft) return;
@@ -164,8 +172,9 @@ export function Settings({ state }: { state: AppState }) {
     const fields = draft.modelEdits?.filter(field => field !== 'Provider') ?? [];
     setModelDrafts(previous => ({ ...previous, [provider]: { models, fields } }));
     const next = modelDrafts[selected];
-    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: next?.models ?? defaultModels(selected) },
-      modelEdits: ['Provider', ...(next?.fields ?? [])] }));
+    const modelEdits: ModelField[] = ['Provider', ...(next?.fields ?? [])];
+    const selectedModels = applyModelEdits(savedModels, next?.models ?? defaultModels(selected), modelEdits, originalModels);
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: selectedModels }, modelEdits }));
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
@@ -204,8 +213,8 @@ export function Settings({ state }: { state: AppState }) {
     });
     if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
     if (!draft.keyUpdates[provider]?.trim() && !hasSavedKey) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
-    if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
-      (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
+    const screenError = screenModelError(provider, pipeline === 'Direct' ? models.AnswerModel : models.VisionModel);
+    if (screenError) return model(screenError, pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
     const applied = applyModelPipelineUpdates({ ...draft.values, ModelPipelines: savedPipelines }, draft.pipelineUpdates, models);
     if (!validModelPipelines(applied.ModelPipelines))
@@ -249,7 +258,7 @@ export function Settings({ state }: { state: AppState }) {
   }
   async function back() {
     if (savingRef.current || choosingColor) return;
-    stopRecording(); setError('');
+    setError('');
     // Clear typed replacements before leaving, including when IPC fails.
     if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     try { await window.sc.discardSettings(); }
@@ -401,8 +410,7 @@ export function Settings({ state }: { state: AppState }) {
           <p className="hint" id="model-help">Choose a suggestion or enter an exact model ID. Screen reading requires image support; answering requires structured responses and support for any task images.</p>
           <VStack className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
             display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={blocked || provider !== 'DeepSeek'}
-            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
-              ...(value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? { AnswerTokenLimit: 16000 } : {}) })} />
+            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning })} />
             <VStack><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
               type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
               value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></VStack></VStack>

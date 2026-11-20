@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
-import { applyModelEdits } from '../contracts/model-selection';
+import { applyModelEdits, screenModelError } from '../contracts/model-selection';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
@@ -42,7 +42,7 @@ function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, {
   const result = applyDraftEdits(current, original, edited);
   result.Appearance = applyDraftEdits(current.Appearance, original.Appearance, edited.Appearance);
   if (modelEdits && edited.Models) {
-    result.Models = modelEdits.length ? applyModelEdits(current.Models, edited.Models, modelEdits) : current.Models;
+    result.Models = applyModelEdits(current.Models, edited.Models, modelEdits, original.Models);
   } else if (current.Models && edited.Models && current.Models.Provider === edited.Models.Provider) {
     const initial = original.Models?.Provider === edited.Models.Provider ? original.Models : defaultModels(edited.Models.Provider);
     result.Models = applyDraftEdits(current.Models, initial, edited.Models);
@@ -259,10 +259,21 @@ export class ApplicationController {
   private changeShortcuts(change: { settings?: VaultData; recording?: boolean; session?: number }): Promise<void> {
     const applied = this.shortcutChanges.then(async () => {
       if (this.exiting || (change.session !== undefined && !this.ownsSettings(change.session))) return;
-      const settings = change.settings ?? this.registeredShortcutSettings ?? this.settings;
+      const endingRecording = change.recording === false && !change.settings;
+      // An in-flight Save owns its provisional bindings through persistence and rollback.
+      const retrySaved = endingRecording && this.state.shortcutRecovery !== null && !this.state.settingsSaving;
+      const settings = change.settings ?? (retrySaved ? this.settings : this.registeredShortcutSettings ?? this.settings);
       const recording = change.recording ?? this.recording;
-      if (!settings || (!change.settings && recording === this.recording)) return;
-      await this.deps.platform.applyShortcuts(settings, recording, this.onAction);
+      if (!settings || (!change.settings && !retrySaved && recording === this.recording)) return;
+      try { await this.deps.platform.applyShortcuts(settings, recording, this.onAction); }
+      catch (error) {
+        if (!endingRecording) throw error;
+        if (!this.exiting && !this.state.shortcutRecovery) {
+          this.reportShortcutRestoreFailure();
+          this.publish();
+        }
+        return;
+      }
       if (this.exiting) return;
       this.registeredShortcutSettings = settings;
       this.recording = recording;
@@ -325,7 +336,9 @@ export class ApplicationController {
     const pipelineSettings = applyModelPipelineUpdates(committed, draft.pipelineUpdates, values.Models);
     const candidate: VaultData = { ...structuredClone(values), ...pipelineSettings, ApiKey: keys[selected], ProviderKeys: keys };
     this.deps.validateSettings(candidate);
-    this.deps.configuration(candidate);
+    const configuration = this.deps.configuration(candidate);
+    const screenError = screenModelError(configuration.provider, configuration.mode === 'Direct' ? configuration.answerModel : configuration.visionModel);
+    if (screenError) throw new AppError('INVALIDMODEL', screenError);
     try { await this.changeShortcuts({ settings: candidate, recording: false }); }
     catch (error) {
       if (error instanceof ShortcutRestoreError) return this.reportShortcutRestoreFailure();
@@ -346,13 +359,13 @@ export class ApplicationController {
     this.state.settingsKeyPresence = this.keyPresence();
     this.state.settingsModels = candidate.Models;
     this.state.settingsModelPipelines = candidate.ModelPipelines;
-    this.state.shortcutRecovery = null;
+    if (!this.recording && this.registeredShortcutSettings === candidate) this.state.shortcutRecovery = null;
     if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
     return 'saved';
   }
   private reportShortcutRestoreFailure(): SettingsSaveResult {
     this.state.shortcutRecovery = this.deps.diagnostics.failure('Shortcuts',
-      new AppError('RESTOREFAILED', 'Settings were not saved. Restart SC to restore the saved shortcuts.'));
+      new AppError('RESTOREFAILED', 'Restart SC to restore the saved shortcuts.'));
     return 'shortcut-restore-failed';
   }
   private closeSettings(session: number): boolean {

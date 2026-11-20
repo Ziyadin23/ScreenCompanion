@@ -37,12 +37,22 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
+  const answerRecovery = state.surface !== 'input' && state.shortcutRecovery !== null;
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => window.sc.onScroll((delta) => {
     // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
-    const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : text.current;
-    if (viewport) viewport.scrollTop -= delta / 120 * Math.max(1, state.appearance.TextSizePoints * 4);
-  }), [state.appearance.TextSizePoints]);
+    const answer = text.current;
+    const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : answer;
+    if (!viewport || !answer) return;
+    let step = Math.max(1, state.appearance.TextSizePoints * 4);
+    if (answerRecovery) {
+      const lineHeight = parseFloat(getComputedStyle(answer).lineHeight);
+      // With a shared scroll area, the first half-step reveals the first line below the header.
+      if (viewport !== answer) step = lineHeight / 2;
+      else if (answer.clientHeight < 2 * lineHeight) step = lineHeight;
+    }
+    viewport.scrollTop -= delta / 120 * step;
+  }), [state.appearance.TextSizePoints, answerRecovery]);
   useEffect(() => {
     if (text.current) text.current.scrollTop = 0;
     if (content.current) content.current.scrollTop = 0;
