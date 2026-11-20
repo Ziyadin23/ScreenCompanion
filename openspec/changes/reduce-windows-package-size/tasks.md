@@ -76,6 +76,12 @@ Outcome and all task groups: [issue #84](https://github.com/Ziyadin23/ScreenComp
 - Task 3.2 remains open. The package audit blocks local beta.14 delivery. All 11 earlier transfer files matched and beta.9 remains latest. The issue owner coordinates a corrected package, a complete Windows matrix and independent review before delivery. A changed application binary needs a new version and its own verification.
 - This report changes `docs/STATUS.md`, `docs/VERIFICATION.md` and this task owner. `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs` (119 files, 531 links), `openspec validate --all --strict --no-interactive` (12/12), `node --test tools/agent-workflow/dist/tests/delivery.test.js` (11/11) and `git diff --check` all exited 0. OpenSpec remains at 3 of 6 tasks.
 
+## Windows file filter correction (2026-11-20)
+
+- Continued task 2.2 on protected main `4667e43`. Corrected the Windows file list in `desktop/package.json` and added an archive check to the Windows package commands. The archive reader was already pinned in the development lockfile. Linux packaging and production dependencies retain their previous settings.
+- The check rejected the original optimized beta.14 ASAR and both Windows-built beta.15 ASARs. It accepted the original beta.14 control. The same check failed on an exclusion-only Windows-format build on Fedora and passed on the corrected build from the same input files. The [archive evidence](../../../docs/VERIFICATION.md#windows-application-archive-filter-2026-11-20) records commands, sizes and target limits.
+- Host verification passed 1,259 tests, types, lint and production bundles. Task 2.2 still requires matched Windows EXE, ZIP and installer measurements for the corrected candidate. Tasks 3.1 and 3.2 retain the full Windows qualification, source review and copied-byte handoff. The frozen beta.14 and beta.15 artifacts remain private.
+
 ## Workflow follow-up
 
 - Archive this `skip_specs` change only after all six tracked tasks and required review pass; verify moved links, documentation and strict OpenSpec. Keep it active with this concrete Windows qualification/delivery dependency while those tasks remain open.
