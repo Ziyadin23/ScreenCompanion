@@ -16,14 +16,14 @@ recordings and local state belong outside this repository.
 
 Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
 
-Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and unfinished Windows gates. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
+Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and the Windows gates pending at that checkpoint. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
 | Windows first-run setup beta.15 | The protected setup checks and key-free portable startup passed on frozen `96d7adc`. Windows native, vault and #62 pipeline checks passed. | The ASAR inventory blocks delivery. See the [candidate record](#beta15-windows-first-run-setup-2026-11-20). |
 | Windows package size beta.14 | Matched Windows builds saved 99.26 MiB unpacked. Windows native 54, vault 9/143, installed and portable startup, and locale checks passed. | The optimized ASAR contains development files. The UI matrix passed 35 cases, failed the native color picker case and left two cases unrun. Package acceptance, full UI and local delivery remain open in [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). See the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20). |
-| Astryx beta.13 qualification | The preserved candidate passed Windows native 54, vault 9/143, archive inspection, direct portable startup and a bounded nine-phase Edge recording. Earlier host and Linux evidence retains its original scope. | The Windows UI matrix ended with 33 passes, two stale Settings-locator failures and three unrun. Full UI and local delivery remain open in #63. See [Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) and the [host and Linux checkpoint](#astryx-beta13-qualification-checkpoint-2026-11-17). |
-| Astryx interface source integration on 15 November | [Combined source checks](#astryx-interface-integration-2026-11-15): host 1,227/34, types/lint/bundles, built doctor and eight synthetic browser views passed. | On 15 November, Windows native and UI checks, packaged startup, a named recorder check and local delivery were pending for beta.13. The [19 November continuation](#astryx-beta13-windows-continuation-2026-11-19) records the native, startup and Edge results. The complete Windows UI matrix and verified transfer of the beta.13 files remain open. |
+| Astryx beta.13 qualification | The retained beta.13 passed all 38 Windows UI cases in one run. All five local handoff files passed copied-byte verification. The earlier native, vault, package, portable startup and Edge results apply to the same build. | Final evidence review and OpenSpec closure are pending in #63. See the [Settings matrix and local handoff](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) and the [earlier Windows attempt](#astryx-beta13-windows-continuation-2026-11-19). |
+| Astryx interface source integration on 15 November | Combined source checks passed 1,227 host tests in 34 files, types, lint, bundles, the built doctor and eight synthetic browser views. [Source integration](#astryx-interface-integration-2026-11-15) | The [19 November Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) records native, startup and Edge checks. The [20 November record](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) covers the full UI pass and verified local handoff. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
@@ -123,7 +123,7 @@ The exact optimized NSIS installer and its installed app passed a startup check 
 
 Two separate postflight checks matched the four protected profile records, original installation registration and shortcut files. The Windows guest shut down normally at 4 GiB. The original device filter, snapshots and hardware settings matched before release to the first-run setup queue.
 
-The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. Beta.9 remains the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/reduce-windows-package-size/tasks.md).
+The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. At the close of the beta.14 check, beta.9 was the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/reduce-windows-package-size/tasks.md).
 
 ## Windows application archive filter (2026-11-20)
 
@@ -169,7 +169,7 @@ The first UI attempt discovered all 38 cases but stopped before any ran. Its pri
 
 `npm run package:win` and `npm run package:zip` exited 0. Packaging rebuilt the native addon. The native and vault suites passed again against the final addon before the full UI rerun. Independent extraction found matching x64 application, ASAR and native payloads in the actual installer and portable wrapper. The audit confirmed the embedded beta.13 version, bundled licenses, installer feed metadata, SHA-512 and blockmap structure. The portable ZIP contains exactly the verified EXE and its matching `README.txt`. The scoped Windows startup check uses the portable wrapper and leaves the existing per-user installation in place.
 
-The second UI attempt discovered **38 cases** and ended after **39.4 minutes**, exit 1, with **33 passed, two failed, three unrun and zero retries**. Both Settings appearance cases waited for `.fixed-theme`, a class that the frozen renderer uses only on the startup error surface. The native failure stopped three subsequent serial cases. A separate filtered repeat reproduced the same locator timeout and confirmed the application, test and built payload hashes. The complete matrix gate remains open.
+The second UI attempt discovered **38 cases** and ended after **39.4 minutes**, exit 1, with **33 passed, two failed, three unrun and zero retries**. Both Settings appearance cases waited for `.fixed-theme`, a class that the frozen renderer uses only on the startup error surface. The native failure stopped three subsequent serial cases. A separate filtered repeat reproduced the same locator timeout and confirmed the application, test and built payload hashes. The complete matrix was pending at this checkpoint.
 
 The exact portable EXE launched with an isolated key-free profile. The preview reported beta.13, both submit controls were enabled for unsent synthetic input, and Settings opened by keyboard with the version visible. The wrapper exited 0, its hash matched the audited copy, and the temporary profile was removed. The first metadata probe failed before launch because it used Unix separators for a nested ASAR lookup on Windows. The corrected probe and launch used the unchanged package.
 
@@ -177,7 +177,39 @@ Microsoft Edge **157.0.4341.60** saved a **1920×1080 whole-monitor VP8 WebM** t
 
 Independent postflight matched the protected files, installed application registration and shortcuts. The guest had zero held inputs and test processes. Normal shutdown completed, the temporary hardware filter was restored, and the saved snapshot list matched. The lab was released for #84 at the approved 4 GiB setting.
 
-**Beta.13 is a partial candidate.** Its Windows artifacts and byte checks are retained privately. The original RPM was unavailable at its recorded digest. A replacement built from the frozen source has SHA-256 `37b2cda459301e2051e2fa7155269efdb856b6c8a5a1c42e26998f31c08e5ee7`. All 83 extracted payload entries matched the retained original, and all 11 isolated Linux checks passed on the replacement. It is retained for the local handoff. The latest verified local handoff remains beta.9. A two-test correction now checks the visible Settings background. On the frozen renderer, its host probe rejected both a transparent background and one changed to the panel color. Task 3.1 still needs independent review of the test correction and a fully passing Windows matrix. Task 3.2 needs the qualified artifact set and copied-byte verification. Beta.10 remains tied to its earlier interrupted matrix under [issue #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57).
+**Beta.13 was a partial candidate at this checkpoint.** Its Windows artifacts and byte checks are retained privately. The original RPM was unavailable at its recorded digest. A replacement built from the frozen source has SHA-256 `37b2cda459301e2051e2fa7155269efdb856b6c8a5a1c42e26998f31c08e5ee7`. All 83 extracted payload entries matched the retained original, and all 11 isolated Linux checks passed on the replacement. It is retained for the local handoff. Beta.9 was the latest verified local handoff at this checkpoint. A two-test correction now checks the visible Settings background. On the frozen renderer, its host probe rejected both a transparent background and one changed to the panel color. Task 3.1 still needed independent review of the test correction and a fully passing Windows matrix. Task 3.2 needed the qualified artifact set and copied-byte verification. Beta.10 remains tied to its earlier interrupted matrix under [issue #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57).
+
+## Astryx beta.13 Settings matrix and local handoff (2026-11-20)
+
+Both corrected runs used Windows 11 x64 build 26200 and the frozen beta.13 candidate at `1c0483f90d7f2d39b53e1ed8285667fafa7ae1e3`. The 165 original source files matched manifest digest `19feb82a5a91366ec341bbd63f2a6fdac6704f8eb3a4e56660b4c25e9d441855`. The Settings test overlay changed two files and had SHA-256 `96caeffa0a091b5bb3d77de9b1f328947877552d8adcc3fe9ec7b06aac47bae6`. Its bytes match the merged test-only diff. [Settings test correction](https://github.com/Ziyadin23/ScreenCompanion/pull/120)
+
+Playwright launched pinned Electron 45.0.0 with `out/main/index.js` and the native addon. The guest verified the same six compiled files, embedded Windows executable, ASAR, native addon and numbered package hashes before and after both runs. The archived installer and portable wrapper retained the exact audited payloads. The 54 native checks, nine vault cases with 143 fixture checks, isolated key-free portable startup and nine saved Edge monitor phases retain their original beta.13 scope.
+
+The corrected runs discovered the same 38 cases in the same order and used one Playwright worker and zero retries. Independent readback checked every case and attempt against the raw reports.
+
+| Full matrix | Passed | Failed | Unrun | Exit | Report SHA-256 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Original Settings locators | 33 | 2 | 3 | 1 | `33fbeaa405684b549e97379172d68cab8da720b2cf257ab5665f03df34414afc` |
+| First corrected run | 36 | 2 | 0 | 1 | `eebe96ed2a35954d2700f19c924cbf3c9501345af3587ce26414db1dd2dbc1e9` |
+| Second corrected run | 38 | 0 | 0 | 0 | `883294f1d975266795dd897876c0ff0e3fc1e7c1478593fd9356140153bc06a1` |
+
+Both corrected Settings cases passed in the first corrected run. Two answer resize cases timed out after the hidden-motion sequence. One waited for native visibility after restoration. The other waited for the first geometry observation after a fresh press. The initial focused command selected zero cases because of Windows shell quoting. A focused replay passed both cases after the filter was passed directly to the runner. The second full run took 44.2 minutes and reported zero flaky cases and zero runner errors.
+
+Independent postflight matched the original profiles, installation registration, installed files and shortcuts. It found zero held inputs, application processes or test jobs. The guest shut down normally at 4096 MiB. The original hardware configuration, snapshots and disk chain matched, and a separate process acquired the released lock.
+
+The five local transfer files matched the audited bytes below. The ZIP contains exactly the portable EXE and its matching README. The latest local record identifies beta.13, and the earlier versioned files were retained.
+
+| Local transfer file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.13.exe` | 116,040,469 | `e2a0f973733e4045f6043b1ef9135681811ae7aeefd80b316b7e9c39e6da0405` |
+| `SC-Setup-v0.5.0-beta.13.exe` | 130,012,203 | `71d54adf94e90379e6d8885b5eeeee7c77d023510b63631869ff1547071f5d0f` |
+| `SC-v0.5.0-beta.13.zip` | 116,060,564 | `ea5d09660649274d50dbf71265978a6d0e3da9c6ee85db6a0655af73e35247b6` |
+| `SC-v0.5.0-beta.13-README.txt` | 12,387 | `768f99303a6a91c1a354808bbc87355812de8fbcc9de341a26a510392d089c7d` |
+| `SC-v0.5.0-beta.13-x86_64.rpm` | 95,747,381 | `37b2cda459301e2051e2fa7155269efdb856b6c8a5a1c42e26998f31c08e5ee7` |
+
+The original RPM was unavailable at its recorded SHA-256 `569c5dab5ec0174d60f3cccbe092a5171752b0f84fb62233f51e362a144206b9`. The qualified replacement listed above matched all 83 retained payload entries and passed 11 isolated Linux checks.
+
+The beta.13 transfer is local and the candidate is unpublished. Independent final evidence review and OpenSpec closure are pending in #63. Beta.14 package work, beta.10 qualification and broader recorder, clean-machine, mixed-DPI and installed Linux checks have their own owners. [Astryx #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63), [package optimization #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84), [pipeline #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57)
 
 ## Astryx interface integration (2026-11-15)
 
@@ -279,10 +311,10 @@ filters, identities, lockfile and first-run Commands wait are preserved.
   512 px PNG and produced two 24 px images. The working badge changed 79 pixels
   in the lower-right corner. Both tray PNGs match the original beta.9 evidence.
 
-Beta.9 remains the latest verified local delivery. All five delivered files
-and the latest-build record match their original digests. Both published
-website languages still reference four icon resources that match the approved
-exports. [Original beta.9 and website evidence](#sc-icon-integration-2026-11-12)
+At this icon checkpoint, beta.9 was the latest verified local delivery. All
+five delivered files and the latest-build record matched their original digests.
+Both published website languages still reference four icon resources that match
+the approved exports. [Original beta.9 and website evidence](#sc-icon-integration-2026-11-12)
 
 The refreshed candidate still needs independent review, hosted checks, Windows
 package and UI qualification, a named recorder check, installed Linux checks and
