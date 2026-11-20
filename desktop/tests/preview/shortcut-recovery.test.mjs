@@ -63,6 +63,12 @@ function fits(bounds, width, height) {
   return bounds.top >= 0 && bounds.bottom <= height && bounds.left >= 0 && bounds.right <= width;
 }
 
+async function completeAnswerLines(answer) {
+  const bounds = await geometry(answer);
+  return bounds.lines.filter(line => line.right > line.left).flatMap((line, index) =>
+    line.top >= bounds.top && line.bottom <= bounds.bottom ? [index + 1] : []);
+}
+
 async function showRecovery(page) {
   await page.evaluate(() => globalThis.simulateRecovery());
   const recovery = page.getByRole('alert');
@@ -156,6 +162,59 @@ test('native wheel scrolling keeps each line readable after a keyboard scroll at
     const expected = delta < 0 ? lineNumbers.slice(1) : lineNumbers;
     assert.deepEqual([...readable].sort((left, right) => left - right), expected);
   }
+});
+
+test('native half-notches reach every complete line after a keyboard scroll at 180×121 and 28 points', async t => {
+  const lineNumbers = Array.from({ length: 14 }, (_, index) => index + 1);
+  const page = await openPanel(t, 'answer', 180, 121, 28, lineNumbers.map(line => `Line ${line}`).join('\n'));
+  const answer = page.getByRole('region', { name: 'Answer' });
+  await showRecovery(page);
+  await answer.focus();
+  await answer.evaluate(element => element.addEventListener('scrollend', () => { element.dataset.keyboardScrolled = 'yes'; }, { once: true }));
+  await page.keyboard.press('ArrowDown');
+  await expect(answer).toHaveAttribute('data-keyboard-scrolled', 'yes');
+
+  for (const delta of [-60, 60]) {
+    const readable = new Set(await completeAnswerLines(answer));
+    for (let step = 0; step < 2 * lineNumbers.length + 2; step++) {
+      await page.evaluate(value => globalThis.scrollPanel(value), delta);
+      for (const line of await completeAnswerLines(answer)) readable.add(line);
+    }
+    const expected = delta < 0 ? lineNumbers.slice(1) : lineNumbers;
+    assert.deepEqual([...readable].sort((left, right) => left - right), expected, `native delta ${delta} reaches every remaining line`);
+    const end = delta < 0 ? lineNumbers.at(-1) : 1;
+    assert.ok((await completeAnswerLines(answer)).includes(end), 'continued scrolling leaves the end line readable');
+  }
+});
+
+test('mixed signed native wheel deltas accumulate only for single-line recovery', async t => {
+  const page = await openPanel(t, 'answer', 180, 121, 28, 'One\nTwo\nThree\nFour\nFive');
+  const answer = page.getByRole('region', { name: 'Answer' });
+  const offset = () => answer.evaluate(element => element.scrollTop);
+  const wheel = delta => page.evaluate(value => globalThis.scrollPanel(value), delta);
+
+  await wheel(-60);
+  assert.equal(await offset(), 56, 'ordinary scrolling responds proportionally to a half-notch');
+  await wheel(60);
+  assert.equal(await offset(), 0);
+  await showRecovery(page);
+
+  await wheel(-60);
+  await wheel(30);
+  assert.equal(await offset(), 0, 'opposite fractional deltas cancel before reaching one notch');
+  await wheel(-90);
+  assert.deepEqual(await completeAnswerLines(answer), [2]);
+  await wheel(-180);
+  assert.deepEqual(await completeAnswerLines(answer), [3]);
+  await wheel(90);
+  await wheel(30);
+  assert.deepEqual(await completeAnswerLines(answer), [3], 'the previous partial delta carries across direction changes');
+  await wheel(60);
+  assert.deepEqual(await completeAnswerLines(answer), [2]);
+  await wheel(-240);
+  assert.deepEqual(await completeAnswerLines(answer), [4]);
+  await wheel(240);
+  assert.deepEqual(await completeAnswerLines(answer), [2]);
 });
 
 for (const [textSizePoints, height] of [[16, 80], [18, 80], [28, 80], [28, 173]]) {

@@ -56,14 +56,16 @@ export function Settings({ state }: { state: AppState }) {
   const [page, setPage] = useState<Page>('Answer & shortcuts');
   const body = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const retryButton = useRef<HTMLButtonElement>(null);
   const [advanced, setAdvanced] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [narrow, setNarrow] = useState(() => window.innerWidth < 600);
   const [focusRequest, setFocusRequest] = useState<{ field: string } | null>(null);
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const [instructionFocused, setInstructionFocused] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'failed' | 'retrying' | 'ready'>('loading');
   const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
   const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelDraft>>>({});
   const [showKey, setShowKey] = useState(false);
@@ -76,7 +78,6 @@ export function Settings({ state }: { state: AppState }) {
   const [choosingColor, setChoosingColor] = useState(false);
   const savingRef = useRef(false);
   const alive = useRef(true);
-  const loaded = draft !== null;
 
   useEffect(() => {
     alive.current = true;
@@ -84,7 +85,7 @@ export function Settings({ state }: { state: AppState }) {
   }, []);
   useEffect(() => {
     let cancelled = false;
-    setLoadFailed(false);
+    setLoadStatus(status => status === 'failed' || status === 'retrying' ? 'retrying' : 'loading');
     void window.sc.getSettingsDraft().then((result) => {
       if (cancelled || result.session !== state.settingsSession) return;
       const previous = draftRef.current;
@@ -99,9 +100,15 @@ export function Settings({ state }: { state: AppState }) {
         setOriginalModels(copy.values.Models);
         replaceDraft(copy);
       }
+      const focused = document.activeElement;
+      // Move focus before Retry disappears if the user is still on it.
+      if (retryButton.current ? focused === retryButton.current : !previous && focused === document.body) {
+        heading.current?.focus({ preventScroll: true });
+      }
       setLoadedRevision(state.settingsRevision);
+      setLoadStatus('ready');
       setError('');
-    }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
+    }).catch(() => { if (!cancelled) { setLoadStatus('failed'); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
     return () => { cancelled = true; };
   }, [loadAttempt, state.settingsSession, state.settingsRevision]);
 
@@ -111,8 +118,6 @@ export function Settings({ state }: { state: AppState }) {
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
-  // Focus once after loading, so status updates and draft edits never steal it.
-  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded]);
   useEffect(() => {
     if (!focusRequest) return;
     const field = document.getElementById(focusRequest.field);
@@ -299,10 +304,11 @@ export function Settings({ state }: { state: AppState }) {
       appearanceEdits: [...new Set([...(previous.appearanceEdits ?? []), ...fields])] }));
   }
   const blocked = saving || choosingColor;
+  const showRetry = loadStatus === 'failed' || loadStatus === 'retrying';
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
 
-  return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
+  return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !showRetry) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
     <HStack as="header" className="dialog-header"><HStack className="dialog-title"><Text className="app-mark" aria-hidden="true">SC</Text><Heading level={1}>SC settings</Heading></HStack><Text>v{state.version}</Text></HStack>
@@ -323,18 +329,21 @@ export function Settings({ state }: { state: AppState }) {
     </VStack>
     <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
       <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading><p className="hint">{PAGE_HINTS[page]}</p></VStack>
-      {(!draft || loadFailed) && <VStack className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
-        {loadFailed && <Button label="Try loading again" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</Button>}</VStack>}
+      {(!draft || showRetry) && <VStack className="settings-loading"><p role="status">{loadStatus === 'failed' ? 'Settings unavailable.' : 'Loading settings…'}</p>
+        {showRetry && <Button ref={retryButton} label="Try loading again" type="button" isLoading={loadStatus === 'retrying'} onClick={() => {
+          setLoadStatus('retrying'); setLoadAttempt((value) => value + 1);
+        }}>Try loading again</Button>}</VStack>}
       {draft && <fieldset className="settings-fields" disabled={blocked}>
         <legend className="sr-only">{page} settings</legend>
         {page === 'Answer & shortcuts' && <>
           <section className="form-section" aria-labelledby="answer-behavior-heading"><Heading level={3} id="answer-behavior-heading">Answer behavior</Heading>
           <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
             onChange={(value) => updateResponse('ResponseMode', value as SettingsDraft['values']['ResponseMode'])} />
-          {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
+          {(draft.values.ResponseMode === 'Custom' || instructionFocused || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
           <TextArea id="custom-instruction" label="Custom instruction (used in Custom mode)" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} rows={4}
             ref={(input) => { if (input) input.maxLength = 2000; }} status={invalidField === 'custom-instruction' ? { type: 'error' } : undefined}
             value={draft.values.CustomInstruction}
+            onFocus={() => setInstructionFocused(true)} onBlur={() => setInstructionFocused(false)}
             isDisabled={blocked} onChange={(value) => updateResponse('CustomInstruction', value.slice(0, 2000))} />
           <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></VStack>}</section>
           <details className="advanced-settings" open={shortcutsOpen}>

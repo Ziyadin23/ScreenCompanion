@@ -9,6 +9,7 @@ import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const WHEEL_DELTA = 120;
 const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
   { label: 'Capture screen', icon: 'capture', command: { type: 'capture' }, request: true },
   { label: 'Question', icon: 'question', command: { type: 'showInput' }, request: true },
@@ -39,33 +40,43 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const alive = useRef(true);
   const answerRecovery = state.surface !== 'input' && state.shortcutRecovery !== null;
   useEffect(() => () => { alive.current = false; }, []);
-  useEffect(() => window.sc.onScroll((delta) => {
-    // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
-    const answer = text.current;
-    const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : answer;
-    if (!viewport || !answer) return;
-    let step = Math.max(1, state.appearance.TextSizePoints * 4);
-    if (answerRecovery) {
-      const style = getComputedStyle(answer);
-      const lineHeight = parseFloat(style.lineHeight);
-      const readableHeight = answer.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      // With a shared scroll area, the first half-step reveals the first line below the header.
-      if (viewport !== answer && lineHeight > 0) step = lineHeight / 2;
-      else if (lineHeight > 0 && readableHeight > 0) {
-        // Leave room for a complete line even when a preceding arrow key stopped mid-line.
-        const fullLines = Math.max(1, Math.floor(readableHeight / lineHeight) - 1);
-        step = Math.min(step, fullLines * lineHeight);
-        if (readableHeight < 2 * lineHeight && Math.abs(delta) === 120) {
-          // Align a full notch to the next row when only one fits. Scroll offsets can round to a pixel.
-          const next = delta < 0 ? Math.floor((viewport.scrollTop + 0.5) / lineHeight) + 1 :
-            Math.ceil((viewport.scrollTop - 0.5) / lineHeight) - 1;
-          viewport.scrollTop = next * lineHeight;
-          return;
+  useEffect(() => {
+    let pendingDelta = 0;
+    return window.sc.onScroll((delta) => {
+      // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
+      const answer = text.current;
+      const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : answer;
+      if (!viewport || !answer) return;
+      let step = Math.max(1, state.appearance.TextSizePoints * 4);
+      if (answerRecovery) {
+        const style = getComputedStyle(answer);
+        const lineHeight = parseFloat(style.lineHeight);
+        const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+        const readableHeight = answer.clientHeight - padding;
+        // With a shared scroll area, the first half-step reveals the first line below the header.
+        if (viewport !== answer && lineHeight > 0) step = lineHeight / 2;
+        else if (lineHeight > 0 && readableHeight > 0) {
+          // Leave room for a complete line even when a preceding arrow key stopped mid-line.
+          const fullLines = Math.max(1, Math.floor(readableHeight / lineHeight) - 1);
+          step = Math.min(step, fullLines * lineHeight);
+          if (readableHeight < 2 * lineHeight) {
+            pendingDelta += delta;
+            const notches = Math.trunc(pendingDelta / WHEEL_DELTA);
+            if (!notches) return;
+            pendingDelta -= notches * WHEEL_DELTA;
+            // Align whole notches to readable lines. Scroll offsets can round to a pixel.
+            const top = viewport.scrollTop;
+            const line = notches < 0 ? Math.floor((top + 0.5) / lineHeight) : Math.ceil((top - 0.5) / lineHeight);
+            const lastLine = answer.scrollHeight - padding - lineHeight;
+            viewport.scrollTop = Math.min((line - notches) * lineHeight, lastLine);
+            return;
+          }
         }
       }
-    }
-    viewport.scrollTop -= delta / 120 * step;
-  }), [state.appearance.TextSizePoints, answerRecovery]);
+      pendingDelta = 0;
+      viewport.scrollTop -= delta / WHEEL_DELTA * step;
+    });
+  }, [state.appearance.TextSizePoints, answerRecovery, state.answer, state.error, state.surface]);
   useEffect(() => {
     if (text.current) text.current.scrollTop = 0;
     if (content.current) content.current.scrollTop = 0;

@@ -51,6 +51,19 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **THEN** the newer draft displays, records and validates shortcuts using the current saved bindings and its own edits
 - **AND** Restore shortcuts can explicitly apply defaults from the newer draft
 
+#### Scenario: Refresh while the custom instruction editor has focus
+- **WHEN** an earlier Save changes Answer mode while the custom instruction editor has focus in a newer draft
+- **THEN** the newer draft shows the latest Answer mode unless the user explicitly changed it
+- **AND** the focused editor remains available for typing and keeps its edits through Save
+- **AND** Escape invokes Back for that draft
+
+#### Scenario: Retry a failed Settings read with the keyboard
+- **WHEN** the user activates Try loading again after a Settings read fails
+- **THEN** Save stays unavailable until the latest preferences load
+- **AND** the Retry control retains focus while waiting and after a failure if the user leaves focus there
+- **AND** on success, focus moves to the page heading if Retry still has focus
+- **AND** Escape invokes Back from either control
+
 #### Scenario: Reasoning edit after an overlapping Save
 - **WHEN** a newer draft selects an active DeepSeek reasoning level and leaves the budget untouched
 - **THEN** the draft displays and saves the current saved budget when one exists
@@ -71,4 +84,5 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **WHEN** SC shows shortcut recovery in a compact Answer or Question panel
 - **THEN** the restart guidance fits alongside the usable panel content and controls at supported minimum sizes
 - **AND** the user can read complete retained answer lines at the selected text size using scrolling as needed within the panel dimensions
+- **AND** fine-resolution native wheel input can reach every remaining line after a keyboard scroll
 - **AND** the user can reach both Question send controls by keyboard

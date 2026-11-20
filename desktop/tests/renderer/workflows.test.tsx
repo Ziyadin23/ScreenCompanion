@@ -286,6 +286,47 @@ describe('answer and temporary input', () => {
 });
 
 describe('production Settings save overlap', () => {
+  it.each(['typing', 'Escape'] as const)('keeps the instruction editor active for %s when an earlier save changes Answer mode', async action => {
+    const user = userEvent.setup();
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), CommandsShown: true,
+      ResponseMode: 'Custom', CustomInstruction: 'Original' });
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    const { settingsSession } = production.controller.getState();
+    const instruction = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Custom instruction' });
+    if (action === 'typing') await user.type(instruction, ' before');
+    else await user.click(instruction);
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+
+    const answerMode = screen.getByRole('combobox', { name: 'Answer mode' });
+    expect(answerMode.textContent).toBe('Brief');
+    if (action === 'Escape') {
+      expect(production.controller.getState().settingsDirty).toBe(false);
+      await user.keyboard('{Escape}');
+      expect(driver.api.discardSettings).toHaveBeenCalledWith(settingsSession);
+      await screen.findByTestId('answer-text');
+      expect(production.save).toHaveBeenCalledTimes(1);
+      return;
+    }
+    expect(document.activeElement === instruction).toBe(true);
+    await user.keyboard(' and after');
+    expect(instruction.value).toBe('Original before and after');
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(answerMode);
+    expect(screen.queryByRole('textbox', { name: 'Custom instruction' })).toBeNull();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Brief', CustomInstruction: 'Original before and after' });
+  });
+
   it.each([
     { initial: 'Old instruction', first: '', explicit: false },
     { initial: '', first: 'New instruction', explicit: false },
@@ -937,6 +978,56 @@ describe('settings drafts and protected controls', () => {
     fireEvent.click(save); await screen.findByTestId('answer-text');
     expect(driver.saved[0]!.values.CustomInstruction).toBe('Keep my edit');
   });
+  it.each([
+    { initial: false, movesFocus: false, outcome: 'pending' },
+    { initial: false, movesFocus: false, outcome: 'success' },
+    { initial: false, movesFocus: false, outcome: 'failure' },
+    { initial: true, movesFocus: true, outcome: 'success' },
+    { initial: false, movesFocus: true, outcome: 'failure' }
+  ])('keeps keyboard focus through Settings load retry (initial=$initial, moves focus=$movesFocus, outcome=$outcome)',
+    async ({ initial, movesFocus, outcome }) => {
+      const user = userEvent.setup();
+      const driver = fixture({ surface: 'settings' });
+      const failure = new Error('simulated read failure');
+      if (initial) driver.api.getSettingsDraft.mockRejectedValueOnce(failure);
+      render(<App />);
+      if (!initial) {
+        await screen.findByRole('combobox', { name: 'Answer mode' });
+        driver.api.getSettingsDraft.mockRejectedValueOnce(failure);
+        await act(async () => driver.emit({ settingsRevision: 1 }));
+      }
+      const retry = await screen.findByRole('button', { name: 'Try loading again' });
+      const tabpanel = screen.getByRole('tabpanel');
+      tabpanel.focus();
+      await user.tab();
+      expect(document.activeElement === retry).toBe(true);
+
+      const read = deferred<SettingsDraft>();
+      driver.api.getSettingsDraft.mockClear().mockImplementationOnce(() => read.promise);
+      await user.keyboard('{Enter}');
+      expect(document.activeElement === retry).toBe(true);
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
+      await user.keyboard('{Enter}[Space]');
+      expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(1);
+      if (movesFocus) {
+        await user.tab({ shift: true });
+        expect(document.activeElement === tabpanel).toBe(true);
+      }
+
+      if (outcome === 'success') {
+        await act(async () => read.resolve(driver.getDraft()));
+        expect(screen.queryByRole('button', { name: 'Try loading again' })).toBeNull();
+      } else if (outcome === 'failure') {
+        await act(async () => read.reject(failure));
+        expect(retry.getAttribute('aria-disabled')).not.toBe('true');
+      }
+      const expectedFocus = movesFocus ? tabpanel : outcome === 'success' ? screen.getByRole('heading', { name: 'Answer & shortcuts' }) : retry;
+      expect(document.activeElement === expectedFocus).toBe(true);
+      await user.keyboard('{Escape}');
+      await screen.findByTestId('answer-text');
+      expect(driver.api.discardSettings).toHaveBeenCalledWith(1);
+      if (outcome === 'pending') await act(async () => read.resolve(driver.getDraft()));
+    });
   it.each(['Save', 'Back'])('reports actual draft edits once and clears dirty state after successful %s', async (action) => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     choose('Answer mode', 'Brief'); choose('Answer mode', 'Summarize');
