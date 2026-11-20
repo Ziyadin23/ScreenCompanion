@@ -5,15 +5,23 @@ import { validateShortcuts } from './shortcuts';
 
 const runHyprctl = promisify(execFile);
 
-export async function readHyprlandPanelFloating(): Promise<boolean | null> {
+interface HyprlandPanelGeometry extends Electron.Size {
+  floating: boolean;
+}
+
+export async function readHyprlandPanelGeometry(title: string): Promise<HyprlandPanelGeometry | null> {
   if (!process.env.HYPRLAND_INSTANCE_SIGNATURE) return null;
   try {
     const { stdout } = await runHyprctl('hyprctl', ['-j', 'clients'], { timeout: 500, maxBuffer: 1024 * 1024 });
     const clients: unknown = JSON.parse(stdout);
     if (!Array.isArray(clients)) return null;
-    const panels = clients.filter(client => client?.pid === process.pid && client.mapped === true && client.hidden === false);
+    const panels = clients.filter(client => client?.pid === process.pid && client.title === title && client.mapped === true && client.hidden === false);
     if (panels.length !== 1) return null;
-    return panels[0].floating === true && panels[0].fullscreen === 0 && panels[0].fullscreenClient === 0;
+    const panel = panels[0];
+    if (!Array.isArray(panel.size) || panel.size.length !== 2 ||
+        !panel.size.every((dimension: number) => Number.isSafeInteger(dimension) && dimension > 0)) return null;
+    return { width: panel.size[0], height: panel.size[1],
+      floating: panel.floating === true && panel.fullscreen === 0 && panel.fullscreenClient === 0 };
   } catch { return null; }
 }
 

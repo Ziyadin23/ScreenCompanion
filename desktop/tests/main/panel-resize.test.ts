@@ -20,6 +20,7 @@ let profile: string;
 let scaleFactor: number;
 let measuredTextHeight: number;
 let panel: TestWindow;
+let panelFloating: boolean;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -30,6 +31,7 @@ const app = Object.assign(new EventEmitter(), {
 
 class TestWindow extends EventEmitter {
   private bounds: Electron.Rectangle;
+  private compositorSize: Electron.Size;
   private minimum: Electron.Size;
   private maximum = { width: Infinity, height: Infinity };
   private visible = false;
@@ -41,19 +43,23 @@ class TestWindow extends EventEmitter {
   constructor({ x, y, width, height, minWidth, minHeight }: Electron.Rectangle & { minWidth: number; minHeight: number }) {
     super();
     this.bounds = { x, y, width, height };
+    this.compositorSize = { width, height };
     this.minimum = { width: minWidth, height: minHeight };
   }
   getBounds() { return { ...this.bounds }; }
   getContentBounds() { return this.getBounds(); }
   getNativeWindowHandle() { return Buffer.alloc(8); }
+  getTitle() { return 'SC'; }
   getSize() { return { width: this.bounds.width, height: this.bounds.height }; }
-  setBounds(bounds: Electron.Rectangle) {
+  getCompositorSize() { return this.compositorSize; }
+  setBounds(bounds: Electron.Rectangle, updateCompositor = true) {
     const { width, height } = this.bounds;
     this.bounds = {
       ...bounds,
       width: Math.min(this.maximum.width, Math.max(this.minimum.width, bounds.width)),
       height: Math.min(this.maximum.height, Math.max(this.minimum.height, bounds.height))
     };
+    if (updateCompositor) this.compositorSize = this.getSize();
     if (this.bounds.width !== width || this.bounds.height !== height) this.emit('resize');
   }
   setMinimumSize(width: number, height: number) {
@@ -65,6 +71,7 @@ class TestWindow extends EventEmitter {
     this.setBounds(this.bounds);
   }
   resizeFromDesktop(size: Electron.Size) { this.setBounds({ ...this.bounds, ...size }); }
+  deliverLateConfigure(size: Electron.Size) { this.setBounds({ ...this.bounds, ...size }, false); }
   setMenu() {}
   setContentProtection() {}
   setResizable() {}
@@ -102,7 +109,7 @@ vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
   return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
-    readHyprlandPanelFloating: async () => true };
+    readHyprlandPanelGeometry: async () => ({ ...panel.getCompositorSize(), floating: panelFloating }) };
 });
 
 function store() { return createSettingsStore(cryptor, profile, { platform }); }
@@ -125,6 +132,7 @@ beforeEach(async () => {
   profile = await mkdtemp(join(tmpdir(), 'sc-panel-resize-'));
   scaleFactor = 1;
   measuredTextHeight = 180;
+  panelFloating = true;
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
@@ -180,10 +188,41 @@ it.skipIf(platform !== 'linux')('ignores the Question minimum when the composito
   await invoke('command', { type: 'showInput' });
   await vi.waitFor(() => expect(panel.getSize().height).toBe(260));
 
-  panel.resizeFromDesktop({ width, height: 180 });
+  panel.deliverLateConfigure({ width, height: 180 });
   await setImmediate();
   measuredTextHeight = 280;
   await invoke('command', { type: 'escape' });
   await vi.waitFor(() => expect(panel.getSize().height).toBe(300));
   expect(await store().loadWindowSize()).toBeNull();
+});
+
+it.skipIf(platform !== 'linux')('accepts a single resize to a settled automatic size', async () => {
+  await boot();
+  await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 480, height: 200 }));
+
+  measuredTextHeight = 240;
+  await invoke('command', { type: 'showInput' });
+  await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 480, height: 260 }));
+  expect(await store().loadWindowSize()).toBeNull();
+
+  panel.resizeFromDesktop({ width: 480, height: 200 });
+  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 480, Height: 200 }));
+});
+
+it.skipIf(platform !== 'linux')('restores a saved floating size when the compositor returns different geometry', async () => {
+  await boot();
+  await vi.waitFor(() => expect(panel.getSize().height).toBe(200));
+  panel.resizeFromDesktop({ width: 530, height: 240 });
+  const chosen = { Width: 530, Height: 240 };
+  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(chosen));
+
+  panelFloating = false;
+  panel.resizeFromDesktop({ width: 900, height: 680 });
+  await setImmediate();
+  expect(await store().loadWindowSize()).toEqual(chosen);
+
+  panelFloating = true;
+  panel.resizeFromDesktop({ width: 560, height: 260 });
+  await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
+  expect(await store().loadWindowSize()).toEqual(chosen);
 });

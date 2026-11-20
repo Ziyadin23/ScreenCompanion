@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -136,6 +136,16 @@ test('Hyprland panel geometry and Settings visibility', async t => {
       if (error.code !== 'ENOENT') throw error;
       return null;
     }
+  };
+  const editAppearance = async (panel, action) => {
+    await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
+    const settings = await showing('settings-save');
+    await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
+    await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
+    await settings.getByRole('button', { name: action, exact: true }).click();
+    await expect(panel.getByTestId('answer-text')).toBeVisible();
+    await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
+      .toBe(action === 'Save' ? 28 : 11);
   };
   try {
     const config = join(runtime, 'hyprland.conf');
@@ -275,6 +285,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         try {
           const panel = await setupProduction(profile);
           const answer = panel.getByTestId('answer-text');
+          await expect.poll(geometry).toEqual([480, 144]);
           const initialSize = await settledPanelSize(panel);
           assert.equal(await savedSize(profile), null, 'Setup should leave the panel automatically sized');
           await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
@@ -315,6 +326,75 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
       });
     }
 
+    await t.test('One native resize back to an earlier automatic fit is persisted', async result => {
+      const profile = 'single-native-resize';
+      try {
+        const panel = await setupProduction(profile);
+        await expect.poll(geometry).toEqual([480, 144]);
+        const earlier = await settledPanelSize(panel);
+        await editAppearance(panel, 'Save');
+        await expect.poll(geometry).toEqual([480, 360]);
+        const before = await settledPanelSize(panel);
+        await delay(750);
+        assert.equal(await savedSize(profile), null);
+
+        const native = await app.browserWindow(panel);
+        const events = await native.evaluateHandle(window => {
+          const sizes = [];
+          window.on('resize', () => sizes.push(window.getSize()));
+          return sizes;
+        });
+        assert.equal(activeClient().floating, true);
+        dispatch('resizewindowpixel', `exact ${earlier.join(' ')},address:${activeClient().address}`);
+        await expect.poll(geometry).toEqual(earlier);
+        await delay(750);
+        const resizeEvents = await events.jsonValue();
+        const persisted = await savedSize(profile);
+        result.diagnostic(JSON.stringify({ before, earlier, resizeEvents, persisted }));
+        assert.deepEqual(resizeEvents, [earlier], 'The compositor should deliver exactly one native resize');
+        assert.deepEqual(persisted, { Width: earlier[0], Height: earlier[1] });
+      } finally {
+        await closeApp();
+      }
+    });
+
+    await t.test('Tiling and returning to floating preserves a manually saved size file', async result => {
+      const profile = 'manual-layout-round-trip';
+      try {
+        const panel = await setupProduction(profile);
+        const chosen = [530, 240];
+        await expect.poll(geometry).toEqual([480, 144]);
+        await resize(panel, chosen);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
+        const sizePath = join(configHome(profile), 'SC', 'window-size.json');
+        const snapshot = async () => {
+          const stats = await stat(sizePath, { bigint: true });
+          return { size: await readFile(sizePath, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
+        };
+        const before = await snapshot();
+        const address = activeClient().address;
+        const native = await app.browserWindow(panel);
+        dispatch('settiled', `address:${address}`);
+        await expect.poll(() => activeClient()?.floating).toBe(false);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([1240, 860]);
+        await delay(750);
+        const tiled = await snapshot();
+
+        dispatch('setfloating', `address:${address}`);
+        await expect.poll(() => activeClient()?.floating).toBe(true);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
+        await delay(750);
+        const floated = await snapshot();
+        result.diagnostic(JSON.stringify({ before, tiled, floated, visible: geometry() }));
+        assert.deepEqual(tiled, before);
+        assert.deepEqual(floated, before, 'Returning to floating should leave the size file untouched');
+        await resize(panel, [560, 260]);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: 560, Height: 260 });
+      } finally {
+        await closeApp();
+      }
+    });
+
     for (const floating of [true, false]) {
       if (!floating) {
         await writeFile(config, compositorConfig.join('\n').replace('float on', 'float off') + '\n');
@@ -326,40 +406,29 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           const profile = `${layout}-${action.toLowerCase()}`;
           try {
             const panel = await setupProduction(profile);
-            const initial = await settledPanelSize(panel);
-            assert.equal(await savedSize(profile), null);
-
-            await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
-            const settings = await showing('settings-save');
-            await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
-            await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
-            await settings.getByRole('button', { name: action, exact: true }).click();
-            await expect(panel.getByTestId('answer-text')).toBeVisible();
-            await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
-              .toBe(action === 'Save' ? 28 : 11);
-            const fittedHeight = action === 'Save' ? 360 : 144;
-            await expect.poll(() => {
-              const client = activeClient();
-              return !!client && (client.floating ? client.size[1] === fittedHeight : !floating);
-            }).toBe(true);
+            if (floating) await expect.poll(geometry).toEqual([480, 144]);
             await settledPanelSize(panel);
-
-            if (!floating && activeClient().floating) {
-              // Request a tile even when Hyprland leaves the remapped fixed-size window floating.
-              dispatch('settiled', `address:${activeClient().address}`);
-            }
+            if (!floating && activeClient().floating) dispatch('settiled', `address:${activeClient().address}`);
             await expect.poll(() => activeClient()?.floating).toBe(floating);
-            if (!floating) {
-              await expect.poll(() => geometry()?.[0] ?? 0).toBeGreaterThan(initial[0]);
-            }
+            if (!floating) await expect.poll(geometry).toEqual([1240, 860]);
             const native = await app.browserWindow(panel);
             const nativeMatchesLayout = async () => {
               const size = await native.evaluate(window => window.getSize());
               return geometry()?.join('×') === size.join('×');
             };
             await expect.poll(nativeMatchesLayout).toBe(true);
+            assert.equal(await savedSize(profile), null);
+            const before = { floating: activeClient().floating, size: geometry() };
+
+            await editAppearance(panel, action);
+            if (floating) await expect.poll(geometry).toEqual([480, action === 'Save' ? 360 : 144]);
+            await settledPanelSize(panel);
+            await expect.poll(nativeMatchesLayout).toBe(true);
             // Give any queued size-file write time to finish after the layout change.
             await delay(750);
+            const after = { floating: activeClient().floating, size: geometry() };
+            result.diagnostic(JSON.stringify({ before, after }));
+            if (!floating) assert.deepEqual(after, before, `The panel should stay tiled through ${action}`);
             assert.equal(await savedSize(profile), null, 'A compositor layout or fit must leave the manual size file absent');
             result.diagnostic(`${layout} answer ${geometry().join('×')} after ${action}, size file absent`);
             if (!floating) {
