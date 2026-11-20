@@ -57,6 +57,23 @@
 - `node .github/scripts/workflow-checks.mjs selftest` passed. The same script's `docs` check passed for 118 Markdown files and 513 local links and anchors. `openspec validate --all --strict --no-interactive` passed all 12 items. `git diff --check` passed. Each command exited 0.
 - Verification used synthetic keys, storage, shortcut registration and isolated headless Chromium. Task 1.3 remains open for the coordinator's fresh independent standards and acceptance review, PR publication and integration. The #84 lab owner recorded release on 2026-11-20. Task 2.1 still requires fresh readiness and Windows native, encrypted vault, UI and recorder verification. Task 2.2 still requires packaged startup and a verified local beta handoff.
 
+### Protected main integration on 2026-11-20
+
+- Merged main `5a1c90a115004492ff876656010cd98535415c06` into `Ziyadin23/issue-59-settings-save-ownership`. Merge commit `adb3265fb13d222bb3d5a6798e2b64059ad8333c` has tree `e751746a94e9cf7d33e03e5847a545d8290218f5` and desktop subtree `4ce9628090eba6055b37165b65d8d3feb6657d80`. Its first parent is the previously tested `0b299b063ba8f17ee6de25988e1d7f8091ce686f`, tree `e21ffaebe07f9fad09d49d6170f51ff50c1694fd`. Main includes the #61 resize guard and the two Windows test updates from #120. PR #122 remains a separate draft. [Draft PR #123](https://github.com/Ziyadin23/ScreenCompanion/pull/123)
+- The merged main entry point uses shortcut recovery in its measurement identity and sends the fitted bounds through the #61 guard. A host probe drove Save and Back through the production IPC and controller with injected window and shortcut callbacks and a temporary size store. Recovery increased the fitted height from 200 to 222 DIPs with the same Answer content. A duplicate resize notification left automatic fitting active. After a manual resize away from and back to the recovery size, the size file held 600 × 278 physical pixels at 125% scale. Clearing recovery kept the manual size, and a restart restored it. The probe passed, exit 0. [Panel sizing task](../persist-final-panel-size/tasks.md)
+- Fedora 44 x64 with Node 22.23.1 and npm 10.9.8 reused the installed dependencies for the identical lockfile. Desktop checks ran serially under `flock /tmp/sc-20261119-desktop-verify.lock env VITEST_MAX_WORKERS=1`. The three focused regression source hashes matched the prior checkpoint. Its overlap command passed all seven selected cases. Its Chromium layout command passed all seven cases on the merged production build. The affected command below passed 277 tests in 10 files, including the three #61 resize cases. `npm --prefix desktop run verify` passed type checking, lint, 1,290 tests in 37 files and production bundles. Each exited 0.
+
+  ```sh
+  npm --prefix desktop test -- tests/main/controller.test.ts tests/main/diagnostics.test.ts \
+    tests/main/panel-size.test.ts tests/main/panel-resize.test.ts tests/renderer/workflows.test.tsx \
+    tests/renderer/preview.test.ts tests/renderer/updates.test.tsx tests/pipeline/configuration.test.ts \
+    tests/platform/platform.test.ts tests/storage
+  ```
+
+- From `desktop`, `node_modules/.bin/astryx doctor --built out/renderer` reported 19 passes, two existing theme-font warnings and zero failures. `node_modules/.bin/playwright test --config playwright.preview.config.ts --workers=1` passed all 16 setup cases. `node node_modules/@playwright/test/cli.js test --list` discovered 38 Windows UI tests in five files on the host. Each exited 0.
+- `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs`, `openspec validate --all --strict --no-interactive` and `git diff --check` passed, exit 0. Strict OpenSpec validation passed all 13 items.
+- Task 1.3 remains open for independent standards and acceptance review and the coordinator's PR readiness decision. Task 2.1 remains open for Windows lab readiness, native shortcuts, encrypted vault, UI and named-recorder checks. Task 2.2 remains open for a new version, packaged startup and the verified local beta handoff.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.
