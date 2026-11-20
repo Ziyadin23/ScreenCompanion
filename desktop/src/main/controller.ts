@@ -7,7 +7,7 @@ import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
 
 export interface DesktopHost {
-  publish(state: AppState, capturing: boolean): void;
+  publish(state: AppState, capturing: boolean): void | Promise<void>;
   panelHandle(): Buffer;
   scroll(delta: number): void;
   exit(): void;
@@ -57,7 +57,7 @@ export class ApplicationController {
   private shortcuts(settings: VaultData): AppState['shortcuts'] {
     return Object.fromEntries(Object.entries(shortcutFields).map(([action, field]) => [action, { ...settings[field] }])) as AppState['shortcuts'];
   }
-  publish(): void { if (!this.exiting) this.deps.host.publish(this.getState(), this.capturing); }
+  publish(): void | Promise<void> { if (!this.exiting) return this.deps.host.publish(this.getState(), this.capturing); }
   private defer(action: () => void): boolean {
     if (!this.capturing) return false;
     this.afterCapture.push(action); return true;
@@ -148,6 +148,7 @@ export class ApplicationController {
     this.state.visible = true; this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), true); this.publish(); this.deps.host.activate?.();
   }
   readonly onAction = (action: DesktopAction): void => {
+    if (this.exiting) return;
     const inputAction = action === 'input' || action === 'input-with-screenshot';
     if (inputAction && this.state.ready && this.state.surface === 'input' && this.state.visible && this.deps.host.isFocused?.()) {
       if (!this.state.busy) {
@@ -173,7 +174,7 @@ export class ApplicationController {
       this.hiddenByUser = !this.state.visible;
       this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), this.state.visible);
       if (!this.state.visible) await this.setRecording(false);
-      this.publish(); return;
+      return this.publish();
     }
     if (!this.state.ready) return;
     switch (command.type) {
@@ -203,7 +204,7 @@ export class ApplicationController {
       case 'escape':
         if (this.state.surface === 'settings') await this.discardSettings();
         else if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
-        else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
+        else { this.state.visible = false; this.hiddenByUser = true; return this.publish(); }
         break;
       case 'settingsDraftChanged':
         if (this.state.surface === 'settings') { this.state.settingsDirty = command.dirty; this.publish(); }

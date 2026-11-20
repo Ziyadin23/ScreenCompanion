@@ -199,8 +199,10 @@ separate fresh profiles. They edit Answer text size and exercise Back and
 Save in floating and tiled layouts. They compare the actual tiled layout
 before opening Settings and after returning. This includes a panel the user
 tiled under a float rule, with and without a size change when tiling. They
-also check that switching
-layouts leaves the manual size file intact and that one native resize to a
+also open Settings with a second `--action=settings` launch while a tiled or
+floating panel is hidden. The cases check placement on Back and preserve the
+manual size file. The fixture checks that switching layouts leaves that file
+intact and that one native resize to a
 previous automatic fit saves that size. A virtual Wayland pointer drives
 Hyprland's interactive resize binding to change the floating size and drag
 back to the earlier size. Each drag is checked on disk and the earlier size
@@ -215,8 +217,11 @@ remap or compositor snapshot at the relevant point. It checks that a matching
 floating resize reaches disk and returns on a quick Hide and Show. A stale
 configure leaves that resize intact. Two real resizes are sampled before Hide
 and the latest is restored even when their replies arrive out of order. The
-fixture also checks a genuine resize to the old normal bounds after remap and
-tests that Exit waits for an outstanding size write within a deadline.
+fixture also checks a genuine resize to the old normal bounds both during and
+after remap. An Electron-only event at those bounds leaves the confirmed resize
+intact. Exit waits for an outstanding size write within a deadline. The tray
+Exit test holds a compositor reply and checks that capture issued after Exit
+never reaches the synthetic platform boundary.
 [Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
 
 ## Installed updates

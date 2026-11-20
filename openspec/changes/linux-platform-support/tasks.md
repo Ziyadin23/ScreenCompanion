@@ -254,3 +254,30 @@
   stays open for interactive Windows Settings and same-profile resize restart
   and the named recorder check. Task 2.7 owns final packages and the verified
   numbered beta handoff.
+
+### 2.6 Quit, hidden Settings and remap follow-up (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from `39488d76c3909c17eb3aa5925d707b14bc01a255` on protected main
+  `2ec9b0c288b3e10f3f3f0c71d6bf0aa99288b7e3`. Independent review found that
+  tray Exit still accepted capture, Settings lost the placement of an
+  already hidden panel, and a second genuine resize at the old normal bounds
+  was discarded during remap.
+- The desktop controller and main entry point stop commands at quit and
+  keep the bounded size drain. The panel records placement before Hide or
+  Settings. Each later remap resize still needs a matching compositor
+  snapshot. The portable main-process and isolated Wayland fixtures cover
+  the three failures and their controls. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
+- With `VITEST_MAX_WORKERS=1` and `flock /tmp/sc-20261119-desktop-verify.lock`,
+  `npm --prefix desktop run verify` exited 0 with 1,288 tests, type checking,
+  lint and production bundles. All 219 focused tests passed. The documented
+  isolated `node --test desktop/tests/linux/panel-settings.mjs` command passed
+  all 16 scenarios. The portable fixture reproduced the tray Exit and
+  pending remap failures before the fix. The isolated Hyprland fixture
+  reproduced the hidden tiled Settings failure. The prior lifecycle and
+  Lua replays passed on the same final bundle. Windows discovery listed all
+  38 cases without running them.
+- Task 2.6 stays open for independent rereview, source integration, Windows
+  Settings and same-profile resize, and the named recorder check. Task 2.7
+  owns final packaging and the verified numbered beta handoff. The
+  coordinator schedules rereview and integration.

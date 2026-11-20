@@ -56,3 +56,10 @@ The [follow-up #19 correction](../../../docs/VERIFICATION.md#hyprland-size-and-t
 keeps a compositor-confirmed floating size across rapid Hide and Show. A newer
 confirmed resize takes precedence over an older reply. The shared Windows
 runtime and delivery requirements remain open under tasks 2.3 and 2.4.
+
+The [#19 remap follow-up](../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
+checks a second real resize to the normal bounds during remap. The test
+confirms the chosen size on the panel, in the file and after restart. An
+Electron-only event at those bounds keeps the earlier confirmed size. The
+integrated draft needs fresh independent review. Tasks 2.3 and 2.4 remain
+open for installed Windows checks and beta delivery.

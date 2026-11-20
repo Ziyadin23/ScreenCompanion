@@ -120,7 +120,7 @@ controls for moving and resizing. SC remembers the last size you chose for a
 Windows panel or a floating Linux panel across normal restarts. When Settings
 closes on Linux, a floating panel restores your chosen size or fits the
 current content if you have never resized it. A tiled panel returns to
-Hyprland's tiled layout.
+Hyprland's tiled layout, including after opening Settings from a hidden panel.
 
 Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance

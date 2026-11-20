@@ -17,6 +17,7 @@ const cryptor = {
 const platform = process.platform === 'linux' ? 'linux' : 'windows';
 const workArea = { x: 0, y: 0, width: 900, height: 700 };
 const setTrayImage = vi.fn();
+const captureVisibility = vi.fn();
 let profile: string;
 let scaleFactor: number;
 let measuredTextHeight: number;
@@ -26,6 +27,7 @@ let panelPaint: Promise<void> | null;
 let nextGeometryResponse: Promise<void> | null;
 let nextSizeWrite: Promise<void> | null;
 let deferPanelConfigure: boolean;
+let exitFromTray: (() => void) | undefined;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -120,10 +122,12 @@ vi.mock('electron', () => ({
     }),
     createFromBitmap: (bitmap: Buffer) => ({ toBitmap: () => Buffer.from(bitmap) })
   },
-  Menu: { buildFromTemplate() {} },
+  Menu: { buildFromTemplate: (items: Array<{ label?: string; click?: () => void }>) => items },
   Tray: class extends EventEmitter {
     setToolTip() {}
-    setContextMenu() {}
+    setContextMenu(items: Array<{ label?: string; click?: () => void }>) {
+      exitFromTray = items.find(item => item.label === 'Exit')?.click;
+    }
     setImage = setTrayImage;
     destroy() {}
   },
@@ -145,7 +149,11 @@ vi.mock(import('node:fs/promises'), async importOriginal => {
 vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
-  return { createLinuxPlatform: createPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
+  const createLinuxPlatform = () => ({ ...createPlatform(), captureSelection: 'portal', captureMonitor: async () => {
+    captureVisibility(panel.isVisible());
+    throw new Error('Synthetic capture cancelled before acquiring media.');
+  } });
+  return { createLinuxPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
     restoreHyprlandPanelTiling: vi.fn(),
     readHyprlandPanelGeometry: async () => {
       const snapshot = { ...panel.getCompositorSize(), address: '0x1', placement: panelFloating ? 'floating' : 'tiled' };
@@ -188,6 +196,8 @@ beforeEach(async () => {
   nextGeometryResponse = null;
   nextSizeWrite = null;
   deferPanelConfigure = false;
+  exitFromTray = undefined;
+  captureVisibility.mockClear();
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
@@ -448,6 +458,42 @@ it.skipIf(platform !== 'linux')('saves a resize to the old normal bounds after a
   await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
 });
 
+it.skipIf(platform !== 'linux').each([true, false])(
+  'checks a later resize to normal bounds before the remap settles (matching compositor size: %s)', async matching => {
+    const previous = { Width: 530, Height: 240 };
+    const first = { width: 510, height: 252 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
+    await invoke('command', { type: 'toggleVisibility' });
+    const paint = pause();
+    const confirmation = pause();
+    panelPaint = paint.pending;
+    const normal = panel.getNormalBounds();
+    const normalSize = { width: normal.width, height: normal.height };
+    try {
+      await invoke('command', { type: 'toggleVisibility' });
+      nextGeometryResponse = confirmation.pending;
+      panel.setBounds({ ...normal, ...first }, true);
+      expect(nextGeometryResponse).toBeNull();
+      panel.setBounds(normal, matching);
+      expect(panel.getSize()).toEqual(normalSize);
+      expect(panel.getCompositorSize()).toEqual(matching ? normalSize : first);
+      expect(await store().loadWindowSize()).toEqual(previous);
+    } finally {
+      confirmation.resume();
+      paint.resume();
+    }
+
+    const size = matching ? normalSize : first;
+    const saved = { Width: size.width, Height: size.height };
+    await vi.waitFor(async () => expect({ visible: panel.getSize(), compositor: panel.getCompositorSize(), saved: await store().loadWindowSize() })
+      .toEqual({ visible: size, compositor: size, saved }));
+    await close();
+    await boot();
+    expect(panel.getSize()).toEqual(size);
+  });
+
 it.skipIf(platform !== 'linux').each([
   { painted: true, stale: false }, { painted: false, stale: false }, { painted: true, stale: true }
 ])('saves and restores a matching resize after Hide and Show (painted: $painted, stale event: $stale)', async ({ painted, stale }) => {
@@ -592,6 +638,40 @@ it('finishes an outstanding size write when Exit follows a resize', async () => 
   }
   await exited;
   expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 });
+});
+
+it.skipIf(platform !== 'linux')('hides the panel before an ordinary capture reaches the platform', async () => {
+  await boot();
+  expect(panel.isVisible()).toBe(true);
+  await invoke('command', { type: 'capture' });
+  expect(captureVisibility.mock.calls).toEqual([[false]]);
+});
+
+it.skipIf(platform !== 'linux')('stops commands on tray Exit while draining a confirmed resize', async () => {
+  const previous = { Width: 530, Height: 240 };
+  await store().saveWindowSize(previous);
+  await boot();
+  await setImmediate();
+  const confirmation = pause();
+  const exited = once(app, 'quit');
+  const onQuit = vi.fn();
+  app.once('quit', onQuit);
+  try {
+    nextGeometryResponse = confirmation.pending;
+    panel.resizeFromDesktop({ width: 510, height: 252 });
+    expect(nextGeometryResponse).toBeNull();
+    expect(exitFromTray).toBeTypeOf('function');
+    exitFromTray?.();
+    expect(onQuit).not.toHaveBeenCalled();
+    expect(await store().loadWindowSize()).toEqual(previous);
+    await invoke('command', { type: 'capture' });
+  } finally {
+    confirmation.resume();
+  }
+  await exited;
+  expect(onQuit).toHaveBeenCalledOnce();
+  expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 });
+  expect(captureVisibility).not.toHaveBeenCalled();
 });
 
 it.skipIf(platform !== 'linux')('exits with the saved size when a pending compositor reply misses the quit deadline', async () => {

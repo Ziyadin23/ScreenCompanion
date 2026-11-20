@@ -1191,6 +1191,60 @@ bundling. The eight focused files passed 212 tests.
 Windows interactive Settings and same-profile resize, the named recorder
 check, final packaging and the numbered local beta handoff remain open.
 
+### Hyprland quit, hidden Settings and remap (2026-11-20)
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+at `39488d76c3909c17eb3aa5925d707b14bc01a255` reproduced three failures.
+Tray Exit accepted a capture command during a held size confirmation. The
+synthetic `getDisplayMedia` replacement recorded one call while the panel
+was mapped. A panel tiled at the same 1240×860 dimensions emitted no
+resize event. Opening Settings through a second launch after Hide returned
+that panel floating. A portable replay confirmed that a second real resize
+to 420×180 during remap was discarded while the earlier 510×252 reply was
+held. The ordinary capture visibility, hidden floating placement and
+Electron-only 420×180 controls passed on the starting head.
+
+SC stops accepting commands when quit starts and keeps the existing
+one-second limit for pending size confirmations and writes. Hide and
+Settings sample placement while the panel is mapped. Settings uses that
+sample if the panel is already hidden. During remap, an earlier confirmed
+resize lets a later return to the old dimensions qualify for its own
+compositor check. An unmatched Electron notification still leaves the
+confirmed size intact.
+
+The [tracked Hyprland fixture](../tests/README.md#hyprland-panel-geometry)
+checks Back after a second `--action=settings` launch from a hidden tiled
+or floating panel. Both keep the 1240×860 dimensions and the saved file's
+bytes, inode and modification time. The portable test checks the real
+420×180 return and stale 420×180 comparison in the live geometry, size file
+and same-profile restart. It holds the 510×252 reply through tray Exit and
+verifies that a later capture command does not reach the platform. The
+native replay uses the existing stop-before-media replacement. The checks
+used no screen capture or provider calls.
+
+Before the correction, the new portable cases had two failures and two
+passing controls. The tracked Hyprland run failed the hidden tiled case and
+passed the other 15 scenarios. After the correction, all 32 portable
+panel resize and tray cases and all 16 tracked Hyprland scenarios passed.
+The isolated Fedora 44 runs used Hyprland 0.56.2 nested in headless KWin
+6.7.5, Electron 45.0.0, a single 1280×900 output at scale 1 and synthetic
+profiles. The tray replay held 510×252 for 307 ms. Exit saved it and returned
+0. The synthetic media replacement received zero calls. Separate replays
+passed the earlier Hide and Show ordering, normal Exit and timeout cases,
+visible Settings with same-size tiling, and Lua Back and Save. The fallback
+preview also passed Hide, Show, Settings Back, Question, Escape and Exit
+with Hyprland geometry queries disabled.
+
+Desktop verify passed type checking, lint, 1,288 tests in 37 files and
+production bundling. The nine focused files passed 219 tests. Playwright
+listed 38 Windows UI cases on Fedora. The Astryx built check passed with
+two font warnings. The verified production main bundle SHA-256 is
+`773d78411a0b84b48aa7bc58e0766d6ccc0af07f73e2c00ca64c6b2e68705b2a`.
+The native replays used the same bundle.
+
+Windows interactive Settings and same-profile resize, the named recorder,
+final candidate packaging and the numbered local beta handoff remain open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

@@ -68,12 +68,15 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     { env, encoding: 'utf8' }).trim(), 'ok');
   const configHome = profile => join(runtime, profile, 'config');
   const fixtureBin = join(runtime, 'bin');
+  const launchArgs = (profile, ...args) =>
+    [entry, '--ozone-platform=wayland', '--no-sandbox', '--user-data-dir=' + join(runtime, profile, 'electron'), ...args];
+  const profileEnv = profile => ({ XDG_CONFIG_HOME: configHome(profile), PATH: fixtureBin + ':' + env.PATH });
   let app;
   const launch = async (profile, ...args) => {
     app = await electron.launch({
       executablePath: require('electron'),
-      args: [entry, '--ozone-platform=wayland', '--no-sandbox', '--user-data-dir=' + join(runtime, profile, 'electron'), ...args],
-      env: { ...env, XDG_CONFIG_HOME: configHome(profile), PATH: fixtureBin + ':' + env.PATH },
+      args: launchArgs(profile, ...args),
+      env: { ...env, ...profileEnv(profile) },
       timeout: 60_000
     });
     return app.firstWindow();
@@ -490,6 +493,47 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
 
           dispatch('setfloating', `address:${activeClient().address}`);
           await expect.poll(layout).toEqual({ floating: true, size: chosen });
+          assert.deepEqual(await sizeFileSnapshot(profile), before);
+        } finally {
+          await closeApp();
+        }
+      });
+    }
+
+    for (const floating of [false, true]) {
+      const placement = floating ? 'floating' : 'tiled';
+      await t.test(`Settings from a hidden ${placement} panel restores its placement at the same size`, async () => {
+        const profile = 'hidden-settings-' + placement;
+        try {
+          const panel = await setupProduction(profile);
+          await expect.poll(geometry).toEqual([480, 144]);
+          await settledPanelSize(panel);
+          const size = [1240, 860];
+          dispatch('resizewindowpixel', `exact ${size.join(' ')},address:${activeClient().address}`);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: size[0], Height: size[1] });
+          const before = await sizeFileSnapshot(profile);
+          const native = await app.browserWindow(panel);
+          await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(size);
+          const resizes = await native.evaluateHandle(window => {
+            const sizes = [];
+            window.on('resize', () => sizes.push(window.getSize()));
+            return sizes;
+          });
+          if (!floating) dispatch('settiled', `address:${activeClient().address}`);
+          const layout = () => ({ floating: activeClient()?.floating, size: geometry() });
+          await expect.poll(layout).toEqual({ floating, size });
+          await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
+          await expect.poll(() => clients().length).toBe(0);
+          assert.deepEqual(await resizes.jsonValue(), [], 'Placement must be recorded even when no resize occurs');
+
+          const action = start(require('electron'), launchArgs(profile, '--action=settings'), profileEnv(profile));
+          assert.deepEqual(await once(action, 'exit', { signal: AbortSignal.timeout(10_000) }), [0, null]);
+          const settings = await showing('settings-save');
+          await expect.poll(() => activeClient()?.title).toBe('SC Settings');
+          await settings.getByRole('button', { name: 'Back', exact: true }).click();
+          await expect(panel.getByTestId('answer-text')).toBeVisible();
+          await settledPanelSize(panel);
+          await expect.poll(layout).toEqual({ floating, size });
           assert.deepEqual(await sizeFileSnapshot(profile), before);
         } finally {
           await closeApp();
