@@ -47,8 +47,9 @@ window controls to move the panel or resize it from an edge or corner. Setup and
 Settings open in their own window. Back and Save return to the answer panel.
 The floating answer panel fits its contents automatically until you resize it.
 SC remembers the last floating size you choose across launches. Hyprland sets
-the size of tiled or fullscreen windows. SC keeps the floating size through
-those layout changes. Question grows a short floating panel to 180 logical
+the size of tiled or fullscreen windows and keeps control of a tiled panel
+when you leave Settings. SC keeps your chosen floating size through layout
+changes. Question grows a short floating panel to 180 logical
 pixels high when space allows. Escape restores the answer size.
 Update by manually installing a newer Linux RPM.
 

@@ -294,6 +294,7 @@ function publish(state: AppState, capturing: boolean): void {
     tray?.setImage(trayImage(state.busy));
     return;
   }
+  let linuxPanelNeedsResize = false;
   if (surfaceChanged) {
     const returningToPanel = !isPanel(surface);
     if (linux) {
@@ -307,7 +308,11 @@ function publish(state: AppState, capturing: boolean): void {
     }
     surface = state.surface;
     if (linux) {
-      applyWindowGeometry(setLinuxPanelMinimum);
+      const bounds = window.getBounds();
+      linuxPanelNeedsResize = !sameSize(bounds, clampBounds(linuxPreferredPanelBounds ?? bounds));
+      // A minimum change that keeps the bounds can coexist with a native resize.
+      if (linuxPanelNeedsResize) applyWindowGeometry(setLinuxPanelMinimum);
+      else setLinuxPanelMinimum(window);
     } else {
       const area = screen.getDisplayMatching(window.getBounds()).workArea;
       applyWindowGeometry(target => {
@@ -335,7 +340,7 @@ function publish(state: AppState, capturing: boolean): void {
   tray?.setImage(trayImage(state.busy));
   if (capturing || !state.visible || !readyToShow) hidePanel();
   else if (linux) {
-    if (surfaceChanged || !window.isVisible()) void refreshLinuxPanelLayout(window);
+    if (linuxPanelNeedsResize || !window.isVisible()) void refreshLinuxPanelLayout(window);
     if (!window.isVisible()) window.show();
   } else if (!window.isVisible()) {
     if (state.surface === 'input' || state.surface === 'settings' || state.surface === 'setup') window.show();
@@ -445,7 +450,7 @@ async function boot(): Promise<void> {
         if (!geometry && bounds === pendingLinuxResize && !closing) geometry = await readHyprlandPanelGeometry(title);
         if (bounds !== pendingLinuxResize) continue;
         pendingLinuxResize = null;
-        if (!geometry || !window.isVisible() || closing) return;
+        if (!geometry || closing || window.isDestroyed() || !window.isVisible()) return;
         const wasFloating = linuxPanelFloating;
         linuxPanelFloating = geometry.floating;
         if (!geometry.floating) { measuredContent = ''; return; }

@@ -154,3 +154,37 @@
 - The coordinator owns independent review and source integration. Windows
   Settings and resize restart, named recorder, final packaging and the
   numbered beta handoff remain open in tasks 2.6 and 2.7.
+
+### 2.6 Layout and resize follow-up (2026-11-20)
+
+- [Draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  retains the prior branch head `0d57abe` and the first correction `fa3d0ec`.
+  Normal merge `9e26bc9` incorporates protected main
+  `4667e43365dd4690d111057f23d85bbd87212372`.
+  The application paths are `desktop/src/main/index.ts` and the Hyprland
+  geometry reader and export in `desktop/src/platform/`. The regression
+  paths are `desktop/tests/linux/panel-settings.mjs` and
+  `desktop/tests/main/panel-resize.test.ts`.
+- The [documented isolated Hyprland command](../../../tests/README.md#hyprland-panel-geometry)
+  exited 1 on the `0d57abe` bundle with four failing scenarios and seven
+  passing scenarios. The final desktop tree
+  `33acc7dcef647bdeb78bad34dcdcf59d4d4a0c3b` passed 11 scenarios, exit 0.
+  The independent production probe passed 22 checks on the same Fedora
+  host. [Candidate identity and outcomes](../../../docs/VERIFICATION.md#hyprland-layout-and-resize-follow-up)
+- `npm --prefix desktop test -- --maxWorkers=1 tests/main/panel-resize.test.ts`
+  exited 1 with two failures and four passes on the prior code. The first
+  correction also failed the Wayland and portable regressions for an
+  immediate resize after Escape. The final portable resize run exited 0
+  with seven passes. With `VITEST_MAX_WORKERS=1` and
+  the shared lock at `/tmp/sc-20261119-desktop-verify.lock`, desktop verify
+  exited 0 with 1,263 portable tests in 37 files, type checking, lint and
+  production bundles. The eight focused suites passed 191 tests, exit 0.
+- `node .github/scripts/workflow-checks.mjs selftest`,
+  `node .github/scripts/workflow-checks.mjs docs`,
+  `openspec validate --all --strict --no-interactive` and `git diff --check`
+  exited 0. The documentation checker verified 122 Markdown files and
+  549 local links and anchors. Strict OpenSpec validation passed 13 items.
+- Keep 2.6 open for independent rereview, source integration, Windows
+  Settings and same-profile resize restart, and the named recorder check.
+  Task 2.7 owns final packaging and the numbered runnable beta handoff.
+  The coordinator schedules rereview and integration.

@@ -21,6 +21,7 @@ let scaleFactor: number;
 let measuredTextHeight: number;
 let panel: TestWindow;
 let panelFloating: boolean;
+let panelPaint: Promise<void> | null;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -38,7 +39,10 @@ class TestWindow extends EventEmitter {
   readonly webContents = Object.assign(new EventEmitter(), {
     mainFrame: { url: '' }, send() {}, setWindowOpenHandler() {},
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDisplayMediaRequestHandler() {} },
-    executeJavaScript: async () => ({ height: measuredTextHeight, controlsHeight: 20, inputHeight: 0 })
+    executeJavaScript: async (script: string) => {
+      if (script.includes('getBoundingClientRect')) return { height: measuredTextHeight, controlsHeight: 20, inputHeight: 0 };
+      await panelPaint;
+    }
   });
   constructor({ x, y, width, height, minWidth, minHeight }: Electron.Rectangle & { minWidth: number; minHeight: number }) {
     super();
@@ -133,6 +137,7 @@ beforeEach(async () => {
   scaleFactor = 1;
   measuredTextHeight = 180;
   panelFloating = true;
+  panelPaint = null;
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
@@ -225,4 +230,24 @@ it.skipIf(platform !== 'linux')('restores a saved floating size when the composi
   panel.resizeFromDesktop({ width: 560, height: 260 });
   await vi.waitFor(() => expect(panel.getSize()).toEqual({ width: 530, height: 240 }));
   expect(await store().loadWindowSize()).toEqual(chosen);
+});
+
+it.skipIf(platform !== 'linux')('accepts a native resize immediately after Escape leaves the bounds unchanged', async () => {
+  await store().save({ ...defaultSettings('synthetic-panel-key'), CommandsShown: true });
+  await store().saveWindowSize({ Width: 530, Height: 240 });
+  await boot();
+  await setImmediate();
+  expect((await invoke('getState') as AppState).surface).toBe('input');
+  expect(panel.getSize()).toEqual({ width: 530, height: 240 });
+
+  let finishPaint!: () => void;
+  panelPaint = new Promise(resolve => { finishPaint = resolve; });
+  try {
+    await invoke('command', { type: 'escape' });
+    expect(panel.getSize()).toEqual({ width: 530, height: 240 });
+    panel.resizeFromDesktop({ width: 380, height: 160 });
+    await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 380, Height: 160 }));
+  } finally {
+    finishPaint();
+  }
 });

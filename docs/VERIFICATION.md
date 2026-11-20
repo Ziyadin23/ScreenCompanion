@@ -837,6 +837,69 @@ cases. The Astryx check reported 20 passes and two font warnings.
 Windows runtime, named-recorder checks, final packaging and the numbered
 local beta handoff remain open.
 
+### Hyprland layout and resize follow-up
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+at `0d57abe` found two remaining resize paths. Fixed size hints sent before
+showing the panel could make Hyprland float a tiled panel on return from
+Settings. The fixture could hide the failure by tiling the panel again.
+A tile-to-float transition could replace an existing manual size file.
+The prior fit history could also discard a single genuine resize to 480×144
+after an appearance Save had grown the floating panel to 480×360.
+
+Native traces showed that a remap can produce a 420×180 resize and leave no
+matching client in the first compositor snapshot. The revised source checks
+the mapped panel before setting fixed bounds. It treats a return to floating
+as a layout change and restores the chosen size or fits the current content.
+Programmatic changes are guarded through the paint and hint update. A later
+native event can save its dimensions when the compositor confirms them.
+The desktop, source and test Git trees are
+`33acc7dcef647bdeb78bad34dcdcf59d4d4a0c3b`,
+`4964f084c8aa0b0bb0b510c6670457d0fb5f86a6` and
+`26c1b098b919d7b4bf262b8e9b5facf505035cf7` respectively. The issue branch
+incorporates protected main `4667e43365dd4690d111057f23d85bbd87212372`
+with a merge commit. The main bundle SHA-256 is
+`a9e59c22974a5797920e1dd823a7996433a464b4d23f50c8808ec17ef80d63bc`.
+
+The [isolated Hyprland fixture](../tests/README.md#hyprland-panel-geometry)
+ran on Fedora 44 x86-64 with Hyprland 0.56.2, headless KWin 6.7.5,
+Electron 45.0.0 and a 1280×900 output at scale 1. The evaluated profiles
+used synthetic settings and a temporary keyring. On the prior bundle the
+regression exited 1 with four failing scenarios. The single 480×144 event
+left the size file absent. A tile-to-float transition replaced the file
+holding 530×240. After edited Back, layout restoration saved 1250×870 on
+the red run. Edited Save returned floating at 480×360.
+
+The revised bundle kept the panel tiled at 1240×860 through edited Back and
+Save. Tiling and returning to floating kept the 530×240 file's bytes, inode
+and modification time. A subsequent virtual-pointer drag saved 560×260.
+The single 480×144 resize wrote 480×144. The two original virtual-pointer
+round trips still saved 530×240 and then 480×276 on separate profiles.
+Each profile restored 480×276 on restart. The Question minimum, Escape,
+automatic answer fit and capture visibility scenarios also passed.
+
+The separate production probe found that the first correction could
+suppress a native resize immediately after Escape. In that case, Escape
+only lowered the minimum and the visible panel kept its dimensions. The
+fixture and a portable regression both reproduced the missed save. The
+revised guard leaves resize tracking active when a visible panel keeps its
+bounds. The real resize to 380×160 then reached the size file.
+
+The fixture passed all 11 scenarios, exit 0. The separate production probe
+passed all 22 checks, including Question and Escape on the same 380×160
+profile after restart. An earlier probe timed out before measuring the first
+answer. The passing run selects the panel by renderer role. The two focused
+regressions failed against the prior
+source. One left a 480×200 native resize absent from disk. The other kept the
+compositor's 560×260 size in place of the saved 530×240 choice. All seven
+tests in the portable resize file passed on the revised source. It also
+passed 191 focused tests and desktop verify with 1,263 tests in 37 files, type
+checking, lint and production bundles. The Astryx check passed with two
+related font warnings.
+
+Windows runtime, named-recorder checks, final packaging and the numbered
+local beta handoff remain open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

@@ -196,11 +196,15 @@ key-free preview checks Settings Back and Save, the Question minimum and
 restoration on Escape. A controlled capture cancellation checks that a late
 Settings load keeps SC hidden. Production checks use a temporary keyring and
 separate fresh profiles. They edit Answer text size and exercise Back and
-Save in floating and tiled layouts. They verify that the panel stays automatic
-through layout changes. A virtual Wayland pointer drives Hyprland's interactive
-resize binding to change the floating size and drag back to the earlier size.
-Each drag is checked on disk and the earlier size is restored on restart.
-[Linux panel verification](../docs/VERIFICATION.md#hyprland-resize-ownership-correction).
+Save in floating and tiled layouts. They compare the actual tiled layout
+before opening Settings and after returning. They also check that switching
+layouts leaves the manual size file intact and that one native resize to a
+previous automatic fit saves that size. A virtual Wayland pointer drives
+Hyprland's interactive resize binding to change the floating size and drag
+back to the earlier size. Each drag is checked on disk and the earlier size
+is restored on restart. The test also checks an immediate native resize
+after Escape leaves the panel at its saved size.
+[Linux panel verification](../docs/VERIFICATION.md#hyprland-layout-and-resize-follow-up).
 
 ## Installed updates
 

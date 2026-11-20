@@ -390,6 +390,18 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         assert.deepEqual(floated, before, 'Returning to floating should leave the size file untouched');
         await resize(panel, [560, 260]);
         await expect.poll(() => savedSize(profile)).toEqual({ Width: 560, Height: 260 });
+
+        await closeApp();
+        const restarted = await launch(profile);
+        const question = restarted.getByTestId('question-input');
+        await expect(question).toBeFocused();
+        await expect.poll(geometry).toEqual([560, 260]);
+        await settledPanelSize(restarted);
+        await question.press('Escape');
+        await expect(question).toHaveCount(0);
+        dispatch('resizewindowpixel', `exact 380 160,address:${activeClient().address}`);
+        await expect.poll(geometry).toEqual([380, 160]);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: 380, Height: 160 });
       } finally {
         await closeApp();
       }
