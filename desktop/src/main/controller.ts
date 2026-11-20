@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
+import { applyModelEdits } from '../contracts/model-selection';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
@@ -37,11 +38,14 @@ function applyDraftEdits<T extends object>(current: T, original: T, edited: T): 
   return result;
 }
 
-function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, edited: SettingsValues): SettingsValues {
+function mergeSettingsDraft(current: SettingsValues, original: SettingsValues, { values: edited, modelEdits }: SettingsDraft): SettingsValues {
   const result = applyDraftEdits(current, original, edited);
   result.Appearance = applyDraftEdits(current.Appearance, original.Appearance, edited.Appearance);
-  if (current.Models && original.Models && edited.Models && current.Models.Provider === edited.Models.Provider && original.Models.Provider === edited.Models.Provider) {
-    result.Models = applyDraftEdits(current.Models, original.Models, edited.Models);
+  if (modelEdits && edited.Models) {
+    result.Models = modelEdits.length ? applyModelEdits(current.Models, edited.Models, modelEdits) : current.Models;
+  } else if (current.Models && edited.Models && current.Models.Provider === edited.Models.Provider) {
+    const initial = original.Models?.Provider === edited.Models.Provider ? original.Models : defaultModels(edited.Models.Provider);
+    result.Models = applyDraftEdits(current.Models, initial, edited.Models);
   }
 
   return result;
@@ -65,15 +69,14 @@ export class ApplicationController {
   private detachWheel: (() => void) | null = null;
   private settingsActions = 0;
   private settingsDraftBase: SettingsValues | null = null;
-  private savingSettings = false;
   private registeredShortcutSettings: VaultData | null = null;
   private shortcutChanges = Promise.resolve();
   constructor(private readonly deps: ControllerDependencies) {
     const defaults = defaultSettings('');
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: this.shortcuts(defaults), captureProtection: 'Failed',
-      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsDirty: false,
-      settingsKeyPresence: null, settingsModelPipelines: null, shortcutRecovery: null };
+      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsDirty: false, settingsSaving: false,
+      settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null };
   }
   getState(): AppState { return structuredClone(this.state); }
   setUpdateState(state: UpdateState): void { this.state.updates = { ...state }; this.publish(); }
@@ -297,17 +300,23 @@ export class ApplicationController {
     if (this.state.updates.status === 'installing') throw new AppError('UPDATEBUSY', 'Wait for SC to restart.');
     if (!this.settings || !this.ownsSettings(this.state.settingsSession)) throw new AppError('NOTREADY', 'Open Settings before saving.');
     if (!this.ownsSettings(draft.session)) throw new AppError('STALEDRAFT', 'This Settings draft is closed. Save from the current Settings window.');
-    if (this.savingSettings) return 'busy';
-    this.savingSettings = true;
+    if (this.state.settingsSaving) return 'busy';
+    this.state.settingsSaving = true;
     this.settingsActions++;
-    try { return await this.saveSettingsDraft(draft, this.settings, draft.session); }
-    finally { this.settingsActions--; this.savingSettings = false; }
+    try {
+      this.publish();
+      return await this.saveSettingsDraft(draft, this.settings, draft.session);
+    } finally {
+      this.settingsActions--;
+      this.state.settingsSaving = false;
+      this.publish();
+    }
   }
   private async saveSettingsDraft(draft: SettingsDraft, previous: VaultData, session: number): Promise<SettingsSaveResult> {
     const priorError = this.state.error;
     const committed = this.settingsValues(previous);
     const values = this.settingsDraftBase && !isDeepStrictEqual(committed, this.settingsDraftBase)
-      ? mergeSettingsDraft(committed, this.settingsDraftBase, draft.values) : draft.values;
+      ? mergeSettingsDraft(committed, this.settingsDraftBase, draft) : draft.values;
     const keys = { ...previous.ProviderKeys };
     const priorProvider = previous.Models?.Provider ?? this.deps.configuration(previous).provider;
     if (!keys[priorProvider]) keys[priorProvider] = previous.ApiKey;
@@ -335,16 +344,15 @@ export class ApplicationController {
     this.settings = candidate; this.state.appearance = { ...candidate.Appearance };
     this.state.shortcuts = this.shortcuts(candidate);
     this.state.settingsKeyPresence = this.keyPresence();
+    this.state.settingsModels = candidate.Models;
     this.state.settingsModelPipelines = candidate.ModelPipelines;
     this.state.shortcutRecovery = null;
     if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
-    this.publish();
     return 'saved';
   }
   private reportShortcutRestoreFailure(): SettingsSaveResult {
     this.state.shortcutRecovery = this.deps.diagnostics.failure('Shortcuts',
       new AppError('RESTOREFAILED', 'Settings were not saved. Restart SC to restore the saved shortcuts.'));
-    this.publish();
     return 'shortcut-restore-failed';
   }
   private closeSettings(session: number): boolean {

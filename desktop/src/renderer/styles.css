@@ -29,9 +29,10 @@ button:disabled, input:disabled { cursor: default; opacity: .5; }
 input, textarea { caret-color: var(--ui-accent); }
 .icon { flex-shrink: 0; vertical-align: middle; }
 .answer-panel {
-  height: 100%; width: 100%; display: flex; flex-direction: column; position: relative;
+  height: 100%; width: 100%; position: relative; container-type: size;
   border-radius: var(--radius-panel); outline: none;
 }
+.panel-content { height: 100%; display: flex; flex-direction: column; }
 .panel-chrome { flex-shrink: 0; }
 .panel-actions { display: flex; align-items: center; height: 36px; padding: 4px 8px; gap: 4px; }
 .panel-recovery { margin: 0 8px; padding: 0 4px; border-radius: 6px; background: var(--input-background); color: var(--input-text); font-size: 12px; line-height: 17px; }
@@ -219,5 +220,12 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 }
 @media (max-height: 120px) {
   .answer-text { padding: 0; }
-  .answer-panel:has(.panel-recovery) .answer-text { margin-bottom: 5px; }
+  .answer-content:has(.panel-recovery) .panel-actions { height: 30px; padding-block: 3px; }
+  .answer-content:has(.panel-recovery) .panel-toolbar button { height: 24px; outline-offset: 1px; }
+  .answer-content:has(.panel-recovery) .answer-text { margin-bottom: 0; }
+}
+/* Share the full scroll area when the compact header and one answer line cannot fit together. */
+@container (height < calc(47px + 1.5em)) {
+  .answer-content:has(.panel-recovery) { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+  .answer-content:has(.panel-recovery) .answer-text { flex: 1 0 auto; overflow: visible; }
 }

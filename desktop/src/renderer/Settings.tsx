@@ -5,10 +5,11 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Button } from '@astryxdesign/core/Button';
-import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
+import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelField, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
+import { applyModelEdits } from '../contracts/model-selection';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
@@ -28,6 +29,8 @@ const PAGE_HINTS: Record<Page, string> = {
   Updates: 'Check your version and choose when to download or install an update.'
 };
 interface ValidationProblem { message: string; page: Page; field: string; advanced?: boolean; provider?: ApiProvider }
+interface ModelDraft { models: ModelSelection; fields: ModelField[] }
+const SAVE_BUSY = 'Another Settings save is finishing. Wait a moment, then try Save again.';
 const COLOR_FIELDS = [{ field: 'BackgroundColor', label: 'Background' }, { field: 'TextColor', label: 'Text' }, { field: 'AccentColor', label: 'Buttons' }] as const;
 const PIPELINE_NOTICE: Record<PipelineMode, string> = {
   Thorough: 'Locates the question, extracts it, then answers in three model calls. Both models must support structured responses; screen reading requires images.',
@@ -58,7 +61,7 @@ export function Settings({ state }: { state: AppState }) {
   const [invalidField, setInvalidField] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelSelection>>>({});
+  const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelDraft>>>({});
   const [showKey, setShowKey] = useState(false);
   const [recording, setRecording] = useState<ShortcutField | null>(null);
   const recordingRef = useRef<ShortcutField | null>(null);
@@ -80,10 +83,10 @@ export function Settings({ state }: { state: AppState }) {
       const copy = structuredClone(result);
       // Saved secrets never cross the renderer boundary, even as masked text.
       copy.keyUpdates = {};
-      const models = copy.values.Models ?? defaultModels();
+      copy.modelEdits = [];
       draftRef.current = copy;
       setDraft(copy);
-      setModelDrafts({ [models.Provider]: models });
+      setModelDrafts({});
     }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
     return () => {
       cancelled = true; alive.current = false;
@@ -139,13 +142,15 @@ export function Settings({ state }: { state: AppState }) {
   function updateValues(patch: Partial<SettingsDraft['values']>) {
     modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
   }
-  const models = draft?.values.Models ?? defaultModels();
+  const models = applyModelEdits(state.settingsModels, draft?.values.Models ?? defaultModels(), draft?.modelEdits ?? []);
   const provider = models.Provider;
   const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
   const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
   const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
-  function updateModels(patch: Partial<ModelSelection>) {
-    updateValues({ Models: { ...models, ...patch } });
+  function updateModels(patch: Partial<Omit<ModelSelection, 'Provider'>>) {
+    const fields = Object.keys(patch) as ModelField[];
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: { ...models, ...patch } },
+      modelEdits: [...new Set([...(previous.modelEdits ?? []), ...fields])] }));
   }
   function changePipeline(mode: PipelineMode) {
     if (!draft) return;
@@ -156,9 +161,11 @@ export function Settings({ state }: { state: AppState }) {
   }
   function changeProvider(selected: ApiProvider) {
     if (!draft || selected === provider) return;
-    setModelDrafts((previous) => ({ ...previous, [provider]: models }));
-    const next = modelDrafts[selected] ?? defaultModels(selected);
-    updateValues({ Models: next });
+    const fields = draft.modelEdits?.filter(field => field !== 'Provider') ?? [];
+    setModelDrafts(previous => ({ ...previous, [provider]: { models, fields } }));
+    const next = modelDrafts[selected];
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: next?.models ?? defaultModels(selected) },
+      modelEdits: ['Provider', ...(next?.fields ?? [])] }));
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
@@ -206,10 +213,10 @@ export function Settings({ state }: { state: AppState }) {
     return null;
   }
   async function save() {
+    if (savingRef.current || choosingColor || !draft) return;
+    if (state.settingsSaving) { setError(SAVE_BUSY); setInvalidField(null); return; }
     stopRecording();
-    if (savingRef.current || choosingColor) return;
     const problem = validation();
-    if (!draft) return;
     if (problem) {
       setPage(problem.page);
       if (problem.provider && problem.provider !== provider) changeProvider(problem.provider);
@@ -217,7 +224,7 @@ export function Settings({ state }: { state: AppState }) {
       if (problem.field.startsWith('shortcut-')) setShortcutsOpen(true);
       setError(problem.message); setInvalidField(problem.field); setFocusRequest({ field: problem.field }); return;
     }
-    savingRef.current = true; setSaving(true); setError('');
+    savingRef.current = true; setSaving(true); setError(''); setInvalidField(null);
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
     outgoing.values.CustomInstruction = outgoing.values.CustomInstruction.trim();
@@ -229,7 +236,7 @@ export function Settings({ state }: { state: AppState }) {
     try {
       const result = await window.sc.saveSettings(outgoing);
       if (!alive.current) return;
-      if (result === 'busy') setError('Another Settings save is finishing. Wait a moment, then try Save again.');
+      if (result === 'busy') setError(SAVE_BUSY);
       else if (result === 'saved' && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
@@ -395,7 +402,7 @@ export function Settings({ state }: { state: AppState }) {
           <VStack className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
             display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={blocked || provider !== 'DeepSeek'}
             onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
-              AnswerTokenLimit: value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? 16000 : models.AnswerTokenLimit })} />
+              ...(value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? { AnswerTokenLimit: 16000 } : {}) })} />
             <VStack><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
               type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
               value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></VStack></VStack>

@@ -21,6 +21,28 @@ function advanced() {
   const summary = screen.getByText('Advanced model settings', { selector: 'summary' });
   if (!summary.parentElement!.hasAttribute('open')) fireEvent.click(summary);
 }
+async function renderController(production: ReturnType<typeof controllerFixture>) {
+  const driver = fixture();
+  production.host.publish = driver.emit;
+  const api = production.controller.apiMethods();
+  driver.api.getState.mockImplementation(api.getState);
+  driver.api.command.mockImplementation(api.command);
+  driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
+  driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
+  await production.controller.initialize();
+  await production.controller.command({ type: 'toggleVisibility' });
+  render(<App />);
+  return driver;
+}
+async function openSettingsFromPanel() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  await screen.findByRole('combobox', { name: 'Answer mode' });
+}
+function enterModel(name: string, value: string) {
+  const model = screen.getByRole('combobox', { name });
+  fireEvent.change(model, { target: { value } });
+  fireEvent.blur(model);
+}
 describe('explicit screenshot submission', () => {
   it.each(['shortcut', 'button', 'global'] as const)('sends text with a screenshot once via %s', async path => {
     const driver = fixture({ surface: 'input' }); render(<App />);
@@ -60,23 +82,11 @@ describe('durable model pipeline choices', () => {
     const selected = { ...original, AnswerModel: 'gpt-synthetic-b' };
     const production = controllerFixture({ ...defaultSettings('synthetic-key'), Models: original, CommandsShown: true,
       ModelPipelines: priorPreference ? rememberModelPipeline([], selected, 'Thorough') : [], PipelineMode: 'Thorough' });
-    const driver = fixture();
-    production.host.publish = driver.emit;
-    const api = production.controller.apiMethods();
-    driver.api.getState.mockImplementation(api.getState);
-    driver.api.command.mockImplementation(api.command);
-    driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
-    driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
-    await production.controller.initialize();
-    await production.controller.command({ type: 'toggleVisibility' });
-    render(<App />);
+    const driver = await renderController(production);
     async function selectModel() {
-      fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
-      await screen.findByRole('combobox', { name: 'Answer mode' });
+      await openSettingsFromPanel();
       tab('Models & API'); advanced();
-      const answerModel = screen.getByRole('combobox', { name: 'Answer model' });
-      fireEvent.change(answerModel, { target: { value: selected.AnswerModel } });
-      fireEvent.blur(answerModel);
+      enterModel('Answer model', selected.AnswerModel);
       expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Thorough');
     }
 
@@ -270,6 +280,121 @@ describe('answer and temporary input', () => {
     await act(async () => driver.emit({ answer: 'Newest answer' }));
     await act(async () => resolve(initial));
     expect(screen.getByTestId('answer-text').textContent).toBe('Newest answer');
+  });
+});
+
+describe('production Settings save overlap', () => {
+  it.each([
+    { edit: 'service only', answer: 'synthetic-saved-answer', vision: 'synthetic-saved-vision' },
+    { edit: 'answer model', answer: 'synthetic-edited-answer', vision: 'synthetic-saved-vision' },
+    { edit: 'default screen-reading model', answer: 'synthetic-saved-answer', vision: 'deepseek-flash' }
+  ])('merges a retry after both drafts select DeepSeek with a newer edit to $edit', async ({ edit, answer, vision }) => {
+    const original = defaultSettings('synthetic-openai-key');
+    original.CommandsShown = true;
+    original.ProviderKeys.DeepSeek = 'synthetic-previous-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    tab('Models & API'); advanced();
+    choose('API service', 'DeepSeek');
+    enterModel('Answer model', 'synthetic-saved-answer');
+    enterModel('Screen-reading model', 'synthetic-saved-vision');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-replacement-key' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    tab('Models & API'); advanced();
+    choose('API service', 'DeepSeek');
+    if (edit === 'answer model') enterModel('Answer model', answer);
+    if (edit === 'default screen-reading model') {
+      fireEvent.click(screen.getByRole('button', { name: 'Screen-reading model suggestions' }));
+      fireEvent.click(screen.getByRole('option', { name: 'deepseek-flash' }));
+    }
+    tab('Panel');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '16' } });
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(production.save).toHaveBeenCalledOnce();
+
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].Models).toMatchObject({ Provider: 'DeepSeek', AnswerModel: 'synthetic-saved-answer', VisionModel: 'synthetic-saved-vision' });
+    tab('Models & API');
+    const displayed = {
+      AnswerModel: screen.getByRole<HTMLInputElement>('combobox', { name: 'Answer model' }).value,
+      VisionModel: screen.getByRole<HTMLInputElement>('combobox', { name: 'Screen-reading model' }).value
+    };
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({
+      Models: { Provider: 'DeepSeek', AnswerModel: answer, VisionModel: vision }, ResponseMode: 'Brief',
+      Appearance: { ...original.Appearance, TextSizePoints: 16 }, ApiKey: 'synthetic-replacement-key',
+      ProviderKeys: { OpenAI: 'synthetic-openai-key', DeepSeek: 'synthetic-replacement-key' }
+    });
+    expect(displayed).toEqual({ AnswerModel: answer, VisionModel: vision });
+    expect(production.run).not.toHaveBeenCalled();
+  });
+
+  it.each(['succeeds', 'fails'])('offers a busy retry before the earlier provider key write %s', async outcome => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    tab('Models & API');
+    choose('API service', 'DeepSeek');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-pending-key' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Summarize');
+    tab('Models & API');
+    choose('API service', 'DeepSeek');
+    const key = screen.getByTestId<HTMLInputElement>('service-key');
+    production.applyShortcuts.mockClear();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(key.value).toBe('');
+    expect(key.getAttribute('aria-invalid')).not.toBe('true');
+    expect(production.save).toHaveBeenCalledOnce();
+    expect(production.applyShortcuts).not.toHaveBeenCalled();
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+    tab('Answer & shortcuts');
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Summarize');
+    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    choose('Answer mode', 'Brief');
+    tab('Models & API');
+
+    await act(async () => {
+      if (outcome === 'succeeds') write.resolve();
+      else write.reject(new Error('Synthetic storage failure'));
+      await Promise.allSettled([driver.api.saveSettings.mock.results[0]!.value]);
+    });
+    expect(screen.getByTestId<HTMLInputElement>('service-key').value).toBe('');
+    expect(JSON.stringify(production.controller.getSettingsDraft())).not.toContain('synthetic-pending-key');
+    expect(JSON.stringify(production.controller.getState())).not.toContain('synthetic-pending-key');
+    if (outcome === 'succeeds') {
+      expect(screen.getByText('A key is saved for this service.')).toBeTruthy();
+      fireEvent.click(screen.getByTestId('settings-save'));
+    } else {
+      fireEvent.click(screen.getByTestId('settings-save'));
+      expect((await screen.findByRole('alert')).textContent).toBe('Enter an API key for the selected service.');
+      expect(document.activeElement).toBe(screen.getByTestId('service-key'));
+      expect(screen.getByTestId('service-key').getAttribute('aria-invalid')).toBe('true');
+      expect(production.save).toHaveBeenCalledOnce();
+      fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-new-key' } });
+      fireEvent.click(screen.getByTestId('settings-save'));
+    }
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Brief', Models: { Provider: 'DeepSeek' },
+      ProviderKeys: { OpenAI: 'synthetic-key', DeepSeek: outcome === 'succeeds' ? 'synthetic-pending-key' : 'synthetic-new-key' } });
+    expect(production.run).not.toHaveBeenCalled();
   });
 });
 

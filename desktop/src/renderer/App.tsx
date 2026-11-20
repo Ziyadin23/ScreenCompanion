@@ -32,6 +32,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const pending = useRef(false);
   const composing = useRef(false);
   const text = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
@@ -39,9 +40,13 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   useEffect(() => () => { alive.current = false; }, []);
   useEffect(() => window.sc.onScroll((delta) => {
     // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
-    if (text.current) text.current.scrollTop -= delta / 120 * Math.max(1, state.appearance.TextSizePoints * 4);
+    const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : text.current;
+    if (viewport) viewport.scrollTop -= delta / 120 * Math.max(1, state.appearance.TextSizePoints * 4);
   }), [state.appearance.TextSizePoints]);
-  useEffect(() => { if (text.current) text.current.scrollTop = 0; }, [state.answer, state.error, state.surface === 'captureTest']);
+  useEffect(() => {
+    if (text.current) text.current.scrollTop = 0;
+    if (content.current) content.current.scrollTop = 0;
+  }, [state.answer, state.error, state.surface === 'captureTest']);
   useEffect(() => {
     if (!state.visible) return;
     if (state.surface === 'input' && !state.busy) input.current?.focus();
@@ -98,28 +103,30 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
       if (event.button === 0 && event.altKey) { event.preventDefault(); event.stopPropagation(); void onCommand({ type: 'beginMove' }); }
     }}>
-    <header className="panel-chrome">
-      <div className="panel-actions">
-        <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
-        <nav className="panel-toolbar" aria-label="SC controls">
-          {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
-            disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
-        </nav>
-      </div>
-      {state.shortcutRecovery && <p className="panel-recovery" role="alert">Restart SC to fix shortcuts.</p>}
-    </header>
-    <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
-    {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
-      <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
-        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
-        onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
-      <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
-      <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
-        onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
-      <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
-      {error && <span className="input-error" role="alert">{error}</span>}
-    </form>}
-    {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
+    <section className={state.surface === 'input' ? 'panel-content' : 'panel-content answer-content'} ref={content}>
+      <header className="panel-chrome">
+        <div className="panel-actions">
+          <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
+          <nav className="panel-toolbar" aria-label="SC controls">
+            {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
+              disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
+          </nav>
+        </div>
+        {state.shortcutRecovery && <p className="panel-recovery" role="alert">Restart SC to fix shortcuts.</p>}
+      </header>
+      <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
+      {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
+        <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
+          disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
+          onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
+        <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+        <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
+          onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
+        <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
+        {error && <span className="input-error" role="alert">{error}</span>}
+      </form>}
+      {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
+    </section>
     {EDGES.map((edge) => <div key={edge} className={`resize-edge edge-${edge}`} data-testid={`resize-${edge}`} aria-hidden="true"
       onMouseDown={(event) => { if (event.button === 0 && !event.altKey) { event.preventDefault(); void onCommand({ type: 'beginResize', edge }); } }} />)}
   </main>;

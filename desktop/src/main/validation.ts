@@ -25,6 +25,7 @@ export const settingsDraftSchema = z.object({
     PipelineMode: pipeline.nullable(),
     ModelPipelines: modelPipelines
   }),
+  modelEdits: z.array(z.enum(['Provider', 'AnswerModel', 'VisionModel', 'Thinking', 'AnswerTokenLimit'])).max(5).optional(),
   keyPresence: z.record(z.enum(PROVIDERS), z.boolean()),
   keyUpdates: z.partialRecord(z.enum(PROVIDERS), key),
   pipelineUpdates: modelPipelines

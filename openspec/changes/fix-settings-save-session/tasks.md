@@ -30,6 +30,14 @@
 - The #19/#61 integration shares [panel measurement and window sizing](../../../desktop/src/main/index.ts). Keep recovery in the measurement identity and retain manual sizing guards. #19 also changes [renderer window selection](../../../desktop/src/renderer/App.tsx) for Linux. Keep that selection and the measured recovery header.
 - Fresh independent standards and acceptance review and the source PR remain pending under task 1.3. Windows native, encrypted vault, UI and recorder checks remain pending under task 2.1. Packaged startup, a new verified runnable copy and the transfer record remain pending under task 2.2.
 
+### Provider overlap and large answer text on 2026-11-20
+
+- The clean baseline was commit `36ad9707968046707593312f78545b2eabb66b11`, tree `3a0ae570386b13e0b9bd14b248f92db490e94c4a`. On an extracted copy, `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` passed all 1,275 original tests in 36 files, type checking, lint and production bundles, exit 0.
+- With the new renderer and controller tests on the baseline, five cases failed, exit 1. Three cases lost one or more saved model fields after both drafts selected DeepSeek. Two cases prompted for a key before the earlier write settled. With the correction, the same five cases and four earlier Direct and Thorough cases passed, exit 0. After a failed earlier key write, the retry prompts for a key when one is required.
+- `node --test --test-concurrency=1 desktop/tests/preview/shortcut-recovery.test.mjs` passed three cases and failed two on the baseline, exit 1. It passed all five on the corrected production renderer, exit 0. At 180×80, the 16-point answer's viewport changed from y=53–75 to y=47–80. The first 29-pixel line fits at y=48–77, and the last line fits after End. At 28 points, a wheel event brings the first full line to y=27–78 and the restart message to y=8–25. End brings the last complete line into view. At 180×128, the Question controls fit at y=57.4–93.4 with default and 28-point answer text.
+- The affected portable suites passed 267 tests across nine files. `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` passed type checking, lint, all 1,280 portable tests across 36 files and production bundles. The built Astryx doctor reported 19 passes and two existing theme-font warnings. The setup Chromium preview passed all 16 cases. Each check exited 0.
+- The host checks use synthetic keys, storage and shortcut state. The #19 and #61 work retains ownership of native panel sizing and persistence. Task 1.3 still requires the independent reviews and source PR. The project owner coordinates those steps, then Windows qualification and local beta handoff in tasks 2.1 and 2.2.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

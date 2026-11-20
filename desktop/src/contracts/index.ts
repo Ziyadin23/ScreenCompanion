@@ -14,6 +14,7 @@ export interface ModelSelection {
   Provider: ApiProvider; AnswerModel: string; VisionModel: string;
   Thinking: DeepSeekReasoning; AnswerTokenLimit: number | null;
 }
+export type ModelField = keyof ModelSelection;
 export interface ModelPipelinePreference { Provider: ApiProvider; AnswerModel: string; PipelineMode: PipelineMode }
 /** PascalCase names and enum strings are the existing SSK3 serialized contract. */
 export interface VaultData {
@@ -105,13 +106,14 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState; settingsSession: number; settingsDirty: boolean;
+  updates: UpdateState; settingsSession: number; settingsDirty: boolean; settingsSaving: boolean;
   settingsKeyPresence: SettingsDraft['keyPresence'] | null;
-  settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
+  settingsModels: ModelSelection | null; settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
 }
 export interface SettingsDraft {
   session: number;
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
+  modelEdits?: ModelField[];
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
   pipelineUpdates: ModelPipelinePreference[];

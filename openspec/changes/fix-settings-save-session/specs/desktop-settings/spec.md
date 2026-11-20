@@ -28,8 +28,14 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 #### Scenario: Overlapping Save after reopening
 - **WHEN** the user tries to save a second draft while an earlier write or its shortcut rollback is pending
 - **THEN** the second attempt issues no shortcut registration or vault write
+- **AND** SC asks the user to wait and keeps the draft editable, including while an earlier write may save the selected service's key
 - **AND** after retrying, the second Save applies its edits against the latest saved preferences and keys
 - **AND** a key saved by the first write is available to the second draft without reentry
+
+#### Scenario: Retry after both drafts select the same service
+- **WHEN** an earlier Save writes model fields for a service and the newer draft also selects that service
+- **THEN** a retry keeps the saved value of each field the newer draft leaves untouched
+- **AND** the retry applies each explicit model field edit from the newer draft, including a choice of the default model ID
 
 #### Scenario: Retry with a saved pipeline for the selected model
 - **WHEN** an earlier Save changes the pipeline for the service and exact answer model in a newer draft
@@ -50,4 +56,5 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 #### Scenario: Recovery at a compact panel size
 - **WHEN** SC shows shortcut recovery in a compact Answer or Question panel
 - **THEN** the restart guidance fits alongside the usable panel content and controls at supported minimum sizes
+- **AND** the user can read complete retained answer lines at the selected text size using scrolling as needed within the panel dimensions
 - **AND** the user can reach both Question send controls by keyboard

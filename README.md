@@ -139,7 +139,7 @@ In Settings:
 - **Models & API** keeps provider keys, answer models and screenshot pipelines
   together; expand advanced controls when needed.
 - **Commands** shows control help; **Updates** manages installed-copy updates.
-- **Save** applies changes; **Back** discards them.
+- **Save** applies changes. If an earlier save is finishing, wait and try **Save** again. **Back** discards the current draft.
 
 See the [user guide](docs/USER_GUIDE.md) for full controls. For failed requests,
 use the panel's diagnostic code and report ID with the [troubleshooting guide](docs/USER_GUIDE.md#diagnose-a-failure).
