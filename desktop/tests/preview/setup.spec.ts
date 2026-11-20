@@ -25,6 +25,18 @@ async function openSetup(page: Page, platform: AppState['platform'], legacyNotic
   await page.addStyleTag({ content: '.preview-toolbar { display: none !important; }' });
 }
 
+test('loads decorative SC artwork in setup and Settings headers', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 420 });
+  for (const [surface, title] of [['setup', 'Set up SC'], ['settings', 'SC settings']]) {
+    await page.goto(`/?surface=${surface}`);
+    const header = page.locator('.dialog-header');
+    await expect(header.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    const mark = header.locator('img[alt=""]');
+    await expect(mark).toBeInViewport({ ratio: 1 });
+    await expect(mark).toHaveJSProperty('naturalWidth', 512);
+  }
+});
+
 for (const viewport of [{ width: 560, height: 480 }, { width: 320, height: 420 }]) {
   for (const platform of ['windows', 'linux'] as const) {
     for (const legacyNotice of [false, true]) {

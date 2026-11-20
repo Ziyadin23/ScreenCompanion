@@ -62,6 +62,7 @@
       }
     ],
     "win": {
+      "icon": "../assets/brand/sc-icon.ico",
       "electronLanguages": [
         "en-US",
         "ru"
@@ -98,6 +99,7 @@
       "requestedExecutionLevel": "asInvoker"
     },
     "linux": {
+      "icon": "../assets/brand/sc-icon-512.png",
       "target": [
         "rpm"
       ],
@@ -131,6 +133,8 @@
       "requestExecutionLevel": "user"
     },
     "nsis": {
+      "installerIcon": "../assets/brand/sc-icon.ico",
+      "uninstallerIcon": "../assets/brand/sc-icon.ico",
       "artifactName": "SC-Setup-v${version}.${ext}",
       "oneClick": true,
       "perMachine": false,

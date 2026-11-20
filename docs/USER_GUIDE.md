@@ -1,6 +1,6 @@
 # SC user guide
 
-Detailed setup and controls for the TypeScript/Electron application. Source 0.5.0-beta.13 is an unpublished, undelivered qualification candidate and its Linux port is awaiting target verification; 0.5.0-beta.6 is the latest published prerelease. The latest published C# download remains v0.4.14; its [original guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md) stays with that release. Start with the [README](../README.md) for source builds and download status.
+This guide covers setup and controls for the TypeScript/Electron application. Linux target verification is in progress. See the [README](../README.md#release-status) for the current source version and downloads. The latest published prerelease is 0.5.0-beta.6. The latest published C# download is v0.4.14, with its own [user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md).
 
 ## Linux setup and controls
 
@@ -92,7 +92,11 @@ The following shortcuts and panel controls apply to the TypeScript beta:
 | **Ctrl+Backspace** | Exit the app, including from Settings. |
 | **Ctrl+Enter** | Open or focus temporary input; while typing in Question, send text with a fresh screenshot. |
 
-The tray menu offers Show/Hide, Settings, Capture test, and Exit. A double-click on the tray icon also shows or hides the selected panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. Expand **Settings → Answer & shortcuts → Keyboard shortcuts** to change all six shortcuts: click a field and press the desired key or combination. Click elsewhere to stop recording, or use Restore shortcuts. The current visibility and exit shortcuts remain active even while recording a new shortcut. Windows may reject reserved or occupied combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps.
+The current source uses the approved SC icon in setup, Settings, the window,
+the tray and the Windows and Linux packages. The tray icon has a badge and a
+working tooltip while a request runs.
+
+The tray menu offers Show / Hide, Type a question, Settings, Capture test and Exit. A double-click on the tray icon also shows or hides the selected panel. Settings offers Default, Brief, Explain steps, Translate to English, Summarize, or Custom answer behavior. The saved custom instruction is limited to 2,000 characters. Expand **Settings → Answer & shortcuts → Keyboard shortcuts** to change all six shortcuts: click a field and press the desired key or combination. Click elsewhere to stop recording, or use Restore shortcuts. The current visibility and exit shortcuts remain active even while recording a new shortcut. Windows may reject reserved or occupied combinations; F12 is reserved. A single-key shortcut can interrupt normal typing in other apps.
 
 The compact answer view reveals Capture screen, Question, Settings, Hide and Exit controls on hover or keyboard focus. Their reserved row keeps them clear of the answer without moving the text. Question input remains temporary, and the answer has no visible scrollbar. At very small input heights, the previous answer is temporarily hidden to keep the composer usable; it returns when input closes. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. Hiding the panel or switching its surface ends the current drag; release and press again to move or resize. SC saves the latest size you drag the panel to, including a return to earlier dimensions. On the next launch, SC restores that size within the current panel limits. The file at `%LOCALAPPDATA%\SC\window-size.json` contains only dimensions. The panel and tray icon indicate a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
 

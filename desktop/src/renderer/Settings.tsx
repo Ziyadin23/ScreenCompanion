@@ -18,6 +18,7 @@ import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, sameShortcut, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
+import appIcon from '../../../assets/brand/sc-icon-512.png';
 
 type Page = 'Answer & shortcuts' | 'Panel' | 'Models & API' | 'Commands' | 'Updates';
 const PAGES: Page[] = ['Answer & shortcuts', 'Panel', 'Models & API', 'Commands', 'Updates'];
@@ -311,7 +312,7 @@ export function Settings({ state }: { state: AppState }) {
   return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !showRetry) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
-    <HStack as="header" className="dialog-header"><HStack className="dialog-title"><Text className="app-mark" aria-hidden="true">SC</Text><Heading level={1}>SC settings</Heading></HStack><Text>v{state.version}</Text></HStack>
+    <HStack as="header" className="dialog-header"><HStack className="dialog-title"><img className="app-mark" src={appIcon} alt="" /><Heading level={1}>SC settings</Heading></HStack><Text>v{state.version}</Text></HStack>
     <VStack className="settings-layout">
     <VStack className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
       {PAGES.map((name) => <Button label={name} icon={<Icon name={PAGE_ICONS[name]} />} variant="ghost" key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}

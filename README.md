@@ -1,3 +1,5 @@
+<img src="assets/brand/sc-icon-180.png" width="64" height="64" alt="">
+
 # SC
 
 SC answers on-screen and typed questions in a compact desktop panel. Select and

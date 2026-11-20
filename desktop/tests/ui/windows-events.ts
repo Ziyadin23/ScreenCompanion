@@ -206,8 +206,8 @@ switch ($payload.type) {
 }`;
   const { stdout } = await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, timeout: 15000, maxBuffer: 64 * 1024 }).catch((error: unknown) => {
-      const stderr = (error as { stderr?: string }).stderr ?? '';
-      throw new Error(`Windows native fixture ${event.type} failed. ${stderr.slice(-3000)}`);
+      const failure = error as { stderr?: string; code?: string | number; killed?: boolean; signal?: string };
+      throw new Error(`Windows native fixture ${event.type} failed (code ${failure.code ?? 'unknown'}, killed ${failure.killed ?? false}, signal ${failure.signal ?? 'none'}). ${(failure.stderr ?? '').slice(-3000)}`);
     });
   return (stdout.trim() ? JSON.parse(stdout.trim()) : undefined) as T;
 }
