@@ -26,7 +26,8 @@ own API key. Provider usage charges apply.
 **Current source includes the new setup and Settings interface**, separate
 text-only and text-with-screenshot sends, and Thorough/Direct pipeline preferences
 for each answer model. The first-launch service list keeps wheel scrolling inside
-the open menu. A new runnable beta with this combined interface still
+the open menu. Settings keeps an active instruction editor available while it
+loads a newer saved mode. A new runnable beta with this combined interface still
 needs its final Windows UI, packaged-startup and recorder checks. See the
 [current verification gates](docs/VERIFICATION.md#current-candidate-and-open-gates).
 

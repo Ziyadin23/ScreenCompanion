@@ -104,7 +104,13 @@ Open **Settings → Panel** to set background transparency from 0% (opaque) to 1
 
 If you open Question while a Settings save is finishing, SC keeps the current surface open. You can reopen Settings and edit a new draft. If Save asks you to wait, try again when the earlier save finishes. The retry keeps the keys and settings you left untouched. Shortcut fields show the latest saved bindings with your edits applied. **Restore shortcuts** sets all six bindings to defaults in the draft. If you leave the service and model settings untouched, the retry uses the service and models saved by the earlier draft. A DeepSeek reasoning suggestion leaves a saved token limit in place. For the same service and answer model, a new pipeline choice applies on Save, including Thorough. The saved choice applies when you leave Request pipeline untouched.
 
-Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. With large text in a short Answer panel, scroll to read complete lines.
+If an earlier save changes **Answer mode** while you type in **Custom instruction**,
+you can finish typing in that field. The latest saved mode applies unless you
+changed it in your draft. If Settings cannot load the latest preferences, choose
+**Try loading again**. You can keep editing your draft while it loads. **Save**
+becomes available when the latest preferences load. Press **Escape** to use Back.
+
+Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. With large text in a short Answer panel, you can use the keyboard and the mouse wheel to read complete lines.
 
 ## Application updates
 

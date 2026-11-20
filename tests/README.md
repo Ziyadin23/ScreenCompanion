@@ -117,7 +117,9 @@ synthetic shortcut failure state in compact Windows panel sizes. The test
 checks the recovery text, retained answer, Question and keyboard controls. It
 measures complete answer lines at the default, 16-point, 18-point and 28-point
 sizes. It checks keyboard scrolling and full native wheel steps in both
-directions, including 28-point text in a 180 × 173 pixel Answer.
+directions, including 28-point text in a 180 × 173 pixel Answer. At 180 × 121
+with 28-point text, it checks half-notches after keyboard scrolling, mixed
+signed deltas and proportional scrolling on the ordinary Answer panel.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

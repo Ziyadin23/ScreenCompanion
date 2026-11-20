@@ -96,6 +96,21 @@
 - The tested desktop tree `b77bee41ea9d308a95ae8ae32efc229e101ee62b` includes protected main `e1533be`. On Fedora, `npm --prefix desktop ci` and `npm --prefix desktop run verify` passed with 1,305 tests in 37 files. The focused group passed eight checks, including a failed refresh followed by a retry and edits while waiting.
 - `node --test --test-concurrency=1 desktop/tests/preview/shortcut-recovery.test.mjs` passed nine production-renderer cases. The reviewers’ four current Chromium probes, five earlier Chromium probes and 16 production IPC cases passed on replay. From `desktop`, the built Astryx check and all 16 preview setup cases passed. Windows UI discovery found 38 cases in five files. Task 1.3 awaits independent review of the updated source. Tasks 2.1 and 2.2 retain the target and delivery requirements.
 
+### Keyboard focus and fine wheel input on 2026-11-20
+
+- Resumed [draft PR #123](https://github.com/Ziyadin23/ScreenCompanion/pull/123) at `4b58395b99f3b55ae24a1c2b764d15f1b646dbf3`. In a Git export of that head, seven new Settings cases failed, exit 1. The earlier Save took focus from the instruction editor and Escape could no longer invoke Back. Retry lost focus during the read. The corrected source passed all seven plus the existing failed-refresh edit case, exit 0. The new cases cover further typing, independent instruction and mode changes, Escape, and keeping the user's focus choice if it moves during Retry.
+
+  ```sh
+  npm --prefix desktop test -- tests/renderer/workflows.test.tsx \
+    -t 'keeps the instruction editor active|keeps keyboard focus through Settings load retry'
+  ```
+
+- On the baseline production bundle, `node --test --test-concurrency=1 desktop/tests/preview/shortcut-recovery.test.mjs` passed nine existing cases and failed two new cases, exit 1. At 180 × 121 with 28-point text, half-notches after ArrowDown exposed zero complete lines. Mixed partial deltas moved the answer before one full notch. The same suite passed all 11 cases, exit 0, after accumulating signed deltas in the compact recovery viewport. Lines 2–14 are readable on the way down from ArrowDown. Lines 1–14 are readable on the way back up. The last line stays readable at the end, and ordinary scrolling still moves with each partial delta.
+- The tested source merge `5d4279e7f05be128a7bdc5a495ac62620ba063c6` has tree `47a4bf4cc79bb3891befb90ad2f18c4b95ea2801` and desktop tree `07dfe02f4326f4958afba10e688dab92c7e68152`. It includes protected main `7d258e33dbdac62ee27f3fe63607cd30d646a7ef` with the approved SC artwork from [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56). The icon assets, packaging configuration, #61 resize tests and both #120 Windows tests match that protected base.
+- On Fedora 44 x64 with Node 22.23.1 and npm 10.9.8, the affected command from the protected-main integration checkpoint passed 300 tests in 10 files, including the three #61 resize cases and the #56 tray regression. `npm --prefix desktop run verify` passed types, lint, 1,313 tests in 37 files and the production build. The combined bundle passed all 11 compact Chromium cases. From `desktop`, `node_modules/.bin/astryx doctor --built out/renderer` reported 19 passes and two theme-font warnings. `node_modules/.bin/playwright test --config playwright.preview.config.ts --workers=1` passed 17 cases, including the setup icon. `node node_modules/@playwright/test/cli.js test --list` found 38 Windows UI cases in five files. Each command exited 0. Heavy checks ran under `flock /tmp/sc-20261119-desktop-verify.lock env VITEST_MAX_WORKERS=1`.
+- `node .github/scripts/workflow-checks.mjs selftest`, `node .github/scripts/workflow-checks.mjs docs`, `openspec validate --all --strict --no-interactive` and the full PR whitespace check passed. The checks covered 137 Markdown files, 570 local links and anchors, and 16 OpenSpec items.
+- Task 1.3 awaits independent standards and acceptance rereview of the updated draft. Windows native, vault, UI and named-recorder checks remain in task 2.1. Packaged startup and the numbered local beta handoff remain in task 2.2.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.
