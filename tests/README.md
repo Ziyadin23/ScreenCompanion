@@ -213,8 +213,10 @@ further panel input or a test-driven repaint. Refloating must restore
 The portable `tests/main/panel-resize.test.ts` fixture holds the repaint,
 remap or compositor snapshot at the relevant point. It checks that a matching
 floating resize reaches disk and returns on a quick Hide and Show. A stale
-configure leaves that resize intact. A newer confirmed resize takes precedence
-over an older reply.
+configure leaves that resize intact. Two real resizes are sampled before Hide
+and the latest is restored even when their replies arrive out of order. The
+fixture also checks a genuine resize to the old normal bounds after remap and
+tests that Exit waits for an outstanding size write within a deadline.
 [Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
 
 ## Installed updates

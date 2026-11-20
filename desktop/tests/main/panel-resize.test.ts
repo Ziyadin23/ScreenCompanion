@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,13 +24,18 @@ let panel: TestWindow;
 let panelFloating: boolean;
 let panelPaint: Promise<void> | null;
 let nextGeometryResponse: Promise<void> | null;
+let nextSizeWrite: Promise<void> | null;
 let deferPanelConfigure: boolean;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
   isPackaged: false, whenReady: async () => {}, getPath: () => profile,
   setDesktopName() {}, setAppUserModelId() {}, commandLine: { appendSwitch() {} },
-  quit() { app.emit('before-quit'); }
+  quit() {
+    let prevented = false;
+    app.emit('before-quit', { preventDefault: () => { prevented = true; } });
+    if (!prevented) app.emit('quit');
+  }
 });
 
 class TestWindow extends EventEmitter {
@@ -126,6 +131,17 @@ vi.mock('electron', () => ({
   screen: { getPrimaryDisplay: () => ({ workArea }), getDisplayMatching: () => ({ workArea, scaleFactor }) }
 }));
 vi.mock('electron-updater', () => ({ default: {} }));
+vi.mock(import('node:fs/promises'), async importOriginal => {
+  const fs = await importOriginal();
+  return { ...fs, rename: async (source, destination) => {
+    if (destination === join(profile, 'SC', 'window-size.json')) {
+      const write = nextSizeWrite;
+      nextSizeWrite = null;
+      await write;
+    }
+    await fs.rename(source, destination);
+  } };
+});
 vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
@@ -156,8 +172,10 @@ async function boot() {
   await import('../../src/main/index');
   await vi.waitFor(async () => expect((await invoke('getState') as AppState).ready).toBe(true));
 }
-function close() {
+async function close() {
+  const exited = once(app, 'quit');
   app.quit();
+  await exited;
   app.removeAllListeners();
   ipc.clear();
 }
@@ -168,13 +186,14 @@ beforeEach(async () => {
   panelFloating = true;
   panelPaint = null;
   nextGeometryResponse = null;
+  nextSizeWrite = null;
   deferPanelConfigure = false;
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
 });
 afterEach(async () => {
-  close();
+  await close();
   vi.unstubAllEnvs();
   await rm(profile, { recursive: true, force: true });
 });
@@ -202,7 +221,7 @@ it.each([
   expect(panel.getSize()).toEqual(sizeA);
   await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(savedA));
 
-  close();
+  await close();
   // A fresh fit would be taller, so matching A on startup proves restoration.
   measuredTextHeight = 260;
   await boot();
@@ -409,6 +428,26 @@ it.skipIf(platform !== 'linux').each([false, true])(
     await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
   });
 
+it.skipIf(platform !== 'linux')('saves a resize to the old normal bounds after a user resize settles the remap', async () => {
+  await store().saveWindowSize({ Width: 530, Height: 240 });
+  await boot();
+  await setImmediate();
+  await invoke('command', { type: 'toggleVisibility' });
+  const paint = pause();
+  panelPaint = paint.pending;
+  try {
+    await invoke('command', { type: 'toggleVisibility' });
+    panel.setBounds({ ...panel.getNormalBounds(), width: 510, height: 252 });
+    await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 }));
+  } finally {
+    paint.resume();
+  }
+
+  await setImmediate();
+  panel.configureNormalBounds();
+  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
+});
+
 it.skipIf(platform !== 'linux').each([
   { painted: true, stale: false }, { painted: false, stale: false }, { painted: true, stale: true }
 ])('saves and restores a matching resize after Hide and Show (painted: $painted, stale event: $stale)', async ({ painted, stale }) => {
@@ -443,6 +482,44 @@ it.skipIf(platform !== 'linux').each([
     }
   });
 
+it.skipIf(platform !== 'linux').each([false, true])(
+  'restores the latest of two real resizes after Hide and Show (replies reversed: %s)', async reversed => {
+    const previous = { Width: 530, Height: 240 };
+    const latest = { width: 503, height: 264 };
+    const saved = { Width: 503, Height: 264 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
+    const older = pause();
+    const newer = pause();
+    try {
+      nextGeometryResponse = older.pending;
+      panel.resizeFromDesktop({ width: 510, height: 252 });
+      nextGeometryResponse = newer.pending;
+      panel.resizeFromDesktop(latest);
+      expect(panel.getCompositorSize()).toEqual(latest);
+      await invoke('command', { type: 'toggleVisibility' });
+      await invoke('command', { type: 'toggleVisibility' });
+      panel.configureNormalBounds();
+      expect(await store().loadWindowSize()).toEqual(previous);
+
+      const [firstReply, lastReply] = reversed ? [newer, older] as const : [older, newer] as const;
+      firstReply.resume();
+      await setImmediate();
+      lastReply.resume();
+      await vi.waitFor(async () => expect({ visible: panel.getSize(), saved: await store().loadWindowSize() })
+        .toEqual({ visible: latest, saved }));
+    } finally {
+      newer.resume();
+      older.resume();
+    }
+
+    await close();
+    await boot();
+    expect(panel.getSize()).toEqual(latest);
+    expect(await store().loadWindowSize()).toEqual(saved);
+  });
+
 it.skipIf(platform !== 'linux')('keeps the new map resize when the prior map confirmation arrives late', async () => {
   await store().saveWindowSize({ Width: 530, Height: 240 });
   await boot();
@@ -465,6 +542,77 @@ it.skipIf(platform !== 'linux')('keeps the new map resize when the prior map con
   } finally {
     confirmation.resume();
   }
+});
+
+it.skipIf(platform !== 'linux').each([true, false])(
+  'finishes a pending resize after quick Hide, Show and Exit (matching compositor size: %s)', async matching => {
+    const previous = { Width: 530, Height: 240 };
+    const size = { width: 510, height: 252 };
+    await store().saveWindowSize(previous);
+    await boot();
+    await setImmediate();
+    const confirmation = pause();
+    const exited = once(app, 'quit');
+    const onQuit = vi.fn();
+    app.once('quit', onQuit);
+    try {
+      nextGeometryResponse = confirmation.pending;
+      if (matching) panel.resizeFromDesktop(size);
+      else panel.deliverLateConfigure(size);
+      await invoke('command', { type: 'toggleVisibility' });
+      await invoke('command', { type: 'toggleVisibility' });
+      panel.configureNormalBounds();
+      await invoke('command', { type: 'exit' });
+      expect(onQuit).not.toHaveBeenCalled();
+    } finally {
+      confirmation.resume();
+    }
+    await exited;
+    expect(await store().loadWindowSize()).toEqual(matching ? { Width: 510, Height: 252 } : previous);
+  });
+
+it('finishes an outstanding size write when Exit follows a resize', async () => {
+  const previous = { Width: 530, Height: 240 };
+  await store().saveWindowSize(previous);
+  await boot();
+  await setImmediate();
+  const write = pause();
+  const exited = once(app, 'quit');
+  const onQuit = vi.fn();
+  app.once('quit', onQuit);
+  try {
+    nextSizeWrite = write.pending;
+    panel.resizeFromDesktop({ width: 510, height: 252 });
+    await vi.waitFor(() => expect(nextSizeWrite).toBeNull());
+    await invoke('command', { type: 'exit' });
+    expect(onQuit).not.toHaveBeenCalled();
+    expect(await store().loadWindowSize()).toEqual(previous);
+  } finally {
+    write.resume();
+  }
+  await exited;
+  expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 });
+});
+
+it.skipIf(platform !== 'linux')('exits with the saved size when a pending compositor reply misses the quit deadline', async () => {
+  const previous = { Width: 530, Height: 240 };
+  await store().saveWindowSize(previous);
+  await boot();
+  await setImmediate();
+  const confirmation = pause();
+  const onQuit = vi.fn();
+  app.once('quit', onQuit);
+  try {
+    nextGeometryResponse = confirmation.pending;
+    panel.resizeFromDesktop({ width: 510, height: 252 });
+    await invoke('command', { type: 'exit' });
+    expect(onQuit).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(onQuit).toHaveBeenCalledOnce(), { timeout: 2500 });
+  } finally {
+    confirmation.resume();
+  }
+  await setImmediate();
+  expect(await store().loadWindowSize()).toEqual(previous);
 });
 
 it.skipIf(platform !== 'linux')('keeps fit constraints until the compositor accepts the fit', async () => {

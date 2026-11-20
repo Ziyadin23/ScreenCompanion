@@ -1119,6 +1119,37 @@ fixture now checks the next live page and retains the geometry assertions.
 Windows Settings and same-profile resize verification, the named recorder
 check, final packaging and the numbered local beta handoff remain open.
 
+### Hyprland resize order and normal Exit (2026-11-20)
+
+On draft PR #122 at `9e11c2c`, an isolated Hyprland replay issued two native
+resizes to 510×252 and 503×264 while the first compositor reply was held.
+After quick Hide and Show, SC restored 510×252 on screen, on disk and after
+restart. A separate normal Exit discarded a captured 510×252 resize and
+restored 530×240 on restart. The portable fixture also reproduced a canceled
+remap blocking a later genuine resize to 420×180.
+
+SC now requests a compositor snapshot for each eligible mapped resize. It
+processes placement in event order within each mapping and remembers the
+latest matching floating size across mappings. When a matched resize settles
+a remap, SC clears that remap's normal-bounds guard. Normal Exit allows up to
+one second for outstanding resize checks and size writes to complete.
+
+The seven new main-process regressions failed on `9e11c2c` and all 28 resize
+cases passed after the correction. The tests include held replies delivered in
+both orders, a newer resize on a remapped panel, an unmatched notification,
+an in-progress atomic write and a quit deadline. In isolated Fedora 44,
+Hyprland 0.56.2, KWin 6.7.5 and Electron 45.0.0, all 14 tracked Wayland
+scenarios passed. The two-real-resize replay restored 503×264 on screen, on
+disk and after restart. Exit and quick Hide, Show and Exit each saved and
+restored 510×252 while the compositor reply was held through the Exit request.
+The 12 replayed scenarios also passed, including same-size tiling and its
+Settings return. The Lua float-rule check passed Back and Save. Desktop
+verification passed type checking, lint, 1,284 tests in 37 files and production
+bundling. The eight focused files passed 212 tests.
+
+Windows interactive Settings and same-profile resize, the named recorder
+check, final packaging and the numbered local beta handoff remain open.
+
 ## Packaged beta.6 activation investigation (2026-11-05)
 
 For [issue #6](https://github.com/Ziyadin23/ScreenCompanion/issues/6), a host-only

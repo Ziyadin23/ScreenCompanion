@@ -237,3 +237,20 @@
 - Task 2.6 remains open for independent rereview, source integration, Windows
   Settings and same-profile resize restart, and the named recorder check.
   Task 2.7 owns final packaging and the numbered runnable beta handoff.
+
+### 2.6 Resize ordering and Exit correction (2026-11-20)
+
+- The follow-up to [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  starts from `9e11c2c` on protected main `7d258e3`. Headless Hyprland and
+  portable IPC replay reproduced the lost latest resize, lost Exit save and
+  lingering remap guard. The correction associates each mapped resize with
+  its own compositor snapshot. Normal Exit waits within one deadline for
+  outstanding confirmations and writes. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-resize-order-and-normal-exit-2026-11-20)
+- The revised replay expects the latest real 503×264 resize across Hide,
+  Show and a same-profile restart. A separate unmatched Electron notification
+  preserves the 510×252 resize. Active remap, automatic sizing and tiling
+  checks remain in the Wayland and portable suites.
+- The coordinator owns independent rereview and source integration. Task 2.6
+  stays open for interactive Windows Settings and same-profile resize restart
+  and the named recorder check. Task 2.7 owns final packages and the verified
+  numbered beta handoff.

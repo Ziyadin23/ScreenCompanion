@@ -47,7 +47,8 @@ window controls to move the panel or resize it from an edge or corner. Setup and
 Settings open in their own window. Back and Save return to the answer panel.
 The floating answer panel fits its contents automatically until you resize it.
 SC remembers the last floating size you choose across launches and restores it
-after Hide and Show. A tiled panel returns to Hyprland's tiled layout after
+after Hide and Show. Exit allows up to one second to confirm and save a pending
+resize. A tiled panel returns to Hyprland's tiled layout after
 Settings, including when a rule floats newly opened windows. Hyprland sets the
 size of tiled or fullscreen windows. SC keeps your chosen floating size through
 layout changes. Question grows a short floating panel to 180 logical
