@@ -15,6 +15,7 @@ const cryptor = {
 };
 const platform = process.platform === 'linux' ? 'linux' : 'windows';
 const workArea = { x: 0, y: 0, width: 900, height: 700 };
+const setTrayImage = vi.fn();
 let profile: string;
 let scaleFactor: number;
 let measuredTextHeight: number;
@@ -80,12 +81,18 @@ vi.mock('electron', () => ({
     panel = new TestWindow(...args);
     return panel;
   },
-  dialog: { showErrorBox: vi.fn() }, nativeImage: { createFromBuffer() {} },
+  dialog: { showErrorBox: vi.fn() },
+  nativeImage: {
+    createFromPath: () => ({
+      resize: ({ width, height }: Electron.Size) => ({ toBitmap: () => Buffer.alloc(width * height * 4) })
+    }),
+    createFromBitmap: (bitmap: Buffer) => ({ toBitmap: () => Buffer.from(bitmap) })
+  },
   Menu: { buildFromTemplate() {} },
   Tray: class extends EventEmitter {
     setToolTip() {}
     setContextMenu() {}
-    setImage() {}
+    setImage = setTrayImage;
     destroy() {}
   },
   ipcMain: { handle: (name: string, listener: (event: unknown, value: unknown) => Promise<unknown>) => ipc.set(name, listener) },
@@ -126,6 +133,12 @@ afterEach(async () => {
   close();
   vi.unstubAllEnvs();
   await rm(profile, { recursive: true, force: true });
+});
+
+it('publishes an idle tray image when the panel finishes loading', async () => {
+  setTrayImage.mockClear();
+  await boot();
+  expect(setTrayImage).toHaveBeenCalledWith(expect.objectContaining({ toBitmap: expect.any(Function) }));
 });
 
 it.each([
