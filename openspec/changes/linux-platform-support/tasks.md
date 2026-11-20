@@ -263,6 +263,9 @@
   tray Exit still accepted capture, Settings lost the placement of an
   already hidden panel, and a second genuine resize at the old normal bounds
   was discarded during remap.
+- The branch incorporates protected main `56104612f6fef068c4ebdb83777cfe374d29ffb4`
+  from [PR #127](https://github.com/Ziyadin23/ScreenCompanion/pull/127).
+  That base update adds one root ignore rule for local Codex agent profiles.
 - The desktop controller and main entry point stop commands at quit and
   keep the bounded size drain. The panel records placement before Hide or
   Settings. Each later remap resize still needs a matching compositor
