@@ -18,7 +18,7 @@ Issue scope and the shared parser and test boundaries are recorded in [issue #62
 
 ## Checkpoint — 2026-11-19
 
-- The issue worktree is linked to #62. Its clean starting branch `Ziyadin23/issue-62-responses-status` matched freshly fetched `origin/main` at `9caa0c26af6670363b6991a78939d3c991a2b0c0`. The prior intake records the issue and the plan-first handoff. [Audit-fix intake](../integrate-astryx-interface/tasks.md#checkpoint--2026-11-15)
+- The issue worktree is linked to #62. Its clean starting branch `Ziyadin23/issue-62-responses-status` matched freshly fetched `origin/main` at `9caa0c26af6670363b6991a78939d3c991a2b0c0`. The prior intake records the issue and the plan-first handoff. [Audit-fix intake](../archive/2026-11-21-integrate-astryx-interface/tasks.md#checkpoint--2026-11-15)
 - The source candidate is staged for review on the issue branch. It changes `desktop/src/providers/index.ts`, `desktop/tests/pipeline/responses-status.test.ts`, `README.md`, `docs/PIPELINE.md`, `docs/STATUS.md` and the five planning files in `openspec/changes/validate-responses-status/`. Git and the linked Orca card track the published head.
 - This checkout had no dependency install receipt or `desktop/node_modules`. `npm --prefix desktop ci` exited 0 on Node 22.23.1 and npm 10.9.8, installing 597 packages. The install reported 14 moderate advisories.
 - On the original parser at `9caa0c2`, `npm --prefix desktop test -- tests/pipeline/responses-status.test.ts --reporter=dot` exited 1 with 16 regression cases failing and 4 compatibility cases passing. All eight Direct failures returned the synthetic answer. All eight Thorough failures reached a second answer attempt, which the strict transport rejected.
