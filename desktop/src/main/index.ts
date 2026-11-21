@@ -547,15 +547,15 @@ async function boot(): Promise<void> {
       if (!geometry || (closing && !waitingForPanelSize) || panel.isDestroyed()) return;
       const current = !closing && panel.isVisible() && isPanel(surface) ? linuxPanelLayout : null;
       const previousPlacement = layout.placement;
-      // The floating geometry during a placement correction belongs to the remap.
-      if (geometry.placement === 'floating' && restorePlacement && (restorePlacement === 'tiled' || previousPlacement === 'tiled')) return;
       layout.placement = geometry.placement;
       if (geometry.placement !== 'floating') {
         if (current === layout) measuredContent = '';
         return;
       }
+      if (restorePlacement === 'tiled') return;
       if (previousPlacement && previousPlacement !== 'floating') {
-        if (current === layout) void refreshLinuxPanelLayout(panel, layout);
+        // The first floating configure belongs to the mode change. Later resizes have their own snapshots.
+        if (current === layout && restorePlacement !== 'floating') void refreshLinuxPanelLayout(panel, layout);
         return;
       }
       if (order <= savedResizeOrder || !sameSize(bounds, geometry)) return;

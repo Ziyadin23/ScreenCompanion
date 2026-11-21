@@ -325,3 +325,43 @@
   local commit, followed by PR integration. Task 2.6 stays open for Windows
   Settings, same-profile resize and the named recorder check. Task 2.7 owns
   final packaging and the verified numbered beta handoff.
+
+### 2.6 Manual resize during the return from Settings (2026-11-21)
+
+Independent review of `109a53ab7f0ff241a4e3eba7893b0f0e020c7c30` found that
+a user could resize the panel as soon as Hyprland showed it floating, then
+lose that size when SC finished restoring the window. The local follow-up
+records the first change to floating placement. Subsequent resize events
+use the existing compositor confirmation and ordered size writes.
+
+| Isolated Hyprland check | Starting commit | Corrected source |
+| --- | --- | --- |
+| Back, resize immediately to 554×252 | SC returned to 530×238 on screen, on disk and after restart. | The panel and file kept 554×252 through restart. |
+| Save, resize immediately to the earlier automatic 480×144 | SC returned to 530×238 on screen, on disk and after restart. | The file kept 480×144. After restart, Question used 480×180 and Escape restored 480×144. |
+| Same two resizes after the window settled | Both passed. | Both passed. |
+
+The four-case reproduction used system `hyprctl` and a fresh profile for
+each case on Fedora 44, Hyprland 0.56.2, headless KWin 6.7.5 and Electron
+45.0.0. It exited 1 on the starting commit and 0 on the correction. The
+extended repository suite ran with `node --test --test-concurrency=1 desktop/tests/linux/panel-settings.mjs`
+on the same isolated host. Initially 18 cases passed and the new Save case
+failed at the file check (exit 1). All 19 passed after the fix (exit 0).
+Separate controls kept automatic answers at 480×144 after Back and 480×360
+after Save with no manual size file. A delayed compositor reply also
+preserved the new 554×252 selection through restart.
+
+The verified `desktop/` tree is `b295bdcde5b51afa5c8d63d68635307cdd1e5059`.
+The original four placement cases, all 12 lifecycle cases and all eight Lua
+placement cases passed on this tree. They cover manual tiling under a float
+rule, Hide and Show, hidden Settings and ordered resize confirmations. The
+focused command above passed 219 tests in nine files. With one Vitest worker
+and the shared verification lock, `npm --prefix desktop run verify` passed
+type checking, lint, 1,288 tests in 37 files and the production build.
+Astryx reported 19 passes and two existing theme font warnings. The workflow
+self-test and documentation check passed for 136 Markdown files and 596 link
+targets. Strict OpenSpec validation passed all 16 items. All commands exited 0.
+
+The coordinator owns independent rereview of this correction and PR
+integration. Task 2.6 stays open for Windows Settings, same-profile resize
+and the named recorder check. Task 2.7 owns final package startup and
+delivery of the verified numbered beta.

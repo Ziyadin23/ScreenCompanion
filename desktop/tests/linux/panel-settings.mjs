@@ -158,12 +158,12 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const stats = await stat(path, { bigint: true });
     return { size: await readFile(path, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
   };
-  const editAppearance = async (panel, action) => {
+  const editAppearance = async (panel, action, onReturn) => {
     await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
     const settings = await showing('settings-save');
     await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
     await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
-    await settings.getByRole('button', { name: action, exact: true }).click();
+    await Promise.all([settings.getByRole('button', { name: action, exact: true }).click(), onReturn?.()]);
     await expect(panel.getByTestId('answer-text')).toBeVisible();
     await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
       .toBe(action === 'Save' ? 28 : 11);
@@ -541,10 +541,13 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
       });
     }
 
+    const setFloatRule = async enabled => {
+      await writeFile(config, compositorConfig.join('\n').replace('float on', enabled ? 'float on' : 'float off') + '\n');
+      assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
+    };
     for (const floating of [true, false]) {
       if (!floating) {
-        await writeFile(config, compositorConfig.join('\n').replace('float on', 'float off') + '\n');
-        assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
+        await setFloatRule(false);
         for (const action of ['Back', 'Save']) {
           await t.test(`${action} restores a manually floated panel under a tile rule`, async () => {
             const profile = 'manually-floated-' + action.toLowerCase();
@@ -623,6 +626,43 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         });
       }
     }
+    await t.test('A manual resize on the first floating map after Save survives restart', async () => {
+      const profile = 'resize-on-settings-return';
+      try {
+        const panel = await setupProduction(profile);
+        await expect.poll(() => activeClient()?.floating).toBe(false);
+        await settledPanelSize(panel);
+        dispatch('setfloating', `address:${activeClient().address}`);
+        await expect.poll(geometry).toEqual([480, 144]);
+        const automatic = await settledPanelSize(panel);
+        await resize(panel, [530, 238]);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 238 });
+
+        await editAppearance(panel, 'Save', async () => {
+          let client;
+          await expect.poll(() => {
+            client = activeClient();
+            return client?.title === 'SC' && client.floating;
+          }, { intervals: [1] }).toBe(true);
+          dispatch('resizewindowpixel', `exact ${automatic.join(' ')},address:${client.address}`);
+        });
+        const native = await app.browserWindow(panel);
+        await expect.poll(() => savedSize(profile)).toEqual({ Width: automatic[0], Height: automatic[1] });
+        await expect.poll(geometry).toEqual(automatic);
+        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(automatic);
+        await closeApp();
+
+        await setFloatRule(true);
+        const restarted = await launch(profile);
+        const question = restarted.getByTestId('question-input');
+        await expect(question).toBeFocused();
+        await expect.poll(geometry).toEqual([automatic[0], 180]);
+        await question.press('Escape');
+        await expect.poll(geometry).toEqual(automatic);
+      } finally {
+        await closeApp();
+      }
+    });
   } finally {
     try {
       await app?.close();
