@@ -5,15 +5,18 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Button } from '@astryxdesign/core/Button';
-import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
+import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelField, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
-import { modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
+import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
+import { applyModelEdits, screenModelError } from '../contracts/model-selection';
+import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
+import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
 import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
-import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
+import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, sameShortcut, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
 import type { ShortcutField } from './shortcuts';
 import appIcon from '../../../assets/brand/sc-icon-512.png';
 
@@ -29,6 +32,8 @@ const PAGE_HINTS: Record<Page, string> = {
   Updates: 'Check your version and choose when to download or install an update.'
 };
 interface ValidationProblem { message: string; page: Page; field: string; advanced?: boolean; provider?: ApiProvider }
+interface ModelDraft { models: ModelSelection; fields: ModelField[] }
+const SAVE_BUSY = 'Another Settings save is finishing. Wait a moment, then try Save again.';
 const COLOR_FIELDS = [{ field: 'BackgroundColor', label: 'Background' }, { field: 'TextColor', label: 'Text' }, { field: 'AccentColor', label: 'Buttons' }] as const;
 const PIPELINE_NOTICE: Record<PipelineMode, string> = {
   Thorough: 'Locates the question, extracts it, then answers in three model calls. Both models must support structured responses; screen reading requires images.',
@@ -46,20 +51,24 @@ const DATA_NOTICE: Record<ApiProvider, string> = {
 export function Settings({ state }: { state: AppState }) {
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
   const draftRef = useRef<SettingsDraft | null>(null);
+  const [originalModels, setOriginalModels] = useState<ModelSelection | null>(null);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const [page, setPage] = useState<Page>('Answer & shortcuts');
   const body = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const retryButton = useRef<HTMLButtonElement>(null);
   const [advanced, setAdvanced] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [narrow, setNarrow] = useState(() => window.innerWidth < 600);
   const [focusRequest, setFocusRequest] = useState<{ field: string } | null>(null);
   const [invalidField, setInvalidField] = useState<string | null>(null);
+  const [instructionFocused, setInstructionFocused] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelSelection>>>({});
+  const [loadStatus, setLoadStatus] = useState<'loading' | 'failed' | 'retrying' | 'ready'>('loading');
+  const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
+  const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelDraft>>>({});
   const [showKey, setShowKey] = useState(false);
   const [recording, setRecording] = useState<ShortcutField | null>(null);
   const recordingRef = useRef<ShortcutField | null>(null);
@@ -70,31 +79,40 @@ export function Settings({ state }: { state: AppState }) {
   const [choosingColor, setChoosingColor] = useState(false);
   const savingRef = useRef(false);
   const alive = useRef(true);
-  const loaded = draft !== null;
 
   useEffect(() => {
     alive.current = true;
+    return () => { alive.current = false; recordingRef.current = null; };
+  }, []);
+  useEffect(() => {
     let cancelled = false;
-    setLoadFailed(false); setError('');
+    setLoadStatus(status => status === 'failed' || status === 'retrying' ? 'retrying' : 'loading');
     void window.sc.getSettingsDraft().then((result) => {
-      if (cancelled) return;
-      const copy = structuredClone(result);
-      // Saved secrets never cross the renderer boundary, even as masked text.
-      copy.keyUpdates = {};
-      const models = copy.values.Models ?? defaultModels();
-      const mode = modelPipeline(copy.values.ModelPipelines, models) ?? copy.values.PipelineMode ?? 'Thorough';
-      copy.values.PipelineMode = mode;
-      copy.values.ModelPipelines = rememberModelPipeline(copy.values.ModelPipelines, models, mode);
-      draftRef.current = copy;
-      setDraft(copy);
-      setModelDrafts({ [models.Provider]: models });
-    }).catch(() => { if (!cancelled) { setLoadFailed(true); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
-    return () => {
-      cancelled = true; alive.current = false;
-      if (recordingRef.current) void window.sc.command({ type: 'recordShortcut', recording: false }).catch(() => {});
-      recordingRef.current = null;
-    };
-  }, [loadAttempt]);
+      if (cancelled || result.session !== state.settingsSession) return;
+      const previous = draftRef.current;
+      if (previous) {
+        replaceDraft({ ...previous, values: { ...previous.values, ...applyPreferenceEdits(result.values, previous) } });
+      } else {
+        const copy = structuredClone(result);
+        copy.keyUpdates = {};
+        copy.modelEdits = [];
+        copy.responseEdits = [];
+        copy.appearanceEdits = [];
+        setOriginalModels(copy.values.Models);
+        replaceDraft(copy);
+      }
+      const focused = document.activeElement;
+      // Move focus before Retry disappears if the user is still on it.
+      if (retryButton.current ? focused === retryButton.current : !previous && focused === document.body) {
+        heading.current?.focus();
+        if (body.current) body.current.scrollTop = 0;
+      }
+      setLoadedRevision(state.settingsRevision);
+      setLoadStatus('ready');
+      setError('');
+    }).catch(() => { if (!cancelled) { setLoadStatus('failed'); setError('Settings could not be loaded. Try again or use Back to return to the answer.'); } });
+    return () => { cancelled = true; };
+  }, [loadAttempt, state.settingsSession, state.settingsRevision]);
 
   useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
   useEffect(() => {
@@ -102,19 +120,17 @@ export function Settings({ state }: { state: AppState }) {
     window.addEventListener('resize', resize);
     return () => window.removeEventListener('resize', resize);
   }, []);
-  // Focus once after loading, so status updates and draft edits never steal it.
-  useEffect(() => { if (loaded) heading.current?.focus({ preventScroll: true }); }, [loaded]);
   useEffect(() => {
     if (!focusRequest) return;
     const field = document.getElementById(focusRequest.field);
     field?.focus(); field?.scrollIntoView?.({ block: 'nearest' });
   }, [focusRequest]);
 
-  function markDirty(value: boolean) {
-    if (dirtyRef.current === value) return;
-    dirtyRef.current = value;
-    if (alive.current) setDirty(value);
-    void window.sc.command({ type: 'settingsDraftChanged', dirty: value }).catch(() => {
+  function markDirty() {
+    if (dirtyRef.current) return;
+    dirtyRef.current = true;
+    setDirty(true);
+    void window.sc.command({ type: 'settingsDraftChanged', dirty: true, session: state.settingsSession }).catch(() => {
       if (alive.current) setError('Settings edit status could not be updated. Save your changes or use Back before restarting.');
     });
   }
@@ -124,13 +140,13 @@ export function Settings({ state }: { state: AppState }) {
     if (!previous || savingRef.current) return;
     const next = change(previous);
     if (JSON.stringify(previous) === JSON.stringify(next)) return;
-    replaceDraft(next); markDirty(true); setError(''); setInvalidField(null);
+    replaceDraft(next); markDirty(); setError(''); setInvalidField(null);
   }
 
   function stopRecording() {
     if (!recordingRef.current) return;
     recordingRef.current = null; pendingModifier.current = null; setRecording(null); setRecordNotice('');
-    void window.sc.command({ type: 'recordShortcut', recording: false }).catch(() => {
+    void window.sc.command({ type: 'recordShortcut', recording: false, session: state.settingsSession }).catch(() => {
       if (alive.current) setError('Shortcut recording could not be stopped. Close Settings and try again.');
     });
   }
@@ -141,35 +157,57 @@ export function Settings({ state }: { state: AppState }) {
   }, []);
   useEffect(() => { if (!state.visible) stopRecording(); }, [state.visible]);
 
-  function updateValues(patch: Partial<SettingsDraft['values']>) {
-    modifyDraft((previous) => ({ ...previous, values: { ...previous.values, ...patch } }));
+  function updateResponse<K extends 'ResponseMode' | 'CustomInstruction'>(field: K, value: SettingsDraft['values'][K]) {
+    if (!state.settingsSaving && loadedRevision === state.settingsRevision && draftRef.current?.values[field] === value) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, [field]: value },
+      responseEdits: [...new Set([...(previous.responseEdits ?? []), field])] }));
   }
-  const models = draft?.values.Models ?? defaultModels();
+  const shortcuts = Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) =>
+    [field, draft?.shortcutEdits?.includes(field) ? draft.values[field] : state.shortcuts[action]])) as ShortcutBindings;
+  function updateShortcuts(patch: Partial<ShortcutBindings>) {
+    const entries = Object.entries(patch) as [ShortcutField, HotkeyBinding][];
+    if (!state.settingsSaving && entries.every(([field, binding]) => sameShortcut(binding, shortcuts[field]))) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, ...patch },
+      shortcutEdits: [...new Set([...(previous.shortcutEdits ?? []), ...entries.map(([field]) => field)])] }));
+  }
+  const savedModels = state.settingsModels ?? originalModels;
+  const draftModels = draft?.values.Models;
+  const models = applyModelEdits(savedModels, draftModels ?? defaultModels(), draft?.modelEdits ?? []);
   const provider = models.Provider;
-  const pipeline = draft?.values.PipelineMode ?? 'Thorough';
-  function updateModels(patch: Partial<ModelSelection>) {
-    const next = { ...models, ...patch };
-    updateValues({ Models: next, ...(next.AnswerModel.trim() !== models.AnswerModel.trim() ?
-      { PipelineMode: modelPipeline(draft!.values.ModelPipelines, next) ?? 'Thorough' } : {}) });
+  const localModels = draftModels?.Provider === provider ? draftModels : models;
+  const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
+  const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
+  const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
+  function updateModels(patch: Partial<Omit<ModelSelection, 'Provider'>>) {
+    const fields = Object.keys(patch) as ModelField[];
+    modifyDraft(previous => {
+      const next = { ...localModels, ...patch };
+      const modelEdits = [...new Set([...(previous.modelEdits ?? []), ...fields])];
+      return { ...previous, values: { ...previous.values, Models: next }, modelEdits };
+    });
   }
   function changePipeline(mode: PipelineMode) {
     if (!draft) return;
     const preference = { Provider: provider, AnswerModel: models.AnswerModel.trim(), PipelineMode: mode };
-    updateValues({ PipelineMode: mode, ...(validModelPipelines([preference]) ?
-      { ModelPipelines: rememberModelPipeline(draft.values.ModelPipelines, models, mode) } : {}) });
+    if (validModelPipelines([preference])) {
+      modifyDraft(previous => ({ ...previous, pipelineUpdates: rememberModelPipeline(previous.pipelineUpdates, models, mode) }));
+    }
   }
   function changeProvider(selected: ApiProvider) {
     if (!draft || selected === provider) return;
-    setModelDrafts((previous) => ({ ...previous, [provider]: models }));
-    const next = modelDrafts[selected] ?? defaultModels(selected);
-    updateValues({ Models: next, PipelineMode: modelPipeline(draft.values.ModelPipelines, next) ?? 'Thorough' });
+    const fields = draft.modelEdits?.filter(field => field !== 'Provider') ?? [];
+    setModelDrafts(previous => ({ ...previous, [provider]: { models: localModels, fields } }));
+    const next = modelDrafts[selected];
+    const modelEdits: ModelField[] = ['Provider', ...(next?.fields ?? [])];
+    const selectedModels = next?.models ?? defaultModels(selected);
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: selectedModels }, modelEdits }));
     setShowKey(false); setError('');
   }
   function startRecording(field: ShortcutField) {
     if (recordingRef.current === field) return;
     stopRecording();
     recordingRef.current = field; setRecording(field); setRecordNotice('Listening… press a key');
-    void window.sc.command({ type: 'recordShortcut', recording: true }).catch(() => {
+    void window.sc.command({ type: 'recordShortcut', recording: true, session: state.settingsSession }).catch(() => {
       if (alive.current) { stopRecording(); setError('Shortcut recording is unavailable. Try again.'); }
     });
   }
@@ -178,20 +216,20 @@ export function Settings({ state }: { state: AppState }) {
     if (!field || !draft) return;
     const problem = shortcutProblem(binding);
     if (problem) { setRecordNotice(problem); pendingModifier.current = null; return; }
-    if (SHORTCUT_FIELDS.some((entry) => entry.field !== field && draft.values[entry.field].Key === binding.Key && draft.values[entry.field].Modifiers === binding.Modifiers)) {
+    if (SHORTCUT_FIELDS.some((entry) => entry.field !== field && sameShortcut(shortcuts[entry.field], binding))) {
       setRecordNotice('Each action needs a different shortcut; press another key.'); pendingModifier.current = null; return;
     }
-    updateValues({ [field]: binding }); stopRecording();
+    updateShortcuts({ [field]: binding }); stopRecording();
   }
   function validation(): ValidationProblem | null {
     if (!draft) return null;
     const answer = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Answer & shortcuts' });
     const model = (message: string, field: string): ValidationProblem => ({ message, field, page: 'Models & API', advanced: true });
-    if (draft.values.ResponseMode === 'Custom' && !draft.values.CustomInstruction.trim()) return answer('Enter a custom instruction or choose another answer mode.', 'custom-instruction');
-    if (draft.values.CustomInstruction.length > 2000) return answer('Custom instructions must be 2,000 characters or fewer.', 'custom-instruction');
-    const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(draft.values[field]));
+    const instructionError = customInstructionError(draft.values);
+    if (instructionError) return answer(instructionError, 'custom-instruction');
+    const invalidShortcut = SHORTCUT_FIELDS.find(({ field }) => shortcutProblem(shortcuts[field]));
     if (invalidShortcut) return answer('Choose valid shortcuts. F12 and Windows reserved combinations are unavailable.', `shortcut-${invalidShortcut.field}`);
-    if (duplicateShortcut(draft.values)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
+    if (duplicateShortcut(shortcuts)) return answer('Each action needs a different shortcut.', 'shortcut-Capture');
     const invalidModel = (value: string) => !/^[a-z0-9_./:-]{1,160}$/i.test(value.trim()) || value.includes('://');
     if (invalidModel(models.AnswerModel)) return model('Enter a valid answer model ID, without spaces or URLs.', 'answer-model');
     if (invalidModel(models.VisionModel)) return model('Enter a valid screen-reading model ID, without spaces or URLs.', pipeline === 'Direct' ? 'request-pipeline' : 'vision-model');
@@ -200,19 +238,20 @@ export function Settings({ state }: { state: AppState }) {
       return key.length > 8192 || /[\u0000-\u001f\u007f]/.test(key);
     });
     if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
-    if (!draft.keyUpdates[provider]?.trim() && !draft.keyPresence[provider]) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
-    if (provider === 'DeepSeek' && ((pipeline === 'Direct' && models.AnswerModel.trim().toLowerCase() === 'deepseek-v4-pro') ||
-      (pipeline !== 'Direct' && models.VisionModel.trim().toLowerCase() === 'deepseek-v4-pro'))) return model('DeepSeek Pro supports text answering only. Use deepseek-flash for Direct screenshot and screen reading.', pipeline === 'Direct' ? 'answer-model' : 'vision-model');
+    if (!draft.keyUpdates[provider]?.trim() && !hasSavedKey) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
+    const screenError = screenModelError(provider, pipeline === 'Direct' ? models.AnswerModel : models.VisionModel);
+    if (screenError) return model(screenError, pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
-    if (!validModelPipelines(rememberModelPipeline(draft.values.ModelPipelines, models, pipeline)))
+    const applied = applyModelPipelineUpdates({ ...draft.values, ModelPipelines: savedPipelines }, draft.pipelineUpdates, models);
+    if (!validModelPipelines(applied.ModelPipelines))
       return model('The saved model pipeline list is full or invalid. Choose a model with an existing preference.', 'answer-model');
     return null;
   }
   async function save() {
+    if (savingRef.current || choosingColor || !draft || loadedRevision !== state.settingsRevision) return;
+    if (state.settingsSaving) { setError(SAVE_BUSY); setInvalidField(null); return; }
     stopRecording();
-    if (savingRef.current || choosingColor) return;
     const problem = validation();
-    if (!draft) return;
     if (problem) {
       setPage(problem.page);
       if (problem.provider && problem.provider !== provider) changeProvider(problem.provider);
@@ -220,20 +259,19 @@ export function Settings({ state }: { state: AppState }) {
       if (problem.field.startsWith('shortcut-')) setShortcutsOpen(true);
       setError(problem.message); setInvalidField(problem.field); setFocusRequest({ field: problem.field }); return;
     }
-    savingRef.current = true; setSaving(true); setError('');
+    savingRef.current = true; setSaving(true); setError(''); setInvalidField(null);
     const outgoing = structuredClone(draft);
     outgoing.values.Models = { ...models, AnswerModel: models.AnswerModel.trim(), VisionModel: models.VisionModel.trim() };
-    outgoing.values.ModelPipelines = rememberModelPipeline(outgoing.values.ModelPipelines, outgoing.values.Models, pipeline);
-    outgoing.values.CustomInstruction = outgoing.values.CustomInstruction.trim();
     for (const key of PROVIDERS) {
       const replacement = outgoing.keyUpdates[key]?.trim();
       if (replacement) outgoing.keyUpdates[key] = replacement;
       else delete outgoing.keyUpdates[key];
     }
     try {
-      await window.sc.saveSettings(outgoing);
-      markDirty(false);
-      if (alive.current && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
+      const result = await window.sc.saveSettings(outgoing);
+      if (!alive.current) return;
+      if (result === 'busy') setError(SAVE_BUSY);
+      else if (result === 'saved' && draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
     } catch {
       // Do not render raw IPC errors: they can include sensitive storage details.
       if (alive.current) setError(state.platform === 'linux' ? 'Settings were not saved. Unlock your secure Linux keyring and check the selected service and model IDs, then try again.' : 'Settings were not saved. Check the selected service, key, model IDs and shortcut availability, then try again.');
@@ -245,10 +283,10 @@ export function Settings({ state }: { state: AppState }) {
   }
   async function back() {
     if (savingRef.current || choosingColor) return;
-    stopRecording(); setError('');
+    setError('');
     // Clear typed replacements before leaving, including when IPC fails.
     if (draftRef.current) replaceDraft({ ...draftRef.current, keyUpdates: {} });
-    try { await window.sc.discardSettings(); markDirty(false); }
+    try { await window.sc.discardSettings(state.settingsSession); }
     catch { if (alive.current) setError('Could not return to the answer. Try Back again.'); }
   }
   async function chooseColor(field: typeof COLOR_FIELDS[number]['field']) {
@@ -256,18 +294,23 @@ export function Settings({ state }: { state: AppState }) {
     setChoosingColor(true); setError('');
     try {
       const color = await window.sc.chooseColor(draft.values.Appearance[field]);
-      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) modifyDraft((previous) => ({
-        ...previous, values: { ...previous.values, Appearance: { ...previous.values.Appearance, [field]: color } }
-      }));
+      if (color && /^#[0-9a-f]{6}$/i.test(color) && alive.current) appearance({ [field]: color });
     } catch { if (alive.current) setError('The color picker could not be opened. Try again.'); }
     finally { if (alive.current) setChoosingColor(false); }
   }
-  function appearance(patch: Partial<AppearanceSettings>) { if (draft) updateValues({ Appearance: { ...draft.values.Appearance, ...patch } }); }
+  function appearance(patch: Partial<AppearanceSettings>) {
+    const fields = Object.keys(patch) as (keyof AppearanceSettings)[];
+    const current = draftRef.current?.values.Appearance;
+    if (!state.settingsSaving && loadedRevision === state.settingsRevision && fields.every(field => current?.[field] === patch[field])) return;
+    modifyDraft(previous => ({ ...previous, values: { ...previous.values, Appearance: { ...previous.values.Appearance, ...patch } },
+      appearanceEdits: [...new Set([...(previous.appearanceEdits ?? []), ...fields])] }));
+  }
   const blocked = saving || choosingColor;
+  const showRetry = loadStatus === 'failed' || loadStatus === 'retrying';
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
 
-  return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !loadFailed) || blocked} onKeyDown={(event) => {
+  return <section className="settings astryx-dialog" aria-label="SC settings" aria-busy={(!draft && !showRetry) || blocked} onKeyDown={(event) => {
     if (event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); event.stopPropagation(); void back(); }
   }}>
     <HStack as="header" className="dialog-header"><HStack className="dialog-title"><img className="app-mark" src={appIcon} alt="" /><Heading level={1}>SC settings</Heading></HStack><Text>v{state.version}</Text></HStack>
@@ -288,19 +331,22 @@ export function Settings({ state }: { state: AppState }) {
     </VStack>
     <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
       <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading><p className="hint">{PAGE_HINTS[page]}</p></VStack>
-      {!draft && <VStack className="settings-loading"><p role="status">{loadFailed ? 'Settings unavailable.' : 'Loading settings…'}</p>
-        {loadFailed && <Button label="Try loading again" type="button" onClick={() => setLoadAttempt((value) => value + 1)}>Try loading again</Button>}</VStack>}
+      {(!draft || showRetry) && <VStack className="settings-loading"><p role="status">{loadStatus === 'failed' ? 'Settings unavailable.' : 'Loading settings…'}</p>
+        {showRetry && <Button ref={retryButton} label="Try loading again" type="button" isLoading={loadStatus === 'retrying'} onClick={() => {
+          setLoadStatus('retrying'); setLoadAttempt((value) => value + 1);
+        }}>Try loading again</Button>}</VStack>}
       {draft && <fieldset className="settings-fields" disabled={blocked}>
         <legend className="sr-only">{page} settings</legend>
         {page === 'Answer & shortcuts' && <>
           <section className="form-section" aria-labelledby="answer-behavior-heading"><Heading level={3} id="answer-behavior-heading">Answer behavior</Heading>
           <Choice {...choiceAria('answer-mode')} label="Answer mode" value={draft.values.ResponseMode} options={RESPONSE_MODES}
-            onChange={(value) => updateValues({ ResponseMode: value as SettingsDraft['values']['ResponseMode'] })} />
-          {(draft.values.ResponseMode === 'Custom' || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
+            onChange={(value) => updateResponse('ResponseMode', value as SettingsDraft['values']['ResponseMode'])} />
+          {(draft.values.ResponseMode === 'Custom' || instructionFocused || invalidField === 'custom-instruction') && <VStack className="custom-instruction">
           <TextArea id="custom-instruction" label="Custom instruction (used in Custom mode)" aria-label="Custom instruction" {...fieldAria('custom-instruction', 'instruction-count')} rows={4}
             ref={(input) => { if (input) input.maxLength = 2000; }} status={invalidField === 'custom-instruction' ? { type: 'error' } : undefined}
             value={draft.values.CustomInstruction}
-            isDisabled={blocked} onChange={(value) => updateValues({ CustomInstruction: value.slice(0, 2000) })} />
+            onFocus={() => setInstructionFocused(true)} onBlur={() => setInstructionFocused(false)}
+            isDisabled={blocked} onChange={(value) => updateResponse('CustomInstruction', value.slice(0, 2000))} />
           <small id="instruction-count">{draft.values.CustomInstruction.length}/2,000 characters</small></VStack>}</section>
           <details className="advanced-settings" open={shortcutsOpen}>
           <summary aria-disabled={blocked} onClick={(event) => {
@@ -315,7 +361,7 @@ export function Settings({ state }: { state: AppState }) {
                 controlClassName={recording === field ? 'recording' : undefined}
                 status={invalidField === `shortcut-${field}` ? { type: 'error' } : undefined}
                 {...fieldAria(`shortcut-${field}`, 'shortcut-help')}
-                isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(draft.values[field])}
+                isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(shortcuts[field])}
                 onFocus={() => startRecording(field)} onClick={() => startRecording(field)} onBlur={stopRecording}
                 onKeyDown={(event) => {
                   if (recordingRef.current !== field) return;
@@ -332,7 +378,7 @@ export function Settings({ state }: { state: AppState }) {
           </VStack>
           <VStack className="inline-actions"><Button label="Restore shortcuts" type="button" onClick={() => {
             stopRecording(); const defaults = defaultSettings('');
-            updateValues(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
+            updateShortcuts(Object.fromEntries(SHORTCUT_FIELDS.map(({ field }) => [field, defaults[field]])));
           }}>Restore shortcuts</Button><Button label="Change API key" type="button" onClick={() => { stopRecording(); setPage('Models & API'); }}>Change API key</Button></VStack>
           <Text className="sr-only" role="status">{recording ? recordNotice : ''}</Text></>}</VStack></details>
         </>}
@@ -361,7 +407,7 @@ export function Settings({ state }: { state: AppState }) {
           <VStack className="preview-checker"><VStack className="appearance-preview" data-testid="appearance-preview" style={panelStyle(draft.values.Appearance)}>
             Your answer appears here.<br />Use the mouse wheel to read a long answer.
           </VStack></VStack>
-          <Button label="Restore appearance" type="button" onClick={() => updateValues({ Appearance: { ...DEFAULT_APPEARANCE } })}>Restore appearance</Button></section>
+          <Button label="Restore appearance" type="button" onClick={() => appearance(DEFAULT_APPEARANCE)}>Restore appearance</Button></section>
         </>}
         {page === 'Models & API' && <>
           <section className="form-section" aria-labelledby="service-heading"><Heading level={3} id="service-heading">Service connection</Heading>
@@ -371,12 +417,12 @@ export function Settings({ state }: { state: AppState }) {
             ref={(input) => { if (input) input.maxLength = 8192; }}
             type={showKey ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false} isDisabled={blocked}
             status={invalidField === 'service-key' ? { type: 'error' } : undefined}
-            placeholder={draft.keyPresence[provider] ? 'Leave empty to keep the saved key' : 'Enter API key'}
+            placeholder={hasSavedKey ? 'Leave empty to keep the saved key' : 'Enter API key'}
             value={draft.keyUpdates[provider] ?? ''} onChange={(value) => {
               modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value.slice(0, 8192) } }));
             }} />
           <HStack className="key-feedback" gap={3} wrap="wrap" hAlign="between">
-            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : draft.keyPresence[provider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
+            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : hasSavedKey ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
             <CheckboxInput label="Show API key" size="sm" value={showKey} isDisabled={blocked} onChange={setShowKey} />
           </HStack>
           <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies this service to future questions without testing the key or making a model request.</p>
@@ -397,8 +443,7 @@ export function Settings({ state }: { state: AppState }) {
           <p className="hint" id="model-help">Choose a suggestion or enter an exact model ID. Screen reading requires image support; answering requires structured responses and support for any task images.</p>
           <VStack className="model-budget-row"><Choice {...choiceAria('deepseek-reasoning', 'deepseek-help')} label="DeepSeek reasoning" value={models.Thinking} options={['None', 'Low', 'High', 'Max']}
             display={(value) => value === 'None' ? 'Off (fast)' : value} disabled={blocked || provider !== 'DeepSeek'}
-            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning,
-              AnswerTokenLimit: value !== 'None' && (models.AnswerTokenLimit ?? 0) < 16000 ? 16000 : models.AnswerTokenLimit })} />
+            onChange={(value) => updateModels({ Thinking: value as DeepSeekReasoning })} />
             <VStack><label htmlFor="answer-budget">Answer output token limit</label><input id="answer-budget" aria-label="Answer output token limit" {...fieldAria('answer-budget', 'deepseek-help')}
               type="number" min={256} max={32000} step={1} disabled={provider !== 'DeepSeek'} placeholder="Configured limit"
               value={models.AnswerTokenLimit ?? ''} onChange={(event) => updateModels({ AnswerTokenLimit: event.target.value === '' ? null : Number(event.target.value) })} /></VStack></VStack>
@@ -413,9 +458,12 @@ export function Settings({ state }: { state: AppState }) {
       </fieldset>}
     </VStack>
     </VStack>
-    {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
+    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages">
+      {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
+      {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
+    </VStack>}
     <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
-      <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
+      <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked || loadedRevision !== state.settingsRevision} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
       <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>
   </section>;
 }

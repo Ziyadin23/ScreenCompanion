@@ -74,7 +74,7 @@ describe('update controls in Settings', () => {
     expect(restart.matches(':disabled, [aria-disabled="true"]')).toBe(true); fireEvent.click(restart); expect(f.api.update).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('settings-back')); await screen.findByTestId('answer-text');
     await openUpdates(); expect(screen.getByRole('button', { name: 'Restart and install' }).matches(':disabled, [aria-disabled="true"]')).toBe(false);
-    expect(f.api.command).toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
+    expect(f.getState().settingsDirty).toBe(false);
   });
   it('keeps restart blocked after a failed Save and allows it after a successful Save', async () => {
     const f = fixture({ updates: { status: 'downloaded', version: '0.5.0-beta.4', progress: 100, message: 'Ready to install.' } });

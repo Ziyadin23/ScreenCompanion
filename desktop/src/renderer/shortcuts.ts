@@ -1,5 +1,5 @@
-import type { HotkeyBinding, SettingsDraft } from '../contracts';
-import { SHORTCUT_FIELDS } from '../contracts/shortcut-display';
+import type { HotkeyBinding } from '../contracts';
+import { SHORTCUT_FIELDS, type ShortcutBindings } from '../contracts/shortcut-display';
 
 export { SHORTCUT_FIELDS, formatShortcut, commandsText } from '../contracts/shortcut-display';
 export type { ShortcutField } from '../contracts/shortcut-display';
@@ -33,6 +33,10 @@ export function shortcutProblem(binding: HotkeyBinding): string | null {
   return null;
 }
 
-export function duplicateShortcut(values: SettingsDraft['values']): boolean {
+export function sameShortcut(left: HotkeyBinding, right: HotkeyBinding): boolean {
+  return left.Key === right.Key && left.Modifiers === right.Modifiers;
+}
+
+export function duplicateShortcut(values: ShortcutBindings): boolean {
   return new Set(SHORTCUT_FIELDS.map(({ field }) => `${values[field].Modifiers}:${values[field].Key}`)).size !== SHORTCUT_FIELDS.length;
 }

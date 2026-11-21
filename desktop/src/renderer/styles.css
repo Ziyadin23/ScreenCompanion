@@ -29,10 +29,13 @@ button:disabled, input:disabled { cursor: default; opacity: .5; }
 input, textarea { caret-color: var(--ui-accent); }
 .icon { flex-shrink: 0; vertical-align: middle; }
 .answer-panel {
-  height: 100%; width: 100%; display: flex; flex-direction: column; position: relative;
+  height: 100%; width: 100%; position: relative; container-type: size;
   border-radius: var(--radius-panel); outline: none;
 }
-.panel-chrome { display: flex; align-items: center; height: 36px; flex-shrink: 0; padding: 4px 8px; gap: 4px; }
+.panel-content { height: 100%; display: flex; flex-direction: column; }
+.panel-chrome { flex-shrink: 0; }
+.panel-actions { display: flex; align-items: center; height: 36px; padding: 4px 8px; gap: 4px; }
+.panel-recovery { margin: 0 8px; padding: 0 4px; border-radius: 6px; background: var(--input-background); color: var(--input-text); font-size: 12px; line-height: 17px; }
 .panel-status { min-width: 0; flex: 1; font-size: 11px; color: var(--input-text); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .panel-toolbar { display: flex; flex-shrink: 0; gap: 2px; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out; }
 .answer-panel:hover .panel-toolbar, .answer-panel:has(:focus-visible) .panel-toolbar,
@@ -128,6 +131,8 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .dialog-footer button { min-width: calc(var(--spacing-10) * 2); }
 .footer-status { margin-right: auto; color: var(--dialog-muted); font-size: var(--text-supporting-size); min-width: 0; }
 .dialog-error { color: var(--color-text-error); background: var(--color-error-muted); padding: var(--spacing-3); border-radius: var(--radius-element); margin: var(--spacing-2) var(--spacing-6) !important; flex-shrink: 0; overflow-wrap: anywhere; font-size: var(--text-supporting-size); }
+/* Keep longer diagnostics scrollable without displacing the focused Settings control. */
+.settings-feedback { flex: 0 0 auto; max-block-size: 32%; overflow-y: auto; }
 .shortcut-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-4); }
 .shortcut-row { min-width: 0; }
 .astryx-dialog .recording { background: var(--color-accent-muted); outline: var(--focus-outline-width) solid var(--color-icon-accent); }
@@ -204,6 +209,10 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 @media (max-height: 420px) {
   .dialog-header, .dialog-footer { min-height: var(--spacing-10); padding-block: var(--spacing-2); }
   .page-intro { margin-bottom: var(--spacing-5); }
+  .settings .tabs { padding-block: var(--spacing-1); }
+  .settings-body { padding-block: var(--spacing-2); }
+  .settings-feedback .dialog-error { margin-block: 0 !important; padding-block: var(--spacing-0-5); }
+  .settings-feedback .dialog-error + .dialog-error { margin-block-start: var(--spacing-1) !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -212,7 +221,17 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
   .answer-panel:has(.question-form) .answer-text { display: none; }
   .question-form { margin: auto 8px 8px; }
   .question-form input, .question-form button { height: 36px; }
+  .answer-panel:has(.panel-recovery) .question-form { margin-bottom: 4px; row-gap: 2px; }
+  .answer-panel:has(.panel-recovery) .question-send-help { line-height: 1.3; }
 }
 @media (max-height: 120px) {
   .answer-text { padding: 0; }
+  .answer-content:has(.panel-recovery) .panel-actions { height: 30px; padding-block: 3px; }
+  .answer-content:has(.panel-recovery) .panel-toolbar button { height: 24px; outline-offset: 1px; }
+  .answer-content:has(.panel-recovery) .answer-text { margin-bottom: 0; }
+}
+/* Share the full scroll area when the compact header and one answer line cannot fit together. */
+@container (height < calc(47px + 1.5em)) {
+  .answer-content:has(.panel-recovery) { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+  .answer-content:has(.panel-recovery) .answer-text { flex: 1 0 auto; overflow: visible; }
 }

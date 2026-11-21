@@ -3,8 +3,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it } from 'vitest';
 import { App } from '../../src/renderer/App';
 import { fixture } from './fixture';
-import { DEFAULT_APPEARANCE } from '../../src/contracts/defaults';
+import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
+import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
+import { commandSchema, settingsDraftSchema } from '../../src/main/validation';
+import { validateShortcuts } from '../../src/platform/shortcuts';
+import { controllerFixture, deferred } from '../main/controller-fixture';
 import userEvent from '@testing-library/user-event';
 
 afterEach(cleanup);
@@ -17,6 +21,29 @@ function disclose(name: string) {
 function advanced() {
   const summary = screen.getByText('Advanced model settings', { selector: 'summary' });
   if (!summary.parentElement!.hasAttribute('open')) fireEvent.click(summary);
+}
+async function renderController(production: ReturnType<typeof controllerFixture>) {
+  const driver = fixture();
+  production.host.publish = driver.emit;
+  const api = production.controller.apiMethods();
+  driver.api.getState.mockImplementation(api.getState);
+  driver.api.command.mockImplementation(command => api.command(commandSchema.parse(command)));
+  driver.api.getSettingsDraft.mockImplementation(api.getSettingsDraft);
+  driver.api.saveSettings.mockImplementation(draft => api.saveSettings(settingsDraftSchema.parse(draft)));
+  driver.api.discardSettings.mockImplementation(api.discardSettings);
+  await production.controller.initialize();
+  await production.controller.command({ type: 'toggleVisibility' });
+  render(<App />);
+  return driver;
+}
+async function openSettingsFromPanel() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
+  await screen.findByRole('combobox', { name: 'Answer mode' });
+}
+function enterModel(name: string, value: string) {
+  const model = screen.getByRole('combobox', { name });
+  fireEvent.change(model, { target: { value } });
+  fireEvent.blur(model);
 }
 describe('explicit screenshot submission', () => {
   it.each(['shortcut', 'button', 'global'] as const)('sends text with a screenshot once via %s', async path => {
@@ -47,6 +74,50 @@ describe('explicit screenshot submission', () => {
 });
 
 describe('durable model pipeline choices', () => {
+  it.each([
+    { priorPreference: false, explicit: false, expected: 'Direct' },
+    { priorPreference: false, explicit: true, expected: 'Thorough' },
+    { priorPreference: true, explicit: false, expected: 'Direct' },
+    { priorPreference: true, explicit: true, expected: 'Thorough' }
+  ])('saves $expected on retry with prior preference $priorPreference and explicit choice $explicit', async ({ priorPreference, explicit, expected }) => {
+    const original = defaultModels();
+    const selected = { ...original, AnswerModel: 'gpt-synthetic-b' };
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), Models: original, CommandsShown: true,
+      ModelPipelines: priorPreference ? rememberModelPipeline([], selected, 'Thorough') : [], PipelineMode: 'Thorough' });
+    const driver = await renderController(production);
+    async function selectModel() {
+      await openSettingsFromPanel();
+      tab('Models & API'); advanced();
+      enterModel('Answer model', selected.AnswerModel);
+      expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Thorough');
+    }
+
+    await selectModel();
+    choose('Request pipeline', 'Direct screenshot');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await selectModel();
+    if (explicit) choose('Request pipeline', 'Thorough');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(production.save).toHaveBeenCalledOnce();
+
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0]).toMatchObject({ Models: selected, PipelineMode: 'Direct' });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+    const displayed = screen.getByRole('combobox', { name: 'Request pipeline' }).textContent;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    const saved = production.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: selected, PipelineMode: expected });
+    expect(modelPipeline(saved.ModelPipelines, selected)).toBe(expected);
+    expect(modelPipeline(saved.ModelPipelines, original)).toBe('Thorough');
+    expect(displayed).toBe(expected === 'Direct' ? 'Direct screenshot' : 'Thorough');
+    expect(production.run).not.toHaveBeenCalled();
+  });
   it('restores separate model preferences after Save/reopen and discards later edits on Back', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Models & API'); advanced();
     const selectModel = (model: string) => { const input = screen.getByRole('combobox', { name: 'Answer model' }); fireEvent.change(input, { target: { value: model } }); fireEvent.blur(input); };
@@ -55,7 +126,7 @@ describe('durable model pipeline choices', () => {
     selectModel('gpt-6-luna'); expect(screen.getByRole('combobox', { name: 'Request pipeline' }).textContent).toBe('Direct screenshot');
     selectModel('another-vision-model'); choose('Request pipeline', 'Thorough');
     fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
-    expect(driver.saved[0]?.values.ModelPipelines).toEqual(expect.arrayContaining([
+    expect(driver.saved[0]?.pipelineUpdates).toEqual(expect.arrayContaining([
       { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', PipelineMode: 'Direct' },
       { Provider: 'OpenAI', AnswerModel: 'another-vision-model', PipelineMode: 'Thorough' }
     ]));
@@ -211,6 +282,530 @@ describe('answer and temporary input', () => {
     await act(async () => driver.emit({ answer: 'Newest answer' }));
     await act(async () => resolve(initial));
     expect(screen.getByTestId('answer-text').textContent).toBe('Newest answer');
+  });
+});
+
+describe('production Settings save overlap', () => {
+  it.each(['typing', 'Escape'] as const)('keeps the instruction editor active for %s when an earlier save changes Answer mode', async action => {
+    const user = userEvent.setup();
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), CommandsShown: true,
+      ResponseMode: 'Custom', CustomInstruction: 'Original' });
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    const { settingsSession } = production.controller.getState();
+    const instruction = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Custom instruction' });
+    if (action === 'typing') await user.type(instruction, ' before');
+    else await user.click(instruction);
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+
+    const answerMode = screen.getByRole('combobox', { name: 'Answer mode' });
+    expect(answerMode.textContent).toBe('Brief');
+    if (action === 'Escape') {
+      expect(production.controller.getState().settingsDirty).toBe(false);
+      await user.keyboard('{Escape}');
+      expect(driver.api.discardSettings).toHaveBeenCalledWith(settingsSession);
+      await screen.findByTestId('answer-text');
+      expect(production.save).toHaveBeenCalledTimes(1);
+      return;
+    }
+    expect(document.activeElement === instruction).toBe(true);
+    await user.keyboard(' and after');
+    expect(instruction.value).toBe('Original before and after');
+    await user.tab({ shift: true });
+    expect(document.activeElement).toBe(answerMode);
+    expect(screen.queryByRole('textbox', { name: 'Custom instruction' })).toBeNull();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Brief', CustomInstruction: 'Original before and after' });
+  });
+
+  it.each([
+    { initial: 'Old instruction', first: '', explicit: false },
+    { initial: '', first: 'New instruction', explicit: false },
+    { initial: 'Old instruction', first: '', explicit: true }
+  ])('validates the current Custom instruction after a save ($initial, $first, explicit=$explicit)', async ({ initial, first, explicit }) => {
+    const production = controllerFixture({ ...defaultSettings('synthetic-key'), CommandsShown: true, CustomInstruction: initial });
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Custom');
+    const instruction = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Custom instruction' });
+    fireEvent.change(instruction(), { target: { value: first } });
+    choose('Answer mode', 'Brief');
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Custom');
+    if (explicit) {
+      fireEvent.change(instruction(), { target: { value: 'Temporary edit' } });
+      fireEvent.change(instruction(), { target: { value: initial } });
+    }
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    const expected = explicit ? initial : first;
+    expect(instruction().value).toBe(expected);
+    if (expected) expect(JSON.stringify(production.controller.getState())).not.toContain(expected);
+    const registrations = production.applyShortcuts.mock.calls.length;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    if (expected) {
+      await screen.findByTestId('answer-text');
+      expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Custom', CustomInstruction: expected });
+    } else {
+      expect((await screen.findByRole('alert')).textContent).toContain('Enter a custom instruction');
+      expect(document.activeElement).toBe(instruction());
+      expect(production.save).toHaveBeenCalledTimes(1);
+      expect(production.applyShortcuts).toHaveBeenCalledTimes(registrations);
+    }
+  });
+
+  it('restores all appearance defaults after an overlapping save', async () => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    tab('Panel');
+    const size = () => screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer text size' });
+    fireEvent.change(size(), { target: { value: '24' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    tab('Panel');
+    fireEvent.change(size(), { target: { value: '18' } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].Appearance.TextSizePoints).toBe(24);
+    fireEvent.click(screen.getByRole('button', { name: 'Restore appearance' }));
+    expect(size().value).toBe(String(DEFAULT_APPEARANCE.TextSizePoints));
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].Appearance).toEqual(DEFAULT_APPEARANCE);
+  });
+
+  it('uses the reasoning suggestion for a legacy vault with an implicit process token limit', async () => {
+    const initial = { ...defaultSettings('synthetic-key'), CommandsShown: true, Models: null };
+    const production = controllerFixture(initial, 'Direct');
+    await renderController(production);
+    await openSettingsFromPanel();
+    tab('Models & API'); advanced();
+    const budget = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer output token limit' });
+    expect(budget.value).toBe('');
+    choose('DeepSeek reasoning', 'High');
+    expect(budget.value).toBe('16000');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[0]![0].Models).toMatchObject({ Provider: 'DeepSeek', Thinking: 'High', AnswerTokenLimit: 16000 });
+  });
+
+  it('keeps the earlier custom instruction on an appearance-only retry', async () => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true,
+      ResponseMode: 'Custom' as const, CustomInstruction: '  original instruction  ' };
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom instruction' }), { target: { value: '  new instruction  ' } });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    expect(value('Custom instruction')).toBe(original.CustomInstruction);
+    tab('Panel');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '18' } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].CustomInstruction).toBe('new instruction');
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ CustomInstruction: 'new instruction', Appearance: { TextSizePoints: 18 } });
+  });
+
+  it('keeps the new dirty draft when a late Back arrives from the previous session', async () => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    const discard = production.controller.apiMethods().discardSettings;
+    const delivery = deferred<void>();
+    driver.api.discardSettings.mockImplementationOnce(async (...args) => { await delivery.promise; await discard(...args); });
+    await openSettingsFromPanel();
+    fireEvent.click(screen.getByTestId('settings-back'));
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    const { settingsSession } = production.controller.getState();
+    await act(async () => { delivery.resolve(); await driver.api.discardSettings.mock.results[0]!.value; });
+
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsSession, settingsDirty: true });
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[0]![0].ResponseMode).toBe('Brief');
+  });
+
+  it.each(['start recording', 'stop recording', 'edit'] as const)('ignores a delayed %s command from the previous Settings session', async action => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    const command = production.controller.apiMethods().command;
+    const deliver = deferred<void>();
+    const captureShortcut = () => screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
+    await openSettingsFromPanel();
+    const oldSession = production.controller.getState().settingsSession;
+    if (action !== 'edit') disclose('Keyboard shortcuts');
+    if (action === 'stop recording') await act(async () => { fireEvent.focus(captureShortcut()); });
+    driver.api.command.mockImplementationOnce(async value => {
+      await deliver.promise;
+      await command(commandSchema.parse(value));
+    });
+    if (action === 'edit') choose('Answer mode', 'Brief');
+    else if (action === 'start recording') fireEvent.focus(captureShortcut());
+    else fireEvent.blur(captureShortcut());
+    const lateCommand = driver.api.command.mock.lastCall![0];
+    const delayed = driver.api.command.mock.results.at(-1)!.value;
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    const session = production.controller.getState().settingsSession;
+    expect(session).toBeGreaterThan(oldSession);
+    disclose('Keyboard shortcuts');
+    if (action === 'stop recording') {
+      await act(async () => { fireEvent.focus(captureShortcut()); });
+      expect(production.applyShortcuts).toHaveBeenLastCalledWith(expect.any(Object), true, production.controller.onAction);
+    }
+    production.applyShortcuts.mockClear();
+
+    await act(async () => { deliver.resolve(); await delayed; });
+    expect(production.applyShortcuts).not.toHaveBeenCalled();
+    expect(production.controller.getState()).toMatchObject({ settingsSession: session, settingsDirty: false, settingsSaving: true });
+    expect(lateCommand).toMatchObject({ session: oldSession });
+
+    choose('Answer mode', 'Summarize');
+    if (action !== 'stop recording') {
+      await act(async () => { fireEvent.focus(captureShortcut()); });
+      expect(production.applyShortcuts).toHaveBeenCalledExactlyOnceWith(expect.any(Object), true, production.controller.onAction);
+    }
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsSession: session, settingsDirty: true, settingsSaving: false });
+    expect(production.controller.canInstallUpdate()).toBe(false);
+    await act(async () => { fireEvent.blur(captureShortcut()); });
+    expect(production.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ ResponseMode: action === 'edit' ? 'Brief' : 'Default' }), false,
+      production.controller.onAction);
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].ResponseMode).toBe('Summarize');
+  });
+
+  it.each([
+    { edit: 'a freed Question chord', label: 'Type a question shortcut' },
+    { edit: 'a freed visibility chord', label: 'Show or hide panel shortcut' },
+    { edit: 'Restore shortcuts', label: null }
+  ])('applies $edit after an overlapping shortcut save', async ({ label }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true };
+    const production = controllerFixture(original);
+    production.platform.applyShortcuts = async settings => { validateShortcuts(settings); };
+    const driver = await renderController(production);
+    await openSettingsFromPanel(); disclose('Keyboard shortcuts');
+    const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
+    fireEvent.focus(capture);
+    fireEvent.keyDown(capture, { key: 'F9', code: 'F9', ctrlKey: true });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Summarize');
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    const changedCapture = { Modifiers: 2, Key: 120 };
+    expect(production.save.mock.calls[0]![0].Capture).toEqual(changedCapture);
+
+    disclose('Keyboard shortcuts');
+    const displayedCapture = value('Capture and answer shortcut');
+    let recorded: string | undefined;
+    if (label) {
+      const shortcut = screen.getByRole<HTMLInputElement>('textbox', { name: label });
+      await act(async () => fireEvent.focus(shortcut));
+      await act(async () => fireEvent.keyDown(shortcut, { key: ' ', code: 'Space', ctrlKey: true, altKey: true }));
+      recorded = shortcut.value;
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Restore shortcuts' }));
+    }
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Summarize',
+      Capture: label ? changedCapture : original.Capture,
+      InputShortcut: label === 'Type a question shortcut' ? original.Capture : original.InputShortcut,
+      Visibility: label === 'Show or hide panel shortcut' ? original.Capture : original.Visibility });
+    expect(displayedCapture).toBe('Ctrl+F9');
+    if (label) expect(recorded).toBe('Ctrl+Alt+Space');
+  });
+
+  it.each([
+    { edit: 'service only', answer: 'synthetic-saved-answer', vision: 'synthetic-saved-vision' },
+    { edit: 'answer model', answer: 'synthetic-edited-answer', vision: 'synthetic-saved-vision' },
+    { edit: 'default screen-reading model', answer: 'synthetic-saved-answer', vision: 'deepseek-flash' }
+  ])('merges a retry after both drafts select DeepSeek with a newer edit to $edit', async ({ edit, answer, vision }) => {
+    const original = defaultSettings('synthetic-openai-key');
+    original.CommandsShown = true;
+    original.ProviderKeys.DeepSeek = 'synthetic-previous-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    tab('Models & API'); advanced();
+    choose('API service', 'DeepSeek');
+    enterModel('Answer model', 'synthetic-saved-answer');
+    enterModel('Screen-reading model', 'synthetic-saved-vision');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-replacement-key' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    tab('Models & API'); advanced();
+    choose('API service', 'DeepSeek');
+    if (edit === 'answer model') enterModel('Answer model', answer);
+    if (edit === 'default screen-reading model') {
+      fireEvent.click(screen.getByRole('button', { name: 'Screen-reading model suggestions' }));
+      fireEvent.click(screen.getByRole('option', { name: 'deepseek-flash' }));
+    }
+    tab('Panel');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '16' } });
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(production.save).toHaveBeenCalledOnce();
+
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].Models).toMatchObject({ Provider: 'DeepSeek', AnswerModel: 'synthetic-saved-answer', VisionModel: 'synthetic-saved-vision' });
+    tab('Models & API');
+    const displayed = {
+      AnswerModel: screen.getByRole<HTMLInputElement>('combobox', { name: 'Answer model' }).value,
+      VisionModel: screen.getByRole<HTMLInputElement>('combobox', { name: 'Screen-reading model' }).value
+    };
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({
+      Models: { Provider: 'DeepSeek', AnswerModel: answer, VisionModel: vision }, ResponseMode: 'Brief',
+      Appearance: { ...original.Appearance, TextSizePoints: 16 }, ApiKey: 'synthetic-replacement-key',
+      ProviderKeys: { OpenAI: 'synthetic-openai-key', DeepSeek: 'synthetic-replacement-key' }
+    });
+    expect(displayed).toEqual({ AnswerModel: answer, VisionModel: vision });
+    expect(production.run).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { saved: 24000, explicit: undefined, expected: 24000 },
+    { saved: 8000, explicit: undefined, expected: 8000 },
+    { saved: 24000, explicit: '12000', expected: 12000 },
+    { saved: null, explicit: undefined, expected: 16000 }
+  ])('uses a $expected token limit after overlapping a save of $saved with a reasoning edit', async ({ saved, explicit, expected }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true };
+    original.ProviderKeys.DeepSeek = 'synthetic-deepseek-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel(); tab('Models & API'); advanced(); choose('API service', 'DeepSeek');
+    if (saved !== null) fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer output token limit' }), { target: { value: String(saved) } });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel(); tab('Models & API'); advanced(); choose('API service', 'DeepSeek');
+    choose('DeepSeek reasoning', 'High');
+    const budget = screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer output token limit' });
+    expect(budget.value).toBe('16000');
+    if (explicit) fireEvent.change(budget, { target: { value: explicit } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(budget.value).toBe(String(expected));
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].Models).toMatchObject({ Thinking: 'High', AnswerTokenLimit: expected });
+  });
+
+  it.each([
+    { originalService: 'OpenAI', saved: null, expected: 16000 },
+    { originalService: 'DeepSeek', saved: 8000, expected: 8000 }
+  ] as const)('shows $expected for a reasoning edit after a $originalService draft inherits the previous save', async ({ originalService, saved, expected }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true,
+      Models: { ...defaultModels(originalService), AnswerTokenLimit: saved } };
+    original.ProviderKeys.DeepSeek = 'synthetic-deepseek-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+    await openSettingsFromPanel(); choose('Answer mode', 'Brief'); tab('Models & API');
+    if (originalService === 'OpenAI') choose('API service', 'DeepSeek');
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(production.save.mock.calls[0]![0].Models).toMatchObject({ Provider: 'DeepSeek', AnswerTokenLimit: saved });
+    tab('Models & API'); advanced(); choose('DeepSeek reasoning', 'High');
+    expect(screen.getByRole<HTMLInputElement>('spinbutton', { name: 'Answer output token limit' }).value).toBe(String(expected));
+    fireEvent.click(screen.getByTestId('settings-save')); await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0].Models).toMatchObject({ Provider: 'DeepSeek', Thinking: 'High', AnswerTokenLimit: expected });
+  });
+
+  it('validates an appearance-only retry against the service committed by the earlier save', async () => {
+    const pro = { ...defaultModels('DeepSeek'), AnswerModel: 'deepseek-v4-pro' };
+    const original = { ...defaultSettings('synthetic-deepseek-key'), Models: pro, CommandsShown: true };
+    original.ProviderKeys.OpenAI = 'synthetic-openai-key';
+    const production = controllerFixture(original);
+    const driver = await renderController(production);
+
+    await openSettingsFromPanel(); tab('Models & API'); advanced();
+    choose('Request pipeline', 'Direct screenshot');
+    choose('API service', 'OpenAI');
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel(); tab('Panel');
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Answer text size' }), { target: { value: '18' } });
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(modelPipeline(production.save.mock.calls[0]![0].ModelPipelines, pro)).toBe('Direct');
+
+    tab('Models & API');
+    const displayedService = screen.getByRole('combobox', { name: 'API service' }).textContent;
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')?.textContent ?? '').not.toContain('text answering only');
+      expect(production.save).toHaveBeenCalledTimes(2);
+    });
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ Models: defaultModels(), PipelineMode: 'Thorough',
+      Appearance: { TextSizePoints: 18 }, ApiKey: 'synthetic-openai-key' });
+    expect(displayedService).toBe('OpenAI');
+  });
+
+  it.each([
+    { field: 'Visibility', label: 'Show or hide panel shortcut' },
+    { field: 'Capture', label: 'Capture and answer shortcut' }
+  ] as const)('returns from Settings and restores the saved $field shortcut once it becomes available', async ({ field, label }) => {
+    const original = { ...defaultSettings('synthetic-key'), CommandsShown: true };
+    const production = controllerFixture(original);
+    const savedBinding = original[field];
+    let occupied = false;
+    let registered: typeof savedBinding | null = null;
+    production.platform.applyShortcuts = async (settings, recording) => {
+      const binding = recording && field === 'Capture' ? null : settings[field];
+      if (occupied && binding?.Key === savedBinding.Key && binding.Modifiers === savedBinding.Modifiers)
+        throw new Error('Synthetic occupied shortcut');
+      registered = binding;
+    };
+    const driver = await renderController(production);
+    await act(async () => {
+      const answering = production.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+      production.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+      await answering;
+    });
+    await openSettingsFromPanel();
+    disclose('Keyboard shortcuts');
+    const edited = screen.getByRole('textbox', { name: label });
+    fireEvent.focus(edited);
+    fireEvent.keyDown(edited, { key: 'F9', code: 'F9', keyCode: 120, ctrlKey: true, shiftKey: true });
+    const write = production.delaySave(); fireEvent.click(screen.getByTestId('settings-save')); await write.started;
+    expect(registered).toEqual({ Key: 120, Modifiers: 6 });
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    disclose('Keyboard shortcuts');
+    const recording = screen.getByRole('textbox', { name: label });
+    await act(async () => fireEvent.focus(recording));
+    expect((recording as HTMLInputElement).value).toContain('Listening');
+    occupied = true;
+    await act(async () => {
+      write.reject(new Error('Synthetic storage failure'));
+      await Promise.allSettled([driver.api.saveSettings.mock.results[0]!.value]);
+    });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, answer: 'Retained answer' });
+    expect(production.controller.getSettingsDraft().values[field]).toEqual(savedBinding);
+    if (field === 'Visibility') {
+      expect((await screen.findByRole('alert')).textContent).toMatch(/SHORTCUTS-RESTOREFAILED.*report [\da-f]{12}/);
+      occupied = false;
+    }
+
+    fireEvent.click(screen.getByTestId('settings-back'));
+    expect((await screen.findByTestId('answer-text')).textContent).toBe('Retained answer');
+    if (field === 'Capture') {
+      expect(registered).toBeNull();
+      expect(screen.getByRole('alert').textContent).toContain('Restart SC');
+      await openSettingsFromPanel();
+      expect((await screen.findByRole('alert')).textContent).toMatch(/SHORTCUTS-RESTOREFAILED.*report [\da-f]{12}/);
+      occupied = false;
+      fireEvent.click(screen.getByTestId('settings-back'));
+      expect((await screen.findByTestId('answer-text')).textContent).toBe('Retained answer');
+    }
+    expect(registered).toEqual(savedBinding);
+    expect(production.controller.getState()).toMatchObject({ shortcutRecovery: null, settingsDirty: false, error: null });
+    expect(production.save).toHaveBeenCalledOnce();
+  });
+
+  it.each(['succeeds', 'fails'])('offers a busy retry before the earlier provider key write %s', async outcome => {
+    const production = controllerFixture();
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    tab('Models & API');
+    choose('API service', 'DeepSeek');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-pending-key' } });
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await screen.findByRole('textbox', { name: 'Question' });
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Summarize');
+    tab('Models & API');
+    choose('API service', 'DeepSeek');
+    const key = screen.getByTestId<HTMLInputElement>('service-key');
+    production.applyShortcuts.mockClear();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect(key.value).toBe('');
+    expect(key.getAttribute('aria-invalid')).not.toBe('true');
+    expect(production.save).toHaveBeenCalledOnce();
+    expect(production.applyShortcuts).not.toHaveBeenCalled();
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+    tab('Answer & shortcuts');
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Summarize');
+    expect((screen.getByTestId('settings-back') as HTMLButtonElement).disabled).toBe(false);
+    choose('Answer mode', 'Brief');
+    tab('Models & API');
+
+    await act(async () => {
+      if (outcome === 'succeeds') write.resolve();
+      else write.reject(new Error('Synthetic storage failure'));
+      await Promise.allSettled([driver.api.saveSettings.mock.results[0]!.value]);
+    });
+    expect(screen.getByTestId<HTMLInputElement>('service-key').value).toBe('');
+    expect(JSON.stringify(production.controller.getSettingsDraft())).not.toContain('synthetic-pending-key');
+    expect(JSON.stringify(production.controller.getState())).not.toContain('synthetic-pending-key');
+    if (outcome === 'succeeds') {
+      expect(screen.getByText('A key is saved for this service.')).toBeTruthy();
+      fireEvent.click(screen.getByTestId('settings-save'));
+    } else {
+      fireEvent.click(screen.getByTestId('settings-save'));
+      expect((await screen.findByRole('alert')).textContent).toBe('Enter an API key for the selected service.');
+      expect(document.activeElement).toBe(screen.getByTestId('service-key'));
+      expect(screen.getByTestId('service-key').getAttribute('aria-invalid')).toBe('true');
+      expect(production.save).toHaveBeenCalledOnce();
+      fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-new-key' } });
+      fireEvent.click(screen.getByTestId('settings-save'));
+    }
+    await screen.findByTestId('answer-text');
+    expect(production.save.mock.calls[1]![0]).toMatchObject({ ResponseMode: 'Brief', Models: { Provider: 'DeepSeek' },
+      ProviderKeys: { OpenAI: 'synthetic-key', DeepSeek: outcome === 'succeeds' ? 'synthetic-pending-key' : 'synthetic-new-key' } });
+    expect(production.run).not.toHaveBeenCalled();
   });
 });
 
@@ -382,7 +977,7 @@ describe('settings drafts and protected controls', () => {
     await waitFor(() => expect(document.activeElement).toBe(field));
     expect(field.getAttribute('aria-invalid')).toBe('true'); expect(driver.saved).toHaveLength(0);
     fireEvent.click(screen.getByText('Keyboard shortcuts', { selector: 'summary' }));
-    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false });
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
   });
   it('adapts keyboard navigation to a narrow horizontal tab list', async () => {
     const previousWidth = window.innerWidth;
@@ -418,18 +1013,89 @@ describe('settings drafts and protected controls', () => {
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'settingsDraftChanged')).toEqual([]);
     expect(driver.getState().settingsDirty).toBe(false); expect(screen.queryByText('Unsaved changes')).toBeNull();
   });
+  it('keeps edits during a failed and retried refresh before enabling Save', async () => {
+    const driver = fixture({ surface: 'settings' });
+    render(<App />);
+    await screen.findByRole('combobox', { name: 'Answer mode' });
+    choose('Answer mode', 'Custom');
+    driver.api.getSettingsDraft.mockRejectedValueOnce(new Error('simulated read failure'));
+    await act(async () => driver.emit({ settingsRevision: 1 }));
+    const retry = await screen.findByRole('button', { name: 'Try loading again' });
+    const save = screen.getByTestId('settings-save');
+    expect(save.matches(':disabled, [aria-disabled="true"]')).toBe(true);
+    const pending = deferred<SettingsDraft>();
+    driver.api.getSettingsDraft.mockImplementationOnce(() => pending.promise);
+    fireEvent.click(retry);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Custom instruction' }), { target: { value: 'Keep my edit' } });
+    const latest = driver.getDraft();
+    latest.values.CustomInstruction = 'Earlier save';
+    await act(async () => pending.resolve(latest));
+    expect(value('Custom instruction')).toBe('Keep my edit');
+    fireEvent.click(save); await screen.findByTestId('answer-text');
+    expect(driver.saved[0]!.values.CustomInstruction).toBe('Keep my edit');
+  });
+  it.each([
+    { initial: false, movesFocus: false, outcome: 'pending' },
+    { initial: false, movesFocus: false, outcome: 'success' },
+    { initial: false, movesFocus: false, outcome: 'failure' },
+    { initial: true, movesFocus: true, outcome: 'success' },
+    { initial: false, movesFocus: true, outcome: 'failure' }
+  ])('keeps keyboard focus through Settings load retry (initial=$initial, moves focus=$movesFocus, outcome=$outcome)',
+    async ({ initial, movesFocus, outcome }) => {
+      const user = userEvent.setup();
+      const driver = fixture({ surface: 'settings' });
+      const failure = new Error('simulated read failure');
+      if (initial) driver.api.getSettingsDraft.mockRejectedValueOnce(failure);
+      render(<App />);
+      if (!initial) {
+        await screen.findByRole('combobox', { name: 'Answer mode' });
+        driver.api.getSettingsDraft.mockRejectedValueOnce(failure);
+        await act(async () => driver.emit({ settingsRevision: 1 }));
+      }
+      const retry = await screen.findByRole('button', { name: 'Try loading again' });
+      const tabpanel = screen.getByRole('tabpanel');
+      tabpanel.focus();
+      await user.tab();
+      expect(document.activeElement === retry).toBe(true);
+
+      const read = deferred<SettingsDraft>();
+      driver.api.getSettingsDraft.mockClear().mockImplementationOnce(() => read.promise);
+      await user.keyboard('{Enter}');
+      expect(document.activeElement === retry).toBe(true);
+      expect(retry.getAttribute('aria-disabled')).toBe('true');
+      await user.keyboard('{Enter}[Space]');
+      expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(1);
+      if (movesFocus) {
+        await user.tab({ shift: true });
+        expect(document.activeElement === tabpanel).toBe(true);
+      }
+
+      if (outcome === 'success') {
+        await act(async () => read.resolve(driver.getDraft()));
+        expect(screen.queryByRole('button', { name: 'Try loading again' })).toBeNull();
+      } else if (outcome === 'failure') {
+        await act(async () => read.reject(failure));
+        expect(retry.getAttribute('aria-disabled')).not.toBe('true');
+      }
+      const expectedFocus = movesFocus ? tabpanel : outcome === 'success' ? screen.getByRole('heading', { name: 'Answer & shortcuts' }) : retry;
+      expect(document.activeElement === expectedFocus).toBe(true);
+      await user.keyboard('{Escape}');
+      await screen.findByTestId('answer-text');
+      expect(driver.api.discardSettings).toHaveBeenCalledWith(1);
+      if (outcome === 'pending') await act(async () => read.resolve(driver.getDraft()));
+    });
   it.each(['Save', 'Back'])('reports actual draft edits once and clears dirty state after successful %s', async (action) => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     choose('Answer mode', 'Brief'); choose('Answer mode', 'Summarize');
     expect(screen.getByText('Unsaved changes')).toBeTruthy();
     expect(driver.getState().settingsDirty).toBe(true);
     expect(driver.api.command.mock.calls.filter(([command]) => command.type === 'settingsDraftChanged').map(([command]) => command)).toEqual([
-      { type: 'settingsDraftChanged', dirty: true }
+      { type: 'settingsDraftChanged', dirty: true, session: driver.getState().settingsSession }
     ]);
     fireEvent.click(screen.getByTestId(action === 'Save' ? 'settings-save' : 'settings-back'));
     await screen.findByTestId('answer-text');
     expect(driver.getState().settingsDirty).toBe(false);
-    expect(driver.api.command).toHaveBeenCalledWith({ type: 'settingsDraftChanged', dirty: false });
+    expect(driver.api.command).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'settingsDraftChanged', dirty: false }));
     expect(driver.saved).toHaveLength(action === 'Save' ? 1 : 0);
   });
   it('shows loading, allows Back, and focuses the page heading only after hydration', async () => {
@@ -500,13 +1166,48 @@ describe('settings drafts and protected controls', () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
     fireEvent.change(screen.getByRole('slider', { name: 'Text visibility' }), { target: { value: '25' } });
     await act(async () => {
-      await driver.api.discardSettings();
+      await driver.api.discardSettings(driver.getState().settingsSession);
       await driver.api.command({ type: 'settings' });
     });
     await waitFor(() => expect(driver.api.getSettingsDraft).toHaveBeenCalledTimes(2));
     tab('Panel'); disclose('Advanced appearance');
     expect((screen.getByRole('slider', { name: 'Text visibility' }) as HTMLInputElement).value).toBe('100');
     expect(driver.saved).toHaveLength(0);
+  });
+  it('keeps a newer draft dirty after the previous Settings Save returns', async () => {
+    const driver = fixture();
+    let finishSave!: () => void;
+    driver.api.saveSettings.mockImplementationOnce(() => new Promise(resolve => { finishSave = () => resolve('saved'); }));
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await act(async () => driver.api.command({ type: 'showInput' }));
+    await openSettings();
+    choose('Answer mode', 'Summarize');
+
+    await act(async () => finishSave());
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Summarize');
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    expect(driver.getState().settingsDirty).toBe(true);
+  });
+  it('lets a newer draft use a provider key saved after that draft opened', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    tab('Models & API');
+    choose('API service', 'Groq');
+    expect(screen.getByText('No saved key for this service.')).toBeTruthy();
+
+    await act(async () => driver.emit({ settingsKeyPresence: { ...driver.getDraft().keyPresence, Groq: true } }));
+    expect(screen.getByText('A key is saved for this service.')).toBeTruthy();
+    expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('');
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(driver.saved).toEqual([expect.objectContaining({ keyUpdates: {}, values: expect.objectContaining({ ResponseMode: 'Brief' }) })]);
   });
   it('previews independent opacity and palettes, discards Back, applies Save, and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings(); tab('Panel'); disclose('Advanced appearance');
@@ -637,12 +1338,13 @@ describe('settings drafts and protected controls', () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     disclose('Keyboard shortcuts');
     const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
-    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true });
+    const session = driver.getState().settingsSession;
+    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true, session });
     fireEvent.keyDown(capture, { key: 'F12', code: 'F12', keyCode: 123 }); expect((capture as HTMLInputElement).value).toContain('F12 is reserved');
     fireEvent.keyDown(capture, { key: 'Enter', code: 'Enter', keyCode: 13, ctrlKey: true }); expect((capture as HTMLInputElement).value).toContain('different shortcut');
     fireEvent.keyDown(capture, { key: 'k', code: 'KeyK', keyCode: 75, ctrlKey: true, shiftKey: true });
     expect((capture as HTMLInputElement).value).toBe('Ctrl+Shift+K');
-    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false });
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false, session });
     const visibility = screen.getByRole('textbox', { name: 'Show or hide panel shortcut' }); fireEvent.focus(visibility);
     await act(async () => driver.emit({ visible: false }));
     expect((visibility as HTMLInputElement).value).toBe('Ctrl+/');
@@ -657,7 +1359,8 @@ describe('settings drafts and protected controls', () => {
     fireEvent.keyDown(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16, shiftKey: true });
     expect((field as HTMLInputElement).value).toContain('Listening');
     fireEvent.keyUp(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16 }); expect((field as HTMLInputElement).value).toBe('Right Shift');
-    fireEvent.click(field); fireEvent.blur(window); expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false });
+    fireEvent.click(field); fireEvent.blur(window);
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
   });
   it('keeps failed Save drafts editable and shows a bounded error without IPC exception details', async () => {
     const driver = fixture(); driver.api.saveSettings.mockRejectedValueOnce(new Error('private raw storage error'));
@@ -667,5 +1370,40 @@ describe('settings drafts and protected controls', () => {
     expect(document.body.textContent).not.toContain('private raw storage error');
     expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
     expect(screen.getByTestId('settings-back').matches(':disabled, [aria-disabled="true"]')).toBe(false);
+  });
+  it('keeps the draft editable and explains how to retry an overlapping save', async () => {
+    const driver = fixture();
+    driver.api.saveSettings.mockResolvedValueOnce('busy');
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    tab('Models & API');
+    fireEvent.change(screen.getByTestId('service-key'), { target: { value: 'synthetic-replacement' } });
+    fireEvent.click(screen.getByTestId('settings-save'));
+
+    expect((await screen.findByRole('alert')).textContent).toContain('Wait a moment, then try Save again');
+    expect((screen.getByTestId('service-key') as HTMLInputElement).value).toBe('synthetic-replacement');
+    expect(driver.getState().settingsDirty).toBe(true);
+    expect(screen.getByTestId('settings-save').matches(':disabled, [aria-disabled="true"]')).toBe(false);
+    expect(driver.saved).toHaveLength(0);
+  });
+  it('shows shortcut recovery while keeping the active Settings draft and retained answer', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+
+    await act(async () => driver.emit({ shortcutRecovery: {
+      message: 'Settings were not saved. Restart SC to restore the saved shortcuts.',
+      code: 'SHORTCUTS-RESTOREFAILED', reportId: 'synthetic', logSaved: false, hint: ''
+    } }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Restart SC');
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
+    expect(driver.getState().settingsDirty).toBe(true);
+
+    fireEvent.click(screen.getByTestId('settings-back'));
+    expect((await screen.findByTestId('answer-text')).textContent).toContain('Synthetic SC answer');
+    expect(screen.getByRole('alert').textContent).toContain('Restart SC');
   });
 });

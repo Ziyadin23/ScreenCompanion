@@ -1,6 +1,7 @@
-import { PROVIDERS, type ModelPipelinePreference, type ModelSelection, type PipelineMode } from './index';
+import { PROVIDERS, type ModelPipelinePreference, type ModelSelection, type PipelineMode, type VaultData } from './index';
 
 type ModelIdentity = Pick<ModelSelection, 'Provider' | 'AnswerModel'>;
+type PipelineSettings = Pick<VaultData, 'ModelPipelines' | 'PipelineMode'>;
 export const MAX_MODEL_PIPELINES = 128;
 
 export function modelPipeline(preferences: readonly ModelPipelinePreference[], model: ModelIdentity): PipelineMode | undefined {
@@ -10,6 +11,13 @@ export function modelPipeline(preferences: readonly ModelPipelinePreference[], m
 export function rememberModelPipeline(preferences: readonly ModelPipelinePreference[], model: ModelIdentity, mode: PipelineMode): ModelPipelinePreference[] {
   const entry = { Provider: model.Provider, AnswerModel: model.AnswerModel.trim(), PipelineMode: mode };
   return [...preferences.filter(item => item.Provider !== entry.Provider || item.AnswerModel !== entry.AnswerModel), entry];
+}
+
+export function applyModelPipelineUpdates(saved: PipelineSettings, updates: readonly ModelPipelinePreference[], model: ModelIdentity | null): PipelineSettings {
+  const preferences = saved.ModelPipelines.filter(preference => modelPipeline(updates, preference) === undefined).concat(updates);
+  if (!model) return { ModelPipelines: preferences, PipelineMode: saved.PipelineMode };
+  const mode = modelPipeline(preferences, model) ?? 'Thorough';
+  return { ModelPipelines: rememberModelPipeline(preferences, model, mode), PipelineMode: mode };
 }
 
 export function validModelPipelines(value: unknown): value is ModelPipelinePreference[] {
