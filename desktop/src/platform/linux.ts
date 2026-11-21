@@ -1,5 +1,54 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import type { DesktopAction, CapturedFrame, DesktopPlatform, HttpTransport } from '../contracts';
 import { validateShortcuts } from './shortcuts';
+
+const runHyprctl = promisify(execFile);
+const hyprctlOptions = { timeout: 500, maxBuffer: 1024 * 1024 };
+const hyprlandAddress = /^0x[0-9a-f]+$/;
+
+export type HyprlandPanelPlacement = 'floating' | 'tiled' | 'fullscreen';
+interface HyprlandPanelGeometry extends Electron.Size {
+  address: string;
+  placement: HyprlandPanelPlacement;
+}
+
+export async function readHyprlandPanelGeometry(title: string): Promise<HyprlandPanelGeometry | null> {
+  if (!process.env.HYPRLAND_INSTANCE_SIGNATURE) return null;
+  try {
+    const { stdout } = await runHyprctl('hyprctl', ['-j', 'clients'], hyprctlOptions);
+    const clients: unknown = JSON.parse(stdout);
+    if (!Array.isArray(clients)) return null;
+    const panels = clients.filter(client => client?.pid === process.pid && client.title === title && client.mapped === true && client.hidden === false);
+    if (panels.length !== 1) return null;
+    const panel = panels[0];
+    if (typeof panel.address !== 'string' || !hyprlandAddress.test(panel.address) || typeof panel.floating !== 'boolean' ||
+        !Number.isInteger(panel.fullscreen) || !Number.isInteger(panel.fullscreenClient) ||
+        !Array.isArray(panel.size) || panel.size.length !== 2 ||
+        !panel.size.every((dimension: number) => Number.isSafeInteger(dimension) && dimension > 0)) return null;
+    const fullscreen = panel.fullscreen !== 0 || panel.fullscreenClient !== 0;
+    return { address: panel.address, width: panel.size[0], height: panel.size[1],
+      placement: fullscreen ? 'fullscreen' : panel.floating ? 'floating' : 'tiled' };
+  } catch { return null; }
+}
+
+export async function restoreHyprlandPanelTiling(address: string, signal: AbortSignal): Promise<void> {
+  if (!process.env.HYPRLAND_INSTANCE_SIGNATURE || !hyprlandAddress.test(address) || signal.aborted) return;
+  const selector = `address:${address}`;
+  const options = { ...hyprctlOptions, signal };
+  try {
+    // Resolve the target in the compositor so an unmapped panel cannot affect the focused window.
+    const script = `local panel = hl.get_window("${selector}")
+if panel and panel.pid == ${process.pid} then
+  hl.dispatch(hl.dsp.window.float({ window = "${selector}", action = "disable" }))
+end`;
+    const { stdout } = await runHyprctl('hyprctl', ['eval', script], options);
+    const reply = stdout.trim();
+    if (!signal.aborted && (reply === 'eval is only supported with the lua config manager' || reply === 'unknown request')) {
+      await runHyprctl('hyprctl', ['dispatch', 'settiled', selector], options);
+    }
+  } catch { /* The next geometry read retains the compositor's actual placement. */ }
+}
 
 interface Image {
   isEmpty(): boolean; getSize(): { width: number; height: number };

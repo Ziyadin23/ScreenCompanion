@@ -89,3 +89,198 @@
 - The seven target/integration tasks above remain unchecked. No new GUI, Windows-native, provider, RPM upgrade, local beta delivery or release run is claimed by this source publication. Continue at task 2.1 after review.
 - `npm audit --json`: exit 1 because of 25 moderate advisories; no high or critical advisories were reported. No automatic dependency changes were applied.
 - `openspec validate linux-platform-support --strict`, `openspec validate organize-project-workflow --strict` and `git diff --cached --check`: exit 0. The final public-file audit checked 60 intended files and 107 Markdown links/anchors with no private paths, credential patterns, obsolete workflow references or conflict markers.
+
+## Settings-to-answer sizing checkpoint (2026-11-19)
+
+- [Issue #19](https://github.com/Ziyadin23/ScreenCompanion/issues/19) owns the
+  Linux surface transition. Branch `Ziyadin23/issue-19-hyprland-panel-size`
+  started at main `9caa0c2`, then moved to `ee6ed7c` for the frozen review tree
+  `8e73add970a81a1ec03b5838beb307c686c7a591`. The remap correction uses
+  main `a0536bfa76ba663f2a49f770ac8645af7a89f1e5`. Issue #61 owns the shared resize suppression
+  defect. [Candidate identities, reproduction and outcomes](../../../docs/VERIFICATION.md#hyprland-panel-geometry-2026-11-19).
+- `npm --prefix desktop ci` exited 0 on the original base. The package and
+  lockfile matched the updated bases. `VITEST_MAX_WORKERS=1 npm --prefix desktop
+  run verify` on the remap correction exited 0 with 1,256 tests in 36 files,
+  type checking, lint and production bundles. The six affected suites passed
+  179 tests, exit 0.
+- The [isolated Hyprland regression](../../../tests/README.md#hyprland-panel-geometry)
+  first reproduced the shortened Question and capture-time panel show on the
+  initial staged fix. On the later frozen tree, both new production cases wrote
+  a 420×180 manual size after Settings and failed to fit the next answer.
+  The remap correction passed all five scenarios, including Back and Save on
+  separate automatic profiles and deliberate resize persistence. The independent
+  production probe passed 22 checks including 530×240 restart and the remembered
+  380×160 answer size below Question's minimum.
+- Two independent reviews passed the remap correction before commit
+  `09c7f6da54bf6ae33486128f62b01c7481edac46`.
+
+### 2.6 Combined sizing checkpoint (2026-11-20)
+
+- The local issue branch combines the reviewed #19 and #61 sources by normal
+  merge. Temporary Wayland constraints apply on fit and remap. The shared
+  resize guard uses the latest effective bounds so a later manual resize to an
+  earlier size still reaches the size store. The fit and remap paths refresh
+  the Wayland size hints when releasing temporary constraints, so a native
+  drag can resize the mapped panel again. [Tested source and results](../../../docs/VERIFICATION.md#combined-settings-sizing-and-manual-resize).
+- With the shared verification lock and one Vitest worker, full desktop verify
+  and the eight focused suites exited 0. The isolated
+  [Hyprland regression](../../../tests/README.md#hyprland-panel-geometry) passed
+  all five scenarios, and the independent production probe passed 22 checks.
+  Two fresh production profiles passed the interactive pointer drag, file
+  persistence and same-profile restart checks after Back and Save.
+  Astryx reported 20 passes and two font warnings. Playwright case discovery
+  passed on Fedora, including both Windows restart cases.
+- The coordinator owns independent review of this merge. At the start of the
+  resumed verification, upstream main was `6499acc` and
+  [PR #119](https://github.com/Ziyadin23/ScreenCompanion/pull/119) was open. The
+  coordinator owns public PR preparation after the shared resize fix lands.
+- Keep 2.6 open for the Windows Settings, panel resize and restart smoke on
+  the integrated candidate and the recorder check. The project owner owns the
+  merge and coordinates those checks with the existing Windows queue. Task 2.7
+  owns the final Linux package and integration checks and the numbered runnable
+  beta handoff.
+
+### 2.6 Resize ownership correction (2026-11-20)
+
+- Independent review on `885d1ce` reproduced a saved tiled size after an
+  appearance edit. The correction on the issue branch retains current main
+  `22271d0` and the accepted merge as ancestors. SC tracks the sizes it
+  requests, defers to the tiled layout and checks for a floating panel before
+  saving a resize.
+- The checked-in regression rejects edited Back and Save persistence in
+  floating and tiled layouts. It also verifies an actual pointer drag to a
+  different floating size, the drag back to the earlier automatic size and
+  same-profile restart. [Source and verification](../../../docs/VERIFICATION.md#hyprland-resize-ownership-correction).
+- The coordinator owns independent review and source integration. Windows
+  Settings and resize restart, named recorder, final packaging and the
+  numbered beta handoff remain open in tasks 2.6 and 2.7.
+
+### 2.6 Layout and resize follow-up (2026-11-20)
+
+- [Draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  retains the prior branch head `0d57abe` and the first correction `fa3d0ec`.
+  Normal merge `9e26bc9` incorporates protected main
+  `4667e43365dd4690d111057f23d85bbd87212372`.
+  The application paths are `desktop/src/main/index.ts` and the Hyprland
+  geometry reader and export in `desktop/src/platform/`. The regression
+  paths are `desktop/tests/linux/panel-settings.mjs` and
+  `desktop/tests/main/panel-resize.test.ts`.
+- The [documented isolated Hyprland command](../../../tests/README.md#hyprland-panel-geometry)
+  exited 1 on the `0d57abe` bundle with four failing scenarios and seven
+  passing scenarios. The final desktop tree
+  `33acc7dcef647bdeb78bad34dcdcf59d4d4a0c3b` passed 11 scenarios, exit 0.
+  The independent production probe passed 22 checks on the same Fedora
+  host. [Candidate identity and outcomes](../../../docs/VERIFICATION.md#hyprland-layout-and-resize-follow-up)
+- `npm --prefix desktop test -- --maxWorkers=1 tests/main/panel-resize.test.ts`
+  exited 1 with two failures and four passes on the prior code. The first
+  correction also failed the Wayland and portable regressions for an
+  immediate resize after Escape. The final portable resize run exited 0
+  with seven passes. With `VITEST_MAX_WORKERS=1` and
+  the shared lock at `/tmp/sc-20261119-desktop-verify.lock`, desktop verify
+  exited 0 with 1,263 portable tests in 37 files, type checking, lint and
+  production bundles. The eight focused suites passed 191 tests, exit 0.
+- `node .github/scripts/workflow-checks.mjs selftest`,
+  `node .github/scripts/workflow-checks.mjs docs`,
+  `openspec validate --all --strict --no-interactive` and `git diff --check`
+  exited 0. The documentation checker verified 122 Markdown files and
+  549 local links and anchors. Strict OpenSpec validation passed 13 items.
+- Keep 2.6 open for independent rereview, source integration, Windows
+  Settings and same-profile resize restart, and the named recorder check.
+  Task 2.7 owns final packaging and the numbered runnable beta handoff.
+  The coordinator schedules rereview and integration.
+
+### 2.6 Geometry lifecycle correction (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from `7c5271b89c24123aca1bc0f9c8fb0cc45d53e406` on shared main
+  `4667e43365dd4690d111057f23d85bbd87212372`. The Linux main entry point
+  confirms floating resize events for the mapping that received them.
+  SC schedules a repaint when showing the panel and when applying or
+  releasing temporary hints. It waits for the accepted fit before release,
+  bounded by the existing deadline.
+- The portable replay reported four failures and 11 passes on the starting
+  head. A further regression held the compositor at the previous size and
+  caught an early hint release. All 16 cases passed on the correction. The
+  404×160 Escape probe reproduced all three native failures on the starting
+  head. It took one
+  compositor command to tile in each of the three corrected runs. All 12
+  repository scenarios and five independent layout scenarios passed.
+  [Red and green evidence](../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
+- With `VITEST_MAX_WORKERS=1` and the shared lock at
+  `/tmp/sc-20261119-desktop-verify.lock`,
+  `npm --prefix desktop run verify` passed 1,272 tests in 37 files, type
+  checking, lint and production bundling. The eight focused files passed
+  200 tests. The workflow self-test, documentation links, strict OpenSpec
+  validation and whitespace checks passed.
+- The coordinator owns independent rereview and integration for 2.6.
+  Windows Settings, same-profile resize restart and the named recorder check
+  remain open. Task 2.7 owns final packaging and the numbered runnable beta
+  handoff.
+
+### 2.6 Resize and tiling restoration (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from reviewed head `144b80b9` through integration `94a5606` on protected
+  main `e1533be`. Both earlier failures reproduced on the integration.
+  SC preserves matching resize results across Hide and Show in resize order.
+  Before hiding the panel for Settings, it checks the current compositor
+  placement. When a rule floats the returning panel, SC restores the prior
+  tiled mode. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+- Protected main advanced to `7d258e3` with the icon integration. The branch
+  merge uses the approved icon with the existing panel and dialog factory and
+  keeps the working tray indicator on both surfaces.
+- The combined desktop tree `c62db279af384eef67f51d3094ac98c071c27e43` passed
+  full desktop verification with 1,277 tests and 205 focused tests. All 14
+  tracked Wayland scenarios, eight independent scenarios and the targeted
+  Hide and Show restart and tiling probes passed with the shared lock and
+  one Vitest worker. Workflow, links, strict OpenSpec and whitespace passed.
+- Task 2.6 remains open for independent rereview, source integration, Windows
+  Settings and same-profile resize restart, and the named recorder check.
+  Task 2.7 owns final packaging and the numbered runnable beta handoff.
+
+### 2.6 Resize ordering and Exit correction (2026-11-20)
+
+- The follow-up to [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  starts from `9e11c2c` on protected main `7d258e3`. Headless Hyprland and
+  portable IPC replay reproduced the lost latest resize, lost Exit save and
+  lingering remap guard. The correction associates each mapped resize with
+  its own compositor snapshot. Normal Exit waits within one deadline for
+  outstanding confirmations and writes. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-resize-order-and-normal-exit-2026-11-20)
+- The revised replay expects the latest real 503×264 resize across Hide,
+  Show and a same-profile restart. A separate unmatched Electron notification
+  preserves the 510×252 resize. Active remap, automatic sizing and tiling
+  checks remain in the Wayland and portable suites.
+- The coordinator owns independent rereview and source integration. Task 2.6
+  stays open for interactive Windows Settings and same-profile resize restart
+  and the named recorder check. Task 2.7 owns final packages and the verified
+  numbered beta handoff.
+
+### 2.6 Quit, hidden Settings and remap follow-up (2026-11-20)
+
+- The correction continues [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+  from `39488d76c3909c17eb3aa5925d707b14bc01a255` on protected main
+  `2ec9b0c288b3e10f3f3f0c71d6bf0aa99288b7e3`. Independent review found that
+  tray Exit still accepted capture, Settings lost the placement of an
+  already hidden panel, and a second genuine resize at the old normal bounds
+  was discarded during remap.
+- The branch incorporates protected main `56104612f6fef068c4ebdb83777cfe374d29ffb4`
+  from [PR #127](https://github.com/Ziyadin23/ScreenCompanion/pull/127).
+  That base update adds one root ignore rule for local Codex agent profiles.
+- The desktop controller and main entry point stop commands at quit and
+  keep the bounded size drain. The panel records placement before Hide or
+  Settings. Each later remap resize still needs a matching compositor
+  snapshot. The portable main-process and isolated Wayland fixtures cover
+  the three failures and their controls. [Regression evidence](../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
+- With `VITEST_MAX_WORKERS=1` and `flock /tmp/sc-20261119-desktop-verify.lock`,
+  `npm --prefix desktop run verify` exited 0 with 1,288 tests, type checking,
+  lint and production bundles. All 219 focused tests passed. The documented
+  isolated `node --test desktop/tests/linux/panel-settings.mjs` command passed
+  all 16 scenarios. The portable fixture reproduced the tray Exit and
+  pending remap failures before the fix. The isolated Hyprland fixture
+  reproduced the hidden tiled Settings failure. The prior lifecycle and
+  Lua replays passed on the same final bundle. Windows discovery listed all
+  38 cases without running them.
+- Task 2.6 stays open for independent rereview, source integration, Windows
+  Settings and same-profile resize, and the named recorder check. Task 2.7
+  owns final packaging and the verified numbered beta handoff. The
+  coordinator schedules rereview and integration.

@@ -38,3 +38,28 @@
 The issue branch incorporated main `a0536bf` at `1e471b02853de0021e99de575d11b8f3d04bc35f`. The only merge conflict was in the issue table in the project status document. The application and test changes relative to main match the independently reviewed changes at `a230000`.
 
 On Fedora, the full desktop verification passed 1,259 tests in 37 files with one Vitest worker, together with type checking, lint and production builds. Playwright listed all 38 Windows cases in five files, including the two same-profile restart cases. The workflow self-test, documentation checks across 118 Markdown files and 512 local links and anchors, strict OpenSpec validation of all 12 items, and whitespace checks passed. Tasks 2.3 and 2.4 remain open. The combined candidate with the [Hyprland Settings geometry fix](https://github.com/Ziyadin23/ScreenCompanion/issues/19) needs both resize regressions because the fixes share the main-process resize path.
+
+## Combined verification on 20 November 2026
+
+The [local integration with #19](../../../docs/VERIFICATION.md#combined-settings-sizing-and-manual-resize)
+passed the portable resize, file and same-profile restore checks at scales 1
+and 1.25. The two isolated Hyprland profiles saved and restored the result of
+interactive drags to B and back to A after Settings. The merge awaits
+independent review. Tasks 2.3 and 2.4 remain open.
+
+The [#19 geometry lifecycle correction](../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
+re-ran the shared resize and restart tests at scales 1 and 1.25. The
+Hyprland fixture also saved an earlier automatic size after one compositor
+resize. Tasks 2.3 and 2.4 remain open for Windows runtime and beta delivery.
+
+The [follow-up #19 correction](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+keeps a compositor-confirmed floating size across rapid Hide and Show. A newer
+confirmed resize takes precedence over an older reply. The shared Windows
+runtime and delivery requirements remain open under tasks 2.3 and 2.4.
+
+The [#19 remap follow-up](../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
+checks a second real resize to the normal bounds during remap. The test
+confirms the chosen size on the panel, in the file and after restart. An
+Electron-only event at those bounds keeps the earlier confirmed size. The
+integrated draft needs fresh independent review. Tasks 2.3 and 2.4 remain
+open for installed Windows checks and beta delivery.

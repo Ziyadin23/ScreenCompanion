@@ -42,11 +42,19 @@ bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input-with-sc
 ```
 
 Use `--action=input` for a custom focus-only opening binding. The explicit `input-with-screenshot` action opens input from elsewhere and submits with a screenshot only when the question field has focus. Other actions are `settings`, `visibility`, `test` and `exit`. Desktop bindings
-are managed by Hyprland, rather than the Windows shortcut editor. Native window
-decorations handle moving and resizing. In an isolated Hyprland test, returning
-from Settings sometimes left the panel at the larger Settings size; drag a window
-edge or corner to resize it if that happens. Linux RPM updates require manually
-installing a newer RPM; the Windows update feed is not used.
+are managed by Hyprland, rather than the Windows shortcut editor. Use the native
+window controls to move the panel or resize it from an edge or corner. Setup and
+Settings open in their own window. Back and Save return to the answer panel.
+The floating answer panel fits its contents automatically until you resize it.
+SC remembers the last floating size you choose across launches and restores it
+after Hide and Show. SC stops taking commands as soon as Exit starts. It allows
+up to one second to confirm and save a pending resize. A tiled panel returns to
+Hyprland's tiled layout after Settings, even if you opened Settings while the
+panel was hidden or a rule floats newly opened windows. Hyprland sets the
+size of tiled or fullscreen windows. SC keeps your chosen floating size through
+layout changes. Question grows a short floating panel to 180 logical
+pixels high when space allows. Escape restores the answer size.
+Update by manually installing a newer Linux RPM.
 
 ## Setup and migration
 
