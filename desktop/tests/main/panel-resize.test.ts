@@ -154,7 +154,7 @@ vi.mock('../../src/platform', async () => {
     throw new Error('Synthetic capture cancelled before acquiring media.');
   } });
   return { createLinuxPlatform, createWindowsPlatform: createPlatform, createLinuxTransport: () => ({}),
-    restoreHyprlandPanelTiling: vi.fn(),
+    restoreHyprlandPanelPlacement: vi.fn(),
     readHyprlandPanelGeometry: async () => {
       const snapshot = { ...panel.getCompositorSize(), address: '0x1', placement: panelFloating ? 'floating' : 'tiled' };
       const response = nextGeometryResponse;

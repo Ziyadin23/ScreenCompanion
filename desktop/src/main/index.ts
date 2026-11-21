@@ -5,7 +5,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
 import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry,
-  restoreHyprlandPanelTiling, type HyprlandPanelPlacement } from '../platform';
+  restoreHyprlandPanelPlacement, type HyprlandPanelPlacement } from '../platform';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
@@ -24,7 +24,7 @@ interface LinuxPanelLayout {
   hiddenPlacement: HyprlandPanelPlacement | null;
   hideCheck: Promise<void> | null;
   transition: AbortController | null;
-  restoreTiling: boolean;
+  restorePlacement: Exclude<HyprlandPanelPlacement, 'fullscreen'> | null;
   remapBounds: Electron.Rectangle | null;
   resizeCheck: Promise<void> | null;
 }
@@ -69,7 +69,6 @@ let activationPending = false;
 let manualPanelSize = false;
 let applyingWindowGeometry = false;
 let linuxPanelLayout: LinuxPanelLayout | null = null;
-let linuxPanelWasTiledBeforeSettings = false;
 let measurement = 0;
 let measuredContent = '';
 let captureLinux: (() => Promise<import('../contracts').CapturedFrame>) | undefined;
@@ -113,14 +112,13 @@ function hidePanel(rememberPlacement = false): Promise<void> | undefined {
   if (!panel) return;
   if (linux && panel.isVisible()) {
     const layout = linuxPanelLayout;
-    if (rememberPlacement && layout && !layout.restoreTiling) {
+    if (rememberPlacement && layout && !layout.restorePlacement) {
       // Hyprland can change placement without emitting a resize. Read it while the panel is mapped.
       if (!layout.hideCheck) {
         const check = readHyprlandPanelGeometry(panel.getTitle()).then(geometry => {
           if (closing || linuxPanelLayout !== layout || layout.hideCheck !== check) return;
           layout.hideCheck = null;
           layout.hiddenPlacement = geometry?.placement ?? null;
-          if (surface === 'settings' && geometry) linuxPanelWasTiledBeforeSettings = geometry.placement === 'tiled';
           hidePanel();
           if (surface === 'settings') controller?.publish();
         });
@@ -171,13 +169,6 @@ function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog'): Promise
   return target.loadFile(join(directory, '../renderer/index.html'), role ? { query: { 'window-role': role } } : undefined);
 }
 function publishLinuxDialog(state: AppState, capturing: boolean): void {
-  if (surface !== state.surface) {
-    linuxPanelWasTiledBeforeSettings = false;
-    if (state.surface === 'settings' && isPanel(surface)) {
-      const layout = linuxPanelLayout;
-      linuxPanelWasTiledBeforeSettings = layout?.restoreTiling === true || (layout?.hiddenPlacement ?? layout?.placement) === 'tiled';
-    }
-  }
   if (readyToShow && isPanel(surface) && window) {
     window.webContents.send('sc:state', state);
   }
@@ -276,15 +267,17 @@ async function refreshLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelL
     if (geometry) break;
   }
   if (!isCurrent()) return;
-  if (layout.restoreTiling && geometry?.placement === 'floating') {
-    // A rule can float the toplevel as it maps again after Settings.
-    await restoreHyprlandPanelTiling(geometry.address, transition.signal);
+  const placement = layout.restorePlacement;
+  if (placement && geometry && geometry.placement !== 'fullscreen' && geometry.placement !== placement) {
+    // A map rule can undo the user's choice when Settings closes.
+    layout.placement = geometry.placement;
+    await restoreHyprlandPanelPlacement(geometry.address, placement, transition.signal);
     if (!isCurrent()) return;
     geometry = await readLinuxPanelLayout(panel, layout);
     if (!isCurrent()) return;
   }
   layout.transition = null;
-  layout.restoreTiling = false;
+  layout.restorePlacement = null;
   layout.remapBounds = null;
   panelBounds = panel.getBounds();
   layout.placement = geometry?.placement ?? null;
@@ -368,7 +361,11 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
   if (surfaceChanged) {
     const returningToPanel = !isPanel(surface);
     if (linux) {
-      if (returningToPanel && window.isVisible()) linuxPanelWasTiledBeforeSettings = false;
+      const layout = linuxPanelLayout;
+      if (surface === 'settings' && layout && !window.isVisible()) {
+        const placement = layout.hiddenPlacement ?? layout.placement;
+        if (placement !== 'fullscreen') layout.restorePlacement ??= placement;
+      }
       linuxDialog?.window.hide();
       if (linuxDialog?.ready && returningToPanel) {
         linuxDialog.window.webContents.send('sc:state', { ...state, visible: false });
@@ -415,9 +412,8 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
     if (!window.isVisible()) {
       // Hyprland can initially configure a remapped window at its old normal bounds.
       const remapBounds = window.isMaximized() ? window.getNormalBounds() : null;
-      const restoreTiling = linuxPanelWasTiledBeforeSettings || linuxPanelLayout?.restoreTiling === true;
-      linuxPanelWasTiledBeforeSettings = false;
-      linuxPanelLayout = { placement: null, hiddenPlacement: null, hideCheck: null, transition: null, restoreTiling, remapBounds, resizeCheck: null };
+      const restorePlacement = linuxPanelLayout?.restorePlacement ?? null;
+      linuxPanelLayout = { placement: null, hiddenPlacement: null, hideCheck: null, transition: null, restorePlacement, remapBounds, resizeCheck: null };
       void refreshLinuxPanelLayout(window, linuxPanelLayout);
       window.show();
       window.webContents.invalidate();
@@ -528,7 +524,7 @@ async function boot(): Promise<void> {
   let resizeOrder = 0;
   let savedResizeOrder = 0;
   const checkLinuxResize = (panel: BrowserWindow, layout: LinuxPanelLayout, bounds: Electron.Rectangle) => {
-    const { remapBounds, resizeCheck: previousCheck, transition, restoreTiling: restoringTiling } = layout;
+    const { remapBounds, resizeCheck: previousCheck, transition, restorePlacement } = layout;
     const atRemapBounds = remapBounds && sameSize(bounds, remapBounds) && bounds.x === remapBounds.x && bounds.y === remapBounds.y;
     if (atRemapBounds && !previousCheck) {
       layout.remapBounds = null;
@@ -551,12 +547,13 @@ async function boot(): Promise<void> {
       if (!geometry || (closing && !waitingForPanelSize) || panel.isDestroyed()) return;
       const current = !closing && panel.isVisible() && isPanel(surface) ? linuxPanelLayout : null;
       const previousPlacement = layout.placement;
+      // The floating geometry during a placement correction belongs to the remap.
+      if (geometry.placement === 'floating' && restorePlacement && (restorePlacement === 'tiled' || previousPlacement === 'tiled')) return;
       layout.placement = geometry.placement;
       if (geometry.placement !== 'floating') {
         if (current === layout) measuredContent = '';
         return;
       }
-      if (restoringTiling) return;
       if (previousPlacement && previousPlacement !== 'floating') {
         if (current === layout) void refreshLinuxPanelLayout(panel, layout);
         return;
@@ -568,6 +565,7 @@ async function boot(): Promise<void> {
       if (current === layout && transition && layout.transition === transition && sameSize(bounds, panel.getBounds())) {
         transition.abort();
         layout.transition = null;
+        layout.restorePlacement = null;
       }
       if (current && current !== layout && !current.transition) void refreshLinuxPanelLayout(panel, current);
     })().catch(() => { /* A failed observation keeps the last confirmed size. */ });

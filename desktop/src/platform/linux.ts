@@ -32,20 +32,21 @@ export async function readHyprlandPanelGeometry(title: string): Promise<Hyprland
   } catch { return null; }
 }
 
-export async function restoreHyprlandPanelTiling(address: string, signal: AbortSignal): Promise<void> {
+export async function restoreHyprlandPanelPlacement(address: string, placement: 'tiled' | 'floating', signal: AbortSignal): Promise<void> {
   if (!process.env.HYPRLAND_INSTANCE_SIGNATURE || !hyprlandAddress.test(address) || signal.aborted) return;
   const selector = `address:${address}`;
+  const floating = placement === 'floating';
   const options = { ...hyprctlOptions, signal };
   try {
     // Resolve the target in the compositor so an unmapped panel cannot affect the focused window.
     const script = `local panel = hl.get_window("${selector}")
 if panel and panel.pid == ${process.pid} then
-  hl.dispatch(hl.dsp.window.float({ window = "${selector}", action = "disable" }))
+  hl.dispatch(hl.dsp.window.float({ window = "${selector}", action = "${floating ? 'enable' : 'disable'}" }))
 end`;
     const { stdout } = await runHyprctl('hyprctl', ['eval', script], options);
     const reply = stdout.trim();
     if (!signal.aborted && (reply === 'eval is only supported with the lua config manager' || reply === 'unknown request')) {
-      await runHyprctl('hyprctl', ['dispatch', 'settiled', selector], options);
+      await runHyprctl('hyprctl', ['dispatch', floating ? 'setfloating' : 'settiled', selector], options);
     }
   } catch { /* The next geometry read retains the compositor's actual placement. */ }
 }

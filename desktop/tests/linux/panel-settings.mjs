@@ -545,6 +545,36 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
       if (!floating) {
         await writeFile(config, compositorConfig.join('\n').replace('float on', 'float off') + '\n');
         assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
+        for (const action of ['Back', 'Save']) {
+          await t.test(`${action} restores a manually floated panel under a tile rule`, async () => {
+            const profile = 'manually-floated-' + action.toLowerCase();
+            const chosen = [530, 238];
+            try {
+              const panel = await setupProduction(profile);
+              await settledPanelSize(panel);
+              await expect.poll(() => activeClient()?.floating).toBe(false);
+              dispatch('setfloating', `address:${activeClient().address}`);
+              await expect.poll(() => activeClient()?.floating).toBe(true);
+              await resize(panel, chosen);
+              await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
+              const before = await sizeFileSnapshot(profile);
+              const native = await app.browserWindow(panel);
+              await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
+
+              await editAppearance(panel, action);
+              await settledPanelSize(panel);
+              await expect.poll(async () => {
+                const client = activeClient();
+                return { floating: client?.floating, compositor: client?.size,
+                  electron: await native.evaluate(window => window.getSize()), file: await sizeFileSnapshot(profile) };
+              }).toEqual({ floating: true, compositor: chosen, electron: chosen, file: before });
+              await closeApp();
+              assert.deepEqual(await sizeFileSnapshot(profile), before);
+            } finally {
+              await closeApp();
+            }
+          });
+        }
       }
       for (const action of ['Back', 'Save']) {
         const layout = floating ? 'floating' : 'tiled';

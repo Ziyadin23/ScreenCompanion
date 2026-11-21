@@ -284,3 +284,44 @@
   Settings and same-profile resize, and the named recorder check. Task 2.7
   owns final packaging and the verified numbered beta handoff. The
   coordinator schedules rereview and integration.
+
+### 2.6 Manually floated panel after Settings (2026-11-21)
+
+- The local branch `Ziyadin23/issue-19-hyprland-resize-origin-2` starts at
+  [PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122) commit
+  `7fd4fab5e464462418ea8da8ca25210df83bda8d` on protected main
+  `56104612f6fef068c4ebdb83777cfe374d29ffb4`. SC reads the panel's placement
+  before hiding it. On return from Settings it restores the prior floating or
+  tiled mode if a Hyprland map rule changed it. Hyprland then supplies the geometry for
+  the existing panel-size check. The verified `desktop/` tree is
+  `0914f44ecc2b4d84f6d5ce15f73d17b51781ac97`.
+- `npm --prefix desktop ci` installed 597 packages from the local cache,
+  exit 0. `npm --prefix desktop run build` exited 0 on both versions.
+  In isolated Fedora 44 with Hyprland 0.56.2, headless KWin 6.7.5 and
+  Electron 45.0.0, `node --test --test-concurrency=1 desktop/tests/linux/panel-settings.mjs`
+  exited 1 on the starting bundle. Back and Save each returned a tiled
+  1240×860 panel. The other 16 scenarios passed. On the correction, all 18
+  scenarios passed, exit 0. Hyprland and Electron both reported 530×238
+  after Back and Save. The file retained its contents, inode and modification
+  time through exit on each fresh profile. The coordinator's original four
+  placement cases also passed on the corrected bundle, exit 0.
+- The Lua configuration passed all eight placement checks, including Back
+  and Save from a hidden, manually floated panel. All 12 earlier lifecycle
+  cases passed, including delayed resize confirmations across Hide, Show and
+  Settings. The preview with Hyprland queries disabled passed. Each run exited 0.
+- With one Vitest worker and the shared verification lock,
+  `npm --prefix desktop test -- --maxWorkers=1 --no-cache tests/main/panel-resize.test.ts tests/main/panel-size.test.ts tests/main/controller.test.ts tests/main/linux-capture.test.ts tests/renderer tests/storage/settings.test.ts`
+  passed 219 tests in nine files. `npm --prefix desktop run verify` passed
+  type checking, lint, 1,288 tests in 37 files and production bundling.
+  Both exited 0. The shared resize tests cover a manual return to an earlier
+  size and a same-profile restart at scales 1 and 1.25.
+- From `desktop/`, `node_modules/.bin/astryx doctor --built out/renderer`
+  exited 0 with 19 passes and two existing theme font warnings. From the
+  repository root, `node .github/scripts/workflow-checks.mjs selftest` and
+  `node .github/scripts/workflow-checks.mjs docs` exited 0 (136 Markdown files,
+  596 links and anchors). `openspec validate --all --strict --no-interactive`
+  passed all 16 items. `git diff --check HEAD` exited 0.
+- The coordinator owns independent standards and acceptance review of the
+  local commit, followed by PR integration. Task 2.6 stays open for Windows
+  Settings, same-profile resize and the named recorder check. Task 2.7 owns
+  final packaging and the verified numbered beta handoff.
