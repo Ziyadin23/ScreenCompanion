@@ -2,7 +2,7 @@
 
 ## Context
 
-See [proposal](proposal.md). The completed [preview owner](../archive/2026-11-13-preview-dark-astryx-theme/tasks.md) records 1,321 portable passes and synthetic browser review at base `0627df2`. Current main `3b29e41` adds the two-mode pipeline and explicit screenshot submissions. The preview is uncommitted in the inactive issue #55 worktree; the installation origin remains in issue #54's separate worktree.
+See [proposal](proposal.md). The completed [preview owner](../2026-11-13-preview-dark-astryx-theme/tasks.md) records 1,321 portable passes and synthetic browser review at base `0627df2`. Current main `3b29e41` adds the two-mode pipeline and explicit screenshot submissions. The preview is uncommitted in the inactive issue #55 worktree; the installation origin remains in issue #54's separate worktree.
 
 ## Goals / Non-Goals
 
