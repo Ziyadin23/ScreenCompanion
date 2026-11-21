@@ -136,6 +136,13 @@
 - Headless Chromium passed all 24 compact layout and keyboard checks. At browser font sizes of 16 and 24 pixels, Retry and the focused heading remained readable with standard and long messages. Keyboard checks also covered Save, Back and deliberate focus movement. The built Astryx check reported 19 passes and two existing font warnings. Desktop checks ran under the host verification lock with one test worker.
 - Task 1.3 remains open for independent standards and acceptance review of the updated local commit. The project owner coordinates that review and source publication. Tasks 2.1 and 2.2 retain Windows native, encrypted storage, UI and recorder checks, packaged startup and numbered beta delivery.
 
+### Keyboard navigation at the minimum Settings size
+
+- Local work continued on November 21 from `354584f`, which includes PR #128 and the previously accepted Settings behavior from `e69f84a`. The renderer keeps the same tab row as messages appear or clear. It brings the focused tab into view and reserves space for a complete control and a readable message.
+- The expanded Chromium suite failed 11 of 35 scenarios on that parent and passed all 35 on the correction. At 420 × 300 it checks 16, 24 and 32 px browser fonts, read and validation errors, shortcut recovery, the unsaved status, deliberate focus movement during Retry and keyboard access to both messages. The 760 × 680 Save and Back flow also passed with an in-memory draft.
+- On Fedora 44 x64, the desktop verification passed type checking, lint, all 1,329 tests in 37 files and the production build. The built Astryx check recorded 19 passes and two existing theme-font warnings.
+- Independent review of the new commit remains open under 1.3. Tasks 2.1 and 2.2 retain target qualification and the numbered local beta handoff.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

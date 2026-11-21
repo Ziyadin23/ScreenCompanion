@@ -282,12 +282,13 @@ async function openCompactSettings(t, withRecovery = false, fontSize) {
     const shortcuts = { capture: { Modifiers: 3, Key: 32 }, test: { Modifiers: 3, Key: 84 },
       exit: { Modifiers: 2, Key: 8 }, visibility: { Modifiers: 2, Key: 191 },
       input: { Modifiers: 2, Key: 13 }, settings: { Modifiers: 2, Key: 73 } };
-    const appearance = { TextSizePoints: 11 };
+    const appearance = { TextSizePoints: 11, TransparencyPercent: 10, TextOpacityPercent: 100,
+      BackgroundColor: '#1C1D20', TextColor: '#F2F3F5', AccentColor: '#385785' };
     let state = { surface: 'settings', platform: 'windows', visible: true, busy: false, version: 'fixture',
       settingsSession: 1, settingsRevision: 0, settingsFocusRevision: 0, settingsSaving: false, settingsDirty: false, shortcutRecovery: withRecovery ? {
         message: 'Restart SC to restore the saved shortcuts.', code: 'SHORTCUTS-RESTOREFAILED', reportId: '000000000001'
       } : null,
-      shortcuts, appearance, answer: 'Retained answer', error: null };
+      shortcuts, appearance, answer: 'Retained answer', error: null, updates: { status: 'disabled' } };
     if (withRecovery === 'long') state.shortcutRecovery.message += ' Additional recovery details.'.repeat(16);
     const draft = { session: state.settingsSession, values: { ResponseMode: 'Brief', CustomInstruction: '', Appearance: appearance,
       Models: { Provider: 'OpenAI', AnswerModel: 'gpt-6-luna', VisionModel: 'gpt-6-luna', Thinking: 'None', AnswerTokenLimit: null },
@@ -367,30 +368,36 @@ async function expectUnobscuredFocus(control) {
   const bounds = await control.evaluate(node => {
     const doc = node.ownerDocument;
     const view = doc.defaultView;
-    const rect = node.getBoundingClientRect();
-    const clip = node.closest('[role="tabpanel"]')?.getBoundingClientRect() ?? { top: 0, bottom: view.innerHeight };
-    const style = view.getComputedStyle(node);
+    const ring = node.closest('.astryx-text-input') ?? node;
+    const rect = ring.getBoundingClientRect();
+    const clip = node.closest('[role="tabpanel"], [role="tablist"]')?.getBoundingClientRect() ??
+      { top: 0, left: 0, bottom: view.innerHeight, right: view.innerWidth };
+    const style = view.getComputedStyle(ring);
     const outline = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
     const range = doc.createRange();
     const walker = doc.createTreeWalker(node, view.NodeFilter.SHOW_TEXT);
-    const lines = [];
+    const lines = node.matches('input') ? [node.getBoundingClientRect()] : [];
     while (walker.nextNode()) {
       range.selectNodeContents(walker.currentNode);
-      for (const line of range.getClientRects()) {
-        if (line.width && line.height) lines.push([line.top + 0.5, line.bottom - 0.5].every(y =>
-          node.contains(doc.elementFromPoint(line.x + line.width / 2, y))));
-      }
+      lines.push(...Array.from(range.getClientRects()).filter(line => line.width && line.height));
     }
-    return { keyboard: node.matches(':focus-visible'), outline, top: rect.top, bottom: rect.bottom, clipTop: clip.top, clipBottom: clip.bottom, lines };
+    return {
+      outline: node.matches(':focus-visible') && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0,
+      fits: rect.top - outline >= Math.max(0, clip.top) && rect.bottom + outline <= Math.min(view.innerHeight, clip.bottom) &&
+        rect.left - outline >= Math.max(0, clip.left) && rect.right + outline <= Math.min(view.innerWidth, clip.right),
+      readable: lines.length > 0 && lines.every(line => {
+        const hit = (x, y) => node.contains(doc.elementFromPoint(x, y));
+        return hit(line.left + 0.5, line.top + 0.5) && hit(line.right - 0.5, line.bottom - 0.5);
+      })
+    };
   });
-  assert.ok(bounds.keyboard && bounds.top - bounds.outline >= bounds.clipTop && bounds.bottom + bounds.outline <= bounds.clipBottom &&
-    bounds.lines.length && bounds.lines.every(Boolean), `${await control.textContent()} ${JSON.stringify(bounds)}`);
+  assert.deepEqual(bounds, { outline: true, fits: true, readable: true }, await control.getAttribute('aria-label') ?? await control.textContent());
 }
 
-for (const fontSize of [16, 24]) {
-  for (const recovery of ['standard', 'long']) {
+for (const fontSize of [16, 24, 32]) {
+  for (const recovery of ['none', 'standard', 'long']) {
     test(`fits Retry and its focused heading with a ${fontSize}px default font and ${recovery} feedback`, async t => {
-      const page = await openCompactSettings(t, recovery, fontSize);
+      const page = await openCompactSettings(t, recovery !== 'none' && recovery, fontSize);
       const heading = page.getByRole('heading', { name: 'Answer & shortcuts' });
       const retry = page.getByRole('button', { name: 'Try loading again' });
       const save = page.getByRole('button', { name: 'Save', exact: true });
@@ -405,7 +412,13 @@ for (const fontSize of [16, 24]) {
       await page.keyboard.press('Enter');
       await expect.poll(() => page.evaluate(() => typeof globalThis.finishRetry)).toBe('function');
       await page.evaluate(() => globalThis.finishRetry());
+      await expect(retry).toHaveCount(0);
       await expectUnobscuredFocus(heading);
+      if (recovery === 'none') {
+        await page.keyboard.press('Escape');
+        await expect(page.getByTestId('answer-text')).toHaveText('Retained answer');
+        return;
+      }
       const feedback = page.getByRole('region', { name: 'Settings messages' });
       let readEnd = false;
       for (let i = 0; i < 20 && !await save.evaluate(node => node === node.ownerDocument.activeElement); i++) {
@@ -426,9 +439,75 @@ for (const fontSize of [16, 24]) {
   }
 }
 
-for (const [moveFocus, fontSize] of [[false, 16], [true, 16], [true, 24]]) {
-  test(`keyboard Retry at 420×300 keeps focus visible (user moved focus: ${moveFocus}, font: ${fontSize}px)`, async t => {
-    const page = await openCompactSettings(t, fontSize === 24 ? 'long' : false, fontSize);
+test('keeps the focused tab visible when a Settings error appears and on ArrowRight at 24px', async t => {
+  const page = await openCompactSettings(t, false, 24);
+  await expect(page.getByRole('heading', { name: 'Answer & shortcuts' })).toBeFocused();
+  const tab = name => page.getByRole('tab', { name, exact: true });
+  await tab('Answer & shortcuts').focus();
+  await page.keyboard.press('End');
+  const updates = tab('Updates');
+  await expectUnobscuredFocus(updates);
+  await page.evaluate(() => globalThis.failRefresh());
+  const retry = page.getByRole('button', { name: 'Try loading again' });
+  await retry.waitFor();
+  await expectUnobscuredFocus(updates);
+  await page.keyboard.press('Home');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowRight');
+  await expectUnobscuredFocus(tab('Models & API'));
+});
+
+for (const fontSize of [24, 32]) test(`keeps a corrected input visible after the last Settings error clears at ${fontSize}px`, async t => {
+  const page = await openCompactSettings(t, false, fontSize);
+  await page.getByRole('tab', { name: 'Models & API' }).click();
+  const service = page.getByRole('combobox', { name: 'API service' });
+  await service.focus();
+  await page.keyboard.press('m');
+  await expect(service).toHaveText('Mistral');
+  await page.getByRole('button', { name: 'Save', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  const input = page.getByTestId('service-key');
+  await expectUnobscuredFocus(input);
+  await page.keyboard.type('a');
+  await expect(page.locator('#settings-error')).toHaveCount(0);
+  await expectUnobscuredFocus(input);
+  await page.keyboard.type('b');
+  await expect(input).toHaveValue('ab');
+  assert.ok(await page.getByRole('tablist').evaluate(node => node.getBoundingClientRect().top >= 0), 'the tabs remain on screen');
+  assert.ok(await page.locator('footer').evaluate(node => node.getBoundingClientRect().bottom <= node.ownerDocument.defaultView.innerHeight),
+    'the unsaved status and actions fit');
+});
+
+test('keyboard scrolling exposes both Settings messages at 32px', async t => {
+  const page = await openCompactSettings(t, true, 32);
+  await expect(page.getByRole('heading', { name: 'Answer & shortcuts' })).toBeFocused();
+  await page.evaluate(() => globalThis.failRefresh());
+  const messages = page.getByRole('region', { name: 'Settings messages' });
+  await expect(messages.getByRole('alert')).toHaveCount(2);
+  for (let i = 0; i < 20 && !await messages.evaluate(node => node.matches(':focus')); i++) await page.keyboard.press('Tab');
+  await expect(messages).toBeFocused();
+  assert.ok(await messages.evaluate(node => node.matches(':focus-visible') &&
+    node.ownerDocument.defaultView.getComputedStyle(node).outlineStyle !== 'none'));
+  const visibleLines = () => messages.evaluate(node => Array.from(node.children).flatMap(alert => {
+    const range = node.ownerDocument.createRange();
+    range.selectNodeContents(alert);
+    return Array.from(range.getClientRects(), line => {
+      const x = line.left + line.width / 2;
+      return [line.top + 0.5, line.bottom - 0.5].every(y => alert.contains(node.ownerDocument.elementFromPoint(x, y)));
+    });
+  }));
+  await page.keyboard.press('Home');
+  await expect.poll(() => messages.evaluate(node => node.scrollTop)).toBe(0);
+  const first = await visibleLines();
+  await page.keyboard.press('End');
+  await expect.poll(() => messages.evaluate(node => node.scrollTop + node.clientHeight >= node.scrollHeight - 1)).toBe(true);
+  const last = await visibleLines();
+  assert.ok(first[0] && last.at(-1) && first.every((visible, i) => visible || last[i]), 'every line of both messages can be read');
+});
+
+for (const [fontSize, recovery] of [[16, false], [24, false], [24, 'long'], [32, false], [32, 'long']]) {
+  test(`keyboard Retry respects a focus move at ${fontSize}px with ${recovery || 'no'} shortcut feedback`, async t => {
+    const page = await openCompactSettings(t, recovery, fontSize);
     const heading = page.getByRole('heading', { name: 'Answer & shortcuts' });
     const retry = page.getByRole('button', { name: 'Try loading again' });
     const mode = page.getByRole('combobox', { name: 'Answer mode' });
@@ -443,28 +522,11 @@ for (const [moveFocus, fontSize] of [[false, 16], [true, 16], [true, 24]]) {
     await expect.poll(() => page.evaluate(() => typeof globalThis.finishRetry)).toBe('function');
     await expect(retry).toBeFocused();
     await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeDisabled();
-    if (moveFocus) {
-      await page.keyboard.press('Tab');
-      await expect(mode).toBeFocused();
-    }
+    await page.keyboard.press('Tab');
+    await expect(mode).toBeFocused();
     await page.evaluate(() => globalThis.finishRetry());
     await expect(retry).toHaveCount(0);
-    const focused = moveFocus ? mode : heading;
-    await expect(focused).toBeFocused();
-    if (moveFocus && fontSize === 24) await expectUnobscuredFocus(focused);
-    if (!moveFocus) {
-      const bounds = await heading.evaluate(element => {
-        const rect = element.getBoundingClientRect();
-        const clip = element.closest('[role="tabpanel"]').getBoundingClientRect();
-        const style = element.ownerDocument.defaultView.getComputedStyle(element);
-        const outline = parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset);
-        return { top: rect.top - outline, bottom: rect.bottom + outline, clipTop: clip.top, clipBottom: clip.bottom,
-          focusVisible: element.matches(':focus-visible') && style.outlineStyle === 'solid' && outline > 0 };
-      });
-      t.diagnostic(JSON.stringify(bounds));
-      assert.ok(bounds.focusVisible && bounds.top >= bounds.clipTop && bounds.bottom <= bounds.clipBottom,
-        'the heading and its keyboard focus outline fit inside the scroll viewport');
-    }
+    await expectUnobscuredFocus(mode);
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('answer-text')).toHaveText('Retained answer');
     assert.equal(await page.evaluate(() => globalThis.discardedSession), 1);

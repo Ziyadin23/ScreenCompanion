@@ -332,6 +332,10 @@ export function Settings({ state }: { state: AppState }) {
     <VStack className="tabs" role="tablist" aria-label="Settings pages" aria-orientation={narrow ? 'horizontal' : 'vertical'}>
       {PAGES.map((name) => <Button label={name} icon={<Icon name={PAGE_ICONS[name]} />} variant="ghost" key={name} id={`tab-${PAGE_IDS[name]}`} type="button" role="tab" aria-selected={page === name}
         tabIndex={page === name ? 0 : -1} aria-controls="settings-page" isDisabled={blocked} onClick={() => { stopRecording(); setPage(name); }}
+        onFocus={event => {
+          const tab = event.currentTarget;
+          if (tab.matches(':focus-visible')) tab.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+        }}
         onKeyDown={(event) => {
           const previous = narrow ? 'ArrowLeft' : 'ArrowUp';
           const next = narrow ? 'ArrowRight' : 'ArrowDown';

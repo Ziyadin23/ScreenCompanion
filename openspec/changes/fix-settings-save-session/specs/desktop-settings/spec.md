@@ -69,6 +69,13 @@ SC SHALL admit one Settings Save at a time through shortcut registration, encryp
 - **AND** if the user moved focus during the retry, that control keeps focus
 - **AND** Escape invokes Back from either control
 
+#### Scenario: Read and correct errors in a compact Settings window
+
+- **WHEN** an error appears or clears while the user navigates the tabs or edits a field at the minimum Settings size
+- **THEN** the focused tab, field or page heading stays visible with its keyboard focus indicator
+- **AND** the user can read both a Settings error and shortcut recovery by keyboard at larger browser font sizes
+- **AND** the page content and the Save and Back controls remain reachable
+
 #### Scenario: Reasoning edit after an overlapping Save
 - **WHEN** a newer draft selects an active DeepSeek reasoning level and leaves the budget untouched
 - **THEN** the draft displays and saves the current saved budget when one exists
