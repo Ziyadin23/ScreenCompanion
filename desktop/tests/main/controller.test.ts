@@ -398,7 +398,7 @@ describe('production lifecycle with injected native boundaries', () => {
     const second = f.controller.getSettingsDraft();
     second.values.Appearance.TextSizePoints = 18;
     await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: second.session });
-    await f.controller.command({ type: 'recordShortcut', recording: true, session: second.session });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session: second.session, focusRevision: f.controller.getState().settingsFocusRevision });
     expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: first.values.InputShortcut }), true, f.controller.onAction);
 
     const restoreStarted = deferred<void>();
@@ -409,7 +409,7 @@ describe('production lifecycle with injected native boundaries', () => {
     const previous = defaultSettings('synthetic-key');
     expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: previous.InputShortcut }), true, f.controller.onAction);
     const registrations = f.applyShortcuts.mock.calls.length;
-    const lateStop = f.controller.command({ type: 'recordShortcut', recording: false, session: first.session });
+    const lateStop = f.controller.command({ type: 'recordShortcut', recording: false, session: first.session, focusRevision: f.controller.getState().settingsFocusRevision });
     await f.controller.command({ type: 'settingsDraftChanged', dirty: false, session: first.session });
     await expect(f.controller.saveSettings(second)).resolves.toBe('busy');
     expect(f.save).toHaveBeenCalledOnce();
@@ -420,7 +420,7 @@ describe('production lifecycle with injected native boundaries', () => {
     expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, answer: 'Retained answer', error: null,
       shortcuts: { input: previous.InputShortcut } });
 
-    await f.controller.command({ type: 'recordShortcut', recording: false, session: second.session });
+    await f.controller.command({ type: 'recordShortcut', recording: false, session: second.session, focusRevision: f.controller.getState().settingsFocusRevision });
     await f.controller.saveSettings(second);
     expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, answer: 'Retained answer' });
     expect(f.save.mock.calls[1]![0]).toMatchObject({ ApiKey: 'synthetic-key', InputShortcut: previous.InputShortcut, Appearance: { TextSizePoints: 18 } });
@@ -492,13 +492,13 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.onWindowBlur();
     f.applyShortcuts.mockClear();
 
-    await f.controller.command({ type: 'recordShortcut', recording: true, session });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision });
     await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session });
     expect(f.controller.getState()).toMatchObject({ visible: false, settingsDirty: true });
     expect(f.applyShortcuts).not.toHaveBeenCalled();
 
     await f.controller.command({ type: 'toggleVisibility' });
-    await f.controller.command({ type: 'recordShortcut', recording: true, session });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision });
     expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
     await f.controller.onWindowBlur();
     expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), false, expect.any(Function));
@@ -508,7 +508,7 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.initialize();
     await f.controller.command({ type: 'settings' });
     const session = f.controller.getState().settingsSession;
-    const start = { type: 'recordShortcut', recording: true, session } as const;
+    const start = { type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision } as const;
     f.applyShortcuts.mockClear();
 
     const queued = f.controller.command(start);
@@ -521,10 +521,36 @@ describe('production lifecycle with injected native boundaries', () => {
     expect(f.controller.getState().visible).toBe(true);
     expect(f.applyShortcuts).not.toHaveBeenCalled();
   });
+  it.each(['window blur', 'refocus', 'hide and show'] as const)('rejects recording from a previous focus after %s', async transition => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    f.host.isFocused.mockReturnValue(true);
+    const { settingsSession: session, settingsFocusRevision: focusRevision } = f.controller.getState();
+    const start = { type: 'recordShortcut', recording: true, session, focusRevision } as const;
+    f.applyShortcuts.mockClear();
+    if (transition === 'hide and show') {
+      const queued = f.controller.command(start);
+      await Promise.all([queued, f.controller.command({ type: 'toggleVisibility' }), f.controller.command({ type: 'toggleVisibility' })]);
+    } else {
+      f.host.isFocused.mockReturnValue(false);
+      await f.controller.onWindowBlur();
+      if (transition === 'refocus') f.host.isFocused.mockReturnValue(true);
+    }
+    await f.controller.command(start);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    f.host.isFocused.mockReturnValue(true);
+    await f.controller.command({ ...start, focusRevision: f.controller.getState().settingsFocusRevision });
+    await f.controller.command({ ...start, recording: false });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), true, f.controller.onAction);
+    await f.controller.onWindowBlur();
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), false, f.controller.onAction);
+  });
   it('blocks update restart while recording and releases shortcuts on native window blur', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
     const { settingsSession } = f.controller.getState();
-    await f.controller.command({ type: 'recordShortcut', recording: true, session: settingsSession });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session: settingsSession, focusRevision: f.controller.getState().settingsFocusRevision });
     expect(f.controller.canInstallUpdate()).toBe(false);
     await f.controller.onWindowBlur();
     expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.any(Object), false, f.controller.onAction);

@@ -129,7 +129,8 @@ recovery messages readable together in a short window. Panel appearance changes 
 panel and its preview while Settings keeps its readable palette.
 
 In current source, a Settings save that finishes after you switch surfaces
-keeps Question or a newer Settings draft open. A retry keeps the saved settings
+keeps Question or a newer Settings draft open. The API key field keeps your
+edit for the service named in its label. A retry keeps the saved settings
 you leave untouched. If focus stays on **Try loading again**, a successful retry
 brings the focused page heading into view. Back discards its draft and restores
 saved shortcuts when they are available. If recovery fails, the panel tells you

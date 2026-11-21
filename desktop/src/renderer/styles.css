@@ -214,6 +214,14 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
   .settings-feedback .dialog-error { margin-block: 0 !important; padding-block: var(--spacing-0-5); }
   .settings-feedback .dialog-error + .dialog-error { margin-block-start: var(--spacing-1) !important; }
 }
+@media (max-width: 599px) and (max-height: 420px) {
+  /* Let messages yield space to a complete control and its focus outline. */
+  .settings:has(.settings-feedback) .settings-layout { display: contents; }
+  .settings:has(.settings-feedback) .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .settings:has(.settings-feedback) .tabs button { flex: 1 0 auto; }
+  .settings:has(.settings-feedback) .settings-body { min-block-size: calc(max(var(--size-element-md), 1lh) + var(--spacing-6)); }
+  .settings-feedback { flex-shrink: 1; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }

@@ -127,6 +127,8 @@ outline, honors a user's focus change while the retry is pending, and keeps
 Escape available. With a shortcut recovery message present, it also checks
 that every line of a validation or read error is visible and that the affected
 input or Retry button can receive keyboard focus and respond to a pointer.
+At browser font sizes of 16 and 24 pixels, it checks the full Retry and
+heading labels, keyboard access to longer messages, and the Save and Back controls.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

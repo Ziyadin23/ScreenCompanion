@@ -286,6 +286,75 @@ describe('answer and temporary input', () => {
 });
 
 describe('production Settings save overlap', () => {
+  it.each(['Save', 'Back', 'select a service'] as const)('keeps the service field with its owner through a refresh and %s', async action => {
+    const user = userEvent.setup();
+    const [first, second] = PROVIDERS;
+    const initial = { ...defaultSettings('record-one'), CommandsShown: true };
+    initial.ProviderKeys[second] = 'record-two';
+    const production = controllerFixture(initial);
+    const driver = await renderController(production);
+    await openSettingsFromPanel();
+    choose('Answer mode', 'Brief');
+    tab('Models & API');
+    choose('API service', second);
+    const write = production.delaySave();
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await write.started;
+
+    await act(async () => production.controller.onAction('input'));
+    await openSettingsFromPanel();
+    tab('Models & API');
+    const field = screen.getByTestId<HTMLInputElement>('service-key');
+    await user.type(field, 'draft');
+    await act(async () => { write.resolve(); await driver.api.saveSettings.mock.results[0]!.value; });
+    expect(document.activeElement === field).toBe(true);
+    expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe(second);
+    await user.keyboard('-one');
+    expect(field.value).toBe('draft-one');
+    expect(field.labels?.[0]?.textContent).toContain(first);
+    expect(screen.getByLabelText(`Service API key for ${first}`) === field).toBe(true);
+
+    if (action === 'select a service') {
+      await user.click(screen.getByRole('checkbox', { name: 'Show API key' }));
+      expect(field.type).toBe('text');
+      expect(field.value).toBe('draft-one');
+      choose('API service', second);
+      expect(field.labels?.[0]?.textContent).toContain(second);
+      expect(field.type).toBe('password');
+      expect(field.value).toBe('');
+      await user.type(field, 'draft-two');
+      choose('API service', first);
+      expect(field.value).toBe('draft-one');
+    }
+    await user.click(screen.getByRole('button', { name: action === 'Back' ? 'Back' : 'Save' }));
+    await screen.findByTestId('answer-text');
+    expect(production.save).toHaveBeenCalledTimes(action === 'Back' ? 1 : 2);
+    const selected = action === 'select a service' ? first : second;
+    expect(production.save.mock.lastCall![0]).toMatchObject({
+      Models: { Provider: selected }, ResponseMode: 'Brief',
+      ProviderKeys: { [first]: action === 'Back' ? 'record-one' : 'draft-one', [second]: action === 'select a service' ? 'draft-two' : 'record-two' }
+    });
+    await openSettingsFromPanel();
+    tab('Models & API');
+    expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe(selected);
+    expect(screen.getByTestId<HTMLInputElement>('service-key').value).toBe('');
+    expect(production.run).not.toHaveBeenCalled();
+  });
+
+  it('honors an explicit choice of the current service while a save is pending', async () => {
+    const [first, second] = PROVIDERS;
+    const driver = fixture({ surface: 'settings', settingsSaving: true });
+    render(<App />);
+    await screen.findByRole('combobox', { name: 'Answer mode' });
+    tab('Models & API');
+    choose('API service', first);
+    await act(async () => driver.emit({ settingsSaving: false, settingsRevision: 1, settingsModels: defaultModels(second) }));
+    expect(screen.getByRole('combobox', { name: 'API service' }).textContent).toBe(first);
+    fireEvent.click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(driver.saved[0]?.values.Models?.Provider).toBe(first);
+  });
+
   it.each(['typing', 'Escape'] as const)('keeps the instruction editor active for %s when an earlier save changes Answer mode', async action => {
     const user = userEvent.setup();
     const production = controllerFixture({ ...defaultSettings('synthetic-key'), CommandsShown: true,
@@ -977,7 +1046,7 @@ describe('settings drafts and protected controls', () => {
     await waitFor(() => expect(document.activeElement).toBe(field));
     expect(field.getAttribute('aria-invalid')).toBe('true'); expect(driver.saved).toHaveLength(0);
     fireEvent.click(screen.getByText('Keyboard shortcuts', { selector: 'summary' }));
-    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession, focusRevision: driver.getState().settingsFocusRevision });
   });
   it('adapts keyboard navigation to a narrow horizontal tab list', async () => {
     const previousWidth = window.innerWidth;
@@ -1339,12 +1408,12 @@ describe('settings drafts and protected controls', () => {
     disclose('Keyboard shortcuts');
     const capture = screen.getByRole('textbox', { name: 'Capture and answer shortcut' });
     const session = driver.getState().settingsSession;
-    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true, session });
+    fireEvent.focus(capture); expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: true, session, focusRevision: driver.getState().settingsFocusRevision });
     fireEvent.keyDown(capture, { key: 'F12', code: 'F12', keyCode: 123 }); expect((capture as HTMLInputElement).value).toContain('F12 is reserved');
     fireEvent.keyDown(capture, { key: 'Enter', code: 'Enter', keyCode: 13, ctrlKey: true }); expect((capture as HTMLInputElement).value).toContain('different shortcut');
     fireEvent.keyDown(capture, { key: 'k', code: 'KeyK', keyCode: 75, ctrlKey: true, shiftKey: true });
     expect((capture as HTMLInputElement).value).toBe('Ctrl+Shift+K');
-    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false, session });
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'recordShortcut', recording: false, session, focusRevision: driver.getState().settingsFocusRevision });
     const visibility = screen.getByRole('textbox', { name: 'Show or hide panel shortcut' }); fireEvent.focus(visibility);
     await act(async () => driver.emit({ visible: false }));
     expect((visibility as HTMLInputElement).value).toBe('Ctrl+/');
@@ -1360,7 +1429,7 @@ describe('settings drafts and protected controls', () => {
     expect((field as HTMLInputElement).value).toContain('Listening');
     fireEvent.keyUp(field, { key: 'Shift', code: 'ShiftRight', keyCode: 16 }); expect((field as HTMLInputElement).value).toBe('Right Shift');
     fireEvent.click(field); fireEvent.blur(window);
-    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession });
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'recordShortcut', recording: false, session: driver.getState().settingsSession, focusRevision: driver.getState().settingsFocusRevision });
   });
   it('keeps failed Save drafts editable and shows a bounded error without IPC exception details', async () => {
     const driver = fixture(); driver.api.saveSettings.mockRejectedValueOnce(new Error('private raw storage error'));

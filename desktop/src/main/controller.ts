@@ -77,7 +77,7 @@ export class ApplicationController {
     const defaults = defaultSettings('');
     this.state = { platform: deps.platformName ?? 'windows', ready: false, surface: 'setup', visible: false, busy: false, answer: '', error: null,
       appearance: { ...defaults.Appearance }, shortcuts: shortcutsByAction(defaults), captureProtection: 'Failed',
-      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsRevision: 0, settingsDirty: false, settingsSaving: false,
+      version: deps.version, setupLegacyNotice: false, updates: disabledUpdates(), settingsSession: 0, settingsRevision: 0, settingsFocusRevision: 0, settingsDirty: false, settingsSaving: false,
       settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null };
   }
   getState(): AppState { return structuredClone(this.state); }
@@ -190,7 +190,11 @@ export class ApplicationController {
     void this.command(commands[action === 'input-with-screenshot' ? 'input' : action]).catch(error => this.fail('Display', error));
   };
   onWindowBlur(): Promise<void> {
-    return this.command({ type: 'recordShortcut', recording: false, session: this.state.settingsSession });
+    if (!this.ownsSettings(this.state.settingsSession)) return Promise.resolve();
+    this.state.settingsFocusRevision++;
+    // Hiding the window during a surface change can deliver blur inside the host's publish.
+    queueMicrotask(() => this.publish());
+    return this.setRecording(false, this.state.settingsSession);
   }
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
@@ -204,6 +208,7 @@ export class ApplicationController {
       if (this.defer(() => { void this.command(command); })) return;
       this.state.visible = !this.state.visible;
       this.hiddenByUser = !this.state.visible;
+      if (!this.state.visible && this.state.surface === 'settings') this.state.settingsFocusRevision++;
       this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), this.state.visible);
       if (!this.state.visible) await this.setRecording(false);
       this.publish(); return;
@@ -246,8 +251,8 @@ export class ApplicationController {
         if (this.ownsSettings(command.session)) { this.state.settingsDirty = command.dirty; this.publish(); }
         break;
       case 'recordShortcut':
-        if (this.ownsSettings(command.session) && (!command.recording || this.state.visible))
-          await this.setRecording(command.recording, command.session);
+        if (this.ownsSettings(command.session) && this.ownsRecordingFocus(command.focusRevision, command.recording))
+          await this.changeShortcuts(command);
         break;
       case 'beginMove': if (this.state.visible && !this.capturing) this.deps.platform.beginMove(this.deps.host.panelHandle()); break;
       case 'beginResize':
@@ -259,11 +264,13 @@ export class ApplicationController {
   private ownsSettings(session: number): boolean {
     return !this.exiting && this.state.surface === 'settings' && this.state.settingsSession === session;
   }
-  private changeShortcuts(change: { settings?: VaultData; recording?: boolean; session?: number }): Promise<void> {
+  private ownsRecordingFocus(revision: number, recording: boolean): boolean {
+    return revision === this.state.settingsFocusRevision && (!recording || (this.state.visible && this.deps.host.isFocused?.() === true));
+  }
+  private changeShortcuts(change: { settings?: VaultData; recording?: boolean; session?: number; focusRevision?: number }): Promise<void> {
     const applied = this.shortcutChanges.then(async () => {
       if (this.exiting || (change.session !== undefined && !this.ownsSettings(change.session))) return;
-      // The window may have been hidden while an earlier registration was finishing.
-      if (change.recording && !this.state.visible) return;
+      if (change.focusRevision !== undefined && !this.ownsRecordingFocus(change.focusRevision, change.recording === true)) return;
       const endingRecording = change.recording === false && !change.settings;
       // An in-flight Save owns its provisional bindings through persistence and rollback.
       const retrySaved = endingRecording && this.state.shortcutRecovery !== null && !this.state.settingsSaving;

@@ -34,7 +34,7 @@ export function controllerFixture(initial: VaultData | null = { ...defaultSettin
     assessmentMode: 'standard', enableQuestionCropping: true, enableRefusalRetry: true, imageRegionPadding: .08,
     questionRegion: null, extractionMaxOutputTokens: 6000, answerMaxOutputTokens: 2500, thinking: 'None' };
   const host = { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: (state: AppState) => { states.push(state); }, scroll() {}, exit() {},
-    isFocused: vi.fn(() => false), inputAction: vi.fn(), inputHeight: vi.fn(), activate: vi.fn() };
+    isFocused: vi.fn(() => true), inputAction: vi.fn(), inputHeight: vi.fn(), activate: vi.fn() };
   const controller = new ApplicationController({ platform, store: { load, save,
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host,

@@ -129,6 +129,13 @@
 - All five regressions passed on desktop tree `fba17becb9d330c66b38d94e229de7d82c8c98bd`. The full desktop verification passed type checking, lint, 1,321 tests in 37 files and the production build. Chromium passed 19 tracked compact cases, 28 wheel and layout replays, four Settings feedback replays and one extended-message keyboard case. All 11 IPC and preview replays and 17 setup preview cases passed.
 - The built Astryx check reported 19 passes and two existing theme-font warnings. Windows UI discovery listed 38 cases in five files. Task 1.3 awaits independent standards and acceptance review of this source. Tasks 2.1 and 2.2 retain the Windows native, vault, GUI and recorder checks, packaged startup and numbered local beta handoff.
 
+### Settings field and keyboard focus on 2026-11-21
+
+- Local source work resumed from published draft head `1fdbdfb` on `Ziyadin23/issue-59-draft-field-ownership`. The draft keeps the service named in the edited field separate from the service selected for future questions. Shortcut recording follows the current focus of the visible Settings window.
+- On Fedora 44 x64, `npm --prefix desktop ci` passed. The seven focused service and shortcut tests failed on the starting source and passed on the correction. The ten affected suites passed 316 tests. `npm --prefix desktop run verify` passed type checking, lint, 1,329 tests in 37 files and the production build.
+- Headless Chromium passed all 24 compact layout and keyboard checks. At browser font sizes of 16 and 24 pixels, Retry and the focused heading remained readable with standard and long messages. Keyboard checks also covered Save, Back and deliberate focus movement. The built Astryx check reported 19 passes and two existing font warnings. Desktop checks ran under the host verification lock with one test worker.
+- Task 1.3 remains open for independent standards and acceptance review of the updated local commit. The project owner coordinates that review and source publication. Tasks 2.1 and 2.2 retain Windows native, encrypted storage, UI and recorder checks, packaged startup and numbered beta delivery.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.

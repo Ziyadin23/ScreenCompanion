@@ -44,12 +44,20 @@ describe('diagnostic privacy and renderer boundaries', () => {
     expect(commandSchema.safeParse({ type: 'inputHeight', height: 76 }).success).toBe(true);
   });
   it.each([
-    { type: 'recordShortcut', recording: true },
+    { type: 'recordShortcut', recording: true, focusRevision: 0 },
     { type: 'settingsDraftChanged', dirty: true }
   ] as const)('requires a Settings session for $type IPC', command => {
     for (const session of [undefined, -1, 1.5, '1', NaN, Infinity]) {
       expect(commandSchema.safeParse({ ...command, session }).success).toBe(false);
     }
     expect(commandSchema.parse({ ...command, session: 1 })).toEqual({ ...command, session: 1 });
+  });
+  it('requires a focus revision for shortcut recording', () => {
+    for (const recording of [true, false]) {
+      const command = { type: 'recordShortcut', recording, session: 1 };
+      for (const focusRevision of [undefined, -1, 0.5, '1'])
+        expect(commandSchema.safeParse({ ...command, focusRevision }).success).toBe(false);
+      expect(commandSchema.safeParse({ ...command, focusRevision: 2 }).success).toBe(true);
+    }
   });
 });

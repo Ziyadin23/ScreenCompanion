@@ -104,6 +104,10 @@ Open **Settings → Panel** to set background transparency from 0% (opaque) to 1
 
 If you open Question while a Settings save is finishing, SC keeps the current surface open. You can reopen Settings and edit a new draft. If Save asks you to wait, try again when the earlier save finishes. The retry keeps the keys and settings you left untouched. Shortcut fields show the latest saved bindings with your edits applied. **Restore shortcuts** sets all six bindings to defaults in the draft. If you leave the service and model settings untouched, the retry uses the service and models saved by the earlier draft. A DeepSeek reasoning suggestion leaves a saved token limit in place. For the same service and answer model, a new pipeline choice applies on Save, including Thorough. The saved choice applies when you leave Request pipeline untouched.
 
+The label above the API key field identifies the service for that replacement.
+Choose **API service** to select the service for future questions. In a short
+Settings window, use the arrow keys on the tabs to reach each page.
+
 If an earlier save changes **Answer mode** while you type in **Custom instruction**,
 you can finish typing in that field. The latest saved mode applies unless you
 changed it in your draft. If Settings cannot load the latest preferences, choose

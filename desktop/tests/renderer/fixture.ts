@@ -13,7 +13,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
     keyUpdates: {}, pipelineUpdates: [], ...draftOverrides
   };
   let state: AppState = {
-    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsRevision: 0, settingsDirty: false, settingsSaving: false,
+    platform: 'windows', ready: true, surface: 'answer', visible: true, busy: false, settingsSession: stateOverrides.surface === 'settings' ? 1 : 0, settingsRevision: 0, settingsFocusRevision: 0, settingsDirty: false, settingsSaving: false,
     settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null, answer: 'Synthetic SC answer', error: null,
     appearance: { ...values.Appearance },
     shortcuts: shortcutsByAction(draft.values),

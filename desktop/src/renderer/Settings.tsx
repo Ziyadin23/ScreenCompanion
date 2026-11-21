@@ -69,9 +69,10 @@ export function Settings({ state }: { state: AppState }) {
   const [loadStatus, setLoadStatus] = useState<'loading' | 'failed' | 'retrying' | 'ready'>('loading');
   const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
   const [modelDrafts, setModelDrafts] = useState<Partial<Record<ApiProvider, ModelDraft>>>({});
-  const [showKey, setShowKey] = useState(false);
+  const [editingKeyProvider, setEditingKeyProvider] = useState<ApiProvider | null>(null);
+  const [visibleKeyProvider, setVisibleKeyProvider] = useState<ApiProvider | null>(null);
   const [recording, setRecording] = useState<ShortcutField | null>(null);
-  const recordingRef = useRef<ShortcutField | null>(null);
+  const recordingRef = useRef<{ field: ShortcutField; focusRevision: number } | null>(null);
   const pendingModifier = useRef<HotkeyBinding | null>(null);
   const [recordNotice, setRecordNotice] = useState('');
   const [error, setError] = useState('');
@@ -114,7 +115,10 @@ export function Settings({ state }: { state: AppState }) {
     return () => { cancelled = true; };
   }, [loadAttempt, state.settingsSession, state.settingsRevision]);
 
-  useEffect(() => { body.current?.scrollTo?.({ top: 0 }); }, [page]);
+  useEffect(() => {
+    body.current?.scrollTo?.({ top: 0 });
+    if (page !== 'Models & API') setEditingKeyProvider(null);
+  }, [page]);
   useEffect(() => {
     const resize = () => setNarrow(window.innerWidth < 600);
     window.addEventListener('resize', resize);
@@ -144,9 +148,10 @@ export function Settings({ state }: { state: AppState }) {
   }
 
   function stopRecording() {
-    if (!recordingRef.current) return;
+    const recording = recordingRef.current;
+    if (!recording) return;
     recordingRef.current = null; pendingModifier.current = null; setRecording(null); setRecordNotice('');
-    void window.sc.command({ type: 'recordShortcut', recording: false, session: state.settingsSession }).catch(() => {
+    void window.sc.command({ type: 'recordShortcut', recording: false, session: state.settingsSession, focusRevision: recording.focusRevision }).catch(() => {
       if (alive.current) setError('Shortcut recording could not be stopped. Close Settings and try again.');
     });
   }
@@ -155,7 +160,9 @@ export function Settings({ state }: { state: AppState }) {
     window.addEventListener('blur', stop);
     return () => window.removeEventListener('blur', stop);
   }, []);
-  useEffect(() => { if (!state.visible) stopRecording(); }, [state.visible]);
+  useEffect(() => {
+    if (!state.visible || recordingRef.current?.focusRevision !== state.settingsFocusRevision) stopRecording();
+  }, [state.visible, state.settingsFocusRevision]);
 
   function updateResponse<K extends 'ResponseMode' | 'CustomInstruction'>(field: K, value: SettingsDraft['values'][K]) {
     if (!state.settingsSaving && loadedRevision === state.settingsRevision && draftRef.current?.values[field] === value) return;
@@ -175,7 +182,10 @@ export function Settings({ state }: { state: AppState }) {
   const models = applyModelEdits(savedModels, draftModels ?? defaultModels(), draft?.modelEdits ?? []);
   const provider = models.Provider;
   const localModels = draftModels?.Provider === provider ? draftModels : models;
-  const hasSavedKey = (state.settingsKeyPresence ?? draft?.keyPresence)?.[provider] ?? false;
+  const keyPresence = state.settingsKeyPresence ?? draft?.keyPresence;
+  // A saved service change can arrive while the user is still typing in this field.
+  const keyProvider = editingKeyProvider ?? provider;
+  const keyLabel = `API key for ${keyProvider === 'Gemini' ? 'Google Gemini' : keyProvider}`;
   const savedPipelines = state.settingsModelPipelines ?? draft?.values.ModelPipelines ?? [];
   const pipeline = modelPipeline(draft?.pipelineUpdates ?? [], models) ?? modelPipeline(savedPipelines, models) ?? 'Thorough';
   function updateModels(patch: Partial<Omit<ModelSelection, 'Provider'>>) {
@@ -194,25 +204,29 @@ export function Settings({ state }: { state: AppState }) {
     }
   }
   function changeProvider(selected: ApiProvider) {
-    if (!draft || selected === provider) return;
+    setEditingKeyProvider(null);
+    if (selected !== keyProvider || selected !== provider) setVisibleKeyProvider(null);
+    if (!draft || (selected === provider && !state.settingsSaving && loadedRevision === state.settingsRevision)) return;
     const fields = draft.modelEdits?.filter(field => field !== 'Provider') ?? [];
-    setModelDrafts(previous => ({ ...previous, [provider]: { models: localModels, fields } }));
-    const next = modelDrafts[selected];
+    const visited = { ...modelDrafts, [provider]: { models: localModels, fields } };
+    setModelDrafts(visited);
+    const next = visited[selected];
     const modelEdits: ModelField[] = ['Provider', ...(next?.fields ?? [])];
     const selectedModels = next?.models ?? defaultModels(selected);
     modifyDraft(previous => ({ ...previous, values: { ...previous.values, Models: selectedModels }, modelEdits }));
-    setShowKey(false); setError('');
+    setError('');
   }
   function startRecording(field: ShortcutField) {
-    if (recordingRef.current === field) return;
+    if (recordingRef.current?.field === field && recordingRef.current.focusRevision === state.settingsFocusRevision) return;
     stopRecording();
-    recordingRef.current = field; setRecording(field); setRecordNotice('Listening… press a key');
-    void window.sc.command({ type: 'recordShortcut', recording: true, session: state.settingsSession }).catch(() => {
-      if (alive.current) { stopRecording(); setError('Shortcut recording is unavailable. Try again.'); }
+    const owner = { field, focusRevision: state.settingsFocusRevision };
+    recordingRef.current = owner; setRecording(field); setRecordNotice('Listening… press a key');
+    void window.sc.command({ type: 'recordShortcut', recording: true, session: state.settingsSession, focusRevision: owner.focusRevision }).catch(() => {
+      if (recordingRef.current === owner) { stopRecording(); setError('Shortcut recording is unavailable. Try again.'); }
     });
   }
   function record(binding: HotkeyBinding) {
-    const field = recordingRef.current;
+    const field = recordingRef.current?.field;
     if (!field || !draft) return;
     const problem = shortcutProblem(binding);
     if (problem) { setRecordNotice(problem); pendingModifier.current = null; return; }
@@ -238,7 +252,7 @@ export function Settings({ state }: { state: AppState }) {
       return key.length > 8192 || /[\u0000-\u001f\u007f]/.test(key);
     });
     if (invalidKey) return { message: 'Enter a valid service API key without line breaks or control characters.', field: 'service-key', page: 'Models & API', provider: invalidKey };
-    if (!draft.keyUpdates[provider]?.trim() && !hasSavedKey) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
+    if (!draft.keyUpdates[provider]?.trim() && !keyPresence?.[provider]) return { message: 'Enter an API key for the selected service.', field: 'service-key', page: 'Models & API' };
     const screenError = screenModelError(provider, pipeline === 'Direct' ? models.AnswerModel : models.VisionModel);
     if (screenError) return model(screenError, pipeline === 'Direct' ? 'answer-model' : 'vision-model');
     if (provider === 'DeepSeek' && models.AnswerTokenLimit !== null && (!Number.isInteger(models.AnswerTokenLimit) || models.AnswerTokenLimit < 256 || models.AnswerTokenLimit > 32000)) return model('Set the answer output token limit between 256 and 32,000, or leave it empty to use the configured limit.', 'answer-budget');
@@ -254,7 +268,7 @@ export function Settings({ state }: { state: AppState }) {
     const problem = validation();
     if (problem) {
       setPage(problem.page);
-      if (problem.provider && problem.provider !== provider) changeProvider(problem.provider);
+      if (problem.field === 'service-key') setEditingKeyProvider(problem.provider ?? provider);
       if (problem.advanced) setAdvanced(true);
       if (problem.field.startsWith('shortcut-')) setShortcutsOpen(true);
       setError(problem.message); setInvalidField(problem.field); setFocusRequest({ field: problem.field }); return;
@@ -364,13 +378,13 @@ export function Settings({ state }: { state: AppState }) {
                 isReadOnly isDisabled={blocked} autoComplete="off" value={recording === field ? recordNotice : formatShortcut(shortcuts[field])}
                 onFocus={() => startRecording(field)} onClick={() => startRecording(field)} onBlur={stopRecording}
                 onKeyDown={(event) => {
-                  if (recordingRef.current !== field) return;
+                  if (recordingRef.current?.field !== field) return;
                   event.preventDefault(); event.stopPropagation();
                   const binding = bindingFromEvent(event);
                   if (modifierForKey(binding.Key)) pendingModifier.current = binding;
                   else record(binding);
                 }} onKeyUp={(event) => {
-                  if (recordingRef.current !== field) return;
+                  if (recordingRef.current?.field !== field) return;
                   event.preventDefault(); event.stopPropagation();
                   if (modifierForKey(bindingFromEvent(event).Key) && pendingModifier.current) record(pendingModifier.current);
                 }} />
@@ -410,22 +424,26 @@ export function Settings({ state }: { state: AppState }) {
           <Button label="Restore appearance" type="button" onClick={() => appearance(DEFAULT_APPEARANCE)}>Restore appearance</Button></section>
         </>}
         {page === 'Models & API' && <>
-          <section className="form-section" aria-labelledby="service-heading"><Heading level={3} id="service-heading">Service connection</Heading>
+          <section className="form-section" aria-labelledby="service-heading" onBlur={event => {
+            if (event.relatedTarget && !event.currentTarget.contains(event.relatedTarget)) setEditingKeyProvider(null);
+          }}>
+          <Heading level={3} id="service-heading">Service connection</Heading>
           <Choice {...choiceAria('api-service')} label="API service" value={provider} options={PROVIDERS} display={(value) => value === 'Gemini' ? 'Google Gemini' : value}
             onChange={(value) => changeProvider(value as ApiProvider)} />
-          <TextInput id="service-key" label={`API key for ${provider === 'Gemini' ? 'Google Gemini' : provider}`} aria-label="Service API key" {...fieldAria('service-key', 'service-key-status service-key-help')} data-testid="service-key"
+          <TextInput id="service-key" label={keyLabel} aria-label={`Service ${keyLabel}`} {...fieldAria('service-key', 'service-key-status service-key-help')} data-testid="service-key"
             ref={(input) => { if (input) input.maxLength = 8192; }}
-            type={showKey ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false} isDisabled={blocked}
+            type={visibleKeyProvider === keyProvider ? 'text' : 'password'} autoComplete="off" hasSpellCheck={false} isDisabled={blocked}
             status={invalidField === 'service-key' ? { type: 'error' } : undefined}
-            placeholder={hasSavedKey ? 'Leave empty to keep the saved key' : 'Enter API key'}
-            value={draft.keyUpdates[provider] ?? ''} onChange={(value) => {
-              modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [provider]: value.slice(0, 8192) } }));
+            placeholder={keyPresence?.[keyProvider] ? 'Leave empty to keep the saved key' : 'Enter API key'}
+            onFocus={() => setEditingKeyProvider(keyProvider)}
+            value={draft.keyUpdates[keyProvider] ?? ''} onChange={(value) => {
+              modifyDraft((previous) => ({ ...previous, keyUpdates: { ...previous.keyUpdates, [keyProvider]: value.slice(0, 8192) } }));
             }} />
           <HStack className="key-feedback" gap={3} wrap="wrap" hAlign="between">
-            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[provider]?.trim() ? 'Replacement key is temporary until Save.' : hasSavedKey ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
-            <CheckboxInput label="Show API key" size="sm" value={showKey} isDisabled={blocked} onChange={setShowKey} />
+            <Text type="supporting" id="service-key-status" role="status">{draft.keyUpdates[keyProvider]?.trim() ? 'Replacement key is temporary until Save.' : keyPresence?.[keyProvider] ? 'A key is saved for this service.' : 'No saved key for this service.'}</Text>
+            <CheckboxInput label="Show API key" size="sm" value={visibleKeyProvider === keyProvider} isDisabled={blocked} onChange={show => setVisibleKeyProvider(show ? keyProvider : null)} />
           </HStack>
-          <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies this service to future questions without testing the key or making a model request.</p>
+          <p className="hint" id="service-key-help">{state.platform === 'linux' ? 'Keys are encrypted using your unlocked Linux keyring.' : 'Keys are encrypted for your Windows account.'} Save applies the selected API service to future questions without testing the key or making a model request.</p>
           <p className="hint">{DATA_NOTICE[provider]}</p></section>
           <details className="advanced-settings" open={advanced}>
             <summary aria-disabled={blocked} onClick={(event) => { event.preventDefault(); if (!blocked) setAdvanced((value) => !value); }}>Advanced model settings</summary>

@@ -108,7 +108,7 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState; settingsSession: number; settingsRevision: number; settingsDirty: boolean; settingsSaving: boolean;
+  updates: UpdateState; settingsSession: number; settingsRevision: number; settingsFocusRevision: number; settingsDirty: boolean; settingsSaving: boolean;
   settingsKeyPresence: SettingsDraft['keyPresence'] | null;
   settingsModels: ModelSelection | null; settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
 }
@@ -128,7 +128,7 @@ export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
   | { type: 'inputHeight'; height: number }
-  | { type: 'recordShortcut'; recording: boolean; session: number }
+  | { type: 'recordShortcut'; recording: boolean; session: number; focusRevision: number }
   | { type: 'settingsDraftChanged'; dirty: boolean; session: number }
   | { type: 'beginResize'; edge: ResizeEdge };
 export interface SetupRequest { provider: ApiProvider; apiKey: string }
