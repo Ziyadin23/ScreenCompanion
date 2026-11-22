@@ -25,4 +25,4 @@ A Windows shortcut can become occupied after it is released during Save. A faile
 
 ## Migration Plan
 
-Existing encrypted vaults and settings identifiers carry forward with the same format. Integrate source under [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59). Qualify a separately reserved version for Windows and the [local beta handoff](../../../docs/PUBLISHING.md#local-beta-handoff).
+Existing encrypted vaults and settings identifiers carry forward with the same format. Integrate source under [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59). Qualify a separately reserved version for Windows and the [local beta handoff](../../../../docs/PUBLISHING.md#local-beta-handoff).
