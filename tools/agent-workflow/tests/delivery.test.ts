@@ -141,6 +141,59 @@ test('differently valued current records are ambiguous across supported layouts'
   }
 });
 
+test('conflicting README table rows are rejected regardless of cell padding or outer pipes', t => {
+  const { root, store, manifest } = fixture(t);
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const path = join(root, 'README.md');
+  const legacy = readFileSync(path, 'utf8');
+  const header = 'Edition | Version | Notes\n--- | --- | ---\n';
+  const table = `${header}| Current source | **0.5.0-beta.7** | Build |\n`;
+  for (const baseline of [table, `${legacy}\n${header}`]) {
+    writeFileSync(path, baseline);
+    const { changes } = prepareVersionRecords(root, reservation);
+    for (const row of [
+      '|Current source|**9.9.9-beta.999**|Conflict|',
+      '|   Current source, unpublished   | **9.9.9-beta.999** | Conflict |',
+      'Current source | **9.9.9-beta.999** | Conflict',
+      'Current source, unpublished\t|\t**0.5.0-beta.7**\t| Duplicate |',
+      '| Current source',
+    ]) {
+      const extra = `${row}\n`;
+      writeFileSync(path, baseline + extra);
+      assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' }, row);
+      const conflicting = changes.map(change => change.path === 'README.md'
+        ? { ...change, before: change.before + extra, after: change.after + extra } : change);
+      assert.throws(() => validateVersionChanges(conflicting, reservation), { code: 'invalid_version_change' }, row);
+    }
+  }
+});
+
+test('a single spaced README table row updates only its version cell', t => {
+  const { root, store, manifest } = fixture(t);
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const published = 'Edition | Version | Notes\r\n--- | --- | ---\r\n' +
+    '| Published | **0.5.0-beta.7** | [Download](releases/download/v0.5.0-beta.7/SC.exe) |\r\n' +
+    '| Historical label | Current source | See earlier releases |\r\n';
+  for (const [prefix, suffix] of [
+    ['|Current source|', '|Build|'],
+    ['  |  Current source, unpublished   |\t', '   | Build'],
+    ['Current source | ', ' | Build'],
+    ['Current source, unpublished\t|\t', '\t|'],
+    ['Current source|', ''],
+  ]) {
+    const before = `${published}${prefix}**0.5.0-beta.7**${suffix}\r\n`;
+    const after = `${published}${prefix}**0.5.0-beta.9**${suffix}\r\n`;
+    writeFileSync(join(root, 'README.md'), before);
+    const { changes } = prepareVersionRecords(root, reservation);
+    assert.equal(changes[2]!.after, after);
+    assert.doesNotThrow(() => validateVersionChanges(changes, reservation));
+  }
+  for (const value of ['', '**9.9.9-beta.999**', '**0.5.0-beta.7** extra']) {
+    writeFileSync(join(root, 'README.md'), `${published}Current source | ${value} | **0.5.0-beta.7**\r\n`);
+    assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
+  }
+});
+
 test('synthetic transfer verifies artifacts, keeps paths private, and never qualifies automerge', async t => {
   const { temp, root, store, manifest } = fixture(t);
   const version = '0.5.0-beta.8', head = 'b'.repeat(40);

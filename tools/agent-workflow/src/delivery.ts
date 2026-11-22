@@ -28,8 +28,8 @@ function replaceOnce(text: string, from: string, to: string): string {
   if (text.split(from).length !== 2) throw new WorkflowError('version_record_wait', 'Required current-version record is ambiguous.', 2);
   return text.replace(from, to);
 }
-function assertUniqueVersionRecord(text: string, markers: string[]): void {
-  const count = markers.reduce((total, marker) => total + text.split(marker).length - 1, 0);
+function assertUniqueVersionRecord(text: string, markers: string[], otherRecords = 0): void {
+  const count = markers.reduce((total, marker) => total + text.split(marker).length - 1, otherRecords);
   if (count !== 1) throw new WorkflowError('version_record_wait', 'Current-version record is unknown or ambiguous.', 2);
 }
 function versionJson(before: string, path: string, reservation: VersionReservation): string {
@@ -56,11 +56,21 @@ function versionJson(before: string, path: string, reservation: VersionReservati
 function versionDocument(before: string, path: string, reservation: VersionReservation): string {
   const old = reservation.previousVersion, next = reservation.version;
   if (path === 'README.md') {
-    const tableLabels = ['| Current source |', '| Current source, unpublished |'];
-    assertUniqueVersionRecord(before, [...tableLabels, 'The current source version is **']);
-    const label = tableLabels.find(marker => before.includes(marker));
-    if (label) {
-      return replaceOnce(before, `${label} **${old}** |`, `${label} **${next}** |`);
+    const sourceLabels = ['Current source', 'Current source, unpublished'];
+    const sourceRows = [];
+    for (const row of before.matchAll(/^.*\|.*$/gm)) {
+      const [label, versionCell] = row[0].trimStart().replace(/^\|/, '').split('|', 2);
+      if (sourceLabels.includes(label!.trim())) sourceRows.push({ row, versionCell });
+    }
+    assertUniqueVersionRecord(before, ['The current source version is **'], sourceRows.length);
+    const sourceRow = sourceRows[0];
+    if (sourceRow) {
+      const { row, versionCell } = sourceRow;
+      const expected = `**${old}**`;
+      if (versionCell?.trim() !== expected)
+        throw new WorkflowError('version_record_wait', 'README source version disagrees with the reservation.', 2);
+      const start = row.index + row[0].indexOf(expected);
+      return before.slice(0, start) + `**${next}**` + before.slice(start + expected.length);
     }
     let result = replaceOnce(before, `The current source version is **${old}**, not yet published.`,
       `The current source version is **${next}**, not yet published.`);
