@@ -69,6 +69,19 @@ npx vitest run --config vitest.windows.config.ts
 Windows CI runs this vault suite separately from the interactive native/UI
 checks. Portable success and native compilation do not substitute for real DPAPI.
 
+Before `npm run package:win`, Windows CI builds the developer preview with
+`npm exec -- vite build --config vite.preview.config.ts`. The package must pass its
+ASAR check with the preview files still on disk. The portable suite also checks
+the ASAR verifier with a production archive and two archives containing stray
+output.
+
+After `npm run package:win`, Windows CI runs `npm run package:zip`. It opens the
+ZIP, requires the versioned portable EXE and `README.txt` at the root, and
+compares their SHA-256 digests with the standalone EXE and the repository
+`README.md`. Run `../.github/scripts/verify-windows-zip.ps1` from `desktop/`
+in PowerShell 7 to repeat the check. The sibling `verify-windows-zip.test.ps1`
+script exercises the check with temporary archives.
+
 ## Electron workflows and preview
 
 The local Astryx review surface runs the real renderer with an in-memory synthetic
