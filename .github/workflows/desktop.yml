@@ -146,4 +146,9 @@ jobs:
       - name: Verify legacy vault interoperability
         run: npx vitest run --config vitest.windows.config.ts
       - run: npm run package:win
+      - run: npm run package:zip
+      - name: Test portable ZIP verification
+        run: ../.github/scripts/verify-windows-zip.test.ps1
+      - name: Verify the packaged EXE and README in the portable ZIP
+        run: ../.github/scripts/verify-windows-zip.ps1
       # Interactive capture/UI/recorder gates run separately on a Windows desktop.

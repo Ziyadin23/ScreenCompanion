@@ -82,6 +82,12 @@ Outcome and all task groups: [issue #84](https://github.com/Ziyadin23/ScreenComp
 - The check rejected the original optimized beta.14 ASAR and both Windows-built beta.15 ASARs. It accepted the original beta.14 control. The same check failed on an exclusion-only Windows-format build on Fedora and passed on the corrected build from the same input files. The [archive evidence](../../../docs/VERIFICATION.md#windows-application-archive-filter-2026-11-20) records commands, sizes and target limits.
 - Host verification passed 1,259 tests, types, lint and production bundles. Task 2.2 still requires matched Windows EXE, ZIP and installer measurements for the corrected candidate. Tasks 3.1 and 3.2 retain the full Windows qualification, source review and copied-byte handoff. The frozen beta.14 and beta.15 artifacts remain private.
 
+## Windows ZIP build check (2026-11-22)
+
+- Continued the ZIP verification portion of task 2.2 on `Ziyadin23/issue-84-windows-zip-ci`. The issue-owned checkout was clean at `cc213c9157ecb23357abe44574aff52ec1fe24c4`, matching `origin/main`. Issue #84 was open and assigned. The saved Orca setup script was empty. Before implementation, `npm --prefix desktop ci` exited 0 on Fedora with Node 22.23.1 and installed 597 packages.
+- The [baseline Windows job](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44898443625/job/136829065885) passed after `package:win` without building a ZIP. The updated job runs `package:zip` and reads both entries with PowerShell against the standalone EXE and repository README.
+- On Fedora with PowerShell 7.7.0, `pwsh -File .github/scripts/verify-windows-zip.test.ps1` exited 1 before the verifier existed and 0 afterward. One matching ZIP passed. Seven fixtures rejected changed EXE or README bytes, extra or missing entries, a duplicate name, a nested name and wrong case. Separate direct verifier invocations on independently compressed fixtures exited 0 for matching bytes and 1 for a one-byte EXE difference.
+
 ## Workflow follow-up
 
 - Archive this `skip_specs` change only after all six tracked tasks and required review pass; verify moved links, documentation and strict OpenSpec. Keep it active with this concrete Windows qualification/delivery dependency while those tasks remain open.
