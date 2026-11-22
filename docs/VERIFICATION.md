@@ -1,11 +1,8 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.16**.
-The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
-The previous C# application and its published releases remain available through
-existing tags/assets. Beta.4 is available as a
-[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
-publication does not establish that every compatibility gate has passed.
+The latest public Windows prerelease is [SC v0.5.0-beta.16](releases/v0.5.0-beta.16.md).
+The previous C# application remains the [v0.4.14 stable release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14).
+Earlier Windows prereleases have their own [beta.6](releases/v0.5.0-beta.6.md) and [beta.4 release notes](releases/v0.5.0-beta.4.md).
 
 [Commands and fixtures](../tests/README.md) describe the current suites. Detailed
 run history, failed automation attempts, package hashes and evidence boundaries
@@ -16,9 +13,9 @@ recordings and local state belong outside this repository.
 
 The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. The Windows 11 build passed native and vault checks, all 38 UI cases, both supplemental Settings cases, installed and portable startup, locale and Unicode checks, and the named Edge recording. The four Windows handoff files passed destination readback. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [integrated candidate](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
-Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
+The earlier beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`, met the size target. Extra development files in its optimized ASAR blocked beta.14 delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
 
-Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and the Windows gates pending at that checkpoint. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
+Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and the Windows gates pending at that checkpoint. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
@@ -1319,13 +1316,13 @@ recorded separately; successful follow-ups do not erase those failures.
 
 ## Platform support
 
-As of **2026-11-07**, the Windows support target is **Windows 11 x64**, following
-the user's Windows 11-only decision. Windows 10 is outside the current support
-target; earlier Windows 10 references retain their historical scope and do not
-promise current support. Source and published binaries are unchanged.
+The Windows support target has been **Windows 11 x64** since **2026-11-07**.
+Windows 10 is outside that target. Earlier Windows 10 references describe their
+original releases.
 
 | Candidate / environment | Established evidence | Qualification boundary |
 | --- | --- | --- |
+| Published beta.16 / standard account on one Windows 11 x64 development VM | Installer and portable first-run setup, 54 native checks, nine vault cases, all 38 UI cases and two additional Settings cases passed. One Edge whole-monitor VP8 recording omitted the tested windows. [Beta.16 qualification](#beta16-windows-qualification-2026-11-22) | A newly created account, a clean Windows machine without developer tools, physical mixed-DPI displays, other recorder paths and a public installed update to beta.16 remain unverified. |
 | Published beta.6 / existing Windows 11 development VM | [Packaged startup and activation](#packaged-beta6-activation-qualification-2026-11-05), [public installed update](#public-github-installed-update-2026-11-03), and [split native/vault/UI checks](#beta6-extraction-guidance). | Existing account and developer tools; no fresh-account or clean-machine pass. Earlier failed attempts remain recorded. |
 | Unpublished beta.7 / existing Windows 11 development VM | [Full native/vault/UI matrix](#windows-full-ui-matrix-2026-11-03). | Does not qualify beta.6 packages or a fresh environment. |
 | Published beta.6 / fresh ordinary Windows 11 account | **Full qualification remains open.** | The installed and portable setup/settings matrix and independent postflight need completed, reconciled evidence. A synthetic app profile is not a fresh Windows account. |
@@ -1433,6 +1430,10 @@ The beta requests Windows capture protection for its windows and owned popups,
 and reports `Excluded`, `ContentHidden` or `Failed`. Affinity assertions and
 native compilation do not establish actual exclusion from a saved recording or
 received stream. The visible tray icon remains part of the Windows taskbar.
+
+For beta.16, one Edge whole-monitor VP8 recording at 1920 × 1080 omitted the
+tested setup, answer and Settings windows. Other capture paths still need their
+own output checks. [Beta.16 recording result](#beta16-windows-qualification-2026-11-22)
 
 On Windows 11, SC requests omission from supported capture paths. If omission
 fails, the bridge also attempts content hiding and reports the resulting status.

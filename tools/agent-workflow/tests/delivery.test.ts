@@ -86,15 +86,19 @@ test('version preparation preserves dated evidence and validates exact JSON fiel
 
 test('version preparation supports the checked-in source table and status header without changing history', t => {
   const { root, store, manifest } = fixture(t, true);
-  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const published = JSON.parse(readFileSync(join(root, 'desktop/package.json'), 'utf8')).version as string;
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository, [published]));
   const prepared = prepareVersionRecords(root, reservation), { previousVersion: old, version: next } = reservation;
-  const readme = prepared.changes[2]!, status = prepared.changes[4]!;
-  assert.equal(readme.after, readme.before.replace(`| Current source, unpublished | **${old}** |`,
-    `| Current source, unpublished | **${next}** |`));
-  assert.notEqual(readme.after, readme.before);
-  assert.equal(status.after, status.before.replace(`Source remains unpublished **${old}**;`,
-    `Source remains unpublished **${next}**;`));
-  assert.notEqual(status.after, status.before);
+  const readme = prepared.changes[2]!, publishing = prepared.changes[3]!, status = prepared.changes[4]!;
+  assert.notEqual(next, published);
+  for (const [change, from, to] of [
+    [readme, `| Current source | **${old}** |`, `| Current source | **${next}** |`],
+    [publishing, `The current source version is **${old}**.`, `The current source version is **${next}**.`],
+    [status, `Application source is **${old}**.`, `Application source is **${next}**.`],
+  ] as const) {
+    assert.ok(change.before.includes(from));
+    assert.equal(change.after, change.before.replace(from, to));
+  }
   assert.doesNotThrow(() => validateVersionChanges(prepared.changes, reservation));
   writeFileSync(join(root, 'README.md'), readme.before + `\nThe current source version is **${old}**, not yet published.\n`);
   assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
@@ -103,7 +107,19 @@ test('version preparation supports the checked-in source table and status header
   assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
 });
 
-test('differently valued current records are ambiguous in both supported layouts', t => {
+test('an older unpublished source table still advances past a conflicting release', t => {
+  const { root, store, manifest } = fixture(t);
+  const downloads = '| Latest published Windows beta | **v0.5.0-beta.8** | [Installer](releases/download/v0.5.0-beta.8/SC-Setup-v0.5.0-beta.8.exe) |';
+  writeFileSync(join(root, 'README.md'), `${downloads}\n| Current source, unpublished | **0.5.0-beta.7** | Build |\n`);
+  writeFileSync(join(root, 'docs/STATUS.md'), 'Source remains unpublished **0.5.0-beta.7**; beta.8 is public.\n');
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  assert.equal(reservation.version, '0.5.0-beta.9');
+  const { changes } = prepareVersionRecords(root, reservation);
+  assert.equal(changes[2]!.after, `${downloads}\n| Current source, unpublished | **0.5.0-beta.9** | Build |\n`);
+  assert.equal(changes[4]!.after, 'Source remains unpublished **0.5.0-beta.9**; beta.8 is public.\n');
+});
+
+test('differently valued current records are ambiguous across supported layouts', t => {
   for (const current of [false, true]) {
     const { root, store, manifest } = fixture(t, current);
     const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
@@ -111,14 +127,70 @@ test('differently valued current records are ambiguous in both supported layouts
     for (const [path, extra] of [
       ['README.md', current ? `| Current source, unpublished | **${other}** | conflicting |` :
         `The current source version is **${other}**, not yet published.`],
+      ['README.md', `| Current source | **${other}** | conflicting |`],
       ['docs/STATUS.md', current ? `Source remains unpublished **${other}**;` : `Application source is **${other}**;`],
-      ['docs/PUBLISHING.md', `The current source version is ${other} and is unpublished.`]
+      ['docs/STATUS.md', `Application source is **${other}**.`],
+      ['docs/PUBLISHING.md', `The current source version is ${other} and is unpublished.`],
+      ['docs/PUBLISHING.md', `The current source version is **${other}**.`]
     ]) {
       const before = readFileSync(join(root, path!), 'utf8');
       writeFileSync(join(root, path!), `${before}\n${extra}\n`);
       assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
       writeFileSync(join(root, path!), before);
     }
+  }
+});
+
+test('conflicting README table rows are rejected regardless of cell padding or outer pipes', t => {
+  const { root, store, manifest } = fixture(t);
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const path = join(root, 'README.md');
+  const legacy = readFileSync(path, 'utf8');
+  const header = 'Edition | Version | Notes\n--- | --- | ---\n';
+  const table = `${header}| Current source | **0.5.0-beta.7** | Build |\n`;
+  for (const baseline of [table, `${legacy}\n${header}`]) {
+    writeFileSync(path, baseline);
+    const { changes } = prepareVersionRecords(root, reservation);
+    for (const row of [
+      '|Current source|**9.9.9-beta.999**|Conflict|',
+      '|   Current source, unpublished   | **9.9.9-beta.999** | Conflict |',
+      'Current source | **9.9.9-beta.999** | Conflict',
+      'Current source, unpublished\t|\t**0.5.0-beta.7**\t| Duplicate |',
+      '| Current source',
+    ]) {
+      const extra = `${row}\n`;
+      writeFileSync(path, baseline + extra);
+      assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' }, row);
+      const conflicting = changes.map(change => change.path === 'README.md'
+        ? { ...change, before: change.before + extra, after: change.after + extra } : change);
+      assert.throws(() => validateVersionChanges(conflicting, reservation), { code: 'invalid_version_change' }, row);
+    }
+  }
+});
+
+test('a single spaced README table row updates only its version cell', t => {
+  const { root, store, manifest } = fixture(t);
+  const reservation = reserveCandidateVersion(store, manifest.id, inventory(manifest.repository));
+  const published = 'Edition | Version | Notes\r\n--- | --- | ---\r\n' +
+    '| Published | **0.5.0-beta.7** | [Download](releases/download/v0.5.0-beta.7/SC.exe) |\r\n' +
+    '| Historical label | Current source | See earlier releases |\r\n';
+  for (const [prefix, suffix] of [
+    ['|Current source|', '|Build|'],
+    ['  |  Current source, unpublished   |\t', '   | Build'],
+    ['Current source | ', ' | Build'],
+    ['Current source, unpublished\t|\t', '\t|'],
+    ['Current source|', ''],
+  ]) {
+    const before = `${published}${prefix}**0.5.0-beta.7**${suffix}\r\n`;
+    const after = `${published}${prefix}**0.5.0-beta.9**${suffix}\r\n`;
+    writeFileSync(join(root, 'README.md'), before);
+    const { changes } = prepareVersionRecords(root, reservation);
+    assert.equal(changes[2]!.after, after);
+    assert.doesNotThrow(() => validateVersionChanges(changes, reservation));
+  }
+  for (const value of ['', '**9.9.9-beta.999**', '**0.5.0-beta.7** extra']) {
+    writeFileSync(join(root, 'README.md'), `${published}Current source | ${value} | **0.5.0-beta.7**\r\n`);
+    assert.throws(() => prepareVersionRecords(root, reservation), { code: 'version_record_wait' });
   }
 });
 
