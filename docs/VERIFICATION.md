@@ -1378,9 +1378,10 @@ When hardware is available, use this procedure:
    Settings. Use the key-free preview text and a panel small enough to scroll.
    Start with the answer partway down. Without clicking, move the pointer onto
    the last visible answer line immediately above the question field and turn
-   the wheel one notch. The answer should scroll. Move the pointer just inside
-   the question field and turn the wheel again. The answer should stay on the
-   same line. Repeat immediately after moving the panel from A to B and again
+   the wheel one notch. Confirm that the first visible answer line changed.
+   Move the pointer just inside the question field and turn the wheel one notch
+   in the opposite direction. The first visible answer line should stay the
+   same. Repeat immediately after moving the panel from A to B and again
    from B to A. Record the display scale, pointer position in physical pixels,
    and first visible answer line before and after each wheel input.
 7. Repeat all eight resize handles after each transition and
