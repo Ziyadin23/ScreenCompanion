@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream, existsSync, linkSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { open, stat, copyFile } from 'node:fs/promises';
-import { basename, isAbsolute, join } from 'node:path';
-import { createInflateRaw } from 'node:zlib';
+import { stat, copyFile } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { digest, WorkflowError } from './manifest.js';
+import { exactArchive, MAX_ARTIFACT } from './portable-zip.mjs';
 import type { RunStore } from './store.js';
 
 export interface VersionReservation { repository: string; runId: string; previousVersion: string; version: string }
@@ -128,7 +128,6 @@ export interface BetaReceipt {
     qualificationKind: 'synthetic' | 'windows'; qualified: boolean };
   private: { targetDirectory: string; latestRecord: string; resourceId: string; sourceDirectory: string };
 }
-const MAX_ARTIFACT = 1_000_000_000;
 const namesFor = (version: string) => [`SC-v${version}.exe`, `SC-v${version}.zip`, `SC-Setup-v${version}.exe`, 'README.txt'];
 async function fileHash(path: string): Promise<string> {
   const info = await stat(path);
@@ -136,69 +135,6 @@ async function fileHash(path: string): Promise<string> {
     throw new WorkflowError('invalid_source', 'Source artifact is absent, unsafe or oversized.');
   const hash = createHash('sha256'); for await (const chunk of createReadStream(path)) hash.update(chunk);
   return hash.digest('hex');
-}
-function crcStep(crc: number, bytes: Buffer): number {
-  for (const byte of bytes) { crc ^= byte; for (let i = 0; i < 8; i++) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0); }
-  return crc;
-}
-async function exactArchive(path: string, expected: Record<string, string>, names: string[]): Promise<void> {
-  const handle = await open(path, 'r');
-  try {
-    const size = (await handle.stat()).size;
-    const tail = Buffer.alloc(Math.min(size, 65557)); await handle.read(tail, 0, tail.length, size - tail.length);
-    let end = -1; for (let i = tail.length - 22; i >= 0; i--) if (tail.readUInt32LE(i) === 0x06054b50 &&
-      i + 22 + tail.readUInt16LE(i + 20) === tail.length) { end = i; break; }
-    if (end < 0 || tail.readUInt16LE(end + 4) || tail.readUInt16LE(end + 6) ||
-        tail.readUInt16LE(end + 8) !== 2 || tail.readUInt16LE(end + 10) !== 2)
-      throw new Error('Invalid ZIP directory');
-    const length = tail.readUInt32LE(end + 12), start = tail.readUInt32LE(end + 16);
-    if (length > 65536 || start + length !== size - tail.length + end) throw new Error('Invalid ZIP directory bounds');
-    const central = Buffer.alloc(length); await handle.read(central, 0, length, start);
-    let cursor = 0; const found = new Set<string>(); const spans: [number, number][] = [];
-    for (let index = 0; index < 2; index++) {
-      if (cursor + 46 > length || central.readUInt32LE(cursor) !== 0x02014b50) throw new Error('Invalid ZIP entry');
-      const flags = central.readUInt16LE(cursor + 8), method = central.readUInt16LE(cursor + 10);
-      const crc = central.readUInt32LE(cursor + 16), compressed = central.readUInt32LE(cursor + 20), plain = central.readUInt32LE(cursor + 24);
-      const nameLength = central.readUInt16LE(cursor + 28), extra = central.readUInt16LE(cursor + 30), comment = central.readUInt16LE(cursor + 32);
-      const localOffset = central.readUInt32LE(cursor + 42);
-      if (cursor + 46 + nameLength + extra + comment > length || flags & ~0x808 || ![0, 8].includes(method) ||
-          !compressed || compressed > MAX_ARTIFACT || !plain || plain > MAX_ARTIFACT || extra || comment ||
-          central.readUInt16LE(cursor + 34) || central.readUInt32LE(cursor + 38)) throw new Error('Unsupported ZIP entry');
-      const name = central.subarray(cursor + 46, cursor + 46 + nameLength).toString('utf8');
-      if (!names.includes(name) || found.has(name) || basename(name) !== name || name.includes('\\')) throw new Error('Unexpected ZIP entry');
-      found.add(name); cursor += 46 + nameLength;
-      const local = Buffer.alloc(30); await handle.read(local, 0, 30, localOffset);
-      if (local.readUInt32LE(0) !== 0x04034b50 || local.readUInt16LE(6) !== flags || local.readUInt16LE(8) !== method ||
-          local.readUInt16LE(28) || local.readUInt16LE(26) !== nameLength) throw new Error('Invalid local ZIP entry');
-      const localName = Buffer.alloc(nameLength); await handle.read(localName, 0, nameLength, localOffset + 30);
-      if (localName.toString('utf8') !== name) throw new Error('ZIP names disagree');
-      if (!(flags & 8) && (local.readUInt32LE(14) !== crc || local.readUInt32LE(18) !== compressed || local.readUInt32LE(22) !== plain))
-        throw new Error('ZIP metadata disagrees');
-      const dataStart = localOffset + 30 + nameLength, dataEnd = dataStart + compressed;
-      if (dataEnd > start) throw new Error('ZIP entry overlaps directory');
-      let entryEnd = dataEnd;
-      if (flags & 8) {
-        const descriptor = Buffer.alloc(16); await handle.read(descriptor, 0, 16, dataEnd);
-        const signed = descriptor.readUInt32LE(0) === 0x08074b50, base = signed ? 4 : 0;
-        if (descriptor.readUInt32LE(base) !== crc || descriptor.readUInt32LE(base + 4) !== compressed ||
-            descriptor.readUInt32LE(base + 8) !== plain) throw new Error('ZIP descriptor disagrees');
-        entryEnd += signed ? 16 : 12;
-      }
-      spans.push([localOffset, entryEnd]);
-      const stream = createReadStream(path, { start: dataStart, end: dataEnd - 1 });
-      const decoded = method === 8 ? stream.pipe(createInflateRaw()) : stream;
-      const hash = createHash('sha256'); let actualCrc = -1, count = 0;
-      for await (const chunk of decoded) { const bytes = Buffer.from(chunk); count += bytes.length;
-        if (count > plain) throw new Error('ZIP entry grew beyond declared length');
-        hash.update(bytes); actualCrc = crcStep(actualCrc, bytes); }
-      if (count !== plain || (actualCrc ^ -1) >>> 0 !== crc || hash.digest('hex') !== expected[name])
-        throw new Error('ZIP contents disagree with source');
-    }
-    spans.sort((a, b) => a[0] - b[0]);
-    if (cursor !== length || found.size !== 2 || spans[0]?.[0] !== 0 || spans[1]?.[0] !== spans[0]?.[1] ||
-        spans[1]?.[1] !== start) throw new Error('ZIP directory has extra content');
-  } catch { throw new WorkflowError('invalid_archive', 'Portable ZIP does not match the exact EXE and README.'); }
-  finally { await handle.close(); }
 }
 function atomicJson(path: string, value: unknown): void {
   atomicText(path, JSON.stringify(value));
@@ -269,8 +205,11 @@ export async function handoffBeta(store: RunStore, runId: string, request: BetaR
   const validateSource = async () => {
     for (const name of sourceNames) if (await fileHash(join(request.sourceDirectory, name)) !== request.source.digests[name])
       throw new WorkflowError('invalid_source', 'Artifact hash disagrees with source provenance.');
-    await exactArchive(join(request.sourceDirectory, sourceNames[1]!),
-      { [sourceNames[0]!]: request.source.digests[sourceNames[0]!]!, 'README.txt': request.source.digests['README.txt']! }, [sourceNames[0]!, 'README.txt']);
+    try {
+      await exactArchive(join(request.sourceDirectory, sourceNames[1]!), {
+        [sourceNames[0]!]: request.source.digests[sourceNames[0]!]!, 'README.txt': request.source.digests['README.txt']!
+      });
+    } catch { throw new WorkflowError('invalid_archive', 'Portable ZIP does not match the exact EXE and README.'); }
   };
   await validateSource();
   const transfer = async (): Promise<BetaReceipt> => {

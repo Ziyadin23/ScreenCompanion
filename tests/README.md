@@ -78,11 +78,13 @@ output.
 After `npm run package:win`, Windows CI runs `npm run package:zip`. It opens the
 ZIP, requires the versioned portable EXE and `README.txt` at the root, and
 compares their SHA-256 digests with the standalone EXE and the repository
-`README.md`. Python's standard ZIP checker compares each local file name with
-the central directory and checks the entry CRCs. Run
-`../.github/scripts/verify-windows-zip.ps1` from `desktop/` in PowerShell 7
-with the native build's Python 3 available as `python`. The sibling
-`verify-windows-zip.test.ps1` script exercises the check with temporary archives.
+`README.md`. CI and the handoff tool use the same [ZIP validator](../tools/agent-workflow/src/portable-zip.mjs).
+It checks local names, flags and compression methods against the central directory.
+It checks the CRC and both sizes in the local header or the data descriptor, then
+checks the size and CRC of the decompressed bytes. Run
+`../.github/scripts/verify-windows-zip.ps1` from `desktop/` with PowerShell 7 and Node 22.
+The sibling `verify-windows-zip.test.ps1` script covers damaged local headers,
+descriptors with and without signatures, and an archive produced by `Compress-Archive`.
 
 ## Electron workflows and preview
 
