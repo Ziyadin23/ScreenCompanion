@@ -12,9 +12,15 @@ try {
     [IO.File]::WriteAllBytes($exePath, [byte[]](0, 128, 255))
     [IO.File]::WriteAllText($readmePath, "SC`r`n")
 
-    function Write-FixtureZip([string[]]$Names) {
+    function Write-FixtureZip([string[]]$Names, [switch]$DataDescriptor) {
         [IO.File]::Delete($zipPath)
-        $zip = [IO.Compression.ZipFile]::Open($zipPath, 'Create')
+        # ZipArchive writes data descriptors when the destination cannot seek.
+        $pipe = if ($DataDescriptor) { [IO.Pipelines.Pipe]::new() }
+        $zip = if ($DataDescriptor) {
+            [IO.Compression.ZipArchive]::new($pipe.Writer.AsStream(), 'Create')
+        } else {
+            [IO.Compression.ZipFile]::Open($zipPath, 'Create')
+        }
         try {
             foreach ($name in $Names) {
                 $source = if ($name -ceq $exeName) { $exePath } else { $readmePath }
@@ -23,16 +29,37 @@ try {
         } finally {
             $zip.Dispose()
         }
+        if ($DataDescriptor) {
+            $reader = $pipe.Reader.AsStream()
+            $file = [IO.File]::Create($zipPath)
+            try { $reader.CopyTo($file) } finally { $file.Dispose(); $reader.Dispose() }
+        }
     }
 
-    function Assert-Rejected([string]$ExpectedError) {
+    function Assert-Rejected([string]$ExpectedError, [string]$Fixture = $ExpectedError) {
         try {
             & $verify $desktop
         } catch {
             if ($_.Exception.Message -cne $ExpectedError) { throw }
             return
         }
-        throw "Verifier accepted a fixture that should fail with '$ExpectedError'."
+        throw "Verifier accepted an invalid fixture ($Fixture)."
+    }
+
+    Write-FixtureZip @($exeName, 'README.txt')
+    $original = [IO.File]::ReadAllBytes($zipPath)
+    if (([BitConverter]::ToUInt16($original, 6) -band 8) -ne 0) {
+        throw 'Expected local CRC and sizes in the seekable ZIP fixture.'
+    }
+    & $verify $desktop
+    # Change one local field at a time. The directory and payload stay intact.
+    $fields = [ordered]@{ CRC = 14; CompressedSize = 18; UncompressedSize = 22; Method = 8 }
+    foreach ($field in $fields.GetEnumerator()) {
+        $offset = $field.Value
+        $bytes = $original.Clone()
+        $bytes[$offset] = $bytes[$offset] -bxor 1
+        [IO.File]::WriteAllBytes($zipPath, $bytes)
+        Assert-Rejected "ZIP local header disagrees for $exeName." "local EXE $($field.Key)"
     }
 
     Write-FixtureZip @('README.txt', $exeName)
@@ -48,7 +75,7 @@ try {
     Assert-Rejected 'Expected exactly two ZIP entries.'
     foreach ($unexpected in @($exeName, 'nested/README.txt', 'readme.txt')) {
         Write-FixtureZip @($exeName, $unexpected)
-        Assert-Rejected 'ZIP is missing README.txt.'
+        Assert-Rejected 'Unexpected or duplicate ZIP entry.'
     }
     Write-FixtureZip @('README.txt', $exeName)
     $bytes = [IO.File]::ReadAllBytes($zipPath)
@@ -59,11 +86,44 @@ try {
     }
     $bytes[$nameOffset] = $bytes[$nameOffset] -bxor 1
     [IO.File]::WriteAllBytes($zipPath, $bytes)
-    Assert-Rejected 'Portable ZIP integrity check failed.'
+    Assert-Rejected 'ZIP local header disagrees for README.txt.'
 
-    Write-FixtureZip @('README.txt', $exeName)
+    Write-FixtureZip @($exeName, 'README.txt') -DataDescriptor
+    $original = [IO.File]::ReadAllBytes($zipPath)
+    if (([BitConverter]::ToUInt16($original, 6) -band 8) -eq 0) {
+        throw 'Expected a data descriptor in the non-seekable ZIP fixture.'
+    }
     & $verify $desktop
-    Write-Output 'Passed all nine portable ZIP fixtures.'
+    # The first descriptor follows the compressed EXE. Read its size from the directory.
+    $directory = [BitConverter]::ToUInt32($original, $original.Length - 6)
+    $data = 30 + [BitConverter]::ToUInt16($original, 26) + [BitConverter]::ToUInt16($original, 28)
+    $descriptor = $data + [BitConverter]::ToUInt32($original, $directory + 20)
+    if ([BitConverter]::ToUInt32($original, $descriptor) -ne 0x08074b50) {
+        throw 'Expected a signed EXE data descriptor.'
+    }
+    foreach ($offset in @(4, 8, 12)) { # CRC, compressed size, original size
+        $bytes = $original.Clone()
+        $bytes[$descriptor + $offset] = $bytes[$descriptor + $offset] -bxor 1
+        [IO.File]::WriteAllBytes($zipPath, $bytes)
+        Assert-Rejected "ZIP data descriptor disagrees for $exeName."
+    }
+    # Remove only the optional signature from the last descriptor and move the directory back four bytes.
+    $lastDescriptor = $directory - 16
+    if ([BitConverter]::ToUInt32($original, $lastDescriptor) -ne 0x08074b50) {
+        throw 'Expected a signed README data descriptor.'
+    }
+    $unsigned = [byte[]]::new($original.Length - 4)
+    [Array]::Copy($original, 0, $unsigned, 0, $lastDescriptor)
+    [Array]::Copy($original, $lastDescriptor + 4, $unsigned, $lastDescriptor, $original.Length - $lastDescriptor - 4)
+    [BitConverter]::GetBytes([uint32]($directory - 4)).CopyTo($unsigned, $unsigned.Length - 6)
+    [IO.File]::WriteAllBytes($zipPath, $unsigned)
+    & $verify $desktop
+
+    $stagedReadme = Join-Path $root 'README.txt'
+    Copy-Item -LiteralPath $readmePath -Destination $stagedReadme
+    Compress-Archive -LiteralPath @($exePath, $stagedReadme) -DestinationPath $zipPath -Force
+    & $verify $desktop
+    Write-Output 'Passed all 19 portable ZIP fixtures.'
 } finally {
     [IO.Directory]::Delete($root, $true)
 }

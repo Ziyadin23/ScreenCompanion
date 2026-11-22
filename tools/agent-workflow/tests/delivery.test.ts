@@ -174,6 +174,13 @@ test('transfer rejects wrong provenance and wrong archived bytes without complet
     await assert.rejects(handoffBeta(store, manifest.id,
       { ...request, source: { ...request.source, digests: archiveDigests } }), { code: 'invalid_archive' });
   }
+  // The Windows handoff requires zero external attributes even for ordinary files.
+  const withAttributes = zip([[names[0]!, exe], ['README.txt', readme]]);
+  const directory = withAttributes.readUInt32LE(withAttributes.length - 6);
+  withAttributes.writeUInt32LE(0x20, directory + 38);
+  writeFileSync(join(source, names[1]!), withAttributes);
+  await assert.rejects(handoffBeta(store, manifest.id, { ...request, source: { ...request.source,
+    digests: { ...digests, [names[1]!]: sha(withAttributes) } } }), { code: 'invalid_archive' });
 });
 
 test('real profile waits by default even with synthetic portable evidence', async t => {
