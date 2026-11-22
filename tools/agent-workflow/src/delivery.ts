@@ -56,10 +56,11 @@ function versionJson(before: string, path: string, reservation: VersionReservati
 function versionDocument(before: string, path: string, reservation: VersionReservation): string {
   const old = reservation.previousVersion, next = reservation.version;
   if (path === 'README.md') {
-    assertUniqueVersionRecord(before, ['| Current source, unpublished |', 'The current source version is **']);
-    if (before.includes('| Current source, unpublished |')) {
-      return replaceOnce(before, `| Current source, unpublished | **${old}** |`,
-        `| Current source, unpublished | **${next}** |`);
+    const tableLabels = ['| Current source |', '| Current source, unpublished |'];
+    assertUniqueVersionRecord(before, [...tableLabels, 'The current source version is **']);
+    const label = tableLabels.find(marker => before.includes(marker));
+    if (label) {
+      return replaceOnce(before, `${label} **${old}** |`, `${label} **${next}** |`);
     }
     let result = replaceOnce(before, `The current source version is **${old}**, not yet published.`,
       `The current source version is **${next}**, not yet published.`);
@@ -69,16 +70,18 @@ function versionDocument(before: string, path: string, reservation: VersionReser
       `\`SC-v${next}.exe\` and its matching two-file ZIP`);
   }
   if (path === 'docs/PUBLISHING.md') {
-    assertUniqueVersionRecord(before, ['The current source version is ']);
-    return replaceOnce(before, `The current source version is ${old} and is unpublished.`,
-      `The current source version is ${next} and is unpublished.`);
+    const label = 'The current source version is ';
+    assertUniqueVersionRecord(before, [label]);
+    if (before.includes(`${label}**`)) return replaceOnce(before, `${label}**${old}**.`, `${label}**${next}**.`);
+    return replaceOnce(before, `${label}${old} and is unpublished.`, `${label}${next} and is unpublished.`);
   }
   if (path === 'docs/STATUS.md') {
     assertUniqueVersionRecord(before, ['Source remains unpublished **', 'Application source is **']);
     if (before.includes('Source remains unpublished **')) {
       return replaceOnce(before, `Source remains unpublished **${old}**;`, `Source remains unpublished **${next}**;`);
     }
-    return replaceOnce(before, `Application source is **${old}**;`, `Application source is **${next}**;`);
+    const ending = before.includes(`Application source is **${old}**.`) ? '.' : ';';
+    return replaceOnce(before, `Application source is **${old}**${ending}`, `Application source is **${next}**${ending}`);
   }
   throw new WorkflowError('invalid_version_change', 'Unexpected version record.');
 }

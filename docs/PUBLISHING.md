@@ -2,15 +2,13 @@
 
 ## Source and release status
 
-`main` develops the Electron/TypeScript application under `desktop/`. Read its
-version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current source version is 0.5.0-beta.16 and is unpublished. The latest verified local Windows handoff combines the Settings and package fixes. The installer, portable EXE, ZIP and README passed copied-byte verification. [Beta.16 Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22). The frozen beta.14 and beta.15 builds retain their original package holds. Earlier beta.10–beta.13 candidates retain their original source and evidence, including the separate [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63). Version 0.5.0-beta.6 was published as a
-[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
-Version 0.5.0-beta.4 was published as a
-[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
-on 2026-10-26. Existing C# releases, assets and tags stay
-unchanged; the full previous application can be built from the
-[v0.4.14 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.4.14).
+`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.16**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
+
+Windows beta.16 is the latest public prerelease. It uses the installer, portable EXE and two-file ZIP qualified on Windows 11 x64. The separate `README.txt` asset matches the file inside the ZIP byte for byte. Both contain the prepublication snapshot that lists beta.6 as the public download. The [beta.16 release notes](releases/v0.5.0-beta.16.md) describe the published files and [Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22).
+
+The [beta.16 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.5.0-beta.16) identifies the verified application inputs. The separate release notice adds the license terms and credits for the portable Elevate helper to the notice embedded in the verified packages. It matches the [supplemental notice at `ca860d3`](https://github.com/Ziyadin23/ScreenCompanion/blob/ca860d3d6d9a702c7c6f752df597f9372dcebc99/THIRD_PARTY_NOTICES.txt). Keep the separate notice and SC license with redistributed portable copies. The [third-party source archive](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/ThirdPartySources-v0.5.0-beta.16.zip) includes the corresponding Windows helper source and installer build inputs.
+
+The frozen beta.14 and beta.15 builds retained their package holds. Earlier beta.10–beta.13 candidates have their own evidence, including the [Astryx runtime qualification](https://github.com/Ziyadin23/ScreenCompanion/issues/63). Earlier public Windows prereleases include [beta.6](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) and [beta.4](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4), published on 2026-10-30 and 2026-10-26 respectively. The stable C# release remains [v0.4.14](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14).
 
 Moving development to `main` does not close unfinished runtime/recorder checks or
 promote the beta to a stable release. Source-only documentation or test changes
@@ -154,13 +152,13 @@ The copyright attribution uses the maintainer's public handle, Ziyadin23.
 dependencies, native headers, Electron and installer components. Review them
 when dependencies or packaging change. Retain Electron's `LICENSE.electron.txt`
 and `LICENSES.chromium.html` inside both application payloads.
-Beta.5 and beta.6 include byte-identical copies of the root MIT license and current
-third-party notices under `resources/LICENSE.txt` and
+Beta.5 and beta.6 include byte-identical copies of the MIT license and third-party
+notices from their respective source revisions under `resources/LICENSE.txt` and
 `resources/THIRD_PARTY_NOTICES.txt` in both installer and portable payloads.
 
 The beta.4 release reuses the already verified executables and two-file ZIP.
 Publish their original README snapshot alongside the
-[current release notes](releases/v0.5.0-beta.4.md); later evidence must not be
+[beta.4 release notes](releases/v0.5.0-beta.4.md). Later evidence must not be
 presented as if it were in the original packaged README. Licensing was selected
 after the build, so its embedded package metadata retains `UNLICENSED`; the
 separate MIT license grants the current rights for SC-owned code. A changed

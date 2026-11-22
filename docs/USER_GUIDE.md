@@ -1,6 +1,6 @@
 # SC user guide
 
-This guide covers setup and controls for the TypeScript/Electron application. Linux target verification is in progress. See the [README](../README.md#release-status) for the current source version and downloads. The latest published prerelease is 0.5.0-beta.6. The latest published C# download is v0.4.14, with its own [user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md).
+This guide covers the Windows beta.16 controls and the Linux source port. See the [Windows downloads](../README.md#release-status) and [beta.16 release notes](releases/v0.5.0-beta.16.md). Earlier releases have versioned guides for [Windows beta.6](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.6/docs/USER_GUIDE.md) and the [stable C# v0.4.14](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md).
 
 ## Linux setup and controls
 
@@ -51,21 +51,22 @@ installing a newer RPM; the Windows update feed is not used.
 ## Setup and migration
 
 The following setup and shortcut details target **Windows 11 x64**. Windows 10
-is outside the current support target. Fresh-account/machine operation without
-installed developer tools remains unqualified; existing development-VM checks
-have the narrower scope in the [support matrix](VERIFICATION.md#platform-support).
+is outside the support target. The beta.16 installer and portable EXE opened
+first-run setup in a standard account on a Windows 11 development VM. A newly
+created account and a clean machine without developer tools still need testing. See the
+[support matrix](VERIFICATION.md#platform-support).
 Linux uses the [controls above](#linux-setup-and-controls).
 
-In the current source, Escape closes an open service menu first. With the menu
+Escape closes an open service menu first. With the menu
 closed, Escape and Cancel exit setup while it is idle. Setup stays open during
 Save so it can finish or show an error.
 
-1. Use the [published TypeScript beta](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The portable `SC-v0.5.0-beta.6.exe` is also available in a matching ZIP containing that EXE and `README.txt`. Both editions include their Electron runtime; the application does not use .NET. This packaging does not establish clean-machine operation without developer tools. The v0.4.14 download linked in the README contains the previous C# application.
+1. Close any running copy of SC. Run `SC-Setup-v0.5.0-beta.16.exe` to install it for your Windows account, then use its Desktop or Start menu shortcut. Installation works without administrator rights. For a portable copy, run `SC-v0.5.0-beta.16.exe` or extract it from the ZIP. The ZIP includes the EXE and the original `README.txt` from before publication. Both editions include their runtime. See [Windows downloads](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation).
 2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. Commands appear after setup. Older settings without the help marker show them on startup until an explicit Settings Save persists the marker; loading alone never rewrites the vault. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to send text only. While the question field has focus, **Ctrl+Enter** or **Send with screenshot** captures the monitor containing the panel once at send time and includes it with your text. Esc returns to the answer. The typed question determines the task; no screen is captured for a text-only send.
 
-In current source, the setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
+The setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
 
 Press **Tab** or **Shift+Tab** to move through setup. A
 pale outline marks keyboard focus on **Show API key**, **Save**, and **Cancel**.
@@ -92,7 +93,7 @@ The following shortcuts and panel controls apply to the TypeScript beta:
 | **Ctrl+Backspace** | Exit the app, including from Settings. |
 | **Ctrl+Enter** | Open or focus temporary input; while typing in Question, send text with a fresh screenshot. |
 
-The current source uses the approved SC icon in setup, Settings, the window,
+SC uses its icon in setup, Settings, the window,
 the tray and the Windows and Linux packages. The tray icon has a badge and a
 working tooltip while a request runs.
 
@@ -127,18 +128,16 @@ Installation is blocked while a model request, settings save or color picker is
 active. Save Settings edits before restarting; unsaved drafts are temporary.
 Closing SC normally does not install a downloaded update automatically.
 
-Beta builds accept newer beta and stable releases; stable builds accept stable
-releases. Updates never intentionally downgrade SC. The public release must
-include its installer and matching update metadata; the existing C# releases
-cannot supply Electron updates. Until an installer release is published, checking
-can report that no update feed is available. A local installer delivery does not
-publish a GitHub release.
+Installed beta builds can accept newer beta and stable releases. Stable builds
+accept stable releases. An update requires a published Electron installer and its
+matching metadata. The public beta.4 → beta.6 installed update passed on Windows
+11. A public installed update to beta.16 still needs testing. [Recorded update test](VERIFICATION.md#public-github-installed-update-2026-11-03)
 
 API keys, model preferences, shortcuts and appearance remain in the same
 Windows-account encrypted vault across installation and updates. Uninstalling SC
 leaves this existing settings storage intact. To move to another account or PC,
-enter your API key again there. The current local beta is unsigned, so Windows or
-managed-PC policy may warn or block it as with the portable build.
+enter your API key again there. The beta.16 installer and portable EXE are
+unsigned. Windows or a managed-PC policy can warn about or block either file.
 
 The portable EXE, development builds and key-free previews do not check for or
 install updates. Their Updates page explains the installed-version requirement.
@@ -162,7 +161,7 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
-All six provider adapters have mocked transport coverage. Beta.7 source passed the [full Windows 11 native/vault/UI matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03); beta.6 retains its [separately recorded checks](VERIFICATION.md#beta6-extraction-guidance). These results do not establish live account/model access, representative answer accuracy, recorder exclusion or fresh-machine readiness.
+All six provider adapters have mocked transport coverage. Live answer accuracy for beta.16 still needs testing. See the [live model evidence](VERIFICATION.md#live-providers-and-model-quality) and [beta.16 Windows checks](VERIFICATION.md#beta16-windows-qualification-2026-11-22). The earlier [beta.7 Windows matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03) and [beta.6 checks](VERIFICATION.md#beta6-extraction-guidance) describe those builds.
 
 ## Installed and portable updates
 
