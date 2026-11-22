@@ -36,7 +36,6 @@ try {
     }
 
     Write-FixtureZip @('README.txt', $exeName)
-    & $verify $desktop
     [IO.File]::WriteAllBytes($exePath, [byte[]](0, 129, 255))
     Assert-Rejected "ZIP bytes differ for $exeName."
     [IO.File]::WriteAllBytes($exePath, [byte[]](0, 128, 255))
@@ -51,7 +50,20 @@ try {
         Write-FixtureZip @($exeName, $unexpected)
         Assert-Rejected 'ZIP is missing README.txt.'
     }
-    Write-Output 'Passed all eight portable ZIP fixtures.'
+    Write-FixtureZip @('README.txt', $exeName)
+    $bytes = [IO.File]::ReadAllBytes($zipPath)
+    # The first local file name starts immediately after the 30-byte ZIP header.
+    $nameOffset = 30
+    if ([Text.Encoding]::ASCII.GetString($bytes, $nameOffset, 10) -cne 'README.txt') {
+        throw 'Expected README.txt in the first local header of the fixture.'
+    }
+    $bytes[$nameOffset] = $bytes[$nameOffset] -bxor 1
+    [IO.File]::WriteAllBytes($zipPath, $bytes)
+    Assert-Rejected 'Portable ZIP integrity check failed.'
+
+    Write-FixtureZip @('README.txt', $exeName)
+    & $verify $desktop
+    Write-Output 'Passed all nine portable ZIP fixtures.'
 } finally {
     [IO.Directory]::Delete($root, $true)
 }
