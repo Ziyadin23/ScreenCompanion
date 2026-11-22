@@ -22,7 +22,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | --- | --- | --- |
 | Windows first-run setup beta.15 | The protected setup checks and key-free portable startup passed on frozen `96d7adc`. Windows native, vault and #62 pipeline checks passed. | The ASAR inventory blocks delivery. See the [candidate record](#beta15-windows-first-run-setup-2026-11-20). |
 | Windows package size beta.14 | Matched Windows builds saved 99.26 MiB unpacked. Windows native 54, vault 9/143, installed and portable startup, and locale checks passed. | The optimized ASAR contains development files. The UI matrix passed 35 cases, failed the native color picker case and left two cases unrun. Package acceptance, full UI and local delivery remain open in [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). See the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20). |
-| Astryx beta.13 qualification | The retained beta.13 passed all 38 Windows UI cases in one run. All five local handoff files passed copied-byte verification. The earlier native, vault, package, portable startup and Edge results apply to the same build. | Independent evidence review passed and the OpenSpec change is archived. The closure diff awaits final review and protected merge in [PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128). See the [Settings matrix and local handoff](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) and the [earlier Windows attempt](#astryx-beta13-windows-continuation-2026-11-19). |
+| Astryx beta.13 qualification | The retained beta.13 passed all 38 Windows UI cases in one run. All five local handoff files passed copied-byte verification. The earlier native, vault, package, portable startup and Edge results apply to the same build. | Independent evidence review passed and the OpenSpec change is archived. [PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128) merged the closure at `cc213c9` on 21 November. See the [Settings matrix and local handoff](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) and the [earlier Windows attempt](#astryx-beta13-windows-continuation-2026-11-19). |
 | Astryx interface source integration on 15 November | Combined source checks passed 1,227 host tests in 34 files, types, lint, bundles, the built doctor and eight synthetic browser views. [Source integration](#astryx-interface-integration-2026-11-15) | The [19 November Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) records native, startup and Edge checks. The [20 November record](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) covers the full UI pass and verified local handoff. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
@@ -209,7 +209,7 @@ The five local transfer files matched the audited bytes below. The ZIP contains 
 
 The original RPM was unavailable at its recorded SHA-256 `569c5dab5ec0174d60f3cccbe092a5171752b0f84fb62233f51e362a144206b9`. The qualified replacement listed above matched all 83 retained payload entries and passed 11 isolated Linux checks.
 
-The beta.13 transfer is local and the candidate is unpublished. Independent evidence review passed on draft PR #128 at `98f6dea`. The integration change records all eight completed tasks in its archive. The closure diff awaits independent review and protected merge. Beta.14 package work, beta.10 qualification and broader recorder, clean-machine, mixed-DPI and installed Linux checks have their own owners. [Archived integration tasks](../openspec/changes/archive/2026-11-21-integrate-astryx-interface/tasks.md), [draft PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128), [Astryx #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63), [package optimization #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84), [pipeline #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57)
+The beta.13 transfer is local and the candidate is unpublished. Independent evidence review passed on draft PR #128 at `98f6dea`. The integration change records all eight completed tasks in its archive. PR #128 merged the archive on 21 November and closed issue #63. Beta.14 package work, beta.10 qualification and broader recorder, clean-machine, mixed-DPI and installed Linux checks have their own owners. [Archived integration tasks](../openspec/changes/archive/2026-11-21-integrate-astryx-interface/tasks.md), [merged PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128), [Astryx #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63), [package optimization #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84), [pipeline #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57)
 
 ## Astryx interface integration (2026-11-15)
 
@@ -1371,12 +1371,22 @@ When hardware is available, use this procedure:
 5. Move each panel across every connected boundary in both directions, including
    pausing while it straddles the boundary and releasing on the destination.
    Check for jumps, off-screen placement, incorrect pointer offset, clipping or
-   stuck drag state. Repeat all eight resize handles after each transition and
+   stuck drag state.
+6. Check the wheel boundary on the input panel before resizing it or opening
+   Settings. Use the key-free preview text and a panel small enough to scroll.
+   Start with the answer partway down. Without clicking, move the pointer onto
+   the last visible answer line immediately above the question field and turn
+   the wheel one notch. The answer should scroll. Move the pointer just inside
+   the question field and turn the wheel again. The answer should stay on the
+   same line. Repeat immediately after moving the panel from A to B and again
+   from B to A. Record the display scale, pointer position in physical pixels,
+   and first visible answer line before and after each wheel input.
+7. Repeat all eight resize handles after each transition and
    exercise resizing while the panel crosses the boundary. Open Settings and
    return on the destination, then hide/restore and verify the panel can still
    move/resize. Account for DPI scaling when interpreting physical dimensions.
-6. Record one result per surface, monitor, edge/corner and transition direction;
-   include steps, expected/observed behavior and technical geometry for failures.
+8. Record one result per surface, monitor, edge/corner and transition direction.
+   Include steps, expected/observed behavior and technical geometry for failures.
    Mark unperformed cases explicitly. Exit normally, verify owned processes and
    held input are cleared, compare original vault bytes, and restore any changed
    display configuration. Keep raw synthetic evidence in the private workspace.
