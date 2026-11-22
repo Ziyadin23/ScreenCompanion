@@ -97,9 +97,15 @@ Outcome and all task groups: [issue #84](https://github.com/Ziyadin23/ScreenComp
 - `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` exited 0 on Fedora (1,263 tests in 38 files, type checking, lint and production bundles). The workflow self-test, documentation check (136 files and 575 links), strict OpenSpec validation (15/15), delivery suite (11/11) and `git diff --check` all exited 0.
 - ZIP CI changes are in `b34cd1f`. The preview fix changes the Windows CI job, package manifest, ASAR verifier, packaging regression, test and publishing guidance, design and this checkpoint. Task 2.2 still needs matched Windows candidate measurements. The issue owner retains tasks 3.1 and 3.2 for target qualification, independent review and versioned delivery.
 
+### ZIP integrity correction after independent review
+
+- Review of [PR #129](https://github.com/Ziyadin23/ScreenCompanion/pull/129) at `8a57d33` found that the verifier accepted a damaged local README name when the central directory and both file contents still matched. The new fixture changes one bit in that local name. Running it against the reviewed verifier reproduced the failure (suite exit 1).
+- The verifier now runs Python's standard `ZipFile.testzip()` while the archive is open. It checks the local names against the directory and verifies the entry CRCs. Python is part of the existing Windows native build toolchain. The correction touches the CI verifier, its fixture, the test guide and this checkpoint.
+- On Fedora, `pwsh -File .github/scripts/verify-windows-zip.test.ps1` passed all nine fixtures. Direct verification exited 1 for the damaged ZIP and 0 for both the intact fixture and an archive built with `Compress-Archive`. The fixture suite also exited 0 with PowerShell's native command error preference enabled. `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` passed 1,263 tests in 38 files, types, lint and production bundles. The delivery tests passed 11/11. The PR records hosted results for each revision. The issue owner retains the remaining candidate work at 3/6.
+
 ## Integrated Windows candidate on 22 November 2026
 
-Version `0.5.0-beta.16` is reserved for [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133). It includes Settings `4003e5d`, Windows packaging `8a57d33` and qualification instructions `175bd77`. The Windows operator will record results for the exact candidate and test revisions. The earlier numbered builds retain their own results.
+The beta.16 application is frozen at `e85a863`. It combines Settings `4003e5d` with Windows packaging `8a57d33`. The stricter CI ZIP check at `1e5afc4` changes verification scripts and documentation. The UI fixture at `bae908a` changes three test files. The operator verified the source archives against both revisions. Matched Windows measurements, runtime qualification and local delivery remain open. [Integrated candidate and evidence](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
 ## Workflow follow-up
 

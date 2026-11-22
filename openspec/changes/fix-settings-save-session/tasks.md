@@ -145,7 +145,7 @@
 
 ## Integrated Windows candidate on 22 November 2026
 
-Version `0.5.0-beta.16` is reserved for [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133). It includes Settings `4003e5d`, Windows packaging `8a57d33` and qualification instructions `175bd77`. The Windows operator will record results for the exact candidate and test revisions. The earlier numbered builds retain their own results.
+The beta.16 application at `e85a863` contains Settings revision `4003e5d`. Independent checks reproduced four defects on the earlier PR head and passed all 11 scenarios on this revision. The integrated host run with UI fixtures from `bae908a` passed 1,336 tests. Windows qualification includes delayed Save and Back, shortcut contention, protected dialogs, retained Question and answer state, encrypted readback and the named recorder check. The operator owns the Windows evidence and copied beta handoff. [Settings PR](https://github.com/Ziyadin23/ScreenCompanion/pull/123) and [integrated qualification](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
 ## Workflow follow-up
 

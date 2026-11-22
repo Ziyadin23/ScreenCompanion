@@ -14,7 +14,7 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-The beta.16 candidate combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Its Windows runtime checks and local delivery are tracked in [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133).
+The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. Playwright discovered 38 UI cases. The Windows runtime checks and the copied local handoff remain open. [Integrated Windows qualification](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
 Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
 

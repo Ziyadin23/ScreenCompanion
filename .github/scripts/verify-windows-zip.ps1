@@ -8,8 +8,8 @@ $sources = @{
     'README.txt' = Join-Path $DesktopRoot '../README.md'
 }
 
-$zipPath = Join-Path $DesktopRoot "dist/SC-v$version.zip"
-$zip = [IO.Compression.ZipFile]::OpenRead((Get-Item -LiteralPath $zipPath).FullName)
+$zipPath = (Get-Item -LiteralPath (Join-Path $DesktopRoot "dist/SC-v$version.zip")).FullName
+$zip = [IO.Compression.ZipFile]::OpenRead($zipPath)
 try {
     if ($zip.Entries.Count -ne $sources.Count) { throw 'Expected exactly two ZIP entries.' }
     foreach ($name in $sources.Keys) {
@@ -24,6 +24,17 @@ try {
             $stream.Dispose()
         }
     }
+    # ZipArchive uses central directory names. Check local names and CRCs with the native build's Python.
+    $testZip = @'
+import sys
+from zipfile import ZipFile
+
+with ZipFile(sys.argv[1]) as archive:
+    sys.exit(archive.testzip() is not None)
+'@
+    $PSNativeCommandUseErrorActionPreference = $false
+    python -I -c $testZip $zipPath
+    if ($LASTEXITCODE -ne 0) { throw 'Portable ZIP integrity check failed.' }
 } finally {
     $zip.Dispose()
 }
