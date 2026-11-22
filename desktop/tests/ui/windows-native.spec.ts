@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { AppState } from '../../src/contracts';
-import { VK, windowsEvent } from './windows-events';
+import { VK, wheelDuringStall, windowsEvent, withReadyWindowsEvents } from './windows-events';
 import type { NativeWindow } from './windows-events';
 
 /**
@@ -32,8 +32,6 @@ const test = base.extend<{ preview: Preview }>({
     const local = join(temporary, 'local');
     const sentinelPath = join(local, 'SC', 'sc.user.key');
     const sentinel = 'SC synthetic preview sentinel; intentionally not an encrypted vault.';
-    await mkdir(join(local, 'SC'), { recursive: true });
-    await writeFile(sentinelPath, sentinel, 'utf8');
     // Never forward credential environment variables or the real user profile.
     const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
       !/(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL)/i.test(key) &&
@@ -41,6 +39,8 @@ const test = base.extend<{ preview: Preview }>({
     let app: ElectronApplication | undefined;
     let applicationProcess: ReturnType<ElectronApplication['process']> | undefined;
     try {
+      await mkdir(join(local, 'SC'), { recursive: true });
+      await writeFile(sentinelPath, sentinel, 'utf8');
       app = await electron.launch({
         args: [resolve('out/main/index.js'), '--capture-test-only', `--user-data-dir=${join(temporary, 'profile')}`],
         env: { ...environment, LOCALAPPDATA: local, APPDATA: join(temporary, 'roaming'), ELECTRON_DISABLE_SECURITY_WARNINGS: 'true' }
@@ -71,15 +71,15 @@ const test = base.extend<{ preview: Preview }>({
       expect(existsSync(join(local, 'SC', 'window-size.json'))).toBe(false);
     } finally {
       try { if (app && applicationProcess?.exitCode === null) await app.close(); }
-      finally { await rm(temporary, { recursive: true, force: true }); }
+      finally { await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
     }
   }
 });
 
 async function state(preview: Preview): Promise<AppState> { return preview.page.evaluate(() => window.sc.getState()); }
-async function globalShortcut(preview: Preview, keys: number[]) {
-  await windowsEvent({ type: 'focus', handle: preview.backdropHandle });
-  await windowsEvent({ type: 'keys', keys });
+async function globalShortcut(preview: Preview, keys: number[], send = windowsEvent) {
+  await send({ type: 'focus', handle: preview.backdropHandle });
+  await send({ type: 'keys', keys });
 }
 async function panelKey(preview: Preview, keys: number[]) {
   await windowsEvent({ type: 'focus', handle: preview.panelHandle });
@@ -97,8 +97,8 @@ async function picker(preview: Preview): Promise<NativeWindow | undefined> {
   const owned = await windowsEvent<NativeWindow[]>({ type: 'owned', handle: preview.panelHandle });
   return owned.find((window) => window.className === '#32770');
 }
-async function expectProtected(handle: string) {
-  const window = await inspect(handle);
+async function expectProtected(handle: string, send = windowsEvent) {
+  const window = await send<NativeWindow>({ type: 'inspect', handle });
   expect(window.affinityRead, 'GetWindowDisplayAffinity must return an observable native status.').toBe(true);
   expect([1, 0x11], 'Windows must request ContentHidden or Excluded; this is not a recording result.').toContain(window.affinity);
 }
@@ -200,23 +200,54 @@ test.describe('Windows native key-free preview', () => {
     const { page } = preview;
     await settings(preview, 'Panel');
     await page.getByRole('slider', { name: 'Text visibility', exact: true }).fill('60');
-    const originalColor = await page.getByRole('button', { name: 'Text color', exact: true }).textContent();
-    await page.getByRole('button', { name: 'Text color', exact: true }).click();
-    await expect.poll(async () => (await picker(preview))?.visible).toBe(true);
-    const dialog = (await picker(preview))!;
-    await expectProtected(dialog.handle);
-    await expect(page.getByTestId('settings-save')).toBeDisabled();
-    await globalShortcut(preview, [VK.control, VK.slash]);
-    await expect.poll(async () => (await inspect(dialog.handle)).visible).toBe(false);
-    await expect.poll(async () => (await inspect(preview.panelHandle)).visible).toBe(false);
-    await globalShortcut(preview, [VK.control, VK.slash]);
-    await expect.poll(async () => (await inspect(dialog.handle)).visible).toBe(true);
-    await expectProtected(dialog.handle);
-    await windowsEvent({ type: 'focus', handle: dialog.handle });
-    await windowsEvent({ type: 'keys', keys: [VK.escape] });
-    await expect.poll(() => picker(preview)).toBeUndefined();
+    const textColor = page.getByRole('button', { name: 'Text color', exact: true });
+    const originalColor = await textColor.textContent();
+    const started = Date.now();
+    const record = (phase: string, observation?: object) =>
+      console.log('Color picker', JSON.stringify({ phase, elapsedMs: Date.now() - started, ...observation }));
+    record('observer starting');
+    await withReadyWindowsEvents(async (send) => {
+      record('observer ready');
+      async function observe(phase: 'opening' | 'hiding' | 'restoring' | 'cancelling', handle?: string) {
+        let dialog: NativeWindow | undefined;
+        let samples = 0;
+        record(phase, { samples, target: handle });
+        await expect.poll(async () => {
+          const owned = await send<NativeWindow[]>({ type: 'owned', handle: preview.panelHandle });
+          const panel = await send<NativeWindow>({ type: 'inspect', handle: preview.panelHandle });
+          const renderer = await page.evaluate(() => ({
+            busy: document.querySelector('[aria-label="SC settings"]')?.getAttribute('aria-busy'),
+            errorShown: Boolean(document.querySelector('#settings-error'))
+          }));
+          record(phase, { samples: ++samples, panelVisible: panel.visible, renderer, ownedCount: owned.length,
+            owned: owned.slice(0, 8).map(({ handle, className, visible }) => ({ handle, className, visible })) });
+          const dialogs = owned.filter((window) => window.className === '#32770');
+          if (phase === 'cancelling') return dialogs.length === 0;
+          dialog = handle ? dialogs.find((window) => window.handle === handle) : dialogs.find((window) => window.visible);
+          const visible = phase !== 'hiding';
+          return dialog?.visible === visible && panel.visible === visible;
+        }, { message: `Owned color picker ${phase}`, timeout: 5000 }).toBe(true);
+        return dialog;
+      }
+      record('click');
+      await textColor.click();
+      const dialog = (await observe('opening'))!;
+      await expectProtected(dialog.handle, send);
+      await expect(page.getByTestId('settings-save')).toBeDisabled();
+      record('hide shortcut');
+      await globalShortcut(preview, [VK.control, VK.slash], send);
+      await observe('hiding', dialog.handle);
+      record('restore shortcut');
+      await globalShortcut(preview, [VK.control, VK.slash], send);
+      await observe('restoring', dialog.handle);
+      await expectProtected(dialog.handle, send);
+      record('cancel');
+      await send({ type: 'focus', handle: dialog.handle });
+      await send({ type: 'keys', keys: [VK.escape] });
+      await observe('cancelling');
+    });
     await expect(page.getByTestId('settings-save')).toBeEnabled();
-    await expect(page.getByRole('button', { name: 'Text color', exact: true })).toHaveText(originalColor!);
+    await expect(textColor).toHaveText(originalColor!);
     await expect(page.getByRole('slider', { name: 'Text visibility', exact: true })).toHaveValue('60');
     await page.getByTestId('settings-back').click();
     await expect(page.getByTestId('answer-text')).toBeVisible();
@@ -243,21 +274,30 @@ test.describe('Windows native key-free preview', () => {
     expect(resized.bottom - resized.top).toBeGreaterThan(moved.bottom - moved.top + 15);
     expect(await page.getByTestId('answer-text').evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     await windowsEvent({ type: 'focus', handle: preview.backdropHandle });
-    await page.getByTestId('answer-text').evaluate((element) => { element.scrollTop = 0; });
+    const answer = page.getByTestId('answer-text');
+    const beforeScroll = await answer.evaluate((element) => { element.scrollTop = 0; return element.scrollTop; });
+    expect(beforeScroll).toBe(0);
+    console.log('Wheel scrollTop before input', beforeScroll);
     // Deliberately block Electron JS, not the independent native mouse thread.
-    const busy = app.evaluate((_, marker) => {
-      const fs = process.getBuiltinModule('fs');
-      fs.writeFileSync(marker, 'synthetic test state only');
-      try {
-        const start = process.hrtime.bigint();
-        while (process.hrtime.bigint() - start < 4_000_000_000n) { /* synthetic UI-thread stall */ }
-      } finally { fs.unlinkSync(marker); }
-    }, preview.busyMarker);
-    try {
-      await expect.poll(() => existsSync(preview.busyMarker)).toBe(true);
-      await windowsEvent({ type: 'wheel', point: { x: resized.left + 40, y: resized.top + 40 }, delta: -360, busyMarker: preview.busyMarker });
-    } finally { await busy; }
-    await expect.poll(() => page.getByTestId('answer-text').evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+    await wheelDuringStall({ type: 'wheel', point: { x: resized.left + 40, y: resized.top + 40 },
+      delta: -360, busyMarker: preview.busyMarker }, async () => {
+      const timing = await app.evaluate((_, marker) => {
+        const fs = process.getBuiltinModule('fs');
+        fs.writeFileSync(marker, 'synthetic test state only');
+        const createdMs = Date.now();
+        try {
+          const start = process.hrtime.bigint();
+          while (process.hrtime.bigint() - start < 4_000_000_000n) { /* synthetic UI-thread stall */ }
+        } finally { fs.unlinkSync(marker); }
+        return { createdMs, removedMs: Date.now() };
+      }, preview.busyMarker);
+      console.log('Wheel stall marker', timing);
+    });
+    await expect.poll(async () => {
+      const scrollTop = await answer.evaluate((element) => element.scrollTop);
+      console.log('Wheel scrollTop after input', scrollTop);
+      return scrollTop;
+    }).toBeGreaterThan(0);
   });
 
   test('shortcut recording validates real keys, restores defaults and keeps visibility/exit active', async ({ preview }) => {

@@ -1,5 +1,8 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
+import { expect } from '@playwright/test';
 
 const execFileAsync = promisify(execFile);
 
@@ -9,16 +12,17 @@ export interface NativeWindow {
   workLeft: number; workTop: number; workRight: number; workBottom: number; dpi: number;
 }
 interface Point { x: number; y: number }
+interface WheelInput { type: 'wheel'; point: Point; delta: number; busyMarker: string }
 type WindowsEvent =
   | { type: 'inspect' | 'owned' | 'focus'; handle: string }
   | { type: 'keys'; keys: number[] }
   | { type: 'drag'; from: Point; to: Point; alt?: boolean }
   | { type: 'pointer'; action: 'down' | 'move' | 'up'; point: Point; alt?: boolean }
-  | { type: 'wheel'; point: Point; delta: number; busyMarker: string };
+  | WheelInput;
 
 // Real SendInput events exercise RegisterHotKey and the production low-level
 // mouse hook. No SendMessage shortcut substitution, clipboard access or images.
-// Use encoded PowerShell stdin-free commands, never a shell-interpolated payload.
+// Pass event data as base64-encoded JSON, independent of the console code page.
 const nativeSource = String.raw`
 using System;
 using System.Collections.Generic;
@@ -180,15 +184,13 @@ public static class ScPreviewEvents {
   }
 }`;
 
-export async function windowsEvent<T = void>(event: WindowsEvent): Promise<T> {
-  if (process.platform !== 'win32') throw new Error('Native preview input requires Windows.');
-  const encodedPayload = Buffer.from(JSON.stringify(event), 'utf8').toString('base64');
-  const script = `$ErrorActionPreference='Stop'
+const helperScript = `$ErrorActionPreference='Stop'
 Add-Type -TypeDefinition @'
 ${nativeSource}
 '@
 [ScPreviewEvents]::PhysicalCoordinates()
-$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encodedPayload}')) | ConvertFrom-Json
+function Invoke-PreviewEvent($encoded) {
+$payload = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($encoded)) | ConvertFrom-Json
 $handle = if ($payload.handle) { [IntPtr]::new([long]$payload.handle) } else { [IntPtr]::Zero }
 switch ($payload.type) {
  'inspect' { [ScPreviewEvents]::Inspect($handle) | ConvertTo-Json -Compress }
@@ -198,18 +200,86 @@ switch ($payload.type) {
  'drag' { [ScPreviewEvents]::Drag($payload.from.x,$payload.from.y,$payload.to.x,$payload.to.y,[bool]$payload.alt) }
  'pointer' { [ScPreviewEvents]::Pointer($payload.action,$payload.point.x,$payload.point.y,[bool]$payload.alt) }
  'wheel' {
-   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw 'The main-thread stall ended before native wheel input.' }
+   $before = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw "The main-thread stall ended before native wheel input at $before." }
    [ScPreviewEvents]::Wheel($payload.point.x,$payload.point.y,$payload.delta)
-   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw 'The main-thread stall ended during native wheel input.' }
+   $accepted = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+   if (!(Test-Path -LiteralPath $payload.busyMarker)) { throw "The main-thread stall ended during native wheel input ($before to $accepted)." }
+   ConvertTo-Json -Compress -InputObject @{ beforeInputMs=$before; acceptedInputMs=$accepted }
  }
  default { throw 'Unsupported native preview operation.' }
+}
 }`;
-  const { stdout } = await execFileAsync('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
-    Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true, timeout: 15000, maxBuffer: 64 * 1024 }).catch((error: unknown) => {
+
+function powershellArgs(command: string) {
+  if (process.platform !== 'win32') throw new Error('Native preview input requires Windows.');
+  return ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand',
+    Buffer.from(`${helperScript}\n${command}`, 'utf16le').toString('base64')];
+}
+function encode(event: WindowsEvent) { return Buffer.from(JSON.stringify(event), 'utf8').toString('base64'); }
+
+export async function windowsEvent<T = void>(event: WindowsEvent): Promise<T> {
+  const { stdout } = await execFileAsync('powershell.exe', powershellArgs(`Invoke-PreviewEvent '${encode(event)}'`),
+    { windowsHide: true, timeout: 15000, maxBuffer: 64 * 1024 }).catch((error: unknown) => {
       const failure = error as { stderr?: string; code?: string | number; killed?: boolean; signal?: string };
       throw new Error(`Windows native fixture ${event.type} failed (code ${failure.code ?? 'unknown'}, killed ${failure.killed ?? false}, signal ${failure.signal ?? 'none'}). ${(failure.stderr ?? '').slice(-3000)}`);
     });
   return (stdout.trim() ? JSON.parse(stdout.trim()) : undefined) as T;
+}
+
+function startWindowsHelper() {
+  const command = `[Console]::WriteLine('ready')
+while ($null -ne ($line = [Console]::ReadLine())) {
+  $result = Invoke-PreviewEvent $line
+  [Console]::WriteLine([string]$result)
+}`;
+  return spawn('powershell.exe', powershellArgs(command), { windowsHide: true });
+}
+
+// A single test owns this helper. Each command reads its reply before sending the next.
+export async function withReadyWindowsEvents<T>(use: (send: typeof windowsEvent) => Promise<T>, start = startWindowsHelper) {
+  const child = start();
+  const closed = new Promise<string>((resolve) => child.once('close', (code, signal) => resolve(`code ${code}, signal ${signal}`)));
+  let detail = '';
+  child.stderr.setEncoding('utf8').on('data', (chunk: string) => { detail = (detail + chunk).slice(-3000); });
+  child.on('error', (error) => { detail = error.message; });
+  child.stdin.on('error', (error) => { detail = error.message; });
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  const replies = lines[Symbol.asyncIterator]();
+  async function readReply(phase: string) {
+    const deadline = setTimeout(() => { detail = '15-second reply deadline.'; child.kill(); }, 15000);
+    try {
+      const reply = await replies.next();
+      if (reply.done) throw new Error(`Windows native fixture ${phase} failed (${await closed}). ${detail}`);
+      return reply.value;
+    } finally { clearTimeout(deadline); }
+  }
+  try {
+    if (await readReply('setup') !== 'ready') throw new Error('Windows native fixture did not acknowledge setup.');
+    return await use(async <R = void>(event: WindowsEvent) => {
+      child.stdin.write(`${encode(event)}\n`);
+      const reply = await readReply(event.type);
+      return (reply ? JSON.parse(reply) : undefined) as R;
+    });
+  } finally {
+    child.stdin.end();
+    const forceExit = setTimeout(() => child.kill(), 1000);
+    try { await closed; } finally { clearTimeout(forceExit); lines.close(); }
+  }
+}
+
+export async function wheelDuringStall(event: WheelInput, stall: () => Promise<void>, start = startWindowsHelper) {
+  console.log('Wheel helper start', Date.now());
+  await withReadyWindowsEvents(async (send) => {
+    console.log('Wheel helper ready', Date.now());
+    const input = async () => {
+      await expect.poll(() => existsSync(event.busyMarker), { message: 'Waiting for the Electron stall marker' }).toBe(true);
+      console.log('Wheel input guards passed', await send(event));
+    };
+    // Observe both outcomes before the test closes the helper and removes the marker directory.
+    const results = await Promise.allSettled([stall(), input()]);
+    for (const result of results) if (result.status === 'rejected') throw result.reason;
+  }, start);
 }
 
 export const VK = { control: 17, alt: 18, shift: 16, enter: 13, backspace: 8, escape: 27, slash: 191,
