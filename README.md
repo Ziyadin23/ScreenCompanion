@@ -21,7 +21,7 @@ own API key. Provider usage charges apply.
 | --- | --- | --- |
 | Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.14** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source, unpublished | **0.5.0-beta.16** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Current source includes the new setup and Settings interface**, separate
 text-only and text-with-screenshot sends, and Thorough/Direct pipeline preferences

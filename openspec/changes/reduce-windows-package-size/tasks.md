@@ -97,6 +97,10 @@ Outcome and all task groups: [issue #84](https://github.com/Ziyadin23/ScreenComp
 - `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` exited 0 on Fedora (1,263 tests in 38 files, type checking, lint and production bundles). The workflow self-test, documentation check (136 files and 575 links), strict OpenSpec validation (15/15), delivery suite (11/11) and `git diff --check` all exited 0.
 - ZIP CI changes are in `b34cd1f`. The preview fix changes the Windows CI job, package manifest, ASAR verifier, packaging regression, test and publishing guidance, design and this checkpoint. Task 2.2 still needs matched Windows candidate measurements. The issue owner retains tasks 3.1 and 3.2 for target qualification, independent review and versioned delivery.
 
+## Integrated Windows candidate on 22 November 2026
+
+Version `0.5.0-beta.16` is reserved for [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133). It includes Settings `4003e5d`, Windows packaging `8a57d33` and qualification instructions `175bd77`. The Windows operator will record results for the exact candidate and test revisions. The earlier numbered builds retain their own results.
+
 ## Workflow follow-up
 
 - Archive this `skip_specs` change only after all six tracked tasks and required review pass; verify moved links, documentation and strict OpenSpec. Keep it active with this concrete Windows qualification/delivery dependency while those tasks remain open.

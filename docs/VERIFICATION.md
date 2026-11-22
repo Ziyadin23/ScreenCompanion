@@ -1,6 +1,6 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.14**.
+This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.16**.
 The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
 The previous C# application and its published releases remain available through
 existing tags/assets. Beta.4 is available as a
@@ -13,6 +13,8 @@ are in [rewrite history](history/typescript-rewrite.md) and [test-run history](h
 recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
+
+The beta.16 candidate combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Its Windows runtime checks and local delivery are tracked in [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133).
 
 Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
 

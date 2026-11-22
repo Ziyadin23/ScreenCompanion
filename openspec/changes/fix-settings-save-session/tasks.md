@@ -143,6 +143,10 @@
 - On Fedora 44 x64, the desktop verification passed type checking, lint, all 1,329 tests in 37 files and the production build. The built Astryx check recorded 19 passes and two existing theme-font warnings.
 - Independent review of the new commit remains open under 1.3. Tasks 2.1 and 2.2 retain target qualification and the numbered local beta handoff.
 
+## Integrated Windows candidate on 22 November 2026
+
+Version `0.5.0-beta.16` is reserved for [integrated Windows qualification (#133)](https://github.com/Ziyadin23/ScreenCompanion/issues/133). It includes Settings `4003e5d`, Windows packaging `8a57d33` and qualification instructions `175bd77`. The Windows operator will record results for the exact candidate and test revisions. The earlier numbered builds retain their own results.
+
 ## Workflow follow-up
 
 - After source review, target qualification and local beta handoff, sync the requirement additions and archive the change. Verify documentation links and strict OpenSpec validation after archive.
