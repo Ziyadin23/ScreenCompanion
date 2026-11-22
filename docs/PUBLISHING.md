@@ -36,7 +36,7 @@ for the window, tray and renderer in the application bundles.
    version; update operational instructions and current-status text against the
    package version and README release status, preserving dated evidence for
    earlier builds.
-3. On Windows x64, install Node.js 22.12+, Visual Studio C++ Build Tools and the
+3. On Windows x64, install Node.js 22.13 or later, Visual Studio C++ Build Tools and the
    Windows SDK. From `desktop/`, run:
 
    ```powershell
