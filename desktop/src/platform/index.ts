@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import type { AppAction, DesktopAction, CaptureProtectionResult, CapturedFrame, HttpRequest, HttpResponse, NormalizedRegion, PixelBounds, ResizeEdge, VaultData, WindowsPlatform } from '../contracts';
-import { SHORTCUT_FIELDS, validateShortcuts } from './shortcuts';
+import { SHORTCUT_FIELDS, ShortcutRestoreError, validateShortcuts } from './shortcuts';
 export { createLinuxTransport } from './linux-transport';
 export { createLinuxPlatform } from './linux';
 
@@ -94,7 +94,13 @@ export function createWindowsPlatform(options: { nativePath?: string } = {}): Wi
       validateShortcuts(settings);
       const bindings = Object.entries(SHORTCUT_FIELDS).map(([name, field], i) => ({ action: name, id: i + 1, modifiers: settings[field].Modifiers, key: settings[field].Key }))
         .filter(b => !recording || b.action === 'visibility' || b.action === 'exit');
-      bridge().applyShortcuts(bindings);
+      try { bridge().applyShortcuts(bindings); }
+      catch (error) {
+        if (error instanceof Error && error.message === 'Could not restore the previous shortcuts. Restart SC.') {
+          throw new ShortcutRestoreError(error.message);
+        }
+        throw error;
+      }
       action = onAction;
     },
     attachPanel(handle, onWheel) {

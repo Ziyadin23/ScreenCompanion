@@ -1,5 +1,7 @@
 import type { AppAction, HotkeyBinding, VaultData } from '../contracts';
 
+export class ShortcutRestoreError extends Error {}
+
 export const SHORTCUT_FIELDS = {
   capture: 'Capture', test: 'Test', visibility: 'Visibility', settings: 'SettingsShortcut',
   exit: 'ExitShortcut', input: 'InputShortcut'

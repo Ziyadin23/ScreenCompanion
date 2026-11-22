@@ -1,42 +1,34 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AppState, PipelineConfiguration, PipelineMode, PipelineInput, PipelineResult, VaultData } from '../../src/contracts';
-import { PROVIDERS } from '../../src/contracts';
-import { withSavedSettings } from '../../src/pipeline/configuration';
+import { PROVIDERS, type VaultData } from '../../src/contracts';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
-import { ApplicationController, canResizePanel } from '../../src/main/controller';
-import { createPreviewPlatform } from '../../src/main/preview';
-import { createDiagnostics } from '../../src/main/diagnostics';
+import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
+import { ShortcutRestoreError } from '../../src/platform/shortcuts';
+import { canResizePanel } from '../../src/main/controller';
+import { settingsDraftSchema } from '../../src/main/validation';
+import { controllerFixture as fixture, deferred } from './controller-fixture';
 
-function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-function fixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough', platformName: 'windows' | 'linux' = 'windows') {
-  const platform = createPreviewPlatform();
-  const jpeg = Buffer.from('synthetic-monitor');
-  platform.activeMonitor = vi.fn(() => ({ x: -1920, y: 0, width: 1920, height: 1080 }));
-  platform.monitorForWindow = vi.fn(() => ({ x: 0, y: 0, width: 1920, height: 1080 }));
-  platform.captureMonitor = vi.fn(async bounds => ({ jpeg, bounds: bounds ?? { x: 0, y: 0, width: 1920, height: 1080 } }));
-  const applyShortcuts = vi.fn(async () => {});
-  platform.applyShortcuts = applyShortcuts;
-  platform.setOwnedDialogsVisible = vi.fn();
-  platform.closeOwnedDialogs = vi.fn();
-  platform.dispose = vi.fn();
-  const load = vi.fn(async () => structuredClone(initial));
-  const legacyPasswordVaultExists = vi.fn(async () => false);
-  const save = vi.fn(async (_value: VaultData) => {});
-  const outcome = deferred<PipelineResult>();
-  const run = vi.fn((_input: PipelineInput) => outcome.promise);
-  const states: AppState[] = [];
-  const configuration: PipelineConfiguration = { provider: processMode === 'Direct' ? 'DeepSeek' : 'OpenAI', answerModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', visionModel: processMode === 'Direct' ? 'deepseek-flash' : 'gpt-6-luna', mode: processMode,
-    assessmentMode: 'standard', enableQuestionCropping: true, enableRefusalRetry: true, imageRegionPadding: .08,
-    questionRegion: null, extractionMaxOutputTokens: 6000, answerMaxOutputTokens: 2500, thinking: 'None' };
-  const host = { panelHandle: () => Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]), publish: (state: AppState) => { states.push(state); }, scroll() {}, exit() {},
-    isFocused: vi.fn(() => false), inputAction: vi.fn(), inputHeight: vi.fn(), activate: vi.fn() };
-  const controller = new ApplicationController({ platform, store: { load, save,
-    loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
-    pipeline: { run }, host,
-    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName });
-  return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, run, outcome, states, jpeg, host };
-}
 describe('production lifecycle with injected native boundaries', () => {
+  it('rejects Custom without a current instruction before applying shortcuts or writing settings', async () => {
+    const f = fixture({ ...defaultSettings('synthetic-key'), CommandsShown: true, CustomInstruction: 'Previous instruction' });
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.CustomInstruction = '';
+    const write = f.delaySave();
+    const pending = f.controller.saveSettings(first);
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.ResponseMode = 'Custom';
+    write.resolve(); await pending;
+    f.applyShortcuts.mockClear();
+    await expect(f.controller.saveSettings(second)).rejects.toThrow(/custom instruction/i);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledTimes(1);
+    expect(f.controller.getState().surface).toBe('settings');
+  });
+
   it('does not rewrite existing normalized settings at startup even when help has never been shown', async () => {
     const saved = { ...defaultSettings('synthetic-existing'), PipelineMode: 'Thorough' as const, CommandsShown: false };
     const f = fixture(saved); await f.controller.initialize();
@@ -201,28 +193,368 @@ describe('production lifecycle with injected native boundaries', () => {
   it('retains unsaved Settings across activation and hide/restore, blocking update restart until discarded', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
     expect(f.controller.canInstallUpdate()).toBe(true);
-    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: f.controller.getState().settingsSession });
     expect(f.controller.canInstallUpdate()).toBe(false);
     await f.controller.command({ type: 'toggleVisibility' }); f.controller.restore();
     await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
-    await f.controller.discardSettings(); await f.controller.command({ type: 'settings' });
+    await f.controller.discardSettings(f.controller.getState().settingsSession); await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
+  });
+  it('applies a delayed save without closing a newer Settings draft opened through the input shortcut', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const answering = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+    await answering;
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Appearance.TextSizePoints = 18;
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(draft);
+    await write.started;
+
+    const inputOpened = deferred<void>();
+    f.host.inputAction.mockImplementationOnce(() => inputOpened.resolve());
+    f.controller.onAction('input');
+    await inputOpened.promise;
+    expect(f.controller.getState().surface).toBe('input');
+    await f.controller.command({ type: 'settings' });
+    const newer = f.controller.getSettingsDraft();
+    newer.values.CustomInstruction = 'Newer unsaved instruction';
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: newer.session });
+    f.platform.closeOwnedDialogs = vi.fn();
+
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', visible: true, settingsDirty: true,
+      answer: 'Retained answer', appearance: { TextSizePoints: 18 } });
+    expect(f.controller.canInstallUpdate()).toBe(false);
+    expect(f.platform.closeOwnedDialogs).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ CustomInstruction: '', ApiKey: 'synthetic-key' }));
+    expect(f.run).toHaveBeenCalledOnce();
+    expect(f.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+  it('keeps Question hidden if the user leaves Settings and hides the panel during a save', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'toggleVisibility' });
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'input', visible: false });
+  });
+  it('keeps a request error that arrived while Settings was saving', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const request = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    await f.controller.command({ type: 'settings' });
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(f.controller.getSettingsDraft());
+    await write.started;
+    f.outcome.reject(new Error('private request failure'));
+    await request;
+    const requestError = f.controller.getState().error;
+    expect(requestError?.code).toBe('APIREQUEST-UNEXPECTED');
+    write.resolve();
+    await saving;
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', busy: false, error: requestError });
+  });
+  it('rejects a Save from an older session that reaches the controller after Settings reopens', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const old = f.controller.getSettingsDraft();
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: f.controller.getState().settingsSession });
+    f.applyShortcuts.mockClear();
+    expect(f.controller.getSettingsDraft().session).not.toBe(old.session);
+
+    await expect(f.controller.saveSettings(old)).rejects.toMatchObject({ code: 'STALEDRAFT' });
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', visible: true, settingsDirty: true });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).not.toHaveBeenCalled();
+  });
+  it('rejects an overlapping save and merges the retry with the newly committed settings and keys', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.Appearance.TransparencyPercent = 35;
+    first.values.Capture = { Modifiers: 2, Key: 81 };
+    first.values.Models = defaultModels('DeepSeek');
+    first.pipelineUpdates = rememberModelPipeline([], first.values.Models, 'Direct');
+    first.keyUpdates.DeepSeek = 'synthetic-first-key';
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first);
+    await write.started;
+
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Appearance.TextSizePoints = 18;
+    second.pipelineUpdates = rememberModelPipeline([], defaultModels('Groq'), 'Direct');
+    second.keyUpdates.Groq = 'synthetic-second-key';
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: second.session });
+    f.applyShortcuts.mockClear();
+    await expect(f.controller.saveSettings(second)).resolves.toBe('busy');
+    expect(f.save).toHaveBeenCalledOnce();
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true });
+
+    write.resolve();
+    await saving;
+    expect(f.controller.getState().settingsKeyPresence).toMatchObject({ OpenAI: true, DeepSeek: true, Groq: false });
+    await f.controller.saveSettings(second);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, appearance: { TransparencyPercent: 35, TextSizePoints: 18 } });
+    expect(f.save).toHaveBeenCalledTimes(2);
+    const saved = f.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: defaultModels('DeepSeek'), PipelineMode: 'Direct', Capture: { Modifiers: 2, Key: 81 },
+      ApiKey: 'synthetic-first-key', ProviderKeys: { OpenAI: 'synthetic-key', DeepSeek: 'synthetic-first-key', Groq: 'synthetic-second-key' } });
+    expect(modelPipeline(saved.ModelPipelines, defaultModels('DeepSeek'))).toBe('Direct');
+    expect(modelPipeline(saved.ModelPipelines, defaultModels('Groq'))).toBe('Direct');
+    expect(f.applyShortcuts).toHaveBeenCalledExactlyOnceWith(saved, false, f.controller.onAction);
+    expect(f.run).not.toHaveBeenCalled();
+  });
+  it('retains independent model edits and their model-specific pipelines when a newer draft saves', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    const originalModel = first.values.Models!;
+    first.values.Models = { ...originalModel, AnswerModel: 'gpt-synthetic-answer' };
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first);
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Models = { ...second.values.Models!, VisionModel: 'gpt-synthetic-vision' };
+    second.pipelineUpdates = rememberModelPipeline([], second.values.Models, 'Direct');
+
+    write.resolve();
+    await saving;
+    await f.controller.saveSettings(second);
+    const saved = f.save.mock.calls[1]![0];
+    expect(saved).toMatchObject({ Models: { AnswerModel: 'gpt-synthetic-answer', VisionModel: 'gpt-synthetic-vision' }, PipelineMode: 'Thorough' });
+    expect(modelPipeline(saved.ModelPipelines, originalModel)).toBe('Direct');
+    expect(modelPipeline(saved.ModelPipelines, saved.Models!)).toBe('Thorough');
+  });
+  it('rejects an incompatible screen model inherited by a stale Settings retry before registering or writing', async () => {
+    const f = fixture();
+    const flash = defaultModels('DeepSeek');
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.Models = { ...flash, VisionModel: 'DEEPSEEK-V4-PRO' };
+    first.keyUpdates.DeepSeek = 'synthetic-deepseek-key';
+    first.pipelineUpdates = rememberModelPipeline([], flash, 'Direct');
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(settingsDraftSchema.parse(first));
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Models = flash;
+    second.modelEdits = ['Provider'];
+    second.pipelineUpdates = rememberModelPipeline([], flash, 'Thorough');
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: second.session });
+    write.resolve();
+    await expect(saving).resolves.toBe('saved');
+    const committed = f.controller.getState();
+    f.applyShortcuts.mockClear();
+
+    await expect(f.controller.saveSettings(settingsDraftSchema.parse(second))).rejects.toMatchObject({ code: 'INVALIDMODEL' });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+    expect(f.save).toHaveBeenCalledOnce();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true,
+      settingsModels: first.values.Models, settingsModelPipelines: committed.settingsModelPipelines });
+
+    second.modelEdits.push('VisionModel');
+    await expect(f.controller.saveSettings(settingsDraftSchema.parse(second))).resolves.toBe('saved');
+    expect(f.save.mock.calls[1]![0]).toMatchObject({ Models: flash, PipelineMode: 'Thorough' });
+  });
+  it('waits for shortcut rollback and keeps a newer draft and recording active after a write failure', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    const answering = f.controller.command({ type: 'submit', question: 'Synthetic question', includeScreenshot: false });
+    f.outcome.resolve({ text: 'Retained answer', requestId: 'synthetic' });
+    await answering;
+    await f.controller.command({ type: 'settings' });
+    const first = f.controller.getSettingsDraft();
+    first.values.InputShortcut = { Modifiers: 2, Key: 81 };
+    first.keyUpdates.OpenAI = 'synthetic-rejected-key';
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(first).catch((error: unknown) => error);
+    await write.started;
+
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    const second = f.controller.getSettingsDraft();
+    second.values.Appearance.TextSizePoints = 18;
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: second.session });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session: second.session, focusRevision: f.controller.getState().settingsFocusRevision });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: first.values.InputShortcut }), true, f.controller.onAction);
+
+    const restoreStarted = deferred<void>();
+    const restore = deferred<void>();
+    f.applyShortcuts.mockImplementationOnce(() => { restoreStarted.resolve(); return restore.promise; });
+    write.reject(new Error('private storage failure'));
+    await restoreStarted.promise;
+    const previous = defaultSettings('synthetic-key');
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.objectContaining({ InputShortcut: previous.InputShortcut }), true, f.controller.onAction);
+    const registrations = f.applyShortcuts.mock.calls.length;
+    const lateStop = f.controller.command({ type: 'recordShortcut', recording: false, session: first.session, focusRevision: f.controller.getState().settingsFocusRevision });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: false, session: first.session });
+    await expect(f.controller.saveSettings(second)).resolves.toBe('busy');
+    expect(f.save).toHaveBeenCalledOnce();
+    restore.resolve();
+    expect(await saving).toMatchObject({ code: 'SAVEFAILED' });
+    await lateStop;
+    expect(f.applyShortcuts).toHaveBeenCalledTimes(registrations);
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, answer: 'Retained answer', error: null,
+      shortcuts: { input: previous.InputShortcut } });
+
+    await f.controller.command({ type: 'recordShortcut', recording: false, session: second.session, focusRevision: f.controller.getState().settingsFocusRevision });
+    await f.controller.saveSettings(second);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, answer: 'Retained answer' });
+    expect(f.save.mock.calls[1]![0]).toMatchObject({ ApiKey: 'synthetic-key', InputShortcut: previous.InputShortcut, Appearance: { TextSizePoints: 18 } });
+  });
+  it('leaves the active draft available to retry after shortcut registration rejects the candidate', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Capture = { Modifiers: 2, Key: 81 };
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: draft.session });
+    const previous = f.controller.getState().shortcuts;
+    f.applyShortcuts.mockRejectedValueOnce(new Error('Synthetic occupied binding'));
+    await expect(f.controller.saveSettings(draft)).rejects.toThrow('Synthetic occupied binding');
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.controller.getState()).toMatchObject({ surface: 'settings', settingsDirty: true, shortcuts: previous });
+    await f.controller.saveSettings(draft);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', settingsDirty: false, shortcuts: { capture: draft.values.Capture } });
+  });
+  it('publishes recovery without writing when native registration cannot restore the previous shortcuts', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: f.controller.getState().settingsSession });
+    f.applyShortcuts.mockRejectedValueOnce(new ShortcutRestoreError('Synthetic native restore failure'));
+
+    await expect(f.controller.saveSettings(f.controller.getSettingsDraft())).resolves.toBe('shortcut-restore-failed');
+    expect(f.save).not.toHaveBeenCalled();
+    expect(f.states.at(-1)).toMatchObject({ surface: 'settings', settingsDirty: true,
+      shortcutRecovery: { code: 'SHORTCUTS-RESTOREFAILED', message: expect.stringContaining('Restart SC') } });
+  });
+  it('publishes shortcut recovery when the failed save belongs to an earlier Settings draft', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const draft = f.controller.getSettingsDraft();
+    draft.values.Appearance.TextSizePoints = 18;
+    const write = f.delaySave();
+    const saving = f.controller.saveSettings(draft);
+    await write.started;
+    await f.controller.command({ type: 'showInput' });
+    await f.controller.command({ type: 'settings' });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: f.controller.getState().settingsSession });
+    f.applyShortcuts.mockRejectedValueOnce(new Error('private restore failure'));
+    write.reject(new Error('private write failure'));
+    expect(await saving).toBe('shortcut-restore-failed');
+    expect(f.states.at(-1)).toMatchObject({ surface: 'settings', settingsDirty: true, error: null, appearance: { TextSizePoints: 11 },
+      shortcutRecovery: { code: 'SHORTCUTS-RESTOREFAILED', message: expect.stringContaining('Restart SC') } });
+    expect(JSON.stringify(f.controller.getState())).not.toContain('private restore failure');
+    await f.controller.saveSettings(f.controller.getSettingsDraft());
+    expect(f.controller.getState().shortcutRecovery).toBeNull();
   });
   it('keeps failed saves dirty and clears the update guard only after a successful save', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
-    await f.controller.command({ type: 'settingsDraftChanged', dirty: true });
     const draft = f.controller.getSettingsDraft(); draft.values.CustomInstruction = 'Synthetic changed preference';
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session: draft.session });
     f.save.mockRejectedValueOnce(new Error('synthetic storage failure'));
     await expect(f.controller.saveSettings(draft)).rejects.toMatchObject({ code: 'SAVEFAILED' });
     expect(f.controller.getState().settingsDirty).toBe(true); expect(f.controller.canInstallUpdate()).toBe(false);
     await f.controller.saveSettings(draft); await f.controller.command({ type: 'settings' });
     expect(f.controller.getState().settingsDirty).toBe(false); expect(f.controller.canInstallUpdate()).toBe(true);
   });
-  it('blocks update restart while a shortcut is being recorded', async () => {
+  it('keeps the full shortcut set when a recording start reaches hidden Settings', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const session = f.controller.getState().settingsSession;
+    await f.controller.command({ type: 'toggleVisibility' });
+    await f.controller.onWindowBlur();
+    f.applyShortcuts.mockClear();
+
+    await f.controller.command({ type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision });
+    await f.controller.command({ type: 'settingsDraftChanged', dirty: true, session });
+    expect(f.controller.getState()).toMatchObject({ visible: false, settingsDirty: true });
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    await f.controller.command({ type: 'toggleVisibility' });
+    await f.controller.command({ type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), true, expect.any(Function));
+    await f.controller.onWindowBlur();
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), false, expect.any(Function));
+  });
+  it('drops a recording start when visibility changes before its registration settles', async () => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    const session = f.controller.getState().settingsSession;
+    const start = { type: 'recordShortcut', recording: true, session, focusRevision: f.controller.getState().settingsFocusRevision } as const;
+    f.applyShortcuts.mockClear();
+
+    const queued = f.controller.command(start);
+    await Promise.all([queued, f.controller.command({ type: 'toggleVisibility' })]);
+    expect(f.controller.getState().visible).toBe(false);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    const hidden = f.controller.command(start);
+    await Promise.all([hidden, f.controller.command({ type: 'toggleVisibility' })]);
+    expect(f.controller.getState().visible).toBe(true);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+  });
+  it.each(['window blur', 'refocus', 'hide and show'] as const)('rejects recording from a previous focus after %s', async transition => {
+    const f = fixture();
+    await f.controller.initialize();
+    await f.controller.command({ type: 'settings' });
+    f.host.isFocused.mockReturnValue(true);
+    const { settingsSession: session, settingsFocusRevision: focusRevision } = f.controller.getState();
+    const start = { type: 'recordShortcut', recording: true, session, focusRevision } as const;
+    f.applyShortcuts.mockClear();
+    if (transition === 'hide and show') {
+      const queued = f.controller.command(start);
+      await Promise.all([queued, f.controller.command({ type: 'toggleVisibility' }), f.controller.command({ type: 'toggleVisibility' })]);
+    } else {
+      f.host.isFocused.mockReturnValue(false);
+      await f.controller.onWindowBlur();
+      if (transition === 'refocus') f.host.isFocused.mockReturnValue(true);
+    }
+    await f.controller.command(start);
+    expect(f.applyShortcuts).not.toHaveBeenCalled();
+
+    f.host.isFocused.mockReturnValue(true);
+    await f.controller.command({ ...start, focusRevision: f.controller.getState().settingsFocusRevision });
+    await f.controller.command({ ...start, recording: false });
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), true, f.controller.onAction);
+    await f.controller.onWindowBlur();
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.anything(), false, f.controller.onAction);
+  });
+  it('blocks update restart while recording and releases shortcuts on native window blur', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
-    await f.controller.command({ type: 'recordShortcut', recording: true }); expect(f.controller.canInstallUpdate()).toBe(false);
-    await f.controller.command({ type: 'recordShortcut', recording: false }); expect(f.controller.canInstallUpdate()).toBe(true);
+    const { settingsSession } = f.controller.getState();
+    await f.controller.command({ type: 'recordShortcut', recording: true, session: settingsSession, focusRevision: f.controller.getState().settingsFocusRevision });
+    expect(f.controller.canInstallUpdate()).toBe(false);
+    await f.controller.onWindowBlur();
+    expect(f.applyShortcuts).toHaveBeenLastCalledWith(expect.any(Object), false, f.controller.onAction);
+    expect(f.controller.canInstallUpdate()).toBe(true);
   });
   it('opens usable input on activation without an answer', async () => {
     const f = fixture(); f.controller.restore(); await f.controller.initialize();
@@ -345,7 +677,7 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.command({ type: 'settings' }); await f.controller.command({ type: 'toggleVisibility' });
     await f.controller.command({ type: 'settings' });
     expect(f.platform.setOwnedDialogsVisible).toHaveBeenLastCalledWith(expect.any(Buffer), true);
-    await f.controller.discardSettings(); expect(f.platform.closeOwnedDialogs).toHaveBeenCalled();
+    await f.controller.discardSettings(f.controller.getState().settingsSession); expect(f.platform.closeOwnedDialogs).toHaveBeenCalled();
   });
   it('defers Settings during capture and retains the answer behind Settings', async () => {
     const f = fixture(); await f.controller.initialize();
@@ -354,7 +686,8 @@ describe('production lifecycle with injected native boundaries', () => {
     await vi.waitFor(() => expect(f.run).toHaveBeenCalled()); expect(f.controller.getState().surface).toBe('settings');
     f.outcome.resolve({ text: 'Retained result', requestId: 'synthetic' }); await pending;
     expect(f.controller.getState()).toMatchObject({ surface: 'settings', answer: 'Retained result' });
-    await f.controller.discardSettings(); expect(f.controller.getState()).toMatchObject({ surface: 'answer', answer: 'Retained result' });
+    await f.controller.discardSettings(f.controller.getState().settingsSession);
+    expect(f.controller.getState()).toMatchObject({ surface: 'answer', answer: 'Retained result' });
   });
   it('exposes key presence only and rolls back shortcuts when Save fails', async () => {
     const f = fixture(); await f.controller.initialize(); await f.controller.command({ type: 'settings' });
