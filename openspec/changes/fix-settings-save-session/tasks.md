@@ -4,7 +4,7 @@
 
 - [x] 1.1 Reproduce the delayed write, global input and newer dirty draft through the production controller, then pass the same test with session-owned completion. Exercise leaving Settings and the renderer's late completion as well.
 - [x] 1.2 Verify that overlapping saves leave preferences and keys intact, and that rejected shortcuts, write failures and rollback preserve draft and answer state. Document Save and retry behavior in the user guide.
-- [ ] 1.3 Run the affected desktop suites, `npm --prefix desktop run verify`, the built Astryx check, documentation checks and strict OpenSpec validation. Obtain independent standards and acceptance review of the final diff and publish the source PR for [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59).
+- [x] 1.3 Run the affected desktop suites, `npm --prefix desktop run verify`, the built Astryx check, documentation checks and strict OpenSpec validation. Obtain independent standards and acceptance review of the final diff and publish the source PR for [#59](https://github.com/Ziyadin23/ScreenCompanion/issues/59).
 
 ## 2. Target qualification and local handoff
 
@@ -146,6 +146,8 @@
 ## Integrated Windows candidate on 22 November 2026
 
 The beta.16 application at `e85a863` contains Settings revision `4003e5d`. Independent checks reproduced four defects on the earlier PR head and passed all 11 scenarios on this revision. The integrated host run with UI fixtures from `bae908a` passed 1,336 tests. Windows qualification includes delayed Save and Back, shortcut contention, protected dialogs, retained Question and answer state, encrypted readback and the named recorder check. The operator owns the Windows evidence and copied beta handoff. [Settings PR](https://github.com/Ziyadin23/ScreenCompanion/pull/123) and [integrated qualification](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
+
+Independent standards and acceptance review passed on the Settings PR head `4003e5d` on 22 November. The reviewer checked the renderer, preload, IPC, controller, shortcut rollback, diagnostics and storage. On that exact head, 1,329 portable tests, 11 independent scenarios and 35 compact-panel Chromium cases passed. The built Astryx check had 19 passes and two existing theme-font warnings. Both hosted runs passed all five jobs. The combined source also passed the documentation and strict OpenSpec checks. The two supplemental Windows Save and Back cases have been prepared for task 2.1.
 
 ## Workflow follow-up
 
