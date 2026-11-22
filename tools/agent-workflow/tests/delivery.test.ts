@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import fsPromises from 'node:fs/promises';
+import { syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -213,6 +215,30 @@ async function realFixture(t: { after(fn: () => void): void }) {
     { execute: async () => value, reconcile: async () => null });
   return { ...fixtureState, head, version, source, target, request, proof, recordProof };
 }
+
+test('handoff distinguishes a staged ZIP lost before open from malformed contents', { timeout: 5000 }, async t => {
+  const { store, manifest, source, version, target, request, recordProof } = await realFixture(t);
+  await recordProof();
+  const path = join(source, `SC-v${version}.zip`), original = readFileSync(path);
+  const open = fsPromises.open;
+  let changeStagedFile = () => rmSync(path);
+  // Provenance hashing uses streams. Change only this temporary ZIP on its subsequent validation open.
+  const hook = t.mock.method(fsPromises, 'open', (...args: Parameters<typeof open>) => {
+    if (args[0] === path) changeStagedFile();
+    return open(...args);
+  });
+  syncBuiltinESMExports();
+  try {
+    await assert.rejects(handoffBeta(store, manifest.id, request), { code: 'ENOENT', syscall: 'open', path });
+    writeFileSync(path, original);
+    changeStagedFile = () => writeFileSync(path, 'damaged ZIP');
+    await assert.rejects(handoffBeta(store, manifest.id, request), { code: 'invalid_archive' });
+    assert.deepEqual(readdirSync(target), []);
+  } finally {
+    hook.mock.restore();
+    syncBuiltinESMExports();
+  }
+});
 
 test('real adapter needs exact observed qualification and preserves older delivery files', async t => {
   const { temp, store, manifest, head, version, source, target, request, proof, recordProof } = await realFixture(t);
