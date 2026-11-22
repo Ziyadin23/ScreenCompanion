@@ -145,6 +145,8 @@ jobs:
       - run: npm run native:build
       - name: Verify legacy vault interoperability
         run: npx vitest run --config vitest.windows.config.ts
+      - name: Build the developer preview before testing its exclusion from the Windows package
+        run: npm exec -- vite build --config vite.preview.config.ts
       - run: npm run package:win
       - run: npm run package:zip
       - name: Test portable ZIP verification

@@ -64,12 +64,15 @@ Windows packages retain English (`en-US`) and Russian (`ru`) Chromium locale
 resources. Question and answer text can use other languages. Renderer libraries
 are included in Vite's production bundles; Windows-specific file exclusions omit
 their redundant `node_modules` copies while retaining the main-process dependency
-graph, native bridge, Electron runtime and licensing. Keep these exclusions under
-`build.win` together with the explicit `out/**/*` and `package.json` includes.
-Both Windows package commands check the resulting `app.asar` for its three
-expected top-level entries and the compiled main, preload and renderer entry
-points. Validate dependency contents and matched control/optimized package sizes
-as part of qualification.
+graph, native bridge, Electron runtime and licensing. The Windows application
+file list includes `package.json` and the compiled `out/main`, `out/preload`
+and `out/renderer` trees. Keep the broader `out/**/*` rule in the other
+platform file lists because electron-builder also collects shared matches.
+Both Windows package commands check that
+`app.asar` contains only `package.json`, `node_modules` and `out` at the root
+and only the three production directories under `out`. They also check that
+each entry point contains data. Validate dependency contents and matched
+control/optimized package sizes as part of qualification.
 
 ## Local beta handoff
 
