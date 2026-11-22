@@ -205,11 +205,11 @@ export async function handoffBeta(store: RunStore, runId: string, request: BetaR
   const validateSource = async () => {
     for (const name of sourceNames) if (await fileHash(join(request.sourceDirectory, name)) !== request.source.digests[name])
       throw new WorkflowError('invalid_source', 'Artifact hash disagrees with source provenance.');
-    try {
-      await exactArchive(join(request.sourceDirectory, sourceNames[1]!), {
-        [sourceNames[0]!]: request.source.digests[sourceNames[0]!]!, 'README.txt': request.source.digests['README.txt']!
-      });
-    } catch { throw new WorkflowError('invalid_archive', 'Portable ZIP does not match the exact EXE and README.'); }
+    await exactArchive(join(request.sourceDirectory, sourceNames[1]!), {
+      [sourceNames[0]!]: request.source.digests[sourceNames[0]!]!, 'README.txt': request.source.digests['README.txt']!
+    }, {
+      invalidContentError: () => new WorkflowError('invalid_archive', 'Portable ZIP does not match the exact EXE and README.')
+    });
   };
   await validateSource();
   const transfer = async (): Promise<BetaReceipt> => {

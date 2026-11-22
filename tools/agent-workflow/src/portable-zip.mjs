@@ -30,9 +30,10 @@ function regularFileAttributes(attributes) {
 /** Verify the two root entries, their ZIP32 records and their uncompressed SHA-256 digests.
  * @param {string} path
  * @param {Record<string, string>} expected
- * @param {{allowFileAttributes?: boolean}} [options] The Windows handoff requires zero external attributes.
+ * @param {{allowFileAttributes?: boolean, invalidContentError?: () => Error}} [options]
+ * The handoff requires zero external attributes and maps content errors after opening the file.
  */
-export async function exactArchive(path, expected, { allowFileAttributes = false } = {}) {
+export async function exactArchive(path, expected, { allowFileAttributes = false, invalidContentError } = {}) {
   const handle = await open(path, 'r');
   try {
     const { size } = await handle.stat();
@@ -111,6 +112,8 @@ export async function exactArchive(path, expected, { allowFileAttributes = false
     spans.sort((a, b) => a[0] - b[0]);
     if (cursor !== length || spans[0]?.[0] !== 0 || spans[1]?.[0] !== spans[0][1] || spans[1]?.[1] !== start)
       throw new Error('ZIP directory has extra content.');
+  } catch (error) {
+    throw invalidContentError ? invalidContentError() : error;
   } finally {
     await handle.close();
   }
