@@ -4,7 +4,7 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. Read its
 version from `desktop/package.json` and publication status from the
-[README](../README.md#release-status). The current source version is 0.5.0-beta.14 and is unpublished. This candidate is reserved for [Windows package size optimization (#84)](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and remains undelivered. Earlier beta.10–beta.13 candidates retain their original source and evidence, including the separate [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63). Version 0.5.0-beta.6 was published as a
+[README](../README.md#release-status). The current source version is 0.5.0-beta.16 and is unpublished. The latest verified local Windows handoff combines the Settings and package fixes. The installer, portable EXE, ZIP and README passed copied-byte verification. [Beta.16 Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22). The frozen beta.14 and beta.15 builds retain their original package holds. Earlier beta.10–beta.13 candidates retain their original source and evidence, including the separate [Astryx runtime qualification (#63)](https://github.com/Ziyadin23/ScreenCompanion/issues/63). Version 0.5.0-beta.6 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6).
 Version 0.5.0-beta.4 was published as a
 [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4)
@@ -36,7 +36,7 @@ for the window, tray and renderer in the application bundles.
    version; update operational instructions and current-status text against the
    package version and README release status, preserving dated evidence for
    earlier builds.
-3. On Windows x64, install Node.js 22.12+, Visual Studio C++ Build Tools and the
+3. On Windows x64, install Node.js 22.13 or later, Visual Studio C++ Build Tools and the
    Windows SDK. From `desktop/`, run:
 
    ```powershell
@@ -64,12 +64,15 @@ Windows packages retain English (`en-US`) and Russian (`ru`) Chromium locale
 resources. Question and answer text can use other languages. Renderer libraries
 are included in Vite's production bundles; Windows-specific file exclusions omit
 their redundant `node_modules` copies while retaining the main-process dependency
-graph, native bridge, Electron runtime and licensing. Keep these exclusions under
-`build.win` together with the explicit `out/**/*` and `package.json` includes.
-Both Windows package commands check the resulting `app.asar` for its three
-expected top-level entries and the compiled main, preload and renderer entry
-points. Validate dependency contents and matched control/optimized package sizes
-as part of qualification.
+graph, native bridge, Electron runtime and licensing. The Windows application
+file list includes `package.json` and the compiled `out/main`, `out/preload`
+and `out/renderer` trees. Keep the broader `out/**/*` rule in the other
+platform file lists because electron-builder also collects shared matches.
+Both Windows package commands check that
+`app.asar` contains only `package.json`, `node_modules` and `out` at the root
+and only the three production directories under `out`. They also check that
+each entry point contains data. Validate dependency contents and matched
+control/optimized package sizes as part of qualification.
 
 ## Local beta handoff
 

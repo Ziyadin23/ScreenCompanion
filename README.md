@@ -21,12 +21,13 @@ own API key. Provider usage charges apply.
 | --- | --- | --- |
 | Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.14** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source, unpublished | **0.5.0-beta.16** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Current source includes the new setup and Settings interface**, separate
 text-only and text-with-screenshot sends, and Thorough/Direct pipeline preferences
 for each answer model. The first-launch service list keeps wheel scrolling inside
-the open menu. A new runnable beta with this combined interface still
+the open menu. Settings keeps an active instruction editor available while it
+loads a newer saved mode. A new runnable beta with this combined interface still
 needs its final Windows UI, packaged-startup and recorder checks. See the
 [current verification gates](docs/VERIFICATION.md#current-candidate-and-open-gates).
 
@@ -123,8 +124,17 @@ Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance
 scale with the renderer's default font size. A pale outline marks keyboard focus as you press **Tab** or
 **Shift+Tab**. The five Settings categories adapt to a narrow window, with Save
-and Back kept visible at the bottom. Panel appearance changes affect the answer
+and Back kept visible at the bottom. Settings keeps validation and shortcut
+recovery messages readable together in a short window. Panel appearance changes affect the answer
 panel and its preview while Settings keeps its readable palette.
+
+In current source, a Settings save that finishes after you switch surfaces
+keeps Question or a newer Settings draft open. The API key field keeps your
+edit for the service named in its label. A retry keeps the saved settings
+you leave untouched. If focus stays on **Try loading again**, a successful retry
+brings the focused page heading into view. Back discards its draft and restores
+saved shortcuts when they are available. If recovery fails, the panel tells you
+to restart SC. Small wheel movements scroll a compact Answer in both directions.
 
 In the current source, Escape closes the setup service menu first and cancels
 idle setup when the menu is closed. Setup stays open while Save is pending.
@@ -137,7 +147,7 @@ In Settings:
 - **Models & API** keeps provider keys, answer models and screenshot pipelines
   together; expand advanced controls when needed.
 - **Commands** shows control help; **Updates** manages installed-copy updates.
-- **Save** applies changes; **Back** discards them.
+- **Save** applies changes. If an earlier save is finishing, wait and try **Save** again. **Back** discards the current draft.
 
 See the [user guide](docs/USER_GUIDE.md) for full controls. For failed requests,
 use the panel's diagnostic code and report ID with the [troubleshooting guide](docs/USER_GUIDE.md#diagnose-a-failure).

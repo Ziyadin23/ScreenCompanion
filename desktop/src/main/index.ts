@@ -8,7 +8,7 @@ import { createLinuxCryptor, createSettingsStore, SettingsError, validateSetting
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
 import { createDiagnostics, AppError } from './diagnostics';
-import { commandSchema, colorSchema, settingsDraftSchema, setupRequestSchema, updateActionSchema } from './validation';
+import { commandSchema, colorSchema, settingsDraftSchema, settingsSessionSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
 import { createPortalCapture } from './linux-capture';
@@ -79,7 +79,7 @@ function hidePanel(): void {
 function measurePanel(state: AppState): void {
   if (!window || !readyToShow || !isPanel(state.surface) || manualPanelSize || state.busy) return;
   const content = state.error ? `${state.error.message}\n${state.error.hint}\n${state.error.code}\n${state.error.reportId}` : state.answer;
-  const identity = `${state.surface}:${state.appearance.TextSizePoints}:${content}`;
+  const identity = `${state.surface}:${state.appearance.TextSizePoints}:${Boolean(state.shortcutRecovery)}:${content}`;
   if (identity === measuredContent) return;
   measuredContent = identity;
   const revision = ++measurement;
@@ -176,7 +176,7 @@ function bindIpc(): void {
     command: value => controller!.command(commandSchema.parse(value)),
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
-    discardSettings: () => controller!.discardSettings(),
+    discardSettings: value => controller!.discardSettings(settingsSessionSchema.parse(value)),
     chooseColor: value => controller!.chooseColor(colorSchema.parse(value)),
     update: value => updates!.action(updateActionSchema.parse(value))
   };
@@ -253,7 +253,7 @@ async function boot(): Promise<void> {
     const size: PanelSize = { Width: Math.round(panelBounds.width * scale), Height: Math.round(panelBounds.height * scale) };
     void store.saveWindowSize(size);
   });
-  window.on('blur', () => { void controller?.command({ type: 'recordShortcut', recording: false }); });
+  window.on('blur', () => { void controller?.onWindowBlur(); });
   try {
     tray = new Tray(trayImage(false)); tray.setToolTip('SC');
     tray.setContextMenu(Menu.buildFromTemplate([

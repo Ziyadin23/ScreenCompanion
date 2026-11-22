@@ -9,6 +9,11 @@ export const SHORTCUT_FIELDS = [
   { action: 'input', field: 'InputShortcut', label: 'Type a question' }
 ] as const;
 export type ShortcutField = typeof SHORTCUT_FIELDS[number]['field'];
+export type ShortcutBindings = Record<ShortcutField, HotkeyBinding>;
+
+export function shortcutsByAction(bindings: ShortcutBindings): Record<AppAction, HotkeyBinding> {
+  return Object.fromEntries(SHORTCUT_FIELDS.map(({ action, field }) => [action, { ...bindings[field] }])) as Record<AppAction, HotkeyBinding>;
+}
 
 const KEY_NAMES: Record<number, string> = {
   8: 'Backspace', 9: 'Tab', 13: 'Enter', 16: 'Shift', 17: 'Ctrl', 18: 'Alt', 19: 'Pause',

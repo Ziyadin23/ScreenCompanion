@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../../src/contracts/defaults';
-import { validBinding, validateShortcuts } from '../../src/platform/shortcuts';
+import { ShortcutRestoreError, validBinding, validateShortcuts } from '../../src/platform/shortcuts';
 import type { WindowsPlatform } from '../../src/contracts';
 
 const mock = vi.hoisted(() => ({ load: vi.fn(), create: vi.fn(), callback: undefined as undefined | ((event: { type: string; action?: string; delta?: number }) => void) }));
@@ -61,6 +61,10 @@ describe('native platform boundary (injected addon; no Windows runtime claim)', 
     native.applyShortcuts!.mockImplementationOnce(() => { throw new Error('Windows rejected a shortcut.'); });
     await expect(platform.applyShortcuts(defaultSettings('synthetic'), false, replacement)).rejects.toThrow();
     mock.callback?.({ type: 'action', action: 'capture' }); expect(previous).toHaveBeenCalledWith('capture'); expect(replacement).not.toHaveBeenCalled();
+  });
+  it('distinguishes a native failure to restore the previous shortcut set', async () => {
+    native.applyShortcuts!.mockImplementationOnce(() => { throw new Error('Could not restore the previous shortcuts. Restart SC.'); });
+    await expect(platform.applyShortcuts(defaultSettings('synthetic'), false, vi.fn())).rejects.toBeInstanceOf(ShortcutRestoreError);
   });
   it('rejects duplicates/reserved keys before loading native code', async () => {
     const settings = defaultSettings('synthetic'); settings.Capture = { ...settings.Visibility };
