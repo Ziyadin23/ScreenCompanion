@@ -11,9 +11,9 @@
 ## 2. Verification and delivery
 
 - [x] 2.1 Run desktop verify with the host resource lock, the affected tests, and documentation/OpenSpec checks. Record the candidate, counts, exit statuses and environment.
-- [ ] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
-- [ ] 2.3 After lab-owner release, run the affected Windows native, vault and UI checks against the integrated candidate, including the two same-profile restarts. Verify packaged startup with an isolated profile.
-- [ ] 2.4 Deliver a newly versioned, verified runnable beta and verify the transfer copy. [Local beta handoff](../../../docs/PUBLISHING.md#local-beta-handoff)
+- [x] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
+- [x] 2.3 After lab-owner release, run the affected Windows native, vault and UI checks against the integrated candidate, including the two same-profile restarts. Verify packaged startup with an isolated profile.
+- [x] 2.4 Deliver a newly versioned, verified runnable beta and verify the transfer copy. [Local beta handoff](../../../../docs/PUBLISHING.md#local-beta-handoff)
 
 ## Planning checkpoint
 
@@ -41,23 +41,23 @@ On Fedora, the full desktop verification passed 1,259 tests in 37 files with one
 
 ## Combined verification on 20 November 2026
 
-The [local integration with #19](../../../docs/VERIFICATION.md#combined-settings-sizing-and-manual-resize)
+The [local integration with #19](../../../../docs/VERIFICATION.md#combined-settings-sizing-and-manual-resize)
 passed the portable resize, file and same-profile restore checks at scales 1
 and 1.25. The two isolated Hyprland profiles saved and restored the result of
 interactive drags to B and back to A after Settings. The merge awaits
 independent review. Tasks 2.3 and 2.4 remain open.
 
-The [#19 geometry lifecycle correction](../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
+The [#19 geometry lifecycle correction](../../../../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20)
 re-ran the shared resize and restart tests at scales 1 and 1.25. The
 Hyprland fixture also saved an earlier automatic size after one compositor
 resize. Tasks 2.3 and 2.4 remain open for Windows runtime and beta delivery.
 
-The [follow-up #19 correction](../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
+The [follow-up #19 correction](../../../../docs/VERIFICATION.md#hyprland-size-and-tiling-restoration-2026-11-20)
 keeps a compositor-confirmed floating size across rapid Hide and Show. A newer
 confirmed resize takes precedence over an older reply. The shared Windows
 runtime and delivery requirements remain open under tasks 2.3 and 2.4.
 
-The [#19 remap follow-up](../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
+The [#19 remap follow-up](../../../../docs/VERIFICATION.md#hyprland-quit-hidden-settings-and-remap-2026-11-20)
 checks a second real resize to the normal bounds during remap. The test
 confirms the chosen size on the panel, in the file and after restart. An
 Electron-only event at those bounds keeps the earlier confirmed size. The
@@ -87,7 +87,7 @@ receipts and package configuration came from main. New geometry source
 | --- | --- |
 | `VITEST_MAX_WORKERS=1 flock /tmp/sc-20261119-desktop-verify.lock npm --prefix desktop run verify` | Type checking, lint, 1,364 tests in 39 files and production bundles passed. |
 | `npm --prefix desktop test -- --maxWorkers=1 --no-cache tests/main/panel-resize.test.ts tests/main/panel-size.test.ts tests/main/controller.test.ts tests/main/linux-capture.test.ts tests/platform/linux.test.ts tests/storage/settings.test.ts tests/renderer` | 287 tests in ten files passed. Both scales restored A from disk. The cases also covered writes held through Exit and out-of-order compositor replies. |
-| Isolated `node --test --test-concurrency=1 desktop/tests/linux/panel-settings.mjs` inside headless KWin and Hyprland | 22 scenarios and their parent passed. See the [test command](../../../tests/README.md#hyprland-panel-geometry) and [Linux results](../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24). |
+| Isolated `node --test --test-concurrency=1 desktop/tests/linux/panel-settings.mjs` inside headless KWin and Hyprland | 22 scenarios and their parent passed. See the [test command](../../../../tests/README.md#hyprland-panel-geometry) and [Linux results](../../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24). |
 | `node --test desktop/tests/preview/shortcut-recovery.test.mjs` and, from `desktop/`, `node node_modules/@playwright/test/cli.js test --config playwright.preview.config.ts` | 35 Chromium panel and Settings cases and 17 compact setup cases passed. |
 | From `desktop/`, `node_modules/.bin/astryx doctor --built out/renderer` and `node node_modules/@playwright/test/cli.js test --list` | Astryx reported 19 passes and two existing font warnings. Playwright listed all 38 Windows cases in five files. |
 
@@ -131,7 +131,7 @@ also failed only that case. The 125% run passed after the old read resumed.
 These controls used the real temporary file and the focused Vitest filter `-t 'remembers a manual return'`.
 
 This merge also includes source correction `7c5a2d9`. The
-[Linux checkpoint](../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24)
+[Linux checkpoint](../../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24)
 records the direct floating resize before paint and the map-rule controls.
 
 The final desktop tree is `896fce345b57776bc5710108b17828f0176f6d43`.
@@ -183,7 +183,7 @@ doctor reported 19 passes and two existing font warnings. The workflow
 self-test, 144 Markdown files and 650 local links or anchors, 14 strict
 OpenSpec items and `git diff --check origin/main` passed.
 
-The [Linux checkpoint](../linux-platform-support/tasks.md#beta17-map-and-manual-resize-verification)
+The [Linux checkpoint](../../linux-platform-support/tasks.md#beta17-map-and-manual-resize-verification)
 records the real compositor results. Independent review of the replacement
 head, interactive Windows Settings and same-profile answer/input restarts,
 native and vault checks, named recorder, packaged startup and verified transfer
@@ -198,7 +198,7 @@ and uses the established publishing and status headers. The failing
 checked-in-record test and all 22 delivery and policy cases passed after
 the correction. The frozen README and Windows package inputs are identical.
 
-The subsequent [Linux-only behavior correction](../linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply)
+The subsequent [Linux-only behavior correction](../../linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply)
 at `8b8002f` changes the shared main bundle. The active Windows beta.17
 qualification stays on `c7635e5`, with identical README, Windows native
 and test inputs. The two-process Fedora checks also passed 14 Exit cases,
@@ -211,3 +211,40 @@ of the two earlier supported README row labels. The assertion now locates
 the single supported row and compares the entire document after replacing
 only its version cell. The checked-in-record and two ambiguity cases passed
 against each of the three labels (nine checks). The frozen README is intact.
+
+The exact source and test head `8f645860fb1bb081821e51d5d1b06fc6615e82b8`
+passed all five jobs in each hosted workflow. The review of accepted
+Hyprland resizes and the Windows measurements below use the specific
+application sources named in their records.
+[PR checks](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/45356306833)
+and [push checks](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/45356299183).
+
+### Windows target and local handoff
+
+The Windows 11 x64 operator built beta.17 from frozen `c7635e5`.
+Both checked-in pointer regressions passed on the final native bytes.
+Answer and input returned from B to A and reopened at A on the same profile.
+The target passed 54 native checks, nine vault cases with 143 checks,
+seven applicable resize fixture cases and eight real-process Exit cases.
+The last completed size survived a stalled write. When a new process saved
+a different size, releasing the old write kept the new file intact.
+Both the installed and portable applications opened Setup with an empty
+key field. All 23 installed files and 24 live portable files matched their
+packages. Edge recorded ten phases. All nine comparisons showed the app
+locally and the backdrop in the saved video. The installer, portable EXE,
+ZIP and README passed destination readback. Both files inside the ZIP
+matched their separate copies. The operator restored the Windows session
+and released the lab. The result applies to the locally delivered beta.17.
+[Windows qualification](../../../../docs/VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
+
+On 24 November the coordinator accepted both original reviews, the
+independent checks of the corrected source at `8f64586`, the Windows
+qualification and the local handoff. All seven tasks are complete.
+[Final independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#issuecomment-7126321089)
+
+The seven completed tasks are archived here. The desktop-panel specification
+now includes manual return to an earlier programmatic size and automatic
+resizing during a surface change. All 13 active OpenSpec items passed strict
+validation after the sync and archive. The documentation check passed for
+144 Markdown files and 659 local links or anchors. The whitespace check
+against the current main branch passed.

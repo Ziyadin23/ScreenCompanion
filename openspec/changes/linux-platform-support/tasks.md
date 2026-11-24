@@ -2,7 +2,14 @@
 
 [Design](design.md) maps the accepted Linux requirements to the four specs and identifies the existing implementation. Checked tasks below import inspected implementation/evidence; they do not claim fresh runtime verification during this workflow migration. The [Linux verification record](../../../docs/VERIFICATION.md#linux-port-status) owns the recorded outcomes and limits.
 
-## Current continuation — 2026-11-03
+## Current continuation — 2026-11-24
+
+Task 2.6 passed for the Settings-to-answer sizing issue. The corresponding
+Windows beta.17 passed the affected target checks and local delivery.
+Continue the broader Linux qualification at task 2.1. Six groups remain open.
+[Task 2.6 evidence](#native-configure-before-the-first-geometry-reply)
+
+## Earlier continuation — 2026-11-03
 
 - Source merged through PR #23 at `d304f2e`; shared main `74c7ebd` includes PR #24's full beta.7 Windows matrix evidence. A new source merge is not the next task.
 - Six imported/workflow tasks below are complete; all seven Linux qualification groups remain open. Continue at task 2.1. Reuse evidence only for its matching source/candidate/environment; later application changes require affected checks again.
@@ -25,7 +32,7 @@
 - [ ] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
 - [ ] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
-- [ ] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
+- [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
 - [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
@@ -394,7 +401,7 @@ and their parent test with zero skips (exit 0). The November 20–21 results
 above identify the earlier Hyprland version and source.
 
 Task 2.6 stays open for independent review and the Windows Settings, resize
-and recorder checks. The [combined checkpoint](../persist-final-panel-size/tasks.md#source-integration-on-24-november-2026)
+and recorder checks. The [combined checkpoint](../archive/2026-11-24-persist-final-panel-size/tasks.md#source-integration-on-24-november-2026)
 records the host commands and the Windows queue. Task 2.7 retains final
 packaging and the verified numbered beta handoff.
 
@@ -445,7 +452,7 @@ pointer position and a compositor size acknowledgment before button release,
 24 consecutive real drags reached the requested endpoint. The complete suite
 then passed all 30 scenarios and its parent, with zero skips. The product, root
 README and Windows fixtures come from the frozen commit above. The
-[combined handoff](../persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
+[combined handoff](../archive/2026-11-24-persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
 records the size-write checks and open qualifications.
 
 ### Native configure before the first geometry reply
@@ -481,5 +488,14 @@ tree. Both held-sample gestures, ordinary Back, and the automatic-rule
 Back and Save controls passed. The first ordinary Save attempt timed out
 before the compositor reported the requested size. On the targeted repeat,
 both Electron and Hyprland showed 480×144, the file contained 480×144 and
-a fresh process restored it. The Windows and local delivery gates remain
-with the frozen candidate.
+a fresh process restored it.
+
+On 24 November the coordinator accepted the independent source checks and
+the Windows handoff. Task 2.6 is complete. Both Windows surfaces retained
+their last native resize through a fresh launch on the same profile.
+The installed and portable beta.17 packages, the named Edge recording and
+all four destination files passed on frozen Windows source `c7635e5`.
+Hyprland's final native configure correction is `8b8002f`. The other six
+Linux qualification groups remain open.
+[Windows qualification](../../../docs/VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
+and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#issuecomment-7126321089).

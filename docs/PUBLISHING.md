@@ -4,10 +4,11 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.17**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
-Build the Windows beta.17 candidate from `c7635e51aeef3d9a9aae312635adf1f0614084ec`.
+The verified, locally delivered Windows beta.17 was built from
+`c7635e51aeef3d9a9aae312635adf1f0614084ec`.
 The subsequent Linux panel correction changes the shared JavaScript bundle.
 Reserve a new version before building that source for Windows distribution.
-[Candidate handoff](../openspec/changes/persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
+[Local transfer and hashes](VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
 
 Windows beta.16 is the latest public prerelease. It uses the installer, portable EXE and two-file ZIP qualified on Windows 11 x64. The separate `README.txt` asset matches the file inside the ZIP byte for byte. Both contain the prepublication snapshot that lists beta.6 as the public download. The [beta.16 release notes](releases/v0.5.0-beta.16.md) describe the published files and [Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 

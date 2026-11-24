@@ -11,10 +11,11 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-Beta.17 is the local candidate for the panel sizing changes in draft PR
-#122. The active [panel-size tasks](../openspec/changes/persist-final-panel-size/tasks.md)
-record the host checks and the remaining Windows and package qualifications.
-
+Windows beta.17 passed qualification and local delivery from frozen
+panel-size source `c7635e5`. The later Hyprland correction at
+`8b8002f` changes the shared JavaScript bundle.
+See the [Windows results](#beta17-windows-panel-sizing-2026-11-24)
+and [Hyprland results](../openspec/changes/linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply).
 
 The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. The Windows 11 build passed native and vault checks, all 38 UI cases, both supplemental Settings cases, installed and portable startup, locale and Unicode checks, and the named Edge recording. The four Windows handoff files passed destination readback. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [integrated candidate](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
@@ -32,7 +33,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
-| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
+| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | The beta.17 follow-up completed the Settings-to-answer sizing item. The other six [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
@@ -53,6 +54,63 @@ A standard account on Windows 11 x64 updated its installed copy of SC from 0.5.0
 Uninstall exited 0. A fresh postflight matched the starting state for all four protected vault and size paths, the original cache directory identity and contents, installation records and shortcuts. The test processes and temporary scheduler entry were gone. The VM returned to its original powered-off state with its original configuration, disks, snapshots and USB filter.
 
 Three early fixture checks stopped before the first download. Two assumed a different form of the Windows uninstall registration. The third recorded a generic error at the beta.6 application-bridge check. Its last observation identified the setup screen as the active surface, with `ready` false and the updater idle. The exact operation that failed is unknown. The successful retry waited for beta.6 to report that the setup screen was visible before submitting the synthetic setup.
+
+## Beta.17 Windows panel sizing (2026-11-24)
+
+The Windows 11 x64 standard-account run used frozen source
+`c7635e51aeef3d9a9aae312635adf1f0614084ec`. The first package attempt
+stopped when the guest could not resolve the Electron download host. The
+second used the pinned Electron and builder files after checksum verification.
+Both packages passed the inventory check. It compared 23 installed files,
+24 portable files, nine compiled application files in each archive and
+5,532 installer update blocks. The strict checker verified the two-file ZIP.
+
+The target passed 54 native checks, nine Windows vault interoperability
+cases with 143 checks, and all seven Windows cases in the resize fixture.
+The fixture includes both scale models. At 96 DPI, the recorded Settings
+window measured 760×680. Real drags resized the answer from 180×80 to
+249×123 and back, and the input from 180×128 to 249×171 and back.
+The answer kept its final size through tray Exit and the input kept its
+final size through command Exit. Both reopened on the same profile at the
+saved physical size. The two checked-in pointer tests passed with zero
+retries when rerun with the native module from the final package build.
+
+Eight Windows process tests covered ordinary Exit, a delayed final rename,
+an expired rename and a later process taking ownership through both routes.
+A delayed rename finished with the original process still holding the
+per-user mutex. The deliberately stalled tray and command writes reached the
+close deadline in 1,031 ms and 1,030 ms. After the deadline, a new process
+saved 336×178 on the answer route and 336×226 on input. The old rename
+failed with `ENOENT` when released. A further restart restored the size
+written by the new process on both routes.
+
+The per-user installer registered beta.17 and created its two shortcuts.
+The installed application and the portable application both opened Setup
+with an empty key field. The 23 installed files and 24 files extracted
+by the portable wrapper matched their respective package inventories.
+The installer, applications, portable wrapper and uninstaller exited 0.
+
+Edge 158 recorded ten phase markers on one 1920×1080 monitor at 96 DPI.
+All nine paired regions showed the application on the local display and
+the backdrop in the saved VP8 video. Pointer shapes remained visible.
+The recording covered Settings, answer and input, their native resizes and
+the fresh restart. Beta.16 retains its separate full 38-case Windows UI
+result. Physical mixed-DPI checks belong to [issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/12).
+
+The local transfer readback on 24 November verified all four files. The
+ZIP contained exactly the portable EXE and `README.txt`, both identical to
+the separate copies. All ten earlier versioned files retained their hashes.
+The standard-account environment and updater cache were restored, and the
+operator released the lab. The public Windows prerelease is beta.16.
+
+| Local beta.17 file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.17.exe` | 104,561,261 | `4c306d83ce4694016b08ed788140ecd8fdbeff93c8b2398d02010d76b15e4159` |
+| `SC-Setup-v0.5.0-beta.17.exe` | 115,175,136 | `7047322919ac9fb0d35e69780810caa4bdd7ef749a4cf7106e626906c6b6b8cd` |
+| `SC-v0.5.0-beta.17.zip` | 104,286,596 | `333e8b8500f5d54214eda88e723ebd6f41bd66e7f6ee8c3e796c755c1cd8e36e` |
+| `SC-v0.5.0-beta.17-README.txt` | 14,242 | `4b2ee29741e1ce844bd41e717c7843d6cbe0854a697a903c8c0ef2b9ef7d3e6b` |
+
+[Panel-size tasks](../openspec/changes/archive/2026-11-24-persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
 
 ## Beta.16 Windows qualification (2026-11-22)
 
@@ -130,7 +188,7 @@ Host verification passed 1,259 tests in 37 files. Windows 11 x64 build 26200 at 
 
 All 14 distinct protected setup cases passed across three executions. The first execution passed 11 of 14. Two recovery tests required an explicit false ARIA attribute where the toolkit omits it. The idle-exit window closed while Playwright was still sending Escape. A targeted retry passed both storage cases. Its process observer then lost the disposed Playwright object during exit. The final idle-exit retry cached the process handle and verified the exact exit command and exit code. The contrast measurements used Electron's Chromium forced-colors emulation.
 
-The exact source's full Windows UI run discovered 38 cases. It ran with one worker and zero retries and exited 1 after 38.4 minutes. Thirty-six cases passed, including the native color picker, encrypted first-launch relaunch, and both #61 cases. For each #61 surface, the test used real resize input to return from B to programmatic size A. The same profile reopened at A and its vault bytes matched. The busy-main-thread wheel case failed when the stall ended before the fixture sent the native wheel input. The final serial shortcut-recording case did not run. A focused invocation of the same two tests against the same build passed both, exit 0. The first filter invocation found no tests. The later beta.16 run passed the full matrix in one invocation. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [resize qualification owner for #61](../openspec/changes/persist-final-panel-size/tasks.md).
+The exact source's full Windows UI run discovered 38 cases. It ran with one worker and zero retries and exited 1 after 38.4 minutes. Thirty-six cases passed, including the native color picker, encrypted first-launch relaunch, and both #61 cases. For each #61 surface, the test used real resize input to return from B to programmatic size A. The same profile reopened at A and its vault bytes matched. The busy-main-thread wheel case failed when the stall ended before the fixture sent the native wheel input. The final serial shortcut-recording case did not run. A focused invocation of the same two tests against the same build passed both, exit 0. The first filter invocation found no tests. The later beta.16 run passed the full matrix in one invocation. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [resize qualification owner for #61](../openspec/changes/archive/2026-11-24-persist-final-panel-size/tasks.md).
 
 The direct portable beta.15 EXE opened visible setup with a blank key field using an isolated profile. Three further launches exercised `en-US`, `ru` and the English fallback for `de-DE`. Each used unsent synthetic Unicode input and a Settings round trip. All four launches exited 0 and removed their profiles.
 
