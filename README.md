@@ -60,7 +60,7 @@ at different scales still need testing. Windows 10 is outside the support target
    restores the running app.
 
 Installed copies offer **Settings → Updates**. You choose when to download and
-restart. A public GitHub update to beta.16 still needs an installed-client test.
+restart. The published beta.6 installer updated to beta.16 on Windows 11 x64. [Installed update test](docs/VERIFICATION.md#public-windows-update-from-beta6-to-beta16-2026-11-24)
 For portable copies, close SC before replacing the EXE manually.
 Existing ScreenCompanion settings migrate without removing the original encrypted
 file. See [setup and migration](docs/USER_GUIDE.md#setup-and-migration) and
