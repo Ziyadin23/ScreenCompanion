@@ -257,6 +257,13 @@ Escape to restore 404×160. The first tiling command must work without
 further panel input or a test-driven repaint. Refloating must restore
 404×160 and preserve the size file.
 
+Fresh Setup, ordinary Hide and Show, and startup with a saved profile also
+run under a 654×318 floating rule. The test checks automatic fitting for
+Setup and compares the original manual size file through exit and restart.
+On each path a compositor resize issued while the first map snapshot is
+pending must survive restart. Choosing 654×318 manually after the restore
+must also reach disk.
+
 The portable `tests/main/panel-resize.test.ts` fixture holds the repaint,
 remap or compositor snapshot at the relevant point. It checks that a matching
 floating resize reaches disk and returns on a quick Hide and Show. A stale
@@ -266,7 +273,10 @@ fixture also checks a genuine resize to the old normal bounds both during and
 after remap. An Electron-only event at those bounds leaves the confirmed resize
 intact. Exit waits for an outstanding size write within a deadline. The tray
 Exit test holds a compositor reply and checks that capture issued after Exit
-never reaches the synthetic platform boundary.
+never reaches the synthetic platform boundary. Both the tray and command Exit
+hold single-instance ownership during a delayed final rename. A separate case
+passes the quit deadline, starts a successor, and releases the old rename
+after the successor has saved its own size.
 [Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
 
 ## Installed updates

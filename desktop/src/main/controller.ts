@@ -63,6 +63,7 @@ export class ApplicationController {
   private state: AppState;
   private capturing = false;
   private exiting = false;
+  private disposed = false;
   private pendingActivation = false;
   private afterCapture: (() => void)[] = [];
   private cancellation: AbortController | null = null;
@@ -198,7 +199,7 @@ export class ApplicationController {
   }
   async command(command: AppCommand): Promise<void> {
     if (this.exiting) return;
-    if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
+    if (command.type === 'exit') { this.beginShutdown(); this.deps.host.exit(); return; }
     if (this.state.updates.status === 'installing') return;
     if (!this.state.ready && this.vaultState !== 'missing') {
       if (command.type === 'toggleVisibility') this.pendingActivation = true;
@@ -463,10 +464,16 @@ export class ApplicationController {
       getSettingsDraft: async () => this.getSettingsDraft(), saveSettings: draft => this.saveSettings(draft),
       discardSettings: session => this.discardSettings(session), chooseColor: color => this.chooseColor(color) };
   }
-  dispose(): void {
+  beginShutdown(): void {
     if (this.exiting) return;
     this.exiting = true; this.cancellation?.abort(); this.afterCapture.length = 0;
-    this.detachWheel?.(); this.detachWheel = null; this.deps.platform.dispose(); this.settings = null;
+    this.detachWheel?.(); this.detachWheel = null; this.settings = null;
     this.registeredShortcutSettings = null;
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.beginShutdown();
+    this.deps.platform.dispose();
   }
 }

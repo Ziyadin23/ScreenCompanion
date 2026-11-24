@@ -58,6 +58,7 @@ let tray: Tray | null = null;
 let trayIcons: ReturnType<typeof createTrayImages> | undefined;
 let closing = false;
 let waitingForPanelSize = false;
+const panelSizeLifetime = new AbortController();
 const pendingLinuxResizes = new Set<Promise<void>>();
 let panelSizeWrite: Promise<boolean> | null = null;
 let readyToShow = false;
@@ -241,6 +242,16 @@ function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangl
     release();
   })().catch(release);
 }
+async function readLinuxMapGeometry(panel: BrowserWindow, layout: LinuxPanelLayout) {
+  // show() and the first normal-bounds configure can both precede the Wayland map.
+  const deadline = performance.now() + panelPaintTimeout;
+  while (linuxPanelLayout === layout && layout.transition && !closing && !panel.isDestroyed() && panel.isVisible()) {
+    const geometry = await readHyprlandPanelGeometry(panel.getTitle());
+    if (geometry || !process.env.HYPRLAND_INSTANCE_SIGNATURE || performance.now() >= deadline) return geometry;
+    await delay(8);
+  }
+  return null;
+}
 async function readLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelLayout) {
   // A fit or restore must wait for any observed native resize to be confirmed.
   while (linuxPanelLayout === layout && !closing && !panel.isDestroyed() && panel.isVisible()) {
@@ -283,6 +294,7 @@ async function refreshLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelL
   layout.transition = null;
   layout.restorePlacement = null;
   layout.remapBounds = null;
+  layout.mapGeometry = null;
   panelBounds = panel.getBounds();
   layout.placement = geometry?.placement ?? null;
   if (geometry?.placement !== 'floating') return;
@@ -430,7 +442,7 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
       void refreshLinuxPanelLayout(window, linuxPanelLayout);
       window.show();
       // Sample the compositor's map rule before paint or an interactive resize can change the size.
-      if (restorePlacement === 'floating') linuxPanelLayout.mapGeometry ??= readHyprlandPanelGeometry(window.getTitle());
+      linuxPanelLayout.mapGeometry = readLinuxMapGeometry(window, linuxPanelLayout);
       window.webContents.invalidate();
     } else if (linuxPanelLayout) {
       linuxPanelLayout.hideCheck = null;
@@ -482,7 +494,7 @@ async function boot(): Promise<void> {
   if (!await platform.acquireInstance(() => { if (controller) controller.restore(); else activationPending = true; })) { app.quit(); return; }
   if (closing) return;
   platform.startCaptureProtection(); diagnostics.event('PROCESSSTARTED');
-  const store: SettingsStore = preview || captureTest ? createPreviewStore() : createSettingsStore(platform, localData ?? (() => { throw new AppError('PROFILEMISSING', 'The local application settings directory is unavailable.'); })(), { platform: linux ? 'linux' : 'windows' });
+  const store: SettingsStore = preview || captureTest ? createPreviewStore() : createSettingsStore(platform, localData ?? (() => { throw new AppError('PROFILEMISSING', 'The local application settings directory is unavailable.'); })(), { platform: linux ? 'linux' : 'windows', windowSizeSignal: panelSizeLifetime.signal });
   const area = screen.getPrimaryDisplay().workArea;
   window = createWindow({ width: 420, height: 180, x: area.x + Math.max(12, area.width - 500), y: area.y + Math.max(12, area.height - 240),
     resizable: true, minWidth: linux ? 340 : 180, minHeight: linux ? 140 : 80 });
@@ -543,8 +555,6 @@ async function boot(): Promise<void> {
     const atRemapBounds = remapBounds && sameSize(bounds, remapBounds) && bounds.x === remapBounds.x && bounds.y === remapBounds.y;
     if (atRemapBounds && !previousCheck) {
       layout.remapBounds = null;
-      // The first query can precede the Wayland map. Electron's normal-bounds configure gives a second sample.
-      if (restorePlacement === 'floating') layout.mapGeometry = readHyprlandPanelGeometry(panel.getTitle());
       return;
     }
     const order = ++resizeOrder;
@@ -561,7 +571,7 @@ async function boot(): Promise<void> {
         layout.remapBounds = null;
         return;
       }
-      const mapped = restorePlacement === 'floating' ? await layout.mapGeometry : null;
+      const mapped = await layout.mapGeometry;
       if (!geometry || (closing && !waitingForPanelSize) || panel.isDestroyed()) return;
       const current = !closing && panel.isVisible() && isPanel(surface) ? linuxPanelLayout : null;
       const previousPlacement = layout.placement;
@@ -572,7 +582,8 @@ async function boot(): Promise<void> {
       }
       if (restorePlacement === 'tiled') return;
       // Ignore the size applied on map. A distinct native resize can precede the first paint.
-      if (restorePlacement === 'floating' && (mapped?.placement === 'floating' ? sameSize(bounds, mapped) : previousPlacement === null)) return;
+      if (mapped?.placement === 'floating' && sameSize(bounds, mapped)) return;
+      if (transition && !previousPlacement && !mapped) return;
       if (previousPlacement && previousPlacement !== 'floating') {
         // The first floating configure belongs to the mode change. Later resizes have their own snapshots.
         if (current === layout && restorePlacement !== 'floating') void refreshLinuxPanelLayout(panel, layout);
@@ -649,7 +660,7 @@ app.on('before-quit', event => {
   const drainPanelSize = !closing && (pendingLinuxResizes.size > 0 || panelSizeWrite !== null);
   if (!closing) {
     closing = true;
-    updates?.dispose(); controller?.dispose();
+    updates?.dispose(); controller?.beginShutdown();
   }
   if (drainPanelSize) {
     event.preventDefault();
@@ -660,11 +671,15 @@ app.on('before-quit', event => {
       clearTimeout(deadline);
       app.quit();
     };
-    const deadline = setTimeout(finish, panelSizeQuitTimeout);
+    const deadline = setTimeout(() => { panelSizeLifetime.abort(); finish(); }, panelSizeQuitTimeout);
     // Allow pending snapshots to enqueue writes before waiting for the store's serialized writes.
     void Promise.allSettled(pendingLinuxResizes).then(() => panelSizeWrite).then(finish, finish);
     return;
   }
-  platform?.dispose(); tray?.destroy(); tray = null;
+  const releaseInstance = () => { if (controller) controller.dispose(); else platform?.dispose(); };
+  // A timed-out write may still be revoking its temporary file. Keep ownership until it settles or the process ends.
+  if (panelSizeWrite) void panelSizeWrite.then(releaseInstance, releaseInstance);
+  else releaseInstance();
+  tray?.destroy(); tray = null;
 });
 void app.whenReady().then(boot).catch(startupFailure);

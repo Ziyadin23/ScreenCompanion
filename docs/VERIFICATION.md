@@ -11,6 +11,11 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
+Beta.17 is the local candidate for the panel sizing changes in draft PR
+#122. The active [panel-size tasks](../openspec/changes/persist-final-panel-size/tasks.md)
+record the host checks and the remaining Windows and package qualifications.
+
+
 The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. The Windows 11 build passed native and vault checks, all 38 UI cases, both supplemental Settings cases, installed and portable startup, locale and Unicode checks, and the named Edge recording. The four Windows handoff files passed destination readback. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [integrated candidate](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
 The earlier beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`, met the size target. Extra development files in its optimized ASAR blocked beta.14 delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).

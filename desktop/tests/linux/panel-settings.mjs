@@ -622,26 +622,117 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         }
       });
     }
-    for (const action of ['Back', 'Save']) {
+    await t.test('A first-run map size rule leaves automatic sizing enabled', async () => {
+      const profile = 'map-size-rule-setup';
+      try {
+        await setFloatRule(true, [654, 318]);
+        const panel = await setupProduction(profile);
+        await expect.poll(geometry).toEqual([480, 144]);
+        await settledPanelSize(panel);
+        await closeApp();
+        assert.equal(await savedSize(profile), null);
+        await setFloatRule(true);
+        const restarted = await launch(profile);
+        await expect(restarted.getByTestId('question-input')).toBeFocused();
+        await restarted.getByTestId('question-input').press('Escape');
+        await expect.poll(geometry).toEqual([420, 140]);
+        assert.equal(await savedSize(profile), null);
+      } finally {
+        await closeApp();
+        await setFloatRule(true);
+      }
+    });
+    for (const action of ['Back', 'Save', 'Hide and Show', 'startup']) {
       await t.test(`A map size rule on ${action} preserves the last manual size through restart`, async () => {
-        const profile = 'map-size-rule-' + action.toLowerCase();
+        const profile = 'map-size-rule-' + action.toLowerCase().replaceAll(' ', '-');
         const chosen = [530, 238];
         try {
-          const panel = await setupProduction(profile);
+          let panel = await setupProduction(profile);
           await expect.poll(geometry).toEqual([480, 144]);
           await resize(panel, chosen);
           await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
           const before = await sizeFileSnapshot(profile);
           await setFloatRule(true, [654, 318]);
 
-          await editAppearance(panel, action);
+          if (action === 'startup') {
+            await closeApp();
+            panel = await launch(profile);
+            await expect(panel.getByTestId('question-input')).toBeFocused();
+          } else if (action === 'Hide and Show') {
+            await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
+            await expect.poll(() => clients().length).toBe(0);
+            await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
+          } else {
+            await editAppearance(panel, action);
+          }
           await expect.poll(geometry).toEqual(chosen);
+          await settledPanelSize(panel);
           await closeApp();
           assert.deepEqual(await sizeFileSnapshot(profile), before);
 
           await setFloatRule(true);
           await expectRestoredSize(profile, chosen);
         } finally {
+          await closeApp();
+          await setFloatRule(true);
+        }
+      });
+    }
+    for (const action of ['Setup', 'Show', 'startup']) {
+      await t.test(`A native resize during and after the initial restore on ${action} survives restart`, async () => {
+        const profile = 'resize-during-map-' + action.toLowerCase();
+        const hyprctl = join(fixtureBin, 'hyprctl');
+        const marker = join(configHome(profile), 'resize-on-map');
+        try {
+          let panel;
+          if (action !== 'Setup') {
+            panel = await setupProduction(profile);
+            await expect.poll(geometry).toEqual([480, 144]);
+            await resize(panel, [530, 238]);
+            await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 238 });
+            if (action === 'startup') await closeApp();
+            else {
+              await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
+              await expect.poll(() => clients().length).toBe(0);
+            }
+          }
+          await setFloatRule(true, [654, 318]);
+          // Return the actual map snapshot after a second, user-requested compositor size has been applied.
+          const request = legacyConfig ? "resizewindowpixel 'exact 554 252,title:^SC$'" :
+            `'hl.dsp.window.resize({ window = "title:^SC$", x = 554, y = 252, relative = false })'`;
+          await writeFile(hyprctl, `#!/bin/sh
+if [ "$1" = -j ] && [ "$2" = clients ]; then
+  snapshot=$(/usr/bin/hyprctl "$@") || exit 1
+  if [ ! -d "${marker}" ] && printf '%s' "$snapshot" | node -e '
+    const clients = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+    process.exit(clients.some(c => c.mapped && !c.hidden && c.title === "SC" && c.size[0] === 654 && c.size[1] === 318) ? 0 : 1);
+  ' && mkdir "${marker}" 2>/dev/null; then
+    /usr/bin/hyprctl dispatch ${request} > "${marker}/reply"
+  fi
+  printf '%s\\n' "$snapshot"
+else
+  exec /usr/bin/hyprctl "$@"
+fi
+`, { mode: 0o700 });
+          if (action === 'Setup') panel = await setupProduction(profile);
+          else if (action === 'startup') panel = await launch(profile);
+          else await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: 554, Height: 252 });
+          assert.equal((await readFile(join(marker, 'reply'), 'utf8')).trim(), 'ok');
+          await expect.poll(geometry).toEqual([554, 252]);
+          await closeApp();
+          await rm(hyprctl);
+          await expectRestoredSize(profile, [554, 252]);
+
+          // After the restore, choosing the rule's own size on the same map is a manual resize.
+          await settledPanelSize(app.windows()[0]);
+          sizeWindow(activeClient().address, [654, 318]);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: 654, Height: 318 });
+          await closeApp();
+          await setFloatRule(true);
+          await expectRestoredSize(profile, [654, 318]);
+        } finally {
+          await rm(hyprctl, { force: true });
           await closeApp();
           await setFloatRule(true);
         }

@@ -28,6 +28,7 @@ let panelPaint: Promise<void> | null;
 let nextGeometryResponse: Promise<void> | null;
 let nextSizeWrite: Promise<void> | null;
 let deferPanelConfigure: boolean;
+let instanceOwner: symbol | null;
 let exitFromTray: (() => void) | undefined;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
@@ -167,7 +168,17 @@ vi.mock(import('../../src/storage'), async importOriginal => {
 });
 vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
-  const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
+  const createPlatform = () => {
+    const instance = Symbol();
+    return { ...createPreviewPlatform(), ...cryptor,
+      acquireInstance: async () => {
+        if (instanceOwner) return false;
+        instanceOwner = instance;
+        return true;
+      },
+      dispose: () => { if (instanceOwner === instance) instanceOwner = null; }
+    };
+  };
   const createLinuxPlatform = () => ({ ...createPlatform(), captureSelection: 'portal', captureMonitor: async () => {
     captureVisibility(panel.isVisible());
     throw new Error('Synthetic capture cancelled before acquiring media.');
@@ -223,6 +234,7 @@ beforeEach(async () => {
   nextGeometryResponse = null;
   nextSizeWrite = null;
   deferPanelConfigure = false;
+  instanceOwner = null;
   exitFromTray = undefined;
   captureVisibility.mockClear();
   vi.stubEnv('LOCALAPPDATA', profile);
@@ -467,6 +479,28 @@ it.skipIf(platform !== 'linux').each([false, true])(
     await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual({ Width: 420, Height: 180 }));
   });
 
+it.skipIf(platform !== 'linux')('observes a Wayland map that is still absent on the first two queries', async () => {
+  await store().saveWindowSize({ Width: 530, Height: 238 });
+  await boot();
+  await setImmediate();
+  await invoke('command', { type: 'toggleVisibility' });
+  const paint = pause();
+  panelPaint = paint.pending;
+  vi.stubEnv('HYPRLAND_INSTANCE_SIGNATURE', 'isolated-test');
+  const geometry = vi.spyOn(await import('../../src/platform'), 'readHyprlandPanelGeometry')
+    .mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+  try {
+    await invoke('command', { type: 'toggleVisibility' });
+    panel.configureNormalBounds();
+    await vi.waitFor(() => expect(geometry.mock.calls.length).toBeGreaterThanOrEqual(3));
+    await resizeAndWaitForSave({ width: 480, height: 144 }, AbortSignal.timeout(2000));
+    expect(await store().loadWindowSize()).toEqual({ Width: 480, Height: 144 });
+  } finally {
+    paint.resume();
+    geometry.mockRestore();
+  }
+});
+
 it.skipIf(platform !== 'linux')('saves a resize to the old normal bounds after a user resize settles the remap', async () => {
   await store().saveWindowSize({ Width: 530, Height: 240 });
   await boot();
@@ -646,27 +680,59 @@ it.skipIf(platform !== 'linux').each([true, false])(
     expect(await store().loadWindowSize()).toEqual(matching ? { Width: 510, Height: 252 } : previous);
   });
 
-it('finishes an outstanding size write when Exit follows a resize', async () => {
+it.each(['command', 'tray'])('keeps instance ownership until the final rename on %s Exit', async route => {
+  const previous = { Width: 530, Height: 240 };
+  await store().saveWindowSize(previous);
+  await boot();
+  await setImmediate();
+  const owner = instanceOwner;
+  expect(owner).toBeTypeOf('symbol');
+  const write = pause();
+  const exited = once(app, 'quit');
+  try {
+    nextSizeWrite = write.pending;
+    panel.resizeFromDesktop({ width: 510, height: 252 });
+    await vi.waitFor(() => expect(nextSizeWrite).toBeNull());
+    if (route === 'tray') exitFromTray!();
+    else await invoke('command', { type: 'exit' });
+    expect(instanceOwner).toBe(owner);
+    expect(await store().loadWindowSize()).toEqual(previous);
+  } finally {
+    write.resume();
+    await exited;
+  }
+  expect(instanceOwner).toBeNull();
+  expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 });
+  await close();
+  await boot();
+  expect(panel.getSize()).toEqual({ width: 510, height: 252 });
+});
+
+it('abandons a final rename at the quit deadline before a successor saves', async () => {
   const previous = { Width: 530, Height: 240 };
   await store().saveWindowSize(previous);
   await boot();
   await setImmediate();
   const write = pause();
-  const exited = once(app, 'quit');
-  const onQuit = vi.fn();
-  app.once('quit', onQuit);
+  const nextSave = once(sizeWrites, profile);
   try {
     nextSizeWrite = write.pending;
     panel.resizeFromDesktop({ width: 510, height: 252 });
     await vi.waitFor(() => expect(nextSizeWrite).toBeNull());
-    await invoke('command', { type: 'exit' });
-    expect(onQuit).not.toHaveBeenCalled();
-    expect(await store().loadWindowSize()).toEqual(previous);
+    const exited = once(app, 'quit', { signal: AbortSignal.timeout(2500) });
+    exitFromTray!();
+    await exited;
+    await vi.waitFor(() => expect(instanceOwner).toBeNull());
+    await close();
+    await boot();
+    expect(panel.getSize()).toEqual({ width: 530, height: 240 });
+    await resizeAndWaitForSave({ width: 550, height: 248 }, AbortSignal.timeout(2500));
   } finally {
     write.resume();
   }
-  await exited;
-  expect(await store().loadWindowSize()).toEqual({ Width: 510, Height: 252 });
+  const [abandoned] = await nextSave;
+  expect(await abandoned).toBe(false);
+  expect(await store().loadWindowSize()).toEqual({ Width: 550, Height: 248 });
 });
 
 it.skipIf(platform !== 'linux')('hides the panel before an ordinary capture reaches the platform', async () => {
