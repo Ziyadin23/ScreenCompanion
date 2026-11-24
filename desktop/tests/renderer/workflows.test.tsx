@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
@@ -236,10 +236,13 @@ describe('text-only question recovery', () => {
     await fail('Timeout');
     await user.click(screen.getByRole('button', { name: 'Question' }));
     expect(value('Question')).toBe(original);
+    const exit = vi.spyOn(production.host, 'exit');
     await user.click(screen.getByRole('button', { name: 'Exit' }));
-    expect(production.platform.dispose).toHaveBeenCalledOnce();
+    expect(exit).toHaveBeenCalledOnce();
     expect(production.save).not.toHaveBeenCalled();
     transport.done();
+    // Complete the host's quit before starting a fresh renderer and controller.
+    production.controller.dispose();
     cleanup();
     await renderController(controllerFixture());
     await user.click(await screen.findByRole('button', { name: 'Question' }));
