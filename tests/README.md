@@ -222,12 +222,15 @@ The first command resolves the pinned Electron runtime before network isolation.
 node -p 'require("./desktop/node_modules/electron")'
 npm --prefix desktop run build
 bwrap --unshare-pid --unshare-net --die-with-parent --clearenv \
-  --setenv PATH /usr/bin:/bin --ro-bind / / --dev-bind /dev /dev \
+  --setenv PATH /usr/bin:/bin --setenv HOME /tmp --ro-bind / / --dev-bind /dev /dev \
   --proc /proc --tmpfs /tmp -- dbus-run-session -- \
   node --test desktop/tests/linux/panel-settings.mjs
 ```
 
-The test reads window dimensions from Hyprland nested in headless KWin. The
+The test uses a Lua configuration and reads window dimensions from Hyprland
+nested in headless KWin. On builds with the legacy configuration parser, add
+`--setenv SC_HYPRLAND_CONFIG legacy` to the Bubblewrap command to exercise the
+same scenarios with legacy rules and dispatchers. The
 key-free preview checks Settings Back and Save, the Question minimum and
 restoration on Escape. A controlled capture cancellation checks that a late
 Settings load keeps SC hidden. Production checks use a temporary keyring and
@@ -238,8 +241,12 @@ tiled under a float rule, with and without a size change when tiling. They
 also open Settings with a second `--action=settings` launch while a tiled or
 floating panel is hidden. The cases check placement on Back and preserve the
 manual size file. The fixture checks that switching layouts leaves that file
-intact and that one native resize to a
-previous automatic fit saves that size. A virtual Wayland pointer drives
+intact. A 654×318 rule on Back or Save must preserve the saved 530×238 size
+through restart. Separate cases resize the panel with the real compositor
+after it restores floating placement and before SC receives the dispatch reply.
+Both the visible panel and the next launch must use that new size.
+One native resize to a previous automatic fit also saves that size.
+A virtual Wayland pointer drives
 Hyprland's interactive resize binding to change the floating size and drag
 back to the earlier size. Each drag is checked on disk and the earlier size
 is restored on restart. The test checks that an immediate native resize after

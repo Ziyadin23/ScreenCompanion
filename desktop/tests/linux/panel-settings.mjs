@@ -14,9 +14,25 @@ import { dragWaylandPointer } from './virtual-pointer.mjs';
 
 const require = createRequire(import.meta.url);
 const entry = fileURLToPath(new URL('../../out/main/index.js', import.meta.url));
-const compositorConfig = ['monitor = ,1280x900@60,0x0,1', 'windowrule = float on, match:class .*',
-  'animations:enabled = false', 'general:border_size = 0', 'xwayland:enabled = false',
-  'input:follow_mouse = 1', 'bindm = , mouse:273, resizewindow'];
+const legacyConfig = process.env.SC_HYPRLAND_CONFIG === 'legacy';
+
+function compositorConfig(floating, mapSize) {
+  if (legacyConfig) {
+    const rules = ['monitor = ,1280x900@60,0x0,1', `windowrule = float ${floating ? 'on' : 'off'}, match:class .*`,
+      'animations:enabled = false', 'general:border_size = 0', 'xwayland:enabled = false',
+      'input:follow_mouse = 1', 'bindm = , mouse:273, resizewindow'];
+    if (mapSize) rules.push(`windowrule = size ${mapSize.join(' ')}, match:title ^SC$`);
+    return rules.join('\n') + '\n';
+  }
+  const rules = [
+    'hl.monitor({ output = "", mode = "1280x900@60", position = "0x0", scale = 1 })',
+    'hl.config({ animations = { enabled = false }, general = { border_size = 0 }, xwayland = { enabled = false }, input = { follow_mouse = 1 } })',
+    'hl.bind("mouse:273", hl.dsp.window.resize(), { mouse = true })',
+    `hl.window_rule({ match = { class = ".*" }, float = ${floating} })`
+  ];
+  if (mapSize) rules.push(`hl.window_rule({ match = { title = "^SC$" }, size = { ${mapSize.join(', ')} } })`);
+  return rules.join('\n') + '\n';
+}
 
 async function stop(child) {
   if (child.exitCode !== null || child.signalCode !== null) return;
@@ -40,7 +56,8 @@ test('Hyprland panel geometry and Settings visibility', async t => {
   const links = execFileSync('ip', ['-br', 'link'], { encoding: 'utf8' }).trim().split('\n');
   assert.ok(links.length === 1 && /^lo\s/.test(links[0]), 'Run in an isolated network namespace');
 
-  const runtime = await mkdtemp(join(tmpdir(), 'sc-panel-wayland-'));
+  // Leave room for Hyprland's instance ID and socket name in the Unix socket path.
+  const runtime = await mkdtemp(join(tmpdir(), 'sc-hypr-'));
   const env = {
     PATH: process.env.PATH,
     HOME: runtime,
@@ -64,8 +81,14 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     return child;
   };
   const hypr = (...args) => JSON.parse(execFileSync('hyprctl', ['-j', ...args], { env, encoding: 'utf8' }));
-  const dispatch = (operation, args) => assert.equal(execFileSync('hyprctl', ['dispatch', operation, args],
-    { env, encoding: 'utf8' }).trim(), 'ok');
+  const dispatch = (operation, legacyName, legacyArgs) => assert.equal(execFileSync('hyprctl',
+    ['dispatch', ...(legacyConfig ? [legacyName, legacyArgs] : [operation])], { env, encoding: 'utf8' }).trim(), 'ok');
+  const setFloating = (address, floating) => dispatch(
+    `hl.dsp.window.float({ window = "address:${address}", action = "${floating ? 'enable' : 'disable'}" })`,
+    floating ? 'setfloating' : 'settiled', `address:${address}`);
+  const sizeWindow = (address, [width, height]) => dispatch(
+    `hl.dsp.window.resize({ window = "address:${address}", x = ${width}, y = ${height}, relative = false })`,
+    'resizewindowpixel', `exact ${width} ${height},address:${address}`);
   const configHome = profile => join(runtime, profile, 'config');
   const fixtureBin = join(runtime, 'bin');
   const launchArgs = (profile, ...args) =>
@@ -122,7 +145,9 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     assert.equal(activeClient().floating, true);
     const [{ width, height, scale }] = hypr('monitors');
     assert.equal(scale, 1);
-    dispatch('movewindowpixel', `exact 260 200,address:${activeClient().address}`);
+    const selector = `address:${activeClient().address}`;
+    dispatch(`hl.dsp.window.move({ window = "${selector}", x = 260, y = 200, relative = false })`,
+      'movewindowpixel', `exact 260 200,${selector}`);
     // Use the compositor's actual position and leave room for the drag on this output.
     await expect.poll(() => {
       const client = activeClient();
@@ -158,19 +183,19 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const stats = await stat(path, { bigint: true });
     return { size: await readFile(path, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
   };
-  const editAppearance = async (panel, action, onReturn) => {
+  const editAppearance = async (panel, action) => {
     await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
     const settings = await showing('settings-save');
     await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
     await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
-    await Promise.all([settings.getByRole('button', { name: action, exact: true }).click(), onReturn?.()]);
+    await settings.getByRole('button', { name: action, exact: true }).click();
     await expect(panel.getByTestId('answer-text')).toBeVisible();
     await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
       .toBe(action === 'Save' ? 28 : 11);
   };
   try {
-    const config = join(runtime, 'hyprland.conf');
-    await writeFile(config, compositorConfig.join('\n') + '\n');
+    const config = join(runtime, legacyConfig ? 'hyprland.conf' : 'hyprland.lua');
+    await writeFile(config, compositorConfig(true));
     start('kwin_wayland', ['--virtual', '--no-lockscreen', '--no-global-shortcuts', '--no-kactivities',
       '--socket', 'sc-parent', '--width', '1280', '--height', '900'], { QT_QPA_PLATFORM: 'offscreen' });
     await expect.poll(() => existsSync(join(runtime, 'sc-parent')), { timeout: 30_000 }).toBe(true);
@@ -183,7 +208,11 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     }, { timeout: 30_000 }).toBe(true);
     env.WAYLAND_DISPLAY = instance.wl_socket;
     env.HYPRLAND_INSTANCE_SIGNATURE = instance.instance;
-    await expect.poll(() => hypr('monitors').length, { timeout: 15_000 }).toBe(1);
+    await expect.poll(() => {
+      // The instance is listed before its control socket can answer requests.
+      try { return hypr('monitors').length; }
+      catch { return 0; }
+    }, { timeout: 15_000 }).toBe(1);
     execFileSync('dbus-update-activation-environment',
       Object.keys(env).filter(name => name !== 'PATH' && name !== 'DBUS_SESSION_BUS_ADDRESS'), { env });
     const panel = await launch('preview', '--synthetic-ui');
@@ -366,7 +395,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           return sizes;
         });
         assert.equal(activeClient().floating, true);
-        dispatch('resizewindowpixel', `exact ${earlier.join(' ')},address:${activeClient().address}`);
+        sizeWindow(activeClient().address, earlier);
         await expect.poll(geometry).toEqual(earlier);
         await delay(750);
         const resizeEvents = await events.jsonValue();
@@ -390,13 +419,13 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         const before = await sizeFileSnapshot(profile);
         const address = activeClient().address;
         const native = await app.browserWindow(panel);
-        dispatch('settiled', `address:${address}`);
+        setFloating(address, false);
         await expect.poll(() => activeClient()?.floating).toBe(false);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([1240, 860]);
         await delay(750);
         const tiled = await sizeFileSnapshot(profile);
 
-        dispatch('setfloating', `address:${address}`);
+        setFloating(address, true);
         await expect.poll(() => activeClient()?.floating).toBe(true);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
         await delay(750);
@@ -415,7 +444,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         await settledPanelSize(restarted);
         await question.press('Escape');
         await expect(question).toHaveCount(0);
-        dispatch('resizewindowpixel', `exact 380 160,address:${activeClient().address}`);
+        sizeWindow(activeClient().address, [380, 160]);
         await expect.poll(geometry).toEqual([380, 160]);
         await expect.poll(() => savedSize(profile)).toEqual({ Width: 380, Height: 160 });
       } finally {
@@ -450,13 +479,13 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         // Observe the idle panel without causing a renderer repaint before requesting tiling.
         await delay(750);
         const address = activeClient().address;
-        dispatch('settiled', `address:${address}`);
+        setFloating(address, false);
         await expect.poll(() => activeClient()?.floating).toBe(false);
         await expect.poll(geometry).toEqual([1240, 860]);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual([1240, 860]);
         assert.deepEqual(await sizeFileSnapshot(profile), before);
 
-        dispatch('setfloating', `address:${address}`);
+        setFloating(address, true);
         await expect.poll(() => activeClient()?.floating).toBe(true);
         await expect.poll(geometry).toEqual(chosen);
         await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
@@ -476,14 +505,14 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           const panel = await setupProduction(profile);
           await expect.poll(geometry).toEqual([480, 144]);
           await settledPanelSize(panel);
-          dispatch('resizewindowpixel', `exact ${width} ${height},address:${activeClient().address}`);
+          sizeWindow(activeClient().address, [width, height]);
           await expect.poll(geometry).toEqual(chosen);
           await expect.poll(() => savedSize(profile)).toEqual({ Width: width, Height: height });
           const before = await sizeFileSnapshot(profile);
           const layout = () => ({ floating: activeClient()?.floating, size: geometry() });
           const tiled = { floating: false, size: [1240, 860] };
 
-          dispatch('settiled', `address:${activeClient().address}`);
+          setFloating(activeClient().address, false);
           await expect.poll(layout).toEqual(tiled);
           for (const action of ['Back', 'Save']) {
             await editAppearance(panel, action);
@@ -491,7 +520,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             assert.deepEqual(await sizeFileSnapshot(profile), before);
           }
 
-          dispatch('setfloating', `address:${activeClient().address}`);
+          setFloating(activeClient().address, true);
           await expect.poll(layout).toEqual({ floating: true, size: chosen });
           assert.deepEqual(await sizeFileSnapshot(profile), before);
         } finally {
@@ -509,7 +538,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           await expect.poll(geometry).toEqual([480, 144]);
           await settledPanelSize(panel);
           const size = [1240, 860];
-          dispatch('resizewindowpixel', `exact ${size.join(' ')},address:${activeClient().address}`);
+          sizeWindow(activeClient().address, size);
           await expect.poll(() => savedSize(profile)).toEqual({ Width: size[0], Height: size[1] });
           const before = await sizeFileSnapshot(profile);
           const native = await app.browserWindow(panel);
@@ -519,7 +548,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             window.on('resize', () => sizes.push(window.getSize()));
             return sizes;
           });
-          if (!floating) dispatch('settiled', `address:${activeClient().address}`);
+          if (!floating) setFloating(activeClient().address, false);
           const layout = () => ({ floating: activeClient()?.floating, size: geometry() });
           await expect.poll(layout).toEqual({ floating, size });
           await panel.evaluate(() => globalThis.sc.command({ type: 'toggleVisibility' }));
@@ -541,10 +570,37 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
       });
     }
 
-    const setFloatRule = async enabled => {
-      await writeFile(config, compositorConfig.join('\n').replace('float on', enabled ? 'float on' : 'float off') + '\n');
+    const setFloatRule = async (enabled, mapSize) => {
+      await writeFile(config, compositorConfig(enabled, mapSize));
       assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
     };
+    for (const action of ['Back', 'Save']) {
+      await t.test(`A map size rule on ${action} preserves the last manual size through restart`, async () => {
+        const profile = 'map-size-rule-' + action.toLowerCase();
+        const chosen = [530, 238];
+        try {
+          const panel = await setupProduction(profile);
+          await expect.poll(geometry).toEqual([480, 144]);
+          await resize(panel, chosen);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
+          const before = await sizeFileSnapshot(profile);
+          await setFloatRule(true, [654, 318]);
+
+          await editAppearance(panel, action);
+          await expect.poll(geometry).toEqual(chosen);
+          await closeApp();
+          assert.deepEqual(await sizeFileSnapshot(profile), before);
+
+          await setFloatRule(true);
+          const restarted = await launch(profile);
+          await expect(restarted.getByTestId('question-input')).toBeFocused();
+          await expect.poll(geometry).toEqual(chosen);
+        } finally {
+          await closeApp();
+          await setFloatRule(true);
+        }
+      });
+    }
     for (const floating of [true, false]) {
       if (!floating) {
         await setFloatRule(false);
@@ -556,7 +612,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
               const panel = await setupProduction(profile);
               await settledPanelSize(panel);
               await expect.poll(() => activeClient()?.floating).toBe(false);
-              dispatch('setfloating', `address:${activeClient().address}`);
+              setFloating(activeClient().address, true);
               await expect.poll(() => activeClient()?.floating).toBe(true);
               await resize(panel, chosen);
               await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
@@ -587,7 +643,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             const panel = await setupProduction(profile);
             if (floating) await expect.poll(geometry).toEqual([480, 144]);
             await settledPanelSize(panel);
-            if (!floating && activeClient().floating) dispatch('settiled', `address:${activeClient().address}`);
+            if (!floating && activeClient().floating) setFloating(activeClient().address, false);
             await expect.poll(() => activeClient()?.floating).toBe(floating);
             if (!floating) await expect.poll(geometry).toEqual([1240, 860]);
             const native = await app.browserWindow(panel);
@@ -612,7 +668,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             result.diagnostic(`${layout} answer ${geometry().join('×')} after ${action}, size file absent`);
             if (!floating) {
               const tiled = geometry();
-              dispatch('setfloating', `address:${activeClient().address}`);
+              setFloating(activeClient().address, true);
               await expect.poll(() => activeClient()?.floating).toBe(true);
               await expect.poll(geometry).not.toEqual(tiled);
               await expect.poll(nativeMatchesLayout).toBe(true);
@@ -626,43 +682,56 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
         });
       }
     }
-    await t.test('A manual resize on the first floating map after Save survives restart', async () => {
-      const profile = 'resize-on-settings-return';
-      try {
-        const panel = await setupProduction(profile);
-        await expect.poll(() => activeClient()?.floating).toBe(false);
-        await settledPanelSize(panel);
-        dispatch('setfloating', `address:${activeClient().address}`);
-        await expect.poll(geometry).toEqual([480, 144]);
-        const automatic = await settledPanelSize(panel);
-        await resize(panel, [530, 238]);
-        await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 238 });
+    for (const [action, chosen] of [['Back', [554, 252]], ['Save', [480, 144]]]) {
+      await t.test(`A manual resize on the first floating map after ${action} survives restart`, async () => {
+        const profile = 'resize-on-return-' + action.toLowerCase();
+        const hyprctl = join(fixtureBin, 'hyprctl');
+        const resized = join(runtime, profile, 'resize-reply');
+        try {
+          await setFloatRule(false);
+          const panel = await setupProduction(profile);
+          await expect.poll(() => activeClient()?.floating).toBe(false);
+          await settledPanelSize(panel);
+          setFloating(activeClient().address, true);
+          await expect.poll(geometry).toEqual([480, 144]);
+          await resize(panel, [530, 238]);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 238 });
 
-        await editAppearance(panel, 'Save', async () => {
-          let client;
-          await expect.poll(() => {
-            client = activeClient();
-            return client?.title === 'SC' && client.floating;
-          }, { intervals: [1] }).toBe(true);
-          dispatch('resizewindowpixel', `exact ${automatic.join(' ')},address:${client.address}`);
-        });
-        const native = await app.browserWindow(panel);
-        await expect.poll(() => savedSize(profile)).toEqual({ Width: automatic[0], Height: automatic[1] });
-        await expect.poll(geometry).toEqual(automatic);
-        await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(automatic);
-        await closeApp();
+          // Make a real compositor resize after the placement dispatch but before SC receives its reply.
+          const placementRequest = legacyConfig ? '[ "$1" = dispatch ] && [ "$2" = setfloating ]' : '[ "$1" = eval ]';
+          const resizeRequest = legacyConfig
+            ? `resizewindowpixel 'exact ${chosen.join(' ')},title:^SC$'`
+            : `'hl.dsp.window.resize({ window = "title:^SC$", x = ${chosen[0]}, y = ${chosen[1]}, relative = false })'`;
+          await writeFile(hyprctl, `#!/bin/sh
+if ${placementRequest}; then
+  /usr/bin/hyprctl "$@" || exit 1
+  /usr/bin/hyprctl dispatch ${resizeRequest} > "${resized}.tmp" && mv "${resized}.tmp" "${resized}"
+else
+  exec /usr/bin/hyprctl "$@"
+fi
+`, { mode: 0o700 });
+          await editAppearance(panel, action);
+          await expect.poll(() => existsSync(resized)).toBe(true);
+          assert.equal((await readFile(resized, 'utf8')).trim(), 'ok');
+          const native = await app.browserWindow(panel);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
+          await expect.poll(geometry).toEqual(chosen);
+          await expect.poll(() => native.evaluate(window => window.getSize())).toEqual(chosen);
+          await closeApp();
 
-        await setFloatRule(true);
-        const restarted = await launch(profile);
-        const question = restarted.getByTestId('question-input');
-        await expect(question).toBeFocused();
-        await expect.poll(geometry).toEqual([automatic[0], 180]);
-        await question.press('Escape');
-        await expect.poll(geometry).toEqual(automatic);
-      } finally {
-        await closeApp();
-      }
-    });
+          await setFloatRule(true);
+          const restarted = await launch(profile);
+          const question = restarted.getByTestId('question-input');
+          await expect(question).toBeFocused();
+          await expect.poll(geometry).toEqual([chosen[0], Math.max(180, chosen[1])]);
+          await question.press('Escape');
+          await expect.poll(geometry).toEqual(chosen);
+        } finally {
+          await rm(hyprctl, { force: true });
+          await closeApp();
+        }
+      });
+    }
   } finally {
     try {
       await app?.close();

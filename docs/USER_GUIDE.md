@@ -50,10 +50,11 @@ SC remembers the last floating size you choose across launches and restores it
 after Hide and Show. SC stops taking commands as soon as Exit starts. It allows
 up to one second to confirm and save a pending resize. A tiled panel returns to
 Hyprland's tiled layout after Settings, even if you opened Settings while the
-panel was hidden or a rule floats newly opened windows. Hyprland sets the
-size of tiled or fullscreen windows. SC keeps your chosen floating size through
-layout changes. Question grows a short floating panel to 180 logical
-pixels high when space allows. Escape restores the answer size.
+panel was hidden or a rule floats newly opened windows. If you float the panel
+yourself under a tiling rule, Back and Save return it to floating. A size rule
+applied when the panel reopens preserves your saved dimensions. Hyprland sets
+the size of tiled or fullscreen windows. Question grows a short floating panel
+to 180 logical pixels high when space allows. Escape restores the answer size.
 Update by manually installing a newer Linux RPM.
 
 ## Setup and migration

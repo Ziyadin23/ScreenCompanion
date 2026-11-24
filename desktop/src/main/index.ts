@@ -91,6 +91,10 @@ function setLinuxPanelMinimum(panel: BrowserWindow): void {
   const area = screen.getDisplayMatching(panel.getBounds()).workArea;
   panel.setMinimumSize(Math.min(340, area.width), Math.min(minimumPanelHeight(), area.height));
 }
+function refreshLinuxSizeHints(panel: BrowserWindow): void {
+  panel.setResizable(false);
+  panel.setResizable(true);
+}
 function waitForLinuxPanelPaint(panel: BrowserWindow): Promise<void> {
   return new Promise(resolve => {
     const finish = () => { clearTimeout(deadline); resolve(); };
@@ -217,8 +221,7 @@ function constrainLinuxPanelSize(panel: BrowserWindow, bounds: Electron.Rectangl
       target.setMaximumSize(0, 0);
       setLinuxPanelMinimum(target);
       // Refresh the mapped Wayland size hints so native drags can resize the panel again.
-      target.setResizable(false);
-      target.setResizable(true);
+      refreshLinuxSizeHints(target);
     });
     // Wayland applies the released size hints on a surface commit.
     if (panel.isVisible()) panel.webContents.invalidate();
@@ -360,6 +363,7 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
   let linuxPanelNeedsResize = false;
   if (surfaceChanged) {
     const returningToPanel = !isPanel(surface);
+    const leavingInput = surface === 'input';
     if (linux) {
       const layout = linuxPanelLayout;
       if (surface === 'settings' && layout && !window.isVisible()) {
@@ -380,7 +384,14 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
       linuxPanelNeedsResize = !sameSize(bounds, clampBounds(linuxPreferredPanelBounds ?? bounds));
       // A minimum change that keeps the bounds can coexist with a native resize.
       if (linuxPanelNeedsResize) applyWindowGeometry(setLinuxPanelMinimum);
-      else setLinuxPanelMinimum(window);
+      else {
+        setLinuxPanelMinimum(window);
+        if (leavingInput && linuxPanelLayout?.placement === 'floating') {
+          // Release the input minimum before the next native resize of the answer.
+          refreshLinuxSizeHints(window);
+          window.webContents.invalidate();
+        }
+      }
     } else {
       const area = screen.getDisplayMatching(window.getBounds()).workArea;
       applyWindowGeometry(target => {
@@ -552,7 +563,9 @@ async function boot(): Promise<void> {
         if (current === layout) measuredContent = '';
         return;
       }
-      if (restorePlacement === 'tiled') return;
+      // Hyprland applies window rules when the panel maps after Settings. Its
+      // first floating configure describes that placement, before any user drag.
+      if (restorePlacement === 'tiled' || (restorePlacement === 'floating' && previousPlacement === null)) return;
       if (previousPlacement && previousPlacement !== 'floating') {
         // The first floating configure belongs to the mode change. Later resizes have their own snapshots.
         if (current === layout && restorePlacement !== 'floating') void refreshLinuxPanelLayout(panel, layout);
