@@ -16,7 +16,7 @@ This verification worktree links to [#89](https://github.com/Ziyadin23/ScreenCom
 ## 3. Review and delivery
 
 - [ ] 3.1 Obtain independent review of the final diff, issue results and artifacts. Record disposition and complete the required checks.
-- [ ] 3.2 Verify the copied EXE, installer, two-file ZIP and matching README, update the local latest-build record, and publish the issue-referenced PR.
+- [x] 3.2 Verify the copied EXE, installer, two-file ZIP and matching README, update the local latest-build record, and publish the issue-referenced PR.
 
 ## Handoff
 
@@ -43,5 +43,7 @@ The beta.15 evidence checkpoint passed the repository workflow self-test, docume
 The #89 documentation review started at `22fb9deb` and incorporated main `1ae3729`. Beta.15 supplies the protected observations for the ten setup fixes. Beta.16 case 23 also exercised both #89 menu sizes and selection with both input methods. The passing beta.16 matrix included the two #61 same-profile restarts. Its native run passed 54 checks, its vault suite passed nine cases with 143 fixture assertions and its separate #62 Responses run passed 20 cases. [Beta.15 per-issue results](../../../docs/VERIFICATION.md#beta15-windows-first-run-setup-2026-11-20) and [beta.16 Windows results](../../../docs/VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 
 Beta.16 satisfies task 2.2. Both package inventories passed. The installed and portable copies opened visible setup with an empty key. The paired Edge frames showed the backdrop while setup was visible locally. The four copied handoff files and both ZIP entries matched the verified beta.16 bytes on readback. [Integrated package and delivery record](https://github.com/Ziyadin23/ScreenCompanion/pull/135).
+
+The latest-build record identifies beta.16. Publication of the issue-linked documentation PR completes task 3.2. The workflow self-test, documentation check (144 Markdown files and 619 local links and anchors), strict OpenSpec validation (14 items) and `git diff --check` passed. [Setup evidence PR #143](https://github.com/Ziyadin23/ScreenCompanion/pull/143).
 
 The recorded checks cover the acceptance conditions for #89, #90 and #92–#98. Task 2.1 stays open for the OS contrast-theme observation requested on #91. The assigned Windows operator will check the active outline against the popup (at least 3:1), distinguish the saved option and confirm the outlined selection with Enter under a Windows contrast theme. Task 3.1 awaits independent review of the final issue results and documentation. [Issue follow-up](https://github.com/Ziyadin23/ScreenCompanion/issues/91#issuecomment-6981910288) and [fix PR](https://github.com/Ziyadin23/ScreenCompanion/pull/105).
