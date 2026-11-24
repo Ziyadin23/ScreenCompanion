@@ -32,6 +32,23 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 
 The sections below are dated evidence, followed by support procedures and historical limits.
 
+## Public Windows update from beta.6 to beta.16 (2026-11-24)
+
+A standard account on Windows 11 x64 updated its installed copy of SC from 0.5.0-beta.6 to 0.5.0-beta.16 through the packaged GitHub feed. Anonymous downloads of both installers, both blockmaps and both `latest.yml` files matched the public release sizes and SHA-256 digests. Both manifests also matched their installer's size and SHA-512. Windows reported both installers as unsigned. [Issue #139](https://github.com/Ziyadin23/ScreenCompanion/issues/139) · [Beta.6 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) · [Beta.16 release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.16)
+
+| Published per-user installer | Bytes | SHA-256 |
+| --- | ---: | --- |
+| Beta.6 predecessor | 123,112,251 | `4c473e9dbaf41d736655841923b550b88c9cdc00da2ca365691b9950a708d23a` |
+| Beta.16 update | 115,171,036 | `d42bc31eebbcb2630538af2c4c04ab9553c47f1a45102d673731b641b521d305` |
+
+1. The lab moved the account's original updater cache aside before installing beta.6. It already contained a beta.16 installer. The first **Settings → Updates** check offered beta.16 with no pending installer. After **Download update**, the pending file matched the published beta.16 size and digest. An ordinary exit left beta.6 installed. A fresh beta.6 process read the saved synthetic settings.
+2. In the reopened Settings, a second **Download update** action returned the same cached installer. **Restart and install** launched a new beta.16 process that reported `READY`. The per-user uninstall registration kept its identity and reported the new version. Both the Desktop and Start menu shortcuts still pointed to `%LOCALAPPDATA%\Programs\sc-desktop\SC.exe`. The executable, application archive and packaged feed matched the files extracted from each version's public installer.
+3. A separate beta.16 launch reported the full target version and read the saved preferences. The beta.6 `Balanced` setting became `Thorough` for the selected model. The custom response instruction, model selections, shortcuts, appearance and key-presence values matched the beta.6 settings. A separate Windows process verified the synthetic key and settings with DPAPI. The encrypted file kept its original bytes. The application recorded no provider requests.
+
+Uninstall exited 0. A fresh postflight matched the starting state for all four protected vault and size paths, the original cache directory identity and contents, installation records and shortcuts. The test processes and temporary scheduler entry were gone. The VM returned to its original powered-off state with its original configuration, disks, snapshots and USB filter.
+
+Three early fixture checks stopped before the first download. Two assumed a different form of the Windows uninstall registration. The third recorded a generic error at the beta.6 application-bridge check. Its last observation identified the setup screen as the active surface, with `ready` false and the updater idle. The exact operation that failed is unknown. The successful retry waited for beta.6 to report that the setup screen was visible before submitting the synthetic setup.
+
 ## Beta.16 Windows qualification (2026-11-22)
 
 The Windows 11 x64 run used frozen application `e85a863`, UI fixtures `bae908a` and ZIP checker `b2cf375` from integrated revision `b1600c0`. The standard account compiled the native bridge for Electron 45 with MSVC and the Windows SDK. The Windows source check passed type checking, lint, 1,307 tests and production bundle generation. The runner skipped 25 tests. The separate response-status run passed all 20 cases.
@@ -1322,7 +1339,7 @@ original releases.
 
 | Candidate / environment | Established evidence | Qualification boundary |
 | --- | --- | --- |
-| Published beta.16 / standard account on one Windows 11 x64 development VM | Installer and portable first-run setup, 54 native checks, nine vault cases, all 38 UI cases and two additional Settings cases passed. One Edge whole-monitor VP8 recording omitted the tested windows. [Beta.16 qualification](#beta16-windows-qualification-2026-11-22) | A newly created account, a clean Windows machine without developer tools, physical mixed-DPI displays, other recorder paths and a public installed update to beta.16 remain unverified. |
+| Published beta.16 / standard account on one Windows 11 x64 development VM | Installer and portable first-run setup, 54 native checks, nine vault cases and 38 UI cases plus two additional Settings cases passed. One Edge whole-monitor VP8 recording omitted the tested windows. The public update from beta.6 passed. [Beta.16 qualification](#beta16-windows-qualification-2026-11-22) · [Installed update](#public-windows-update-from-beta6-to-beta16-2026-11-24) | A newly created account, a clean Windows machine without developer tools, physical mixed-DPI displays and other recorder paths still need qualification. |
 | Published beta.6 / existing Windows 11 development VM | [Packaged startup and activation](#packaged-beta6-activation-qualification-2026-11-05), [public installed update](#public-github-installed-update-2026-11-03), and [split native/vault/UI checks](#beta6-extraction-guidance). | Existing account and developer tools; no fresh-account or clean-machine pass. Earlier failed attempts remain recorded. |
 | Unpublished beta.7 / existing Windows 11 development VM | [Full native/vault/UI matrix](#windows-full-ui-matrix-2026-11-03). | Does not qualify beta.6 packages or a fresh environment. |
 | Published beta.6 / fresh ordinary Windows 11 account | **Full qualification remains open.** | The installed and portable setup/settings matrix and independent postflight need completed, reconciled evidence. A synthetic app profile is not a fresh Windows account. |
