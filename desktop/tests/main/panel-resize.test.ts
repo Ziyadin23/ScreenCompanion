@@ -1,4 +1,4 @@
-import { EventEmitter } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -16,6 +16,7 @@ const cryptor = {
 const platform = process.platform === 'linux' ? 'linux' : 'windows';
 const workArea = { x: 0, y: 0, width: 900, height: 700 };
 const setTrayImage = vi.fn();
+const sizeWrites = new EventEmitter();
 let profile: string;
 let scaleFactor: number;
 let measuredTextHeight: number;
@@ -99,6 +100,24 @@ vi.mock('electron', () => ({
   screen: { getPrimaryDisplay: () => ({ workArea }), getDisplayMatching: () => ({ workArea, scaleFactor }) }
 }));
 vi.mock('electron-updater', () => ({ default: {} }));
+vi.mock(import('../../src/storage'), async importOriginal => {
+  const storage = await importOriginal();
+  return {
+    ...storage,
+    createSettingsStore(platform, directory, options) {
+      const store = storage.createSettingsStore(platform, directory, options);
+      return {
+        ...store,
+        saveWindowSize(size) {
+          // The resize handler starts this save without awaiting it.
+          const write = store.saveWindowSize(size);
+          sizeWrites.emit(directory, write);
+          return write;
+        }
+      };
+    }
+  };
+});
 vi.mock('../../src/platform', async () => {
   const { createPreviewPlatform } = await import('../../src/main/preview');
   const createPlatform = () => ({ ...createPreviewPlatform(), ...cryptor });
@@ -106,6 +125,12 @@ vi.mock('../../src/platform', async () => {
 });
 
 function store() { return createSettingsStore(cryptor, profile, { platform }); }
+async function resizeAndWaitForSave(size: Electron.Size, signal: AbortSignal) {
+  const nextSave = once(sizeWrites, profile, { signal });
+  panel.resizeFromDesktop(size);
+  const [write] = await nextSave;
+  expect(await write).toBe(true);
+}
 async function invoke(name: string, value?: unknown) {
   const handler = ipc.get(`sc:${name}`);
   if (!handler) throw new Error('SC has not registered its IPC handlers.');
@@ -141,22 +166,22 @@ it('publishes an idle tray image when the panel finishes loading', async () => {
   expect(setTrayImage).toHaveBeenCalledWith(expect.objectContaining({ toBitmap: expect.any(Function) }));
 });
 
-it.each([
+it.for([
   { scale: 1, savedA: { Width: 480, Height: 200 }, savedB: { Width: 500, Height: 252 } },
   { scale: 1.25, savedA: { Width: 600, Height: 250 }, savedB: { Width: 625, Height: 315 } }
-])('remembers a manual return to an automatic size at scale $scale', async ({ scale, savedA, savedB }) => {
+])('remembers a manual return to an automatic size at scale $scale', async ({ scale, savedA, savedB }, { signal }) => {
   scaleFactor = scale;
   const sizeA = { width: 480, height: 200 };
   await boot();
   await vi.waitFor(() => expect(panel.getSize()).toEqual(sizeA));
   expect(await store().loadWindowSize()).toBeNull();
 
-  panel.resizeFromDesktop({ width: 500, height: 252 });
-  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(savedB));
+  await resizeAndWaitForSave({ width: 500, height: 252 }, signal);
+  expect(await store().loadWindowSize()).toEqual(savedB);
 
-  panel.resizeFromDesktop(sizeA);
+  await resizeAndWaitForSave(sizeA, signal);
   expect(panel.getSize()).toEqual(sizeA);
-  await vi.waitFor(async () => expect(await store().loadWindowSize()).toEqual(savedA));
+  expect(await store().loadWindowSize()).toEqual(savedA);
 
   close();
   // A fresh fit would be taller, so matching A on startup proves restoration.
