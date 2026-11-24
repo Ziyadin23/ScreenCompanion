@@ -447,3 +447,31 @@ then passed all 30 scenarios and its parent, with zero skips. The product, root
 README and Windows fixtures come from the frozen commit above. The
 [combined handoff](../persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
 records the size-write checks and open qualifications.
+
+### Native configure before the first geometry reply
+
+A focused replay on the frozen Windows candidate source, `c7635e5`, held
+Hyprland's geometry command before it sampled the remapped panel. On both
+Back and Save, Electron and Hyprland accepted a manual resize. After the
+first reply, the panel and file returned to the older 530×238.
+
+Linux correction `8b8002ff7589c3d20cfaa76f5aba1ccc79fafe48` records the
+bounds from the native configure that puts Electron's Wayland toplevel in
+its maximized state. Hyprland also sends that configure for the floating
+panel. With no size rule, it carried 420×180. With the floating size rule,
+it carried 654×318. A delayed command can now confirm a later resize using
+that earlier native size as the map origin.
+
+The same four independent Back and Save cases passed on Fedora 44 and
+Hyprland 0.57.2. With both samples held until after the gesture, the first
+reads completed in 150 ms and 156 ms. Back kept 554×252 and Save kept
+480×144 on screen, on disk and after restart. Both controls that sampled
+before the gesture also passed. The tracked two early-gesture cases and
+two automatic-rule cases passed. Both no-input cases kept the original
+530×238 file through restart. All 35 portable resize tests, type checking,
+focused lint and the production build passed.
+
+Only the Linux execution path changed. The shared main-process JavaScript
+bundle has different bytes. Windows beta.17 qualification and delivery use
+the frozen `c7635e5` package inputs. A future Windows binary built from
+this later source requires its own version.

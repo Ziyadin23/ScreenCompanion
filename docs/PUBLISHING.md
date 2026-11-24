@@ -4,6 +4,11 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.17**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
+Build the Windows beta.17 candidate from `c7635e51aeef3d9a9aae312635adf1f0614084ec`.
+The subsequent Linux panel correction changes the shared JavaScript bundle.
+Reserve a new version before building that source for Windows distribution.
+[Candidate handoff](../openspec/changes/persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
+
 Windows beta.16 is the latest public prerelease. It uses the installer, portable EXE and two-file ZIP qualified on Windows 11 x64. The separate `README.txt` asset matches the file inside the ZIP byte for byte. Both contain the prepublication snapshot that lists beta.6 as the public download. The [beta.16 release notes](releases/v0.5.0-beta.16.md) describe the published files and [Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 
 The [beta.16 tag](https://github.com/Ziyadin23/ScreenCompanion/tree/v0.5.0-beta.16) identifies the verified application inputs. The separate release notice adds the license terms and credits for the portable Elevate helper to the notice embedded in the verified packages. It matches the [supplemental notice at `ca860d3`](https://github.com/Ziyadin23/ScreenCompanion/blob/ca860d3d6d9a702c7c6f752df597f9372dcebc99/THIRD_PARTY_NOTICES.txt). Keep the separate notice and SC license with redistributed portable copies. The [third-party source archive](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/ThirdPartySources-v0.5.0-beta.16.zip) includes the corresponding Windows helper source and installer build inputs.

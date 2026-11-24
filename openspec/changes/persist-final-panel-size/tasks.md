@@ -197,3 +197,11 @@ The delivery tool now recognizes the frozen README's local-candidate row
 and uses the established publishing and status headers. The failing
 checked-in-record test and all 22 delivery and policy cases passed after
 the correction. The frozen README and Windows package inputs are identical.
+
+The subsequent [Linux-only behavior correction](../linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply)
+at `8b8002f` changes the shared main bundle. The active Windows beta.17
+qualification stays on `c7635e5`, with identical README, Windows native
+and test inputs. The two-process Fedora checks also passed 14 Exit cases,
+including both rename/unlink orderings and actual process exit. Separate
+Windows runtime, recorder and destination checks still require their own
+results.
