@@ -73,7 +73,7 @@ The setup script is a local Orca setting; a fresh Orca registration must configu
 
 [Desktop checks](../.github/workflows/desktop.yml) keeps the `portable` and `windows-build` check names. Known Markdown documentation, OpenSpec artifacts and agent Markdown use the lightweight documentation route. Application, executable tooling, CI and unknown paths require full application checks. A missing or unreadable diff baseline requires the full route too. Documentation failure propagates to the existing named application checks through an explicit gate; it cannot become a successful skip.
 
-New revisions cancel older checks for the same pull request or unprotected feature branch. Pull request checks and branch push checks run separately. Each push to the default branch, a protected branch, or a tag keeps its own run.
+A new pull request revision cancels the previous run for that PR. On an unprotected feature branch, the routing and documentation checks run first. The new push then cancels older workflow tests and application builds for that exact branch, including when the new push changes only documentation. Each default-branch, protected-branch, and tag push keeps its own run.
 
 Run the lightweight checks from the root:
 

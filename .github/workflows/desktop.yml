@@ -1,13 +1,8 @@
 name: Desktop checks
 on: [push, pull_request]
 concurrency:
-  # A shared group replaces older pending runs even with cancel-in-progress disabled.
-  group: >-
-    ${{ github.workflow }}-${{ github.event_name }}-${{
-      github.event.pull_request.number ||
-      (github.ref_type == 'branch' && !github.ref_protected &&
-       github.ref_name != github.event.repository.default_branch && github.ref) ||
-      github.run_id }}
+  # Each push keeps its own run until changes identifies the exact feature ref.
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 jobs:
   changes:
@@ -16,6 +11,7 @@ jobs:
       contents: read
     outputs:
       application: ${{ steps.paths.outputs.application }}
+      push_group: ${{ steps.paths.outputs.push_group }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,6 +23,7 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node .github/scripts/workflow-checks.mjs changes
   documentation:
     runs-on: ubuntu-latest
@@ -47,6 +44,9 @@ jobs:
       - run: git show --format= --check HEAD
   agent-workflow:
     needs: [changes, documentation]
+    concurrency:
+      group: ${{ github.workflow }}-agent-workflow-${{ needs.changes.outputs.push_group || github.run_id }}
+      cancel-in-progress: true
     runs-on: ubuntu-24.04
     if: ${{ !cancelled() }}
     timeout-minutes: 15
@@ -77,6 +77,9 @@ jobs:
         run: echo 'Documentation and routing gates passed; executable workflow checks are unchanged.'
   portable:
     needs: [changes, documentation]
+    concurrency:
+      group: ${{ github.workflow }}-portable-${{ needs.changes.outputs.push_group || github.run_id }}
+      cancel-in-progress: true
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: ubuntu-latest
     defaults:
@@ -99,6 +102,9 @@ jobs:
       - run: npm run verify
   windows-build:
     needs: [changes, documentation]
+    concurrency:
+      group: ${{ github.workflow }}-windows-build-${{ needs.changes.outputs.push_group || github.run_id }}
+      cancel-in-progress: true
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: windows-latest
     defaults:
@@ -163,3 +169,18 @@ jobs:
       - name: Verify the packaged EXE and README in the portable ZIP
         run: ../.github/scripts/verify-windows-zip.ps1
       # Interactive capture/UI/recorder gates run separately on a Windows desktop.
+
+  # Skipped builds never enter their groups. A documentation-only push must still stop older builds.
+  supersede-skipped-builds:
+    needs: [changes, documentation]
+    if: needs.changes.outputs.push_group != '' && needs.changes.outputs.application == 'false'
+    strategy:
+      matrix:
+        build: [portable, windows-build]
+    concurrency:
+      group: ${{ github.workflow }}-${{ matrix.build }}-${{ needs.changes.outputs.push_group }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - run: echo 'This revision only needs documentation checks.'
