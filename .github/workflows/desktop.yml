@@ -1,5 +1,13 @@
 name: Desktop checks
 on: [push, pull_request]
+# The helper reads the ref type, protection and default branch as they were at push time.
+run-name: ${{ github.event_name == 'push' && format('Push {0} (default {1}) - {2}',
+             github.ref_protected && 'protected' || github.ref_type,
+             github.event.repository.default_branch, github.event.head_commit.message) || github.event.pull_request.title }}
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('desktop-pr-{0}', github.event.pull_request.number) ||
+             format('desktop-{0}-push-{1}', github.ref_protected && 'protected' || github.ref_type, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -39,7 +47,7 @@ jobs:
   agent-workflow:
     needs: [changes, documentation]
     runs-on: ubuntu-24.04
-    if: always()
+    if: ${{ !cancelled() }}
     timeout-minutes: 15
     permissions:
       contents: read
@@ -68,7 +76,7 @@ jobs:
         run: echo 'Documentation and routing gates passed; executable workflow checks are unchanged.'
   portable:
     needs: [changes, documentation]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -90,7 +98,7 @@ jobs:
       - run: npm run verify
   windows-build:
     needs: [changes, documentation]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success')
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: windows-latest
     defaults:
       run:
