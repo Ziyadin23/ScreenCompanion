@@ -26,8 +26,9 @@ function needsApplicationChecks(base, head, gitOptions) {
 
 function featurePushBranch(run) {
   // A null result means GitHub has yet to publish the ref metadata. The initial title can be the commit subject.
-  const title = run.display_title;
-  if (!title || run.subject?.startsWith(title.replace(/(?:…|\.{3})$/, ''))) return null;
+  const { display_title: title, subject } = run;
+  if (!title || typeof subject !== 'string' || !subject.trim() ||
+      subject.startsWith(title.replace(/(?:…|\.{3})$/, ''))) return null;
   const metadata = /^Push (branch|protected|tag) \(default ([^ ]+)\) -/.exec(title);
   if (!metadata) return null;
   return run.event === 'push' && metadata[1] === 'branch' && run.head_branch !== metadata[2] ? run.head_branch : '';
@@ -134,7 +135,7 @@ function checkDocuments(root, files) {
 }
 
 async function selftest() {
-  const push = { event: 'push', head_branch: 'Main', display_title: 'Push branch (default main) - update' };
+  const push = { event: 'push', head_branch: 'Main', display_title: 'Push branch (default main) - update', subject: 'update' };
   const first = { ...push, id: 40, run_number: 10 };
   const middle = { ...push, id: 10, run_number: 11 };
   const newest = { ...push, id: 20, run_number: 12 };
@@ -152,13 +153,19 @@ async function selftest() {
   const observations = [early, middle];
   const retained = { ...first, id: 70, display_title: 'Push branch (default Main) - update' };
   const subject = 'Push branch (default trunk) - old commit';
-  const listings = [[first, { ...retained, display_title: subject, subject }], [first, retained]];
+  const missingSubject = { ...retained, display_title: subject, subject: null };
+  const listings = [[first, missingSubject], [first, { ...retained, display_title: subject, subject }], [first, retained]];
   assert.deepEqual(await supersededPushes(early, id => {
     assert.equal(id, middle.id);
     return observations.shift();
   }, () => listings.shift(), () => {}), [first.id]);
   assert.equal(observations.length, 0);
   assert.equal(listings.length, 0);
+  const sourceObservations = [missingSubject, retained];
+  assert.deepEqual(await supersededPushes(missingSubject, () => sourceObservations.shift(),
+    () => assert.fail('A retained source must not select any runs'), () => {}), []);
+  assert.equal(sourceObservations.length, 0);
+  for (const unusable of [undefined, '', '   ']) assert.equal(featurePushBranch({ ...first, subject: unusable }), null);
 
   assert.equal(documentationOnly(['README.md', 'docs/history/a.md', 'openspec/changes/a/tasks.md']), true);
   for (const file of ['desktop/src/main/index.ts', 'desktop/package-lock.json', '.github/workflows/desktop.yml',
