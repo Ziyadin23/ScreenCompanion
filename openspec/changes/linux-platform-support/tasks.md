@@ -365,3 +365,35 @@ The coordinator owns independent rereview of this correction and PR
 integration. Task 2.6 stays open for Windows Settings, same-profile resize
 and the named recorder check. Task 2.7 owns final package startup and
 delivery of the verified numbered beta.
+
+### 2.6 Settings return on current main (2026-11-24)
+
+[Draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+includes the two November 21 fixes for manually floated panels and rapid
+resizes. On the merged source at `b299960`, an isolated 654×318 map rule
+replaced the user's 530×238 size on both Back and Save. A native resize to
+380×160 immediately after Escape also settled at 380×180. The two deliberate
+resize controls passed on that source.
+
+At `3d9b966`, SC treats the first floating configure on return from Settings
+as placement and commits the lower answer minimum when leaving Question.
+All 22 scenarios in the [isolated Wayland suite](../../../tests/README.md#hyprland-panel-geometry)
+passed on Fedora 44, Hyprland 0.57.2 with Lua, KWin 6.8.3, Electron 45.0.0 and
+one 1280×900 output at scale 1. Both map-rule cases kept the file contents,
+inode and modification time and restored 530×238 on a fresh launch. A real
+compositor resize issued before SC received its floating-placement reply
+persisted through restart at 554×252 after Back and 480×144 after Save.
+The earlier tiling, hidden Settings, capture visibility and fit cases passed.
+
+The old fixture stopped at compositor startup on this host. The updated
+fixture uses a shorter socket path and Lua controls, and retains a selectable
+legacy configuration. A first full run of the new pre-reply case read its
+result file before the compositor wrote the reply. Publishing the completed
+reply by rename fixed the fixture race. The final run passed all 22 scenarios
+and their parent test with zero skips (exit 0). The November 20–21 results
+above identify the earlier Hyprland version and source.
+
+Task 2.6 stays open for independent review and the Windows Settings, resize
+and recorder checks. The [combined checkpoint](../persist-final-panel-size/tasks.md#source-integration-on-24-november-2026)
+records the host commands and the Windows queue. Task 2.7 retains final
+packaging and the verified numbered beta handoff.

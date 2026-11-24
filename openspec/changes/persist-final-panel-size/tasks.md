@@ -11,7 +11,7 @@
 ## 2. Verification and delivery
 
 - [x] 2.1 Run desktop verify with the host resource lock, the affected tests, and documentation/OpenSpec checks. Record the candidate, counts, exit statuses and environment.
-- [x] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
+- [ ] 2.2 Obtain independent standards and acceptance review on the final source diff and record the disposition.
 - [ ] 2.3 After lab-owner release, run the affected Windows native, vault and UI checks against the integrated candidate, including the two same-profile restarts. Verify packaged startup with an isolated profile.
 - [ ] 2.4 Deliver a newly versioned, verified runnable beta and verify the transfer copy. [Local beta handoff](../../../docs/PUBLISHING.md#local-beta-handoff)
 
@@ -63,3 +63,50 @@ confirms the chosen size on the panel, in the file and after restart. An
 Electron-only event at those bounds keeps the earlier confirmed size. The
 integrated draft needs fresh independent review. Tasks 2.3 and 2.4 remain
 open for installed Windows checks and beta delivery.
+
+## Source integration on 24 November 2026
+
+[Draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122) continues
+[#61](https://github.com/Ziyadin23/ScreenCompanion/issues/61) and
+[#19](https://github.com/Ziyadin23/ScreenCompanion/issues/19). The issue card
+links both #61 and its draft. The published starting head was `7fd4fab`.
+The checkout had no installed dependencies, the Orca setup hook was empty,
+and the agent terminal was the only task terminal. Before source edits or
+regression runs, `npm --prefix desktop ci` added 597 packages (exit 0).
+
+The branch retained local #19 commits `109a53a` and `3a1b6c0` and their
+existing integration at `06ac725`. Ordinary merge `b299960` incorporated
+protected main `ef930f7`. The merged controller keeps Settings session
+ownership for Escape and Back, uses the active window's blur handler, and
+waits for asynchronous panel hiding. The published beta.16 manifest, release
+receipts and package configuration came from main. New geometry source
+`3d9b96646bbb8b03c3d94deaa3cb9ecf517ee544` has desktop tree
+`d333a613b313ada7cfa117890da80cd2da541dd8`.
+
+| Fedora 44 check | Result |
+| --- | --- |
+| `VITEST_MAX_WORKERS=1 flock /tmp/sc-20261119-desktop-verify.lock npm --prefix desktop run verify` | Type checking, lint, 1,364 tests in 39 files and production bundles passed. |
+| `npm --prefix desktop test -- --maxWorkers=1 --no-cache tests/main/panel-resize.test.ts tests/main/panel-size.test.ts tests/main/controller.test.ts tests/main/linux-capture.test.ts tests/platform/linux.test.ts tests/storage/settings.test.ts tests/renderer` | 287 tests in ten files passed. Both scales restored A from disk. The cases also covered writes held through Exit and out-of-order compositor replies. |
+| Isolated `node --test --test-concurrency=1 desktop/tests/linux/panel-settings.mjs` inside headless KWin and Hyprland | 22 scenarios and their parent passed. See the [test command](../../../tests/README.md#hyprland-panel-geometry) and [Linux results](../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24). |
+| `node --test desktop/tests/preview/shortcut-recovery.test.mjs` and, from `desktop/`, `node node_modules/@playwright/test/cli.js test --config playwright.preview.config.ts` | 35 Chromium panel and Settings cases and 17 compact setup cases passed. |
+| From `desktop/`, `node_modules/.bin/astryx doctor --built out/renderer` and `node node_modules/@playwright/test/cli.js test --list` | Astryx reported 19 passes and two existing font warnings. Playwright listed all 38 Windows cases in five files. |
+
+All final commands above exited 0. During development, refreshing the hints
+on entering Question as well as leaving it failed three portable repaint
+assertions. The correction limits the refresh to leaving Question.
+
+Task 2.2 reopened for the combined diff. The earlier review of `a230000`
+remains recorded above. The workflow self-test, 141 Markdown files and 633
+local links or anchors, all 14 strict OpenSpec items and the whitespace
+check passed. The coordinator will integrate the accepted
+[test-only #140 correction](https://github.com/Ziyadin23/ScreenCompanion/pull/141)
+on main before this draft. Its two-scale write assertions and this draft's
+held-rename, shutdown and remap cases share one fixture.
+
+Tasks 2.3 and 2.4 remain open. The Windows queue puts #130 ahead of this
+candidate after #139's public-update session. Windows native and vault tests,
+interactive Settings, both answer/input same-profile restarts, the named
+recorder, packaged startup and a newly numbered, verified local beta still
+need candidate-specific evidence. The beta.16 public downloads and local
+handoff identify the previously qualified build. The coordinator owns the
+review of the final integrated diff and the Windows lab assignment.
