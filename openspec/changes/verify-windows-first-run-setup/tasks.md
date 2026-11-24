@@ -44,6 +44,15 @@ The #89 documentation review started at `22fb9deb` and incorporated main `1ae372
 
 Beta.16 satisfies task 2.2. Both package inventories passed. The installed and portable copies opened visible setup with an empty key. The paired Edge frames showed the backdrop while setup was visible locally. The four copied handoff files and both ZIP entries matched the verified beta.16 bytes on readback. [Integrated package and delivery record](https://github.com/Ziyadin23/ScreenCompanion/pull/135).
 
-The latest-build record identifies beta.16. Publication of the issue-linked documentation PR completes task 3.2. The workflow self-test, documentation check (144 Markdown files and 619 local links and anchors), strict OpenSpec validation (14 items) and `git diff --check` passed. [Setup evidence PR #143](https://github.com/Ziyadin23/ScreenCompanion/pull/143).
+The latest-build record identifies beta.16. Publication of the issue-linked documentation PR completes task 3.2. Independent acceptance review confirmed the nine issue results and tasks 2.2 and 3.2 at `d33cdfa862065db008de91074ba4e9eeb975d32e`. [Setup evidence PR #143](https://github.com/Ziyadin23/ScreenCompanion/pull/143).
+
+At that revision, each command below exited 0. The documentation check verified 619 local links and anchors in 144 Markdown files. Strict OpenSpec validation passed all 14 items.
+
+```sh
+node .github/scripts/workflow-checks.mjs selftest
+node .github/scripts/workflow-checks.mjs docs
+openspec validate --all --strict --no-interactive
+git diff --check 1ae3729cdbf7b1908a1444abc2074488e5d5a27e...d33cdfa862065db008de91074ba4e9eeb975d32e
+```
 
 The recorded checks cover the acceptance conditions for #89, #90 and #92–#98. Task 2.1 stays open for the OS contrast-theme observation requested on #91. The assigned Windows operator will check the active outline against the popup (at least 3:1), distinguish the saved option and confirm the outlined selection with Enter under a Windows contrast theme. Task 3.1 awaits independent review of the final issue results and documentation. [Issue follow-up](https://github.com/Ziyadin23/ScreenCompanion/issues/91#issuecomment-6981910288) and [fix PR](https://github.com/Ziyadin23/ScreenCompanion/pull/105).
