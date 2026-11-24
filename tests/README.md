@@ -212,6 +212,73 @@ open. Historical recorder results retain their candidate/surface limits in
 [verification](../docs/VERIFICATION.md). For actual exclusion claims, follow the
 [named-recorder procedure](../docs/VERIFICATION.md#capture-exclusion-checks).
 
+### Hyprland panel geometry
+
+On Fedora 44, install Hyprland, KWin, Bubblewrap, GNOME Keyring and the D-Bus session tools.
+Run this regression from the repository root after desktop dependency setup.
+The first command resolves the pinned Electron runtime before network isolation.
+
+```sh
+node -p 'require("./desktop/node_modules/electron")'
+npm --prefix desktop run build
+bwrap --unshare-pid --unshare-net --die-with-parent --clearenv \
+  --setenv PATH /usr/bin:/bin --setenv HOME /tmp --ro-bind / / --dev-bind /dev /dev \
+  --proc /proc --tmpfs /tmp -- dbus-run-session -- \
+  node --test desktop/tests/linux/panel-settings.mjs
+```
+
+The test uses a Lua configuration and reads window dimensions from Hyprland
+nested in headless KWin. On builds with the legacy configuration parser, add
+`--setenv SC_HYPRLAND_CONFIG legacy` to the Bubblewrap command to exercise the
+same scenarios with legacy rules and dispatchers. The
+key-free preview checks Settings Back and Save, the Question minimum and
+restoration on Escape. A controlled capture cancellation checks that a late
+Settings load keeps SC hidden. Production checks use a temporary keyring and
+separate fresh profiles. They edit Answer text size and exercise Back and
+Save in floating and tiled layouts. They compare the actual tiled layout
+before opening Settings and after returning. This includes a panel the user
+tiled under a float rule, with and without a size change when tiling. They
+also open Settings with a second `--action=settings` launch while a tiled or
+floating panel is hidden. The cases check placement on Back and preserve the
+manual size file. The fixture checks that switching layouts leaves that file
+intact. A 654×318 rule on Back or Save must preserve the saved 530×238 size
+through restart. Separate cases resize the panel with the real compositor
+after it restores floating placement and before SC receives the dispatch reply.
+Both the visible panel and the next launch must use that new size. A second
+pair holds the first renderer paint on an already floating map. A native
+resize before that paint must also survive restart.
+One native resize to a previous automatic fit also saves that size.
+A virtual Wayland pointer drives
+Hyprland's interactive resize binding to change the floating size and drag
+back to the earlier size. Each drag is checked on disk and the earlier size
+is restored on restart. The test checks that an immediate native resize after
+Escape is saved. It also opens Question on a saved 404×160 panel and uses
+Escape to restore 404×160. The first tiling command must work without
+further panel input or a test-driven repaint. Refloating must restore
+404×160 and preserve the size file.
+
+Fresh Setup, ordinary Hide and Show, and startup with a saved profile also
+run under a 654×318 floating rule. The test checks automatic fitting for
+Setup and compares the original manual size file through exit and restart.
+On each path a compositor resize issued while the first map snapshot is
+pending must survive restart. Choosing 654×318 manually after the restore
+must also reach disk.
+
+The portable `tests/main/panel-resize.test.ts` fixture holds the repaint,
+remap or compositor snapshot at the relevant point. It checks that a matching
+floating resize reaches disk and returns on a quick Hide and Show. A stale
+configure leaves that resize intact. Two real resizes are sampled before Hide
+and the latest is restored even when their replies arrive out of order. The
+fixture also checks a genuine resize to the old normal bounds both during and
+after remap. An Electron-only event at those bounds leaves the confirmed resize
+intact. Exit waits for an outstanding size write within a deadline. The tray
+Exit test holds a compositor reply and checks that capture issued after Exit
+never reaches the synthetic platform boundary. Both the tray and command Exit
+hold single-instance ownership during a delayed final rename. A separate case
+passes the quit deadline, starts a successor, and releases the old rename
+after the successor has saved its own size.
+[Linux panel verification](../docs/VERIFICATION.md#hyprland-panel-geometry-lifecycle-2026-11-20).
+
 ## Installed updates
 
 Verify installed delivery, automatic restart, expected version, retained settings and cleanup using the candidate-specific update procedure. Check the real vault hashes independently before and after, and use an isolated profile for synthetic retention checks. Keep private feed overrides and runner paths outside source and release assets. Historical local-feed scenarios do not establish public-feed delivery; see [recorded evidence](../docs/VERIFICATION.md) and [installed update history](../docs/history/test-runs.md#installed-update-history).
