@@ -26,6 +26,7 @@ interface LinuxPanelLayout {
   transition: AbortController | null;
   restorePlacement: Exclude<HyprlandPanelPlacement, 'fullscreen'> | null;
   remapBounds: Electron.Rectangle | null;
+  mapGeometry: ReturnType<typeof readHyprlandPanelGeometry> | null;
   resizeCheck: Promise<void> | null;
 }
 
@@ -424,9 +425,12 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
       // Hyprland can initially configure a remapped window at its old normal bounds.
       const remapBounds = window.isMaximized() ? window.getNormalBounds() : null;
       const restorePlacement = linuxPanelLayout?.restorePlacement ?? null;
-      linuxPanelLayout = { placement: null, hiddenPlacement: null, hideCheck: null, transition: null, restorePlacement, remapBounds, resizeCheck: null };
+      linuxPanelLayout = { placement: null, hiddenPlacement: null, hideCheck: null, transition: null, restorePlacement,
+        remapBounds, mapGeometry: null, resizeCheck: null };
       void refreshLinuxPanelLayout(window, linuxPanelLayout);
       window.show();
+      // Sample the compositor's map rule before paint or an interactive resize can change the size.
+      if (restorePlacement === 'floating') linuxPanelLayout.mapGeometry ??= readHyprlandPanelGeometry(window.getTitle());
       window.webContents.invalidate();
     } else if (linuxPanelLayout) {
       linuxPanelLayout.hideCheck = null;
@@ -539,6 +543,8 @@ async function boot(): Promise<void> {
     const atRemapBounds = remapBounds && sameSize(bounds, remapBounds) && bounds.x === remapBounds.x && bounds.y === remapBounds.y;
     if (atRemapBounds && !previousCheck) {
       layout.remapBounds = null;
+      // The first query can precede the Wayland map. Electron's normal-bounds configure gives a second sample.
+      if (restorePlacement === 'floating') layout.mapGeometry = readHyprlandPanelGeometry(panel.getTitle());
       return;
     }
     const order = ++resizeOrder;
@@ -555,6 +561,7 @@ async function boot(): Promise<void> {
         layout.remapBounds = null;
         return;
       }
+      const mapped = restorePlacement === 'floating' ? await layout.mapGeometry : null;
       if (!geometry || (closing && !waitingForPanelSize) || panel.isDestroyed()) return;
       const current = !closing && panel.isVisible() && isPanel(surface) ? linuxPanelLayout : null;
       const previousPlacement = layout.placement;
@@ -563,9 +570,9 @@ async function boot(): Promise<void> {
         if (current === layout) measuredContent = '';
         return;
       }
-      // Hyprland applies window rules when the panel maps after Settings. Its
-      // first floating configure describes that placement, before any user drag.
-      if (restorePlacement === 'tiled' || (restorePlacement === 'floating' && previousPlacement === null)) return;
+      if (restorePlacement === 'tiled') return;
+      // Ignore the size applied on map. A distinct native resize can precede the first paint.
+      if (restorePlacement === 'floating' && (mapped?.placement === 'floating' ? sameSize(bounds, mapped) : previousPlacement === null)) return;
       if (previousPlacement && previousPlacement !== 'floating') {
         // The first floating configure belongs to the mode change. Later resizes have their own snapshots.
         if (current === layout && restorePlacement !== 'floating') void refreshLinuxPanelLayout(panel, layout);
@@ -573,6 +580,7 @@ async function boot(): Promise<void> {
       }
       if (order <= savedResizeOrder || !sameSize(bounds, geometry)) return;
       layout.remapBounds = null;
+      layout.mapGeometry = null;
       savedResizeOrder = order;
       rememberSize(bounds);
       if (current === layout && transition && layout.transition === transition && sameSize(bounds, panel.getBounds())) {

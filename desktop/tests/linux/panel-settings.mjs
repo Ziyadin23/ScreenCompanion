@@ -570,10 +570,58 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
       });
     }
 
+    const expectRestoredSize = async (profile, size) => {
+      const restarted = await launch(profile);
+      const question = restarted.getByTestId('question-input');
+      await expect(question).toBeFocused();
+      await expect.poll(geometry).toEqual([size[0], Math.max(180, size[1])]);
+      await question.press('Escape');
+      await expect.poll(geometry).toEqual(size);
+    };
     const setFloatRule = async (enabled, mapSize) => {
       await writeFile(config, compositorConfig(enabled, mapSize));
       assert.equal(execFileSync('hyprctl', ['reload'], { env, encoding: 'utf8' }).trim(), 'ok');
     };
+    for (const [action, chosen] of [['Back', [554, 252]], ['Save', [480, 144]]]) {
+      await t.test(`A native resize before the first panel paint after ${action} survives restart`, async () => {
+        const profile = 'resize-before-paint-' + action.toLowerCase();
+        try {
+          const panel = await setupProduction(profile);
+          await expect.poll(geometry).toEqual([480, 144]);
+          await resize(panel, [530, 238]);
+          await expect.poll(() => savedSize(profile)).toEqual({ Width: 530, Height: 238 });
+          const native = await app.browserWindow(panel);
+          const paint = await native.evaluateHandle(window => {
+            const contents = window.webContents;
+            const execute = contents.executeJavaScript.bind(contents);
+            let release, waiting = false;
+            const pending = new Promise(resolve => { release = resolve; });
+            contents.executeJavaScript = (code, ...args) => {
+              if (code.startsWith('new Promise(resolve => requestAnimationFrame')) {
+                waiting = true;
+                return pending.then(() => execute(code, ...args));
+              }
+              return execute(code, ...args);
+            };
+            return { waiting: () => waiting, finish: () => { contents.executeJavaScript = execute; release(); } };
+          });
+          try {
+            await editAppearance(panel, action);
+            await expect.poll(() => paint.evaluate(gate => gate.waiting())).toBe(true);
+            await expect.poll(() => activeClient()?.floating).toBe(true);
+            sizeWindow(activeClient().address, chosen);
+            await expect.poll(geometry).toEqual(chosen);
+            await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
+          } finally {
+            await paint.evaluate(gate => gate.finish());
+          }
+          await closeApp();
+          await expectRestoredSize(profile, chosen);
+        } finally {
+          await closeApp();
+        }
+      });
+    }
     for (const action of ['Back', 'Save']) {
       await t.test(`A map size rule on ${action} preserves the last manual size through restart`, async () => {
         const profile = 'map-size-rule-' + action.toLowerCase();
@@ -592,9 +640,7 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
           assert.deepEqual(await sizeFileSnapshot(profile), before);
 
           await setFloatRule(true);
-          const restarted = await launch(profile);
-          await expect(restarted.getByTestId('question-input')).toBeFocused();
-          await expect.poll(geometry).toEqual(chosen);
+          await expectRestoredSize(profile, chosen);
         } finally {
           await closeApp();
           await setFloatRule(true);
@@ -720,12 +766,7 @@ fi
           await closeApp();
 
           await setFloatRule(true);
-          const restarted = await launch(profile);
-          const question = restarted.getByTestId('question-input');
-          await expect(question).toBeFocused();
-          await expect.poll(geometry).toEqual([chosen[0], Math.max(180, chosen[1])]);
-          await question.press('Escape');
-          await expect.poll(geometry).toEqual(chosen);
+          await expectRestoredSize(profile, chosen);
         } finally {
           await rm(hyprctl, { force: true });
           await closeApp();
