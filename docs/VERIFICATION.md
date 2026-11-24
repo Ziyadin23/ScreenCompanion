@@ -11,6 +11,12 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
+Windows beta.17 passed qualification and local delivery from frozen
+panel-size source `c7635e5`. The later Hyprland correction at
+`8b8002f` changes the shared JavaScript bundle.
+See the [Windows results](#beta17-windows-panel-sizing-2026-11-24)
+and [Hyprland results](../openspec/changes/linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply).
+
 The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. The Windows 11 build passed native and vault checks, all 38 UI cases, both supplemental Settings cases, installed and portable startup, locale and Unicode checks, and the named Edge recording. The four Windows handoff files passed destination readback. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [integrated candidate](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
 The earlier beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`, met the size target. Extra development files in its optimized ASAR blocked beta.14 delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
@@ -27,7 +33,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
-| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | All seven [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. A source merge does not close them. |
+| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | The beta.17 follow-up completed the Settings-to-answer sizing item. The other six [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
@@ -48,6 +54,63 @@ A standard account on Windows 11 x64 updated its installed copy of SC from 0.5.0
 Uninstall exited 0. A fresh postflight matched the starting state for all four protected vault and size paths, the original cache directory identity and contents, installation records and shortcuts. The test processes and temporary scheduler entry were gone. The VM returned to its original powered-off state with its original configuration, disks, snapshots and USB filter.
 
 Three early fixture checks stopped before the first download. Two assumed a different form of the Windows uninstall registration. The third recorded a generic error at the beta.6 application-bridge check. Its last observation identified the setup screen as the active surface, with `ready` false and the updater idle. The exact operation that failed is unknown. The successful retry waited for beta.6 to report that the setup screen was visible before submitting the synthetic setup.
+
+## Beta.17 Windows panel sizing (2026-11-24)
+
+The Windows 11 x64 standard-account run used frozen source
+`c7635e51aeef3d9a9aae312635adf1f0614084ec`. The first package attempt
+stopped when the guest could not resolve the Electron download host. The
+second used the pinned Electron and builder files after checksum verification.
+Both packages passed the inventory check. It compared 23 installed files,
+24 portable files, nine compiled application files in each archive and
+5,532 installer update blocks. The strict checker verified the two-file ZIP.
+
+The target passed 54 native checks, nine Windows vault interoperability
+cases with 143 checks, and all seven Windows cases in the resize fixture.
+The fixture includes both scale models. At 96 DPI, the recorded Settings
+window measured 760×680. Real drags resized the answer from 180×80 to
+249×123 and back, and the input from 180×128 to 249×171 and back.
+The answer kept its final size through tray Exit and the input kept its
+final size through command Exit. Both reopened on the same profile at the
+saved physical size. The two checked-in pointer tests passed with zero
+retries when rerun with the native module from the final package build.
+
+Eight Windows process tests covered ordinary Exit, a delayed final rename,
+an expired rename and a later process taking ownership through both routes.
+A delayed rename finished with the original process still holding the
+per-user mutex. The deliberately stalled tray and command writes reached the
+close deadline in 1,031 ms and 1,030 ms. After the deadline, a new process
+saved 336×178 on the answer route and 336×226 on input. The old rename
+failed with `ENOENT` when released. A further restart restored the size
+written by the new process on both routes.
+
+The per-user installer registered beta.17 and created its two shortcuts.
+The installed application and the portable application both opened Setup
+with an empty key field. The 23 installed files and 24 files extracted
+by the portable wrapper matched their respective package inventories.
+The installer, applications, portable wrapper and uninstaller exited 0.
+
+Edge 158 recorded ten phase markers on one 1920×1080 monitor at 96 DPI.
+All nine paired regions showed the application on the local display and
+the backdrop in the saved VP8 video. Pointer shapes remained visible.
+The recording covered Settings, answer and input, their native resizes and
+the fresh restart. Beta.16 retains its separate full 38-case Windows UI
+result. Physical mixed-DPI checks belong to [issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/12).
+
+The local transfer readback on 24 November verified all four files. The
+ZIP contained exactly the portable EXE and `README.txt`, both identical to
+the separate copies. All ten earlier versioned files retained their hashes.
+The standard-account environment and updater cache were restored, and the
+operator released the lab. The public Windows prerelease is beta.16.
+
+| Local beta.17 file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.17.exe` | 104,561,261 | `4c306d83ce4694016b08ed788140ecd8fdbeff93c8b2398d02010d76b15e4159` |
+| `SC-Setup-v0.5.0-beta.17.exe` | 115,175,136 | `7047322919ac9fb0d35e69780810caa4bdd7ef749a4cf7106e626906c6b6b8cd` |
+| `SC-v0.5.0-beta.17.zip` | 104,286,596 | `333e8b8500f5d54214eda88e723ebd6f41bd66e7f6ee8c3e796c755c1cd8e36e` |
+| `SC-v0.5.0-beta.17-README.txt` | 14,242 | `4b2ee29741e1ce844bd41e717c7843d6cbe0854a697a903c8c0ef2b9ef7d3e6b` |
+
+[Panel-size tasks](../openspec/changes/archive/2026-11-24-persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
 
 ## Beta.16 Windows qualification (2026-11-22)
 
@@ -125,7 +188,7 @@ Host verification passed 1,259 tests in 37 files. Windows 11 x64 build 26200 at 
 
 All 14 distinct protected setup cases passed across three executions. The first execution passed 11 of 14. Two recovery tests required an explicit false ARIA attribute where the toolkit omits it. The idle-exit window closed while Playwright was still sending Escape. A targeted retry passed both storage cases. Its process observer then lost the disposed Playwright object during exit. The final idle-exit retry cached the process handle and verified the exact exit command and exit code. The contrast measurements used Electron's Chromium forced-colors emulation.
 
-The exact source's full Windows UI run discovered 38 cases. It ran with one worker and zero retries and exited 1 after 38.4 minutes. Thirty-six cases passed, including the native color picker, encrypted first-launch relaunch, and both #61 cases. For each #61 surface, the test used real resize input to return from B to programmatic size A. The same profile reopened at A and its vault bytes matched. The busy-main-thread wheel case failed when the stall ended before the fixture sent the native wheel input. The final serial shortcut-recording case did not run. A focused invocation of the same two tests against the same build passed both, exit 0. The first filter invocation found no tests. The later beta.16 run passed the full matrix in one invocation. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [resize qualification owner for #61](../openspec/changes/persist-final-panel-size/tasks.md).
+The exact source's full Windows UI run discovered 38 cases. It ran with one worker and zero retries and exited 1 after 38.4 minutes. Thirty-six cases passed, including the native color picker, encrypted first-launch relaunch, and both #61 cases. For each #61 surface, the test used real resize input to return from B to programmatic size A. The same profile reopened at A and its vault bytes matched. The busy-main-thread wheel case failed when the stall ended before the fixture sent the native wheel input. The final serial shortcut-recording case did not run. A focused invocation of the same two tests against the same build passed both, exit 0. The first filter invocation found no tests. The later beta.16 run passed the full matrix in one invocation. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [resize qualification owner for #61](../openspec/changes/archive/2026-11-24-persist-final-panel-size/tasks.md).
 
 The direct portable beta.15 EXE opened visible setup with a blank key field using an isolated profile. Three further launches exercised `en-US`, `ru` and the English fallback for `de-DE`. Each used unsent synthetic Unicode input and a Settings round trip. All four launches exited 0 and removed their profiles.
 
@@ -910,6 +973,417 @@ matching process credentials. Pinned beta.7 remains affected. Repeat the
 applicable checks on the selected integrated candidate under task 2.7.
 Installed desktop, Windows lab qualification and verified runnable beta
 delivery remain pending for the changed application.
+
+## Hyprland panel geometry (2026-11-19)
+
+[Issue #19](https://github.com/Ziyadin23/ScreenCompanion/issues/19) tracks this
+work in [Linux task 2.6](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness).
+The checks used Fedora 44 x86-64, Electron 45.0.0 and native Wayland on Hyprland
+0.56.2, nested in headless KWin 6.7.5 with one 1280×900 output at scale 1.
+Each run used a synthetic profile, a separate D-Bus session and a network
+namespace with only loopback.
+
+- **Beta.7 source replay.** The original locally delivered RPM was unavailable
+  in the retained locations checked. A fresh build of `d304f2e`, whose Git tree
+  matches PR #23 source `6cbf691`, reproduced the old result. A 560×480 answer
+  adopted the 760×680 Settings size on Back and Save. Hyprland resized the panel
+  to 530×240 and SC saved that size. The next Settings round trip overwrote it
+  with 760×680, which also appeared on restart.
+- **Pre-fix main baseline `9caa0c2`.** The production entry point with a synthetic
+  keyring profile reproduced the 560×480 to 760×680 change and the overwritten
+  size file. The checked-in [regression](../tests/README.md#hyprland-panel-geometry)
+  independently failed on `9caa0c2` with a 420×180 synthetic answer that
+  returned at 760×680 after Back.
+- **Initial staged fix `a5a9fc530efcae418bdd39cdfddaea6d308092dc` on `9caa0c2`.**
+  The main bundle SHA-256 was `649e9857d0f4f85a090c2e4acdd05703f96f437db705b027a77d20495fde8eb9`.
+  Four Back/Save round trips and 12 production profile checks passed. Host
+  verification passed 1,235 tests in 35 files. The review regressions both
+  failed on this frozen tree. Question stayed at 380×160, and the delayed
+  Settings renderer fired one native panel show event during capture.
+- **Frozen review candidate `8e73add970a81a1ec03b5838beb307c686c7a591` on `ee6ed7c` after PRs #111 and #113.**
+  Git blobs for the main entry point, controller and renderer are
+  `46d8f1af1eef3c8fd7b1d2af4e21f2820eb22fa3`,
+  `6884af570f3aea9a102f7caf37d234285c14e6a6` and
+  `380a7ff38a45b5230a408ffe44efbe558ac0f8e8`. The production main bundle
+  SHA-256 is `e9182c91242df78a61fc6b307e072627104f87065ec5b3843fb3c414d7bc3396`.
+  Setup and Settings use a separate native window. Renderer readiness uses
+  the controller's current capture state, and temporary size constraints
+  enforce the visible panel geometry while preserving the chosen size.
+
+The earlier regression passed all **three scenarios**, exit 0. Back and
+Save restored the compact answer and compositor sizes of 530×240 and 380×160.
+Question grew the 380×160 panel to 380×180, and Escape restored it to 380×160.
+The delayed Settings load produced zero panel show events and zero mapped SC
+windows while a test-controlled media request was pending. Cancelling that
+request restored the draft, and Settings could open again.
+
+The frozen production entry point passed **22/22** checks, exit 0, with a temporary,
+encrypted Secret Service profile. The answer returned from Back and Save at
+420×180 after Settings opened at 760×680. The answer, toolbar and input controls
+fit. The selected 530×240 size survived a Settings round trip and same-profile
+restart. With a saved 380×160 answer size, Question used 380×180 before and
+after restart. Escape restored the answer size in both sessions. The app exited
+normally and its isolated profiles were removed.
+
+Earlier attempts timed out after Save or reset the manually chosen size on
+Wayland remap. One frozen replay also encountered a nested compositor
+protocol error. Host verification on the frozen candidate passed **1,255 tests
+in 36 files**, type checking, lint and production bundles. The affected suites
+passed **179 tests in six files**, and the Astryx built check passed with two
+related font warnings and zero failures.
+
+On a fresh production profile for each action, both new regression cases
+failed on the frozen tree, exit 1. After Back or Save, a native resize on
+remap restored 420×180 and SC wrote that size before any user resize or
+typed request. The next synthetic answer overflowed the panel. In a control
+run without a Settings visit, Electron fitted the same answer at 480×276
+while Hyprland still reported 420×180.
+
+The remap correction is based on `a0536bfa76ba663f2a49f770ac8645af7a89f1e5`
+after PR #112. The main entry point blob is
+`e724c5ed98338093f5c912fdb242a37621d788d0` and the checked-in regression blob is
+`e5e543fc229a80f26233763dc64a2f82052ad188`. Temporary Wayland size constraints
+apply the panel's size on remap and apply new automatic sizes to the compositor.
+The shared resize-return guard remains with [issue #61](https://github.com/Ziyadin23/ScreenCompanion/issues/61).
+
+All **five scenarios** passed, exit 0. In separate fresh production profiles,
+Back and Save returned to the measured panel size with no manual size file.
+The next synthetic answer fit in a taller toplevel, and the ensuing deliberate
+530×240 compositor resize was saved. Question still grew from 380×160 to
+380×180 and returned on Escape. The delayed-load capture scenario still kept
+every SC window hidden. The separate **22/22** production checks still covered
+530×240 restart, 380×160 persistence and the minimum after restart. Host
+verification passed **1,256 tests in 36 files** with one Vitest worker, plus
+type checking, lint and production bundles, exit 0. The six affected portable
+suites passed **179 tests**, and the Astryx built check passed with two font
+warnings and zero failures.
+
+Windows runtime, recorder, final packaged target checks and a numbered local
+beta handoff remain pending. The source candidate uses the existing beta.14
+version label and the beta.14 release reservation remains with #84.
+
+### Combined Settings sizing and manual resize
+
+On 2026-11-20 UTC, verification resumed on the local merge of the #19 correction at
+`09c7f6da54bf6ae33486128f62b01c7481edac46` with the reviewed
+[PR #119](https://github.com/Ziyadin23/ScreenCompanion/pull/119) head
+`d9b3fce8c67f660727d071c82b627832c28be642`. The tested `desktop/` tree was
+`321cd7da903b3e0b3eac72a6177ecfd87a5d2b66`. Its `src/` and `tests/` trees were
+`1586aa2c92060173cb5e449b35a7c9160f39f102` and
+`9fdb51524173f6319106c2dba1ad9a7042cdedcb`. The main bundle SHA-256 was
+`e34d3a1e16bb52c815551abf7745132ad59996b1be3f8bd6d839463cf9759d4f`.
+
+The initial staged merge passed the compositor geometry commands. A separate
+pointer test failed at the first drag. Electron reported that the fixed limit
+had been cleared, and the Wayland trace showed Hyprland still using the fixed
+size. Refreshing resizability when releasing the temporary limits publishes
+the updated size hints. In each fresh production profile, a virtual Wayland
+pointer used Hyprland's interactive resize binding after an untouched Back or
+Save. The later answer fit at 480×276 with no saved size. The drag to 530×240
+and the drag back to 480×276 each updated the size file. Restart on each
+profile restored 480×276. Both runs passed all 10 checks, exit 0.
+
+All five checked-in scenarios passed on the same isolated Fedora 44 and
+Hyprland setup, exit 0. Separate fresh production profiles kept automatic fit
+after Back and Save. The next synthetic answer fit, and each later compositor
+resize wrote 530×240. The Question minimum, Escape and delayed Settings load
+during capture also passed. The separate production entry point passed all 22
+checks, exit 0. The 480×144 answer returned from 760×680 Settings with no size
+file after either action. The 530×240 resize survived restart. A 380×160 manual
+size remained saved while Question used 380×180, and Escape restored 380×160
+before and after restart. An earlier run sampled the 420×180 startup size
+before the short answer fit at 420×140. The checked-in test now waits for the
+short answer to fit and checks that the size file is absent immediately after
+Back and Save. An earlier production probe sampled the size file before it
+appeared. The final probe waits for the file after the compositor resize.
+
+The portable production resize cases saved B, saved A after the manual return
+to A, and restored A on the same profile at simulated scales 1 and 1.25.
+Automatic fitting continued after the input minimum raised the height. The
+eight focused suites passed 187 tests. `npm --prefix desktop run verify` passed
+1,259 tests in 37 files, type checking, lint and production bundles. Both runs
+exited 0 with one Vitest worker. An earlier focused run missed a toolbar Enter
+action in the renderer tests and passed on retry. The Astryx build check
+reported 20 passes and two font warnings, exit 0. Playwright listed all 38
+Windows cases on Fedora, including both changed restart scenarios, exit 0.
+The workflow self-test, documentation links, strict OpenSpec and whitespace
+checks passed. Windows runtime, named-recorder checks, final packaging and a
+numbered local beta handoff remain open.
+
+### Hyprland resize ownership correction
+
+On 2026-11-20, independent review reproduced a 1240×860 manual size file after
+changing Answer text size from 11 to 28 and choosing Save on `885d1ce`. A
+replay with an edited Back also reproduced it. The test used a fresh
+production profile and a Hyprland `float off` rule. The old candidate treated
+the layout resize as a manual choice. A later run also caught a delayed
+480×180 Question minimum being saved in a floating window.
+
+The correction tracks requested fits and minimum sizes across Wayland resize
+notifications. Hyprland's layout report controls whether SC applies the
+measured fit and whether it can save a changed size. A confirmed manual
+resize clears the earlier requests. The tested desktop tree was
+`76b88759155e7014d6a15d9091ad06ec7791c879`. Its source and test trees were
+`ba8726b9e46c77b2ed270e4a346df9fe72fde6f7` and
+`85e7263c4c4a76c63f4fcc9d307fc1f02b6c5451`. The main bundle SHA-256 was
+`95ddda5cdadb1f325654876875be1422d9cd45e18b1899bf3342d5ae6741a6c8`.
+
+The checked-in layout regression failed both tiled cases on the accepted
+bundle. The corrected bundle passed nine scenarios in isolated Hyprland, exit
+0. Edited Back retained 11 points and edited Save applied 28 points. In the
+floating layout the answer was 480×144 after Back and 480×360 after Save. Both
+tiled cases reached 1240×860 and then returned to their floating sizes. The
+size file stayed absent through each layout change. In separate fresh
+profiles, Wayland pointer events dragged the panel from an automatic 480×276
+to 530×240 and back to 480×276 after untouched Back and Save. Each new size
+reached disk and both profiles restored 480×276 on restart.
+
+The portable late-Question-minimum regression failed on `885d1ce`. The
+panel stayed at 180 logical pixels after Escape. The corrected panel refit
+to 300 logical pixels and left the size file absent.
+
+Desktop verify passed 1,260 tests in 37 files, type checking, lint and the
+production build. The eight focused suites passed 188 tests, and the separate
+production probe passed 22 checks. Playwright discovered all 38 Windows
+cases. The Astryx check reported 20 passes and two font warnings.
+
+Windows runtime, named-recorder checks, final packaging and the numbered
+local beta handoff remain open.
+
+### Hyprland layout and resize follow-up
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+at `0d57abe` found two remaining resize paths. Fixed size hints sent before
+showing the panel could make Hyprland float a tiled panel on return from
+Settings. The fixture could hide the failure by tiling the panel again.
+A tile-to-float transition could replace an existing manual size file.
+The prior fit history could also discard a single genuine resize to 480×144
+after an appearance Save had grown the floating panel to 480×360.
+
+Native traces showed that a remap can produce a 420×180 resize and leave no
+matching client in the first compositor snapshot. The revised source checks
+the mapped panel before setting fixed bounds. It treats a return to floating
+as a layout change and restores the chosen size or fits the current content.
+Programmatic changes are guarded through the paint and hint update. A later
+native event can save its dimensions when the compositor confirms them.
+The desktop, source and test Git trees are
+`33acc7dcef647bdeb78bad34dcdcf59d4d4a0c3b`,
+`4964f084c8aa0b0bb0b510c6670457d0fb5f86a6` and
+`26c1b098b919d7b4bf262b8e9b5facf505035cf7` respectively. The issue branch
+incorporates protected main `4667e43365dd4690d111057f23d85bbd87212372`
+with a merge commit. The main bundle SHA-256 is
+`a9e59c22974a5797920e1dd823a7996433a464b4d23f50c8808ec17ef80d63bc`.
+
+The [isolated Hyprland fixture](../tests/README.md#hyprland-panel-geometry)
+ran on Fedora 44 x86-64 with Hyprland 0.56.2, headless KWin 6.7.5,
+Electron 45.0.0 and a 1280×900 output at scale 1. The evaluated profiles
+used synthetic settings and a temporary keyring. On the prior bundle the
+regression exited 1 with four failing scenarios. The single 480×144 event
+left the size file absent. A tile-to-float transition replaced the file
+holding 530×240. After edited Back, layout restoration saved 1250×870 on
+the red run. Edited Save returned floating at 480×360.
+
+The revised bundle kept the panel tiled at 1240×860 through edited Back and
+Save. Tiling and returning to floating kept the 530×240 file's bytes, inode
+and modification time. A subsequent virtual-pointer drag saved 560×260.
+The single 480×144 resize wrote 480×144. The two original virtual-pointer
+round trips still saved 530×240 and then 480×276 on separate profiles.
+Each profile restored 480×276 on restart. The Question minimum, Escape,
+automatic answer fit and capture visibility scenarios also passed.
+
+The separate production probe found that the first correction could
+suppress a native resize immediately after Escape. In that case, Escape
+only lowered the minimum and the visible panel kept its dimensions. The
+fixture and a portable regression both reproduced the missed save. The
+revised guard leaves resize tracking active when a visible panel keeps its
+bounds. The real resize to 380×160 then reached the size file.
+
+The fixture passed all 11 scenarios, exit 0. The separate production probe
+passed all 22 checks, including Question and Escape on the same 380×160
+profile after restart. An earlier probe timed out before measuring the first
+answer. The passing run selects the panel by renderer role. The two focused
+regressions failed against the prior
+source. One left a 480×200 native resize absent from disk. The other kept the
+compositor's 560×260 size in place of the saved 530×240 choice. All seven
+tests in the portable resize file passed on the revised source. It also
+passed 191 focused tests and desktop verify with 1,263 tests in 37 files, type
+checking, lint and production bundles. The Astryx check passed with two
+related font warnings.
+
+Windows runtime, named-recorder checks, final packaging and the numbered
+local beta handoff remain open.
+
+### Hyprland panel geometry lifecycle (2026-11-20)
+
+Both independent findings on [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+reproduced on head `7c5271b89c24123aca1bc0f9c8fb0cc45d53e406`. Three
+portable probes lost a matching 500×252 floating resize before the release
+repaint, during remap or after Hide occurred before a compositor reply. Both
+comparison cases passed. The expanded portable fixture failed four cases
+on that head and passed the 11 controls and prior cases.
+
+In independent native replay, Escape returned the panel from 404×180 to
+404×160 and Electron reported an unlimited maximum. Each first tile command
+returned `ok` and left the panel floating. Three fresh profiles failed after
+quiet waits of 750, 1,500 and 2,500 ms. Each retry failed. The trace showed
+the released size hints with no following commit on the panel surface.
+
+The fix tracks each visible mapping separately. A matching floating resize
+can finish during hint release, during remap or after Hide. A new mapping
+can accept its own resize while a reply for the prior mapping is in flight.
+SC recognizes the initial configure that repeats Electron's old normal
+bounds on remap. A deliberate later resize to those dimensions still saves.
+The first implementation attempt saved that remap configure as a user
+choice. The revised portable test covers both events. A later trace showed
+the fixed hints being cleared before Hyprland accepted the new fit. SC now
+requests a repaint when mapping the panel and when applying or releasing fixed
+hints. A fit keeps its fixed hints until Hyprland reports the new size or the
+existing deadline expires. The portable control fails if a renderer frame
+releases the hints before Hyprland confirms the fit.
+
+The verified desktop tree is `2a23f0ea5db3b330b7ec3fb74fadef169e9b9c11`.
+All 12 scenarios passed in isolated Fedora 44, Hyprland 0.56.2, KWin 6.7.5
+and Electron 45.0.0. The 404×160 panel tiled at 1240×860 on the first
+command after Escape with no further input or test-driven repaint. Refloating
+restored 404×160 and preserved the size file's bytes, inode and modification
+time. All three independent Escape replays passed. The five independent
+layout and resize scenarios also passed, including Back and Save without
+retiling and a single resize to the earlier 480×144 automatic fit followed
+by a same-profile restart. [Isolated fixture](../tests/README.md#hyprland-panel-geometry)
+
+Desktop verify passed type checking, lint, 1,272 tests in 37 files and
+production bundling. The eight focused files passed 200 tests, including
+16 resize tests. The shared resize tests covered simulated scales 1 and
+1.25. Linux tests used a temporary keyring, synthetic settings and one
+1280×900 output at scale 1. Windows Settings and resize restart, the
+named-recorder check, final packaging and the numbered beta handoff remain
+open.
+
+### Hyprland size and tiling restoration (2026-11-20)
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+found two failures on the reviewed source. Both repeated on integration
+`94a5606ff8bb02628c4259275f28e2b9f3fc57ce` with protected main `e1533be`.
+When a matching 510×252 resize reply arrived after Hide and Show, SC restored
+the previous 530×240 choice on screen and on restart. A panel tiled by the
+user at 1240×860 returned floating when Hyprland applied a float-on-map rule.
+The Hide-only comparison saved 510×252.
+
+SC keeps the latest confirmed resize across mappings. It uses the observed
+resize order so an older reply cannot overwrite a newer confirmed size. A
+queued stale notification leaves an earlier matching reply eligible to save.
+An unrelated notification also leaves the initial normal-bounds guard in
+place. Three portable cases failed on `94a5606` and 16 passed. A further case
+caught a queued stale event dropping the matching reply on the first correction.
+
+Entering Settings reads the panel's placement while its toplevel is still
+mapped. This covers tiling at 1240×860 without an Electron resize event. On
+return, SC restores tiling when a rule opens that panel floating. The request
+targets the mapped SC panel. Hyprland continues to set the tiled dimensions.
+
+Protected main advanced to `7d258e3` during verification. The combined source
+preserves the approved icon in panel and dialog creation and the working tray
+indicator. [Icon integration](#sc-icon-source-refresh-2026-11-20)
+
+The verified desktop tree is `c62db279af384eef67f51d3094ac98c071c27e43`.
+Desktop verification passed type checking, lint, 1,277 tests in 37 files and
+production bundling. Eight focused files passed 205 tests with one Vitest
+worker. All 14 tracked and eight independent Wayland scenarios passed in
+isolated Fedora 44, Hyprland 0.56.2, headless KWin 6.7.5 and Electron 45.0.0.
+The timing replay saved and restored 510×252 on screen and after restart.
+Both edited Settings actions restored tiling under the float rule. The
+legacy same-size and Lua placement probes passed. The first corrected
+Wayland run encountered a closing Setup page in the test fixture. The
+fixture now checks the next live page and retains the geometry assertions.
+[Isolated fixture](../tests/README.md#hyprland-panel-geometry)
+
+Windows Settings and same-profile resize verification, the named recorder
+check, final packaging and the numbered local beta handoff remain open.
+
+### Hyprland resize order and normal Exit (2026-11-20)
+
+On draft PR #122 at `9e11c2c`, an isolated Hyprland replay issued two native
+resizes to 510×252 and 503×264 while the first compositor reply was held.
+After quick Hide and Show, SC restored 510×252 on screen, on disk and after
+restart. A separate normal Exit discarded a captured 510×252 resize and
+restored 530×240 on restart. The portable fixture also reproduced a canceled
+remap blocking a later genuine resize to 420×180.
+
+SC now requests a compositor snapshot for each eligible mapped resize. It
+processes placement in event order within each mapping and remembers the
+latest matching floating size across mappings. When a matched resize settles
+a remap, SC clears that remap's normal-bounds guard. Normal Exit allows up to
+one second for outstanding resize checks and size writes to complete.
+
+The seven new main-process regressions failed on `9e11c2c` and all 28 resize
+cases passed after the correction. The tests include held replies delivered in
+both orders, a newer resize on a remapped panel, an unmatched notification,
+an in-progress atomic write and a quit deadline. In isolated Fedora 44,
+Hyprland 0.56.2, KWin 6.7.5 and Electron 45.0.0, all 14 tracked Wayland
+scenarios passed. The two-real-resize replay restored 503×264 on screen, on
+disk and after restart. Exit and quick Hide, Show and Exit each saved and
+restored 510×252 while the compositor reply was held through the Exit request.
+The 12 replayed scenarios also passed, including same-size tiling and its
+Settings return. The Lua float-rule check passed Back and Save. Desktop
+verification passed type checking, lint, 1,284 tests in 37 files and production
+bundling. The eight focused files passed 212 tests.
+
+Windows interactive Settings and same-profile resize, the named recorder
+check, final packaging and the numbered local beta handoff remain open.
+
+### Hyprland quit, hidden Settings and remap (2026-11-20)
+
+Independent review of [draft PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122)
+at `39488d76c3909c17eb3aa5925d707b14bc01a255` reproduced three failures.
+Tray Exit accepted a capture command during a held size confirmation. The
+synthetic `getDisplayMedia` replacement recorded one call while the panel
+was mapped. A panel tiled at the same 1240×860 dimensions emitted no
+resize event. Opening Settings through a second launch after Hide returned
+that panel floating. A portable replay confirmed that a second real resize
+to 420×180 during remap was discarded while the earlier 510×252 reply was
+held. The ordinary capture visibility, hidden floating placement and
+Electron-only 420×180 controls passed on the starting head.
+
+SC stops accepting commands when quit starts and keeps the existing
+one-second limit for pending size confirmations and writes. Hide and
+Settings sample placement while the panel is mapped. Settings uses that
+sample if the panel is already hidden. During remap, an earlier confirmed
+resize lets a later return to the old dimensions qualify for its own
+compositor check. An unmatched Electron notification still leaves the
+confirmed size intact.
+
+The [tracked Hyprland fixture](../tests/README.md#hyprland-panel-geometry)
+checks Back after a second `--action=settings` launch from a hidden tiled
+or floating panel. Both keep the 1240×860 dimensions and the saved file's
+bytes, inode and modification time. The portable test checks the real
+420×180 return and stale 420×180 comparison in the live geometry, size file
+and same-profile restart. It holds the 510×252 reply through tray Exit and
+verifies that a later capture command does not reach the platform. The
+native replay uses the existing stop-before-media replacement. The checks
+used no screen capture or provider calls.
+
+Before the correction, the new portable cases had two failures and two
+passing controls. The tracked Hyprland run failed the hidden tiled case and
+passed the other 15 scenarios. After the correction, all 32 portable
+panel resize and tray cases and all 16 tracked Hyprland scenarios passed.
+The isolated Fedora 44 runs used Hyprland 0.56.2 nested in headless KWin
+6.7.5, Electron 45.0.0, a single 1280×900 output at scale 1 and synthetic
+profiles. The tray replay held 510×252 for 307 ms. Exit saved it and returned
+0. The synthetic media replacement received zero calls. Separate replays
+passed the earlier Hide and Show ordering, normal Exit and timeout cases,
+visible Settings with same-size tiling, and Lua Back and Save. The fallback
+preview also passed Hide, Show, Settings Back, Question, Escape and Exit
+with Hyprland geometry queries disabled.
+
+Desktop verify passed type checking, lint, 1,288 tests in 37 files and
+production bundling. The nine focused files passed 219 tests. Playwright
+listed 38 Windows UI cases on Fedora. The Astryx built check passed with
+two font warnings. The verified production main bundle SHA-256 is
+`773d78411a0b84b48aa7bc58e0766d6ccc0af07f73e2c00ca64c6b2e68705b2a`.
+The native replays used the same bundle.
+
+Windows interactive Settings and same-profile resize, the named recorder,
+final candidate packaging and the numbered local beta handoff remain open.
 
 ## Packaged beta.6 activation investigation (2026-11-05)
 
