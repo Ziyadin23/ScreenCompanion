@@ -67,6 +67,7 @@ export class ApplicationController {
   private pendingActivation = false;
   private afterCapture: (() => void)[] = [];
   private cancellation: AbortController | null = null;
+  private keepQuestionDiagnostic = false;
   private recording = false;
   private hiddenByUser = false;
   private detachWheel: (() => void) | null = null;
@@ -97,7 +98,11 @@ export class ApplicationController {
     const actions = this.afterCapture.splice(0);
     for (const action of actions) { if (!this.exiting) action(); }
   }
-  private fail(stage: string, error: unknown): void { this.state.error = this.deps.diagnostics.failure(stage, error); this.publish(); }
+  private fail(stage: string, error: unknown, keepForRetry = false): void {
+    this.state.error = this.deps.diagnostics.failure(stage, error);
+    this.keepQuestionDiagnostic = keepForRetry;
+    this.publish();
+  }
   setCaptureProtection(result: CaptureProtectionResult): void { this.state.captureProtection = result; this.publish(); }
   async initialize(): Promise<void> {
     const mode = this.deps.mode ?? 'production';
@@ -245,7 +250,10 @@ export class ApplicationController {
         this.publish(); break;
       case 'escape':
         if (this.state.surface === 'settings') break;
-        if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
+        if (this.state.surface === 'input') {
+          this.keepQuestionDiagnostic = false;
+          this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish();
+        }
         else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
         break;
       case 'settingsDraftChanged':
@@ -379,7 +387,7 @@ export class ApplicationController {
     this.state.settingsModels = candidate.Models;
     this.state.settingsModelPipelines = candidate.ModelPipelines;
     if (!this.recording && this.registeredShortcutSettings === candidate) this.state.shortcutRecovery = null;
-    if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
+    if (this.closeSettings(session) && this.state.error === priorError && !this.keepQuestionDiagnostic) this.state.error = null;
     return 'saved';
   }
   private reportShortcutRestoreFailure(): SettingsSaveResult {
@@ -420,7 +428,7 @@ export class ApplicationController {
       return 'clear-question';
     }
     this.cancellation = new AbortController();
-    this.state.busy = true; this.state.error = null;
+    this.state.busy = true; this.state.error = null; this.keepQuestionDiagnostic = false;
     let jpeg: Buffer | null = null;
     let stage = includeScreenshot ? 'Capture' : 'ApiRequest';
     try {
@@ -453,7 +461,7 @@ export class ApplicationController {
         if (!retryQuestion && !this.hiddenByUser) this.state.visible = true;
         const retryInput = stage === 'Capture' && typedQuestion !== undefined && this.deps.platform.captureSelection === 'portal';
         if (retryInput) this.state.surface = 'input';
-        this.fail(stage, error);
+        this.fail(stage, error, retryQuestion);
         if (retryInput) throw new AppError('CAPTUREFAILED', 'Screen capture was cancelled or unavailable. Try again.');
         if (retryQuestion) return;
       }

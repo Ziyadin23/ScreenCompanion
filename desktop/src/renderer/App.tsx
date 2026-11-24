@@ -38,6 +38,7 @@ function Answer({ state, onCommand, question, setQuestion }: {
   const text = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const focusInputWhenReady = useRef(false);
   const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
@@ -94,10 +95,17 @@ function Answer({ state, onCommand, question, setQuestion }: {
     if (content.current) content.current.scrollTop = 0;
   }, [state.answer, state.error, state.surface === 'captureTest']);
   useEffect(() => {
+    const field = input.current;
+    focusInputWhenReady.current = state.visible && field?.disabled === true;
     if (!state.visible) return;
-    if (state.surface === 'input' && !state.busy) input.current?.focus();
+    if (field && !field.disabled) field.focus();
     else panel.current?.focus({ preventScroll: true });
   }, [state.surface, state.visible]);
+  useEffect(() => {
+    if (!focusInputWhenReady.current || state.busy || submitting) return;
+    focusInputWhenReady.current = false;
+    if (document.hasFocus() && document.activeElement === panel.current) input.current?.focus();
+  }, [state.busy, submitting]);
   useEffect(() => {
     if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) setError('');
   }, [state.surface, state.platform, state.busy]);

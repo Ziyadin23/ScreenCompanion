@@ -187,6 +187,7 @@ If an answer fails, the panel shows the error, a diagnostic code and a report ID
 If a text-only send gives `ANSWER-NETWORK`, `ANSWER-TIMEOUT`, or an HTTP timeout
 (status 408 or 504), reopen **Question**.
 Edit your text, then press **Enter** or choose **Send** to try again.
+You can change and save Settings first. The diagnostic code and report ID stay in the panel.
 SC keeps the draft only in memory. A successful send clears it.
 Press **Esc** in Question or exit SC to discard it.
 

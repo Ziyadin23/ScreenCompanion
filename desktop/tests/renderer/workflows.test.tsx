@@ -157,13 +157,22 @@ function value(name: string) { return (screen.getByRole('textbox', { name }) as 
 describe('text-only question recovery', () => {
   const original = 'Synthetic input for connection recovery';
 
-  async function sendQuestion(text = original) {
+  async function sendQuestion(text = original, submitReply?: Promise<void>) {
     const production = controllerFixture();
     const firstResponse = deferred<HttpResponse>();
     const transport = new StrictTransport([() => firstResponse.promise]);
     production.run.mockImplementation(createPipelineRunner({ transport, cropper: production.platform }).run);
     const user = userEvent.setup();
     const driver = await renderController(production);
+    production.host.inputAction.mockImplementation(driver.inputAction);
+    if (submitReply) {
+      const invoke = driver.api.command.getMockImplementation()!;
+      driver.api.command.mockImplementation(async command => {
+        const result = await invoke(command);
+        if (command.type === 'submit') await submitReply;
+        return result;
+      });
+    }
     await user.click(await screen.findByRole('button', { name: 'Question' }));
     await user.type(screen.getByRole('textbox', { name: 'Question' }), text);
     await user.keyboard('{Enter}');
@@ -251,29 +260,69 @@ describe('text-only question recovery', () => {
     expect(production.platform.captureMonitor).not.toHaveBeenCalled();
   });
 
-  it.each(['Settings', 'Hide'] as const)('respects %s during the request and discards the recovered question with Escape', async action => {
+  it.each(['Settings Back', 'Settings Save', 'Hide'] as const)('respects %s during the request and discards the recovered question with Escape', async action => {
     const draft = '  ' + original + ' ✓  ';
     const { production, user, transport, fail } = await sendQuestion(draft);
-    await user.click(screen.getByRole('button', { name: action }));
-    if (action === 'Settings') await screen.findByRole('combobox', { name: 'Answer mode' });
+    const inSettings = action !== 'Hide';
+    await user.click(screen.getByRole('button', { name: inSettings ? 'Settings' : 'Hide' }));
+    if (inSettings) await screen.findByRole('combobox', { name: 'Answer mode' });
     const focus = document.activeElement;
     production.host.activate.mockClear();
     await fail('Network');
     expect(production.controller.getState()).toMatchObject({
-      surface: action === 'Settings' ? 'settings' : 'answer', visible: action === 'Settings',
+      surface: inSettings ? 'settings' : 'answer', visible: inSettings,
       error: { code: 'ANSWER-NETWORK' }, busy: false
     });
     expect(production.host.activate).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(focus);
-    if (action === 'Settings') await user.click(screen.getByTestId('settings-back'));
+    const reportId = production.controller.getState().error!.reportId;
+    if (inSettings) await user.click(screen.getByTestId(action === 'Settings Save' ? 'settings-save' : 'settings-back'));
     else await act(async () => production.controller.onAction('visibility'));
     await user.click(screen.getByRole('button', { name: 'Question' }));
     expect(value('Question')).toBe(draft);
+    expect(screen.getByTestId('answer-text').textContent).toContain(reportId);
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('textbox', { name: 'Question' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Question' }));
     expect(value('Question')).toBe('');
     transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('clears an unrelated shortcut diagnostic after saving Settings', async () => {
+    const production = controllerFixture();
+    production.applyShortcuts.mockRejectedValueOnce(new Error('Synthetic unavailable shortcut'));
+    await renderController(production);
+    expect(production.controller.getState().error?.code).toBe('SHORTCUTS-UNEXPECTED');
+    await openSettingsFromPanel();
+    await userEvent.setup().click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.controller.getState().error).toBeNull();
+  });
+
+  it.each(['type', 'Tab', 'Hide'] as const)('respects the next keyboard action (%s) when Question reopens before the submit reply', async action => {
+    const reply = deferred<void>();
+    const { production, user, transport, fail } = await sendQuestion(original, reply.promise);
+    await fail('Network');
+    await act(async () => production.controller.onAction('input'));
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Question' });
+    expect(input.disabled).toBe(true);
+    if (action === 'Tab') {
+      await user.tab();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+    }
+    if (action === 'Hide') await act(async () => production.controller.onAction('visibility'));
+    const focus = document.activeElement;
+    await act(async () => reply.resolve());
+    expect(input.disabled).toBe(false);
+    expect(input.value).toBe(original);
+    if (action === 'type') {
+      expect(document.activeElement).toBe(input);
+      await user.keyboard('x');
+      expect(input.value).toBe(original + 'x');
+    } else expect(document.activeElement).toBe(focus);
+    expect(production.controller.getState().visible).toBe(action !== 'Hide');
+    expect(transport.requests).toHaveLength(1);
     expect(production.platform.captureMonitor).not.toHaveBeenCalled();
   });
 
