@@ -23,17 +23,17 @@ function needsApplicationChecks(base, head, gitOptions) {
   }
 }
 
-function featurePushBranch({ GITHUB_EVENT_NAME, GITHUB_REF, GITHUB_REF_PROTECTED, DEFAULT_BRANCH }) {
-  if (GITHUB_EVENT_NAME !== 'push' || GITHUB_REF_PROTECTED !== 'false' || !DEFAULT_BRANCH ||
-      !GITHUB_REF?.startsWith('refs/heads/') || GITHUB_REF === `refs/heads/${DEFAULT_BRANCH}`) return '';
-  return GITHUB_REF.slice('refs/heads/'.length);
+function featurePushBranch(run) {
+  // A Git ref cannot contain a space. Compare the saved default name with the exact head branch.
+  const defaultBranch = /^Push branch \(default ([^ ]+)\) -/.exec(run.display_title)?.[1];
+  return run.event === 'push' && defaultBranch && run.head_branch !== defaultBranch ? run.head_branch : '';
 }
 
 function activePushRuns(repository, branch) {
   const api = (...args) => execFileSync('gh', ['api', '--method', 'GET',
     `repos/${repository}/actions/workflows/desktop.yml/runs`, '-f', 'event=push', '-f', `branch=${branch}`,
     '-F', 'per_page=100', '-F', 'exclude_pull_requests=true', ...args], { encoding: 'utf8', timeout: 30000 });
-  const fields = '.workflow_runs[] | select(.status != "completed") | {id, run_number, head_branch, status}';
+  const fields = '.workflow_runs[] | select(.status != "completed") | {id, run_number, event, head_branch, display_title, status}';
   const first = JSON.parse(api('--jq', `{total: .total_count, active: [${fields}]}`));
   if (first.total <= 100) return first.active;
 
@@ -46,7 +46,7 @@ function activePushRuns(repository, branch) {
 
 function olderPushIds(runs, branch, runNumber) {
   if (!Number.isSafeInteger(runNumber) || runNumber < 1) return [];
-  const older = runs.filter(run => run.head_branch === branch && Number.isSafeInteger(run.run_number) &&
+  const older = runs.filter(run => featurePushBranch(run) === branch && Number.isSafeInteger(run.run_number) &&
     run.run_number > 0 && run.run_number < runNumber && Number.isSafeInteger(run.id) && run.id > 0);
   // Actions accepts up to 256 matrix jobs. Retire executing runs first if the queue exceeds that limit.
   older.sort((a, b) => Number(b.status === 'in_progress') - Number(a.status === 'in_progress'));
@@ -106,21 +106,20 @@ function checkDocuments(root, files) {
 }
 
 function selftest() {
-  const push = { GITHUB_EVENT_NAME: 'push', GITHUB_REF_PROTECTED: 'false', DEFAULT_BRANCH: 'main' };
-  const branch = (ref, overrides) => featurePushBranch({ ...push, GITHUB_REF: ref, ...overrides });
-  assert.equal(branch('refs/heads/Main'), 'Main');
-  assert.equal(branch('refs/heads/main'), '');
-  assert.equal(branch('refs/tags/Main'), '');
-  assert.equal(branch('refs/heads/release', { GITHUB_REF_PROTECTED: 'true' }), '');
-  assert.equal(branch('refs/pull/1/merge', { GITHUB_EVENT_NAME: 'pull_request' }), '');
-  const docsPush = { id: 40, run_number: 8, head_branch: 'feature/Fix' };
-  const codePush = { id: 10, run_number: 9, head_branch: 'feature/Fix' };
-  const nextCodePush = { id: 20, run_number: 10, head_branch: 'feature/Fix' };
-  const runs = [nextCodePush, docsPush, codePush, { id: 30, run_number: 7, head_branch: 'feature/fix' }];
-  // The newest build starts first. A delayed docs or code push can only retire an earlier run.
-  assert.deepEqual(olderPushIds(runs, 'feature/Fix', nextCodePush.run_number), [docsPush.id, codePush.id]);
-  assert.deepEqual(olderPushIds(runs, 'feature/Fix', codePush.run_number), [docsPush.id]);
-  assert.deepEqual(olderPushIds(runs, 'feature/Fix', docsPush.run_number), []);
+  const push = { event: 'push', head_branch: 'Main', display_title: 'Push branch (default main) - update' };
+  const first = { ...push, id: 40, run_number: 10 };
+  const middle = { ...push, id: 10, run_number: 11 };
+  const newest = { ...push, id: 20, run_number: 12 };
+  const runs = [first, middle, newest];
+  // Each earlier run's own metadata survives later changes to protection or the default branch.
+  for (const title of ['Push branch (default Main) - update', 'Push protected (default main) - update',
+    'Push tag (default main) - update', 'Older run without ref metadata']) {
+    runs.push({ ...first, id: 30, display_title: title });
+  }
+  runs.push({ ...first, id: 50, head_branch: 'main' }, { ...first, id: 60, event: 'pull_request' });
+  assert.deepEqual(olderPushIds(runs, 'Main', newest.run_number), [first.id, middle.id]);
+  assert.deepEqual(olderPushIds(runs, 'Main', middle.run_number), [first.id]);
+  assert.deepEqual(olderPushIds(runs, 'Main', first.run_number), []);
 
   assert.equal(documentationOnly(['README.md', 'docs/history/a.md', 'openspec/changes/a/tasks.md']), true);
   for (const file of ['desktop/src/main/index.ts', 'desktop/package-lock.json', '.github/workflows/desktop.yml',
@@ -178,9 +177,10 @@ switch (process.argv[2]) {
     break;
   }
   case 'older-pushes': {
-    const branch = featurePushBranch(process.env);
-    const ids = branch ? olderPushIds(activePushRuns(process.env.GITHUB_REPOSITORY, branch), branch,
-      Number(process.env.GITHUB_RUN_NUMBER)) : [];
+    const { workflow, workflow_run: run, repository } = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
+    const branch = featurePushBranch(run);
+    const ids = branch && workflow.path === '.github/workflows/desktop.yml' && run.head_repository?.id === repository.id
+      ? olderPushIds(activePushRuns(process.env.GITHUB_REPOSITORY, branch), branch, run.run_number) : [];
     appendFileSync(process.env.GITHUB_OUTPUT, `runs=${JSON.stringify(ids)}\n`);
     break;
   }

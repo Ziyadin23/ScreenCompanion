@@ -1,0 +1,41 @@
+name: Retire superseded Desktop pushes
+on:
+  workflow_run:
+    workflows: [Desktop checks]
+    types: [requested]
+permissions: {}
+jobs:
+  find-older-pushes:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.display_title, 'Push branch (default ')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      runs: ${{ steps.older.outputs.runs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: older
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/workflow-checks.mjs older-pushes
+
+  # Two helpers can claim the same older run. Their job results belong to this workflow.
+  supersede-older-pushes:
+    needs: find-older-pushes
+    if: needs.find-older-pushes.outputs.runs != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        run_id: ${{ fromJSON(needs.find-older-pushes.outputs.runs) }}
+    concurrency:
+      group: desktop-branch-push-${{ matrix.run_id }}
+      cancel-in-progress: true
+    runs-on: ubuntu-latest
+    steps:
+      - run: 'true'
