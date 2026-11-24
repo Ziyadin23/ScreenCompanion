@@ -20,7 +20,7 @@ This verification worktree links to [#89](https://github.com/Ziyadin23/ScreenCom
 
 ## Handoff
 
-The setup source in PR #109 and the status in PR #110 retain their original candidate results. The application fixes are already on main. The reviewed #61 and #62 source is also on the pinned base. #59 remains on its own PR. Beta.15 was reserved for this candidate. The prior handoff recorded the #84 release and required fresh readiness. The existing beta.14 package hold remains in [#84's task record](../reduce-windows-package-size/tasks.md).
+The setup source in PR #109 and the status in PR #110 retain their original candidate results. The application fixes are already on main. The reviewed #61 and #62 source is also on the pinned base. #59 remains on its own PR. Beta.15 was reserved for this candidate. The prior handoff recorded the #84 release and required fresh readiness. The existing beta.14 package hold remains in [#84's task record](../archive/2026-11-22-reduce-windows-package-size/tasks.md).
 
 ## Windows lab and candidate checkpoint on 20 November 2026
 

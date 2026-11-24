@@ -36,6 +36,10 @@ Owner for [W7 / issue #12](https://github.com/Ziyadin23/ScreenCompanion/issues/1
 
 The draft branch incorporated main `e8e676d` at `5fd7ff18871df32b21e2d4382a79a78a57d39027`. The status table now links the W7 procedure while retaining current evidence for the other Windows issues. The physical procedure matches the independently reviewed November text. The desktop tree matches main. The workflow self-test, documentation checks across 117 Markdown files and 514 local links and anchors, and all 12 strict OpenSpec checks passed. Readiness remains at one of four tasks. The physical Windows runs still require two monitors at different display scales.
 
+## Wheel boundary preparation on 22 November 2026
+
+The [physical procedure](../../../docs/VERIFICATION.md#physical-windows-mixed-dpi-qualification) now checks wheel input on both sides of the question field immediately after moving between monitors in either direction. [Issue #131](https://github.com/Ziyadin23/ScreenCompanion/issues/131) tracks the documentation. The physical operator still owns tasks 2.1 and 2.2 for published beta.6. They require a Windows console with two physical displays at different scales. The documentation checks passed on base `cc213c9`. They covered 136 Markdown files and 576 local links and anchors. All 15 OpenSpec items and the Git whitespace check passed.
+
 ## Workflow follow-up
 
 - Keep issue #12 open while physical acceptance is unavailable. A preparation PR is partial delivery; its review does not complete task 3.1.

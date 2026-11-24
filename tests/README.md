@@ -69,6 +69,23 @@ npx vitest run --config vitest.windows.config.ts
 Windows CI runs this vault suite separately from the interactive native/UI
 checks. Portable success and native compilation do not substitute for real DPAPI.
 
+Before `npm run package:win`, Windows CI builds the developer preview with
+`npm exec -- vite build --config vite.preview.config.ts`. The package must pass its
+ASAR check with the preview files still on disk. The portable suite also checks
+the ASAR verifier with a production archive and two archives containing stray
+output.
+
+After `npm run package:win`, Windows CI runs `npm run package:zip`. It opens the
+ZIP, requires the versioned portable EXE and `README.txt` at the root, and
+compares their SHA-256 digests with the standalone EXE and the repository
+`README.md`. CI and the handoff tool use the same [ZIP validator](../tools/agent-workflow/src/portable-zip.mjs).
+It checks local names, flags and compression methods against the central directory.
+It checks the CRC and both sizes in the local header or the data descriptor, then
+checks the size and CRC of the decompressed bytes. Run
+`../.github/scripts/verify-windows-zip.ps1` from `desktop/` with PowerShell 7 and Node 22.
+The sibling `verify-windows-zip.test.ps1` script covers damaged local headers,
+descriptors with and without signatures, and an archive produced by `Compress-Archive`.
+
 ## Electron workflows and preview
 
 The local Astryx review surface runs the real renderer with an in-memory synthetic
@@ -110,6 +127,25 @@ From `desktop/`, run `npx playwright install chromium` once, then run
 `npx playwright test --config playwright.preview.config.ts` for the compact setup
 regression. It starts the synthetic preview on port 43290 and uses isolated
 Chromium sessions for keyboard focus, error visibility and Save retry.
+
+After `npm --prefix desktop run build`, run `node --test desktop/tests/preview/shortcut-recovery.test.mjs`
+from the repository root. Headless Chromium loads the production renderer with
+synthetic shortcut failure state in compact Windows panel sizes. The test
+checks the recovery text, retained answer, Question and keyboard controls. It
+measures complete answer lines at the default, 16-point, 18-point and 28-point
+sizes. It checks keyboard scrolling and full native wheel steps in both
+directions, including 28-point text in a 180 × 173 pixel Answer. At 180 × 121
+with 28-point text, it checks half-notches after keyboard scrolling, mixed
+signed deltas and proportional scrolling on the ordinary Answer panel. At
+180 × 80 and 180 × 185 with 28-point text, it compares wheel deltas of ±1 and
+±2 to a full notch and checks reversal at both scroll limits. At 420 × 300,
+it checks that a successful keyboard retry shows the heading and its focus
+outline, honors a user's focus change while the retry is pending, and keeps
+Escape available. With a shortcut recovery message present, it also checks
+that every line of a validation or read error is visible and that the affected
+input or Retry button can receive keyboard focus and respond to a pointer.
+At browser font sizes of 16 and 24 pixels, it checks the full Retry and
+heading labels, keyboard access to longer messages, and the Save and Back controls.
 
 The compact theme extends the installed Neutral package. After editing its
 source, run `npm --prefix desktop run theme:build` and retain the generated theme

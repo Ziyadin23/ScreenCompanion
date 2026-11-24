@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const git = (args, options) => execFileSync('git', args, { ...options, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 const documentationOnly = files => files.length > 0 && files.every(file =>
   /^(README|AGENTS|CODING_STANDARDS)\.md$/.test(file) ||
   /^docs\/.*\.md$/.test(file) || file === 'tests/README.md' || file === 'desktop/REWRITE.md' ||
@@ -13,10 +13,10 @@ const documentationOnly = files => files.length > 0 && files.every(file =>
   /^\.(agents|claude)\/skills\/.*\.md$/.test(file) ||
   /^\.opencode\/.*\.md$/.test(file));
 
-function needsApplicationChecks(base, head) {
+function needsApplicationChecks(base, head, gitOptions) {
   if (!base || /^0+$/.test(base)) return true;
   try {
-    const files = git('diff', '--name-only', '--no-renames', '-z', base, head).split('\0').filter(Boolean);
+    const files = git(['diff', '--name-only', '--no-renames', '-z', base, head], gitOptions).split('\0').filter(Boolean);
     return !documentationOnly(files);
   } catch {
     return true;
@@ -82,38 +82,41 @@ function selftest() {
     assert.equal(documentationOnly(['docs/a.md', file]), false, file);
   }
   assert.equal(documentationOnly([]), false);
-  assert.equal(needsApplicationChecks('', 'HEAD'), true);
-  assert.equal(needsApplicationChecks('0'.repeat(40), 'HEAD'), true);
-  assert.equal(needsApplicationChecks('missing-workflow-checks-ref', 'HEAD'), true);
-  const root = mkdtempSync(join(tmpdir(), 'sc-docs-check-'));
-  const previousDirectory = process.cwd();
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'sc-docs-check-')));
   try {
     writeFileSync(join(root, 'source.md'), '# Source\n\n[ok](<target file.md#repeat-1>)\n\n```md\n[example](absent.md)\n```\n');
     writeFileSync(join(root, 'target file.md'), '# Repeat\n\n# Repeat\n');
     assert.deepEqual(checkDocuments(root, ['source.md']).errors, []);
     writeFileSync(join(root, 'source.md'), '[missing](absent.md)\n[anchor](target%20file.md#absent)\n');
     assert.equal(checkDocuments(root, ['source.md']).errors.length, 2);
-    process.chdir(root);
-    git('init', '--quiet');
-    git('config', 'core.hooksPath', '.git/no-hooks');
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/i.test(name)));
+    const fixture = { cwd: root, env: { ...env, HOME: root, XDG_CONFIG_HOME: root, GIT_CONFIG_NOSYSTEM: '1' } };
+    const fixtureGit = (...args) => git(args, fixture);
+    fixtureGit('init', '--quiet', '--template=');
+    const gitPath = flag => realpathSync(fixtureGit('rev-parse', '--path-format=absolute', flag).trimEnd());
+    assert.equal(gitPath('--git-dir'), join(root, '.git'));
+    assert.equal(gitPath('--git-common-dir'), join(root, '.git'));
+    assert.equal(gitPath('--show-toplevel'), root);
     const commit = () => {
-      git('add', '.');
-      git('-c', 'user.name=SC workflow selftest', '-c', 'user.email=sc-selftest@example.invalid',
+      fixtureGit('add', '.');
+      fixtureGit('-c', 'user.name=SC workflow selftest', '-c', 'user.email=sc-selftest@example.invalid',
         '-c', 'commit.gpgsign=false', 'commit', '--quiet', '-m', 'selftest fixture');
     };
-    writeFileSync('README.md', '# Initial\n');
-    writeFileSync('production.js', 'export const value = 1;\n');
+    writeFileSync(join(root, 'README.md'), '# Initial\n');
+    writeFileSync(join(root, 'production.js'), 'export const value = 1;\n');
     commit();
-    const base = git('rev-parse', 'HEAD').trim();
-    writeFileSync('README.md', '# Documentation update\n');
+    const base = fixtureGit('rev-parse', 'HEAD').trim();
+    assert.equal(needsApplicationChecks('', 'HEAD', fixture), true);
+    assert.equal(needsApplicationChecks('0'.repeat(40), 'HEAD', fixture), true);
+    assert.equal(needsApplicationChecks('missing-workflow-checks-ref', 'HEAD', fixture), true);
+    writeFileSync(join(root, 'README.md'), '# Documentation update\n');
     commit();
-    assert.equal(needsApplicationChecks(base, 'HEAD'), false);
-    assert.equal(needsApplicationChecks('HEAD', 'HEAD'), true);
-    renameSync('production.js', 'README.md');
+    assert.equal(needsApplicationChecks(base, 'HEAD', fixture), false);
+    assert.equal(needsApplicationChecks('HEAD', 'HEAD', fixture), true);
+    renameSync(join(root, 'production.js'), join(root, 'README.md'));
     commit();
-    assert.equal(needsApplicationChecks('HEAD^', 'HEAD'), true);
+    assert.equal(needsApplicationChecks('HEAD^', 'HEAD', fixture), true);
   } finally {
-    process.chdir(previousDirectory);
     rmSync(root, { recursive: true, force: true });
   }
   console.log('Workflow checker selftest passed: conservative routing, fallback and broken-document rejection.');
@@ -127,7 +130,7 @@ switch (process.argv[2]) {
     break;
   }
   case 'docs': {
-    const files = git('ls-files', '--cached', '--others', '--exclude-standard', '-z').split('\0')
+    const files = git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']).split('\0')
       .filter(file => file.endsWith('.md') && !file.startsWith('.') && existsSync(file));
     const { errors, links } = checkDocuments(process.cwd(), files);
     if (errors.length) {

@@ -30,12 +30,34 @@ describe('diagnostic privacy and renderer boundaries', () => {
   it('validates IPC payload sizes and excludes credentials from drafts', () => {
     expect(commandSchema.safeParse({ type: 'submit', question: 'x'.repeat(4001) }).success).toBe(false);
     const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('synthetic');
-    expect(settingsDraftSchema.safeParse({ values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: { OpenAI: 'bad\nkey' } }).success).toBe(false);
+    const draft = { session: 1, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: {}, pipelineUpdates: [] };
+    expect(settingsDraftSchema.safeParse(draft).success).toBe(true);
+    expect(settingsDraftSchema.safeParse({ ...draft, keyUpdates: { OpenAI: 'bad\nkey' } }).success).toBe(false);
+    const update = { Provider: 'OpenAI', AnswerModel: 'synthetic-model', PipelineMode: 'Thorough' };
+    expect(settingsDraftSchema.safeParse({ ...draft, pipelineUpdates: [update] }).success).toBe(true);
+    expect(settingsDraftSchema.safeParse({ ...draft, pipelineUpdates: [update, update] }).success).toBe(false);
   });
   it('requires an explicit screenshot choice and bounds measured input geometry', () => {
     for (const includeScreenshot of [true, false]) expect(commandSchema.safeParse({ type: 'submit', question: 'Synthetic task', includeScreenshot }).success).toBe(true);
     for (const includeScreenshot of [undefined, 'yes', 1]) expect(commandSchema.safeParse({ type: 'submit', question: 'Synthetic task', includeScreenshot }).success).toBe(false);
     for (const height of [0, -1, 1.5, 32769, NaN]) expect(commandSchema.safeParse({ type: 'inputHeight', height }).success).toBe(false);
     expect(commandSchema.safeParse({ type: 'inputHeight', height: 76 }).success).toBe(true);
+  });
+  it.each([
+    { type: 'recordShortcut', recording: true, focusRevision: 0 },
+    { type: 'settingsDraftChanged', dirty: true }
+  ] as const)('requires a Settings session for $type IPC', command => {
+    for (const session of [undefined, -1, 1.5, '1', NaN, Infinity]) {
+      expect(commandSchema.safeParse({ ...command, session }).success).toBe(false);
+    }
+    expect(commandSchema.parse({ ...command, session: 1 })).toEqual({ ...command, session: 1 });
+  });
+  it('requires a focus revision for shortcut recording', () => {
+    for (const recording of [true, false]) {
+      const command = { type: 'recordShortcut', recording, session: 1 };
+      for (const focusRevision of [undefined, -1, 0.5, '1'])
+        expect(commandSchema.safeParse({ ...command, focusRevision }).success).toBe(false);
+      expect(commandSchema.safeParse({ ...command, focusRevision: 2 }).success).toBe(true);
+    }
   });
 });

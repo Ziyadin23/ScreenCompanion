@@ -9,6 +9,7 @@ import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
+const WHEEL_DELTA = 120;
 const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
   { label: 'Capture screen', icon: 'capture', command: { type: 'capture' }, request: true },
   { label: 'Question', icon: 'question', command: { type: 'showInput' }, request: true },
@@ -32,16 +33,63 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const pending = useRef(false);
   const composing = useRef(false);
   const text = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
+  const answerRecovery = state.surface !== 'input' && state.shortcutRecovery !== null;
   useEffect(() => () => { alive.current = false; }, []);
-  useEffect(() => window.sc.onScroll((delta) => {
-    // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
-    if (text.current) text.current.scrollTop -= delta / 120 * Math.max(1, state.appearance.TextSizePoints * 4);
-  }), [state.appearance.TextSizePoints]);
-  useEffect(() => { if (text.current) text.current.scrollTop = 0; }, [state.answer, state.error, state.surface === 'captureTest']);
+  useEffect(() => {
+    let pendingDelta = 0;
+    let fractionalScroll: { viewport: HTMLElement; top: number; remainder: number } | null = null;
+    return window.sc.onScroll((delta) => {
+      // Native Windows wheel deltas are positive upwards, unlike DOM wheel deltaY.
+      const answer = text.current;
+      const viewport = content.current && getComputedStyle(content.current).overflowY === 'auto' ? content.current : answer;
+      if (!viewport || !answer) return;
+      let step = Math.max(1, state.appearance.TextSizePoints * 4);
+      if (answerRecovery) {
+        const style = getComputedStyle(answer);
+        const lineHeight = parseFloat(style.lineHeight);
+        const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+        const readableHeight = answer.clientHeight - padding;
+        // With a shared scroll area, the first half-step reveals the first line below the header.
+        if (viewport !== answer && lineHeight > 0) step = lineHeight / 2;
+        else if (lineHeight > 0 && readableHeight > 0) {
+          // Leave room for a complete line even when a preceding arrow key stopped mid-line.
+          const fullLines = Math.max(1, Math.floor(readableHeight / lineHeight) - 1);
+          step = Math.min(step, fullLines * lineHeight);
+          if (readableHeight < 2 * lineHeight) {
+            fractionalScroll = null;
+            pendingDelta += delta;
+            const notches = Math.trunc(pendingDelta / WHEEL_DELTA);
+            if (!notches) return;
+            pendingDelta -= notches * WHEEL_DELTA;
+            // Align whole notches to readable lines. Scroll offsets can round to a pixel.
+            const top = viewport.scrollTop;
+            const line = notches < 0 ? Math.floor((top + 0.5) / lineHeight) : Math.ceil((top - 0.5) / lineHeight);
+            const lastLine = answer.scrollHeight - padding - lineHeight;
+            viewport.scrollTop = Math.min((line - notches) * lineHeight, lastLine);
+            return;
+          }
+        }
+      }
+      pendingDelta = 0;
+      const top = viewport.scrollTop;
+      const remainder = fractionalScroll?.viewport === viewport && fractionalScroll.top === top ? fractionalScroll.remainder : 0;
+      const limit = viewport.scrollHeight - viewport.clientHeight;
+      const target = Math.min(limit, Math.max(0, top + remainder - delta / WHEEL_DELTA * step));
+      viewport.scrollTop = target;
+      // Keep the fraction Chromium rounded off. A keyboard scroll or a new viewport starts from its own position.
+      const actual = viewport.scrollTop;
+      fractionalScroll = { viewport, top: actual, remainder: target - actual };
+    });
+  }, [state.appearance.TextSizePoints, answerRecovery, state.answer, state.error, state.surface]);
+  useEffect(() => {
+    if (text.current) text.current.scrollTop = 0;
+    if (content.current) content.current.scrollTop = 0;
+  }, [state.answer, state.error, state.surface === 'captureTest']);
   useEffect(() => {
     if (!state.visible) return;
     if (state.surface === 'input' && !state.busy) input.current?.focus();
@@ -98,45 +146,43 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     ref={panel} tabIndex={-1} style={panelStyle(state.appearance)} onMouseDownCapture={(event) => {
       if (event.button === 0 && event.altKey) { event.preventDefault(); event.stopPropagation(); void onCommand({ type: 'beginMove' }); }
     }}>
-    <div className="panel-chrome">
-      <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
-      <nav className="panel-toolbar" aria-label="SC controls">
-        {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
-          disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
-      </nav>
-    </div>
-    <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
-    {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
-      <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
-        disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
-        onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
-      <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
-      <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
-        onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
-      <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
-      {error && <span className="input-error" role="alert">{error}</span>}
-    </form>}
-    {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
+    <section className={state.surface === 'input' ? 'panel-content' : 'panel-content answer-content'} ref={content}>
+      <header className="panel-chrome">
+        <div className="panel-actions">
+          <span className="panel-status" role="status">{state.busy ? 'Working…' : state.error ? 'Could not answer' : ''}</span>
+          <nav className="panel-toolbar" aria-label="SC controls">
+            {PANEL_ACTIONS.map(({ label, icon, command, request }) => <button key={label} type="button" aria-label={label} title={label}
+              disabled={request && (state.busy || submitting)} onClick={() => { void control(command); }}><Icon name={icon} /></button>)}
+          </nav>
+        </div>
+        {state.shortcutRecovery && <p className="panel-recovery" role="alert">Restart SC to fix shortcuts.</p>}
+      </header>
+      <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
+      {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>
+        <input ref={input} data-testid="question-input" aria-label="Question" aria-describedby="question-send-help" placeholder="Ask a question…" value={question} maxLength={4000} autoComplete="off" spellCheck={false}
+          disabled={state.busy || submitting} onChange={(event) => setQuestion(event.target.value.slice(0, 4000))}
+          onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { composing.current = false; }} />
+        <button type="submit" aria-label="Send" title="Send text (Enter)" disabled={state.busy || submitting || !question.trim()}><Icon name="send" /></button>
+        <button type="button" className="screenshot-send" aria-label="Send with screenshot" title="Send with screenshot (Ctrl+Enter)" disabled={state.busy || submitting || !question.trim()}
+          onClick={() => { if (!composing.current) void submit(true); }}><Icon name="capture" /></button>
+        <span id="question-send-help" className="question-send-help">Ctrl+Enter · Send with screenshot</span>
+        {error && <span className="input-error" role="alert">{error}</span>}
+      </form>}
+      {error && state.surface !== 'input' && <p className="panel-action-error" role="alert">{error}</p>}
+    </section>
     {EDGES.map((edge) => <div key={edge} className={`resize-edge edge-${edge}`} data-testid={`resize-${edge}`} aria-hidden="true"
       onMouseDown={(event) => { if (event.button === 0 && !event.altKey) { event.preventDefault(); void onCommand({ type: 'beginResize', edge }); } }} />)}
   </main>;
 }
 
 export function App() {
-  const [snapshot, setSnapshot] = useState<{ state: AppState; settingsSession: number } | null>(null);
-  const state = snapshot?.state;
+  const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
     let receivedEvent = false;
-    function receive(next: AppState) {
-      // IPC updates can enter and leave Settings before React commits a render.
-      // Give each opening its own draft even when those updates are batched.
-      setSnapshot((previous) => ({ state: next, settingsSession: (previous?.settingsSession ?? 0) +
-        (next.surface === 'settings' && previous?.state.surface !== 'settings' ? 1 : 0) }));
-    }
-    const unsubscribe = window.sc.subscribe((next) => { receivedEvent = true; if (active) receive(next); });
-    void window.sc.getState().then((initial) => { if (active && !receivedEvent) receive(initial); })
+    const unsubscribe = window.sc.subscribe((next) => { receivedEvent = true; if (active) setState(next); });
+    void window.sc.getState().then((initial) => { if (active && !receivedEvent) setState(initial); })
       .catch(() => { if (active) setError('SC could not load. Close and reopen the app.'); });
     return () => { active = false; unsubscribe(); };
   }, []);
@@ -160,6 +206,6 @@ export function App() {
   const dialog = state.surface === 'setup' || state.surface === 'settings';
   if (state.platform === 'linux' && ((windowRole === 'panel' && dialog) || (windowRole === 'dialog' && !dialog))) return null;
   if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
-  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={snapshot!.settingsSession} state={state} /></Theme>;
+  if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={state.settingsSession} state={state} /></Theme>;
   return <Answer state={state} onCommand={command} />;
 }

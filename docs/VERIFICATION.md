@@ -1,11 +1,8 @@
 # Verification and limitations
 
-This source tree contains the unpublished TypeScript/Electron application, **0.5.0-beta.14**.
-The latest [GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) is beta.6.
-The previous C# application and its published releases remain available through
-existing tags/assets. Beta.4 is available as a
-[GitHub prerelease](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.4);
-publication does not establish that every compatibility gate has passed.
+The latest public Windows prerelease is [SC v0.5.0-beta.16](releases/v0.5.0-beta.16.md).
+The previous C# application remains the [v0.4.14 stable release](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14).
+Earlier Windows prereleases have their own [beta.6](releases/v0.5.0-beta.6.md) and [beta.4 release notes](releases/v0.5.0-beta.4.md).
 
 [Commands and fixtures](../tests/README.md) describe the current suites. Detailed
 run history, failed automation attempts, package hashes and evidence boundaries
@@ -14,15 +11,17 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-Main carries beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`. The Windows builds meet the size target. Extra development files in the optimized ASAR block delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
+The beta.16 application at `e85a863` combines Settings revision `4003e5d` with Windows packaging revision `8a57d33`. Host verification passed 1,332 tests on the frozen application and 1,336 with the timing fixtures from `bae908a`. Both runs passed type checking, lint and the production build. The Windows 11 build passed native and vault checks, all 38 UI cases, both supplemental Settings cases, installed and portable startup, locale and Unicode checks, and the named Edge recording. The four Windows handoff files passed destination readback. [Beta.16 Windows qualification](#beta16-windows-qualification-2026-11-22) and [integrated candidate](https://github.com/Ziyadin23/ScreenCompanion/pull/135)
 
-Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and the Windows gates pending at that checkpoint. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. The latest published prerelease remains beta.6. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
+The earlier beta.14 Windows package optimization at `6c8d671`, based on `e7a844f`, met the size target. Extra development files in its optimized ASAR blocked beta.14 delivery. See [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) and the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20).
+
+Main's earlier beta.13 qualification checkpoint integrated through [PR #82](https://github.com/Ziyadin23/ScreenCompanion/pull/82) at `f8fecd1`, based on `545223d`, retains its [host and isolated Linux results](#astryx-beta13-qualification-checkpoint-2026-11-17) and the Windows gates pending at that checkpoint. Earlier beta.10 artifacts predate Astryx, and separately reserved beta.11/beta.12 evidence retains its original source. [Project status](STATUS.md) links current issues and task owners. Imported evidence below retains its candidate and environment.
 
 | Area | Recorded result | Remaining boundary |
 | --- | --- | --- |
 | Windows first-run setup beta.15 | The protected setup checks and key-free portable startup passed on frozen `96d7adc`. Windows native, vault and #62 pipeline checks passed. | The ASAR inventory blocks delivery. See the [candidate record](#beta15-windows-first-run-setup-2026-11-20). |
-| Windows package size beta.14 | Matched Windows builds saved 99.26 MiB unpacked. Windows native 54, vault 9/143, installed and portable startup, and locale checks passed. | The optimized ASAR contains development files. The UI matrix passed 35 cases, failed the native color picker case and left two cases unrun. Package acceptance, full UI and local delivery remain open in [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). See the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20). |
-| Astryx beta.13 qualification | The retained beta.13 passed all 38 Windows UI cases in one run. All five local handoff files passed copied-byte verification. The earlier native, vault, package, portable startup and Edge results apply to the same build. | Independent evidence review passed and the OpenSpec change is archived. The closure diff awaits final review and protected merge in [PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128). See the [Settings matrix and local handoff](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) and the [earlier Windows attempt](#astryx-beta13-windows-continuation-2026-11-19). |
+| Windows package size beta.14 | Matched Windows builds saved 99.26 MiB unpacked. Windows native 54, vault 9/143, installed and portable startup, and locale checks passed. | The optimized ASAR contains development files. The UI matrix passed 35 cases, failed the native color picker case and left two cases unrun. Beta.14 remained on hold. The [beta.16 handoff](#beta16-windows-qualification-2026-11-22) completed this package work for [#84](https://github.com/Ziyadin23/ScreenCompanion/issues/84). See the [Windows package comparison](#beta14-windows-package-comparison-2026-11-20). |
+| Astryx beta.13 qualification | The retained beta.13 passed all 38 Windows UI cases in one run. All five local handoff files passed copied-byte verification. The earlier native, vault, package, portable startup and Edge results apply to the same build. | Independent evidence review passed and the OpenSpec change is archived. [PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128) merged the closure at `cc213c9` on 21 November. See the [Settings matrix and local handoff](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) and the [earlier Windows attempt](#astryx-beta13-windows-continuation-2026-11-19). |
 | Astryx interface source integration on 15 November | Combined source checks passed 1,227 host tests in 34 files, types, lint, bundles, the built doctor and eight synthetic browser views. [Source integration](#astryx-interface-integration-2026-11-15) | The [19 November Windows continuation](#astryx-beta13-windows-continuation-2026-11-19) records native, startup and Edge checks. The [20 November record](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20) covers the full UI pass and verified local handoff. |
 | Pipeline beta.10 | [Current candidate checks](#pipeline-beta10-verification-2026-11-14): host 1,226/33, Windows native 54/vault 9/143 and isolated synthetic Linux checks passed. | Corrected full UI, packaged startup, recorder and runnable handoff remain open in issue #57; no live-model quality result is claimed. |
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
@@ -33,9 +32,36 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 
 The sections below are dated evidence, followed by support procedures and historical limits.
 
+## Beta.16 Windows qualification (2026-11-22)
+
+The Windows 11 x64 run used frozen application `e85a863`, UI fixtures `bae908a` and ZIP checker `b2cf375` from integrated revision `b1600c0`. The standard account compiled the native bridge for Electron 45 with MSVC and the Windows SDK. The Windows source check passed type checking, lint, 1,307 tests and production bundle generation. The runner skipped 25 tests. The separate response-status run passed all 20 cases.
+
+| Windows output | Matched control, bytes | Optimized, bytes |
+| --- | ---: | ---: |
+| Unpacked application | 449,815,933 | 336,143,407 |
+| Per-user installer | 130,982,854 | 115,171,036 |
+| Portable EXE | 116,662,878 | 104,547,720 |
+| Portable ZIP | 116,390,797 | 104,272,916 |
+
+The builds used identical compiled application files, dependency locks and native payloads. The unpacked application shrank by 113,672,526 bytes (108.4 MiB). Independent extraction verified the production ASAR, native bridge, English and Russian locales, licenses and all 5,528 update blocks. The installer and portable payloads share 23 byte-identical files. The portable package also contains its 107,520-byte elevation helper. All 19 ZIP fixtures passed. The real ZIP contains exactly the portable EXE and its matching README.
+
+The Windows native harness passed all 54 checks, including real capture, DPAPI and shortcut handling. An early interoperability run stopped because the local SDK lacked runtime assemblies. A later npm launch stopped before running tests because its bundled build helper was missing. The operator restored the pinned SDK and Node distribution and verified all 5,578 SDK files and 2,032 Node files. The ordinary `npm run test:windows` then passed the 54 native checks and all nine C#/TypeScript vault cases, including 143 C# checks.
+
+The first full UI run executed all 38 cases with one worker and zero retries. It passed 37. The compact-panel test read the background of a transparent layout container. The test now reads the answer panel that owns the background and its opacity. The corrected assertion passed on the frozen renderer and rejected an opaque background, a fully transparent background, the wrong color and a dimmed panel. A separate Chromium screenshot check measured the expected blend over black and white backdrops. It also detected an opaque white fill on the inner layout. Both separate delayed Settings cases passed on Windows. Each exercised a real shortcut during a pending write and checked both encrypted key slots after restart.
+
+With the test correction at `56a7ce1`, `npm run test:ui` passed all 38 cases in 41.3 minutes. All 38 discovered cases ran exactly once across five test files with one worker, zero retries and zero skips. Both full runs used the same execution order. The run covered the native color picker, busy-thread wheel scrolling, shortcut contention and resizing on all eight edges and corners of both panels. The 207 checked source and fixture files, nine compiled files and native bridge matched their expected hashes before and after the run.
+
+The per-user installer opened first-run setup in a standard account that had no SC installation, shortcuts or saved profile at baseline. All 23 installed application files matched the independently extracted installer. The desktop and Start menu shortcuts pointed to the installed executable. Setup displayed an empty API key field. Cancel exited with code 0. Uninstall exited with code 0 and removed the registration, shortcuts and executable. The first installer probe compared the installed files with the portable package. The second requested a UI Automation pattern that the selected control did not support. The passing probe selected the editable field by its role and read its value.
+
+The versioned portable EXE opened the same empty setup screen. Cancel closed both the application and its NSIS launcher with exit code 0. All 24 files extracted by the live launcher matched the optimized build receipt. The packaged renderer loaded from that verified copy. Chromium used English for `en-US`, Russian for `ru` and English for the unsupported `de-DE` locale. All three runs retained the unsent Unicode question and rendered the synthetic multilingual answer. Three earlier portable probes failed. The first timed out while attaching the debugger to the launcher. The second exceeded the child process output limit while serializing file metadata. The third timed out before it wrote a results file. The last two retained separate renderer results from the unpacked build. The successful launcher probe recorded plain file names and digests.
+
+In a separate Edge whole-monitor recording, the operator paired all nine phase markers with the local display. The setup, answer and Settings windows were visible locally during the eight application phases. An independent reviewer decoded all 84 frames and matched the nine local images to their markers. The saved frames showed the synthetic backdrop in each corresponding window area. This result applies to the tested 1920 × 1080 Edge VP8 recording.
+
+The local handoff contains the versioned portable EXE, installer, ZIP and README. All four destination sizes and SHA-256 digests matched the optimized source files. The strict checker read the two entries from the copied ZIP and matched both to the separate files. Earlier versioned files retained their original hashes. Guest profile, installer and shortcut state matched the baseline after cleanup. Two physical monitors with different scales are still required for the separate hardware test. [Integrated qualification](https://github.com/Ziyadin23/ScreenCompanion/pull/135) and [mixed-DPI issue](https://github.com/Ziyadin23/ScreenCompanion/issues/12)
+
 ## Windows package size benchmark (2026-11-17)
 
-[Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and its [OpenSpec owner](../openspec/changes/reduce-windows-package-size/tasks.md) track Windows-only package pruning on main `e7a844f`, reserved source **0.5.0-beta.14**. Dependency versions, application/native logic and bundler configuration are unchanged. Windows retains `en-US` and `ru` Chromium locales and omits separate renderer-library copies; Linux composition settings retain their original inputs.
+[Issue #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84) and its [OpenSpec owner](../openspec/changes/archive/2026-11-22-reduce-windows-package-size/tasks.md) track Windows-only package pruning on main `e7a844f`, reserved source **0.5.0-beta.14**. Dependency versions, application/native logic and bundler configuration are unchanged. Windows retains `en-US` and `ru` Chromium locales and omits separate renderer-library copies; Linux composition settings retain their original inputs.
 
 The user authorized source integration while runtime and handoff remain pending. [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) squash-merged at `6c8d67116f3b4855759fac80402445917eda7bcb` on **2026-11-17T16:42:25Z**, with a Git tree identical to reviewed head `b6920027549d0b4b1b5e9b19b0690d1093260e15`. Both [PR](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44124269171) and [push](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/44124143229) passed all five exact-head jobs, including workflow **316/316** and hosted Windows build/vault/package. Protection is unchanged and issue #84 remains open. This source integration adds no local Windows runtime or runnable-beta delivery result.
 
@@ -123,7 +149,7 @@ The exact optimized NSIS installer and its installed app passed a startup check 
 
 Two separate postflight checks matched the four protected profile records, original installation registration and shortcut files. The Windows guest shut down normally at 4 GiB. The original device filter, snapshots and hardware settings matched before release to the first-run setup queue.
 
-The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. At the close of the beta.14 check, beta.9 was the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/reduce-windows-package-size/tasks.md).
+The Windows builds and their original receipts remain private. All 11 earlier transfer files matched their original hashes. At the close of the beta.14 check, beta.9 was the latest verified local delivery. Package acceptance requires a clean ASAR inventory. UI acceptance requires one passing full matrix. See the [OpenSpec task owner](../openspec/changes/archive/2026-11-22-reduce-windows-package-size/tasks.md).
 
 ## Windows application archive filter (2026-11-20)
 
@@ -209,7 +235,7 @@ The five local transfer files matched the audited bytes below. The ZIP contains 
 
 The original RPM was unavailable at its recorded SHA-256 `569c5dab5ec0174d60f3cccbe092a5171752b0f84fb62233f51e362a144206b9`. The qualified replacement listed above matched all 83 retained payload entries and passed 11 isolated Linux checks.
 
-The beta.13 transfer is local and the candidate is unpublished. Independent evidence review passed on draft PR #128 at `98f6dea`. The integration change records all eight completed tasks in its archive. The closure diff awaits independent review and protected merge. Beta.14 package work, beta.10 qualification and broader recorder, clean-machine, mixed-DPI and installed Linux checks have their own owners. [Archived integration tasks](../openspec/changes/archive/2026-11-21-integrate-astryx-interface/tasks.md), [draft PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128), [Astryx #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63), [package optimization #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84), [pipeline #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57)
+The beta.13 transfer is local and the candidate is unpublished. Independent evidence review passed on draft PR #128 at `98f6dea`. The integration change records all eight completed tasks in its archive. PR #128 merged the archive on 21 November and closed issue #63. Beta.14 package work, beta.10 qualification and broader recorder, clean-machine, mixed-DPI and installed Linux checks have their own owners. [Archived integration tasks](../openspec/changes/archive/2026-11-21-integrate-astryx-interface/tasks.md), [merged PR #128](https://github.com/Ziyadin23/ScreenCompanion/pull/128), [Astryx #63](https://github.com/Ziyadin23/ScreenCompanion/issues/63), [package optimization #84](https://github.com/Ziyadin23/ScreenCompanion/issues/84), [pipeline #57](https://github.com/Ziyadin23/ScreenCompanion/issues/57)
 
 ## Astryx interface integration (2026-11-15)
 
@@ -1701,13 +1727,13 @@ recorded separately; successful follow-ups do not erase those failures.
 
 ## Platform support
 
-As of **2026-11-07**, the Windows support target is **Windows 11 x64**, following
-the user's Windows 11-only decision. Windows 10 is outside the current support
-target; earlier Windows 10 references retain their historical scope and do not
-promise current support. Source and published binaries are unchanged.
+The Windows support target has been **Windows 11 x64** since **2026-11-07**.
+Windows 10 is outside that target. Earlier Windows 10 references describe their
+original releases.
 
 | Candidate / environment | Established evidence | Qualification boundary |
 | --- | --- | --- |
+| Published beta.16 / standard account on one Windows 11 x64 development VM | Installer and portable first-run setup, 54 native checks, nine vault cases, all 38 UI cases and two additional Settings cases passed. One Edge whole-monitor VP8 recording omitted the tested windows. [Beta.16 qualification](#beta16-windows-qualification-2026-11-22) | A newly created account, a clean Windows machine without developer tools, physical mixed-DPI displays, other recorder paths and a public installed update to beta.16 remain unverified. |
 | Published beta.6 / existing Windows 11 development VM | [Packaged startup and activation](#packaged-beta6-activation-qualification-2026-11-05), [public installed update](#public-github-installed-update-2026-11-03), and [split native/vault/UI checks](#beta6-extraction-guidance). | Existing account and developer tools; no fresh-account or clean-machine pass. Earlier failed attempts remain recorded. |
 | Unpublished beta.7 / existing Windows 11 development VM | [Full native/vault/UI matrix](#windows-full-ui-matrix-2026-11-03). | Does not qualify beta.6 packages or a fresh environment. |
 | Published beta.6 / fresh ordinary Windows 11 account | **Full qualification remains open.** | The installed and portable setup/settings matrix and independent postflight need completed, reconciled evidence. A synthetic app profile is not a fresh Windows account. |
@@ -1782,12 +1808,23 @@ When hardware is available, use this procedure:
 5. Move each panel across every connected boundary in both directions, including
    pausing while it straddles the boundary and releasing on the destination.
    Check for jumps, off-screen placement, incorrect pointer offset, clipping or
-   stuck drag state. Repeat all eight resize handles after each transition and
+   stuck drag state.
+6. Check the wheel boundary on the input panel before resizing it or opening
+   Settings. Use the key-free preview text and a panel small enough to scroll.
+   Start with the answer partway down. Without clicking, move the pointer onto
+   the last visible answer line immediately above the question field and turn
+   the wheel one notch. Confirm that the first visible answer line changed.
+   Move the pointer just inside the question field and turn the wheel one notch
+   in the opposite direction. The first visible answer line should stay the
+   same. Repeat immediately after moving the panel from A to B and again
+   from B to A. Record the display scale, pointer position in physical pixels,
+   and first visible answer line before and after each wheel input.
+7. Repeat all eight resize handles after each transition and
    exercise resizing while the panel crosses the boundary. Open Settings and
    return on the destination, then hide/restore and verify the panel can still
    move/resize. Account for DPI scaling when interpreting physical dimensions.
-6. Record one result per surface, monitor, edge/corner and transition direction;
-   include steps, expected/observed behavior and technical geometry for failures.
+8. Record one result per surface, monitor, edge/corner and transition direction.
+   Include steps, expected/observed behavior and technical geometry for failures.
    Mark unperformed cases explicitly. Exit normally, verify owned processes and
    held input are cleared, compare original vault bytes, and restore any changed
    display configuration. Keep raw synthetic evidence in the private workspace.
@@ -1804,6 +1841,10 @@ The beta requests Windows capture protection for its windows and owned popups,
 and reports `Excluded`, `ContentHidden` or `Failed`. Affinity assertions and
 native compilation do not establish actual exclusion from a saved recording or
 received stream. The visible tray icon remains part of the Windows taskbar.
+
+For beta.16, one Edge whole-monitor VP8 recording at 1920 × 1080 omitted the
+tested setup, answer and Settings windows. Other capture paths still need their
+own output checks. [Beta.16 recording result](#beta16-windows-qualification-2026-11-22)
 
 On Windows 11, SC requests omission from supported capture paths. If omission
 fails, the bridge also attempts content hiding and reports the resulting status.

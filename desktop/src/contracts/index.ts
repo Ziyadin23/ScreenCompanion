@@ -1,3 +1,5 @@
+import type { ShortcutField } from './shortcut-display';
+
 /** Shared contracts. The integration lead owns this file; coordinate changes before editing. */
 export const PROVIDERS = ['OpenAI', 'Groq', 'Gemini', 'Mistral', 'OpenRouter', 'DeepSeek'] as const;
 export type ApiProvider = typeof PROVIDERS[number];
@@ -14,6 +16,7 @@ export interface ModelSelection {
   Provider: ApiProvider; AnswerModel: string; VisionModel: string;
   Thinking: DeepSeekReasoning; AnswerTokenLimit: number | null;
 }
+export type ModelField = keyof ModelSelection;
 export interface ModelPipelinePreference { Provider: ApiProvider; AnswerModel: string; PipelineMode: PipelineMode }
 /** PascalCase names and enum strings are the existing SSK3 serialized contract. */
 export interface VaultData {
@@ -105,19 +108,28 @@ export interface AppState {
   ready: boolean; surface: Surface; visible: boolean; busy: boolean; answer: string;
   error: DisplayError | null; appearance: AppearanceSettings; shortcuts: Record<AppAction, HotkeyBinding>;
   captureProtection: CaptureProtectionResult; version: string; setupLegacyNotice: boolean;
-  updates: UpdateState; settingsDirty: boolean;
+  updates: UpdateState; settingsSession: number; settingsRevision: number; settingsFocusRevision: number; settingsDirty: boolean; settingsSaving: boolean;
+  settingsKeyPresence: SettingsDraft['keyPresence'] | null;
+  settingsModels: ModelSelection | null; settingsModelPipelines: ModelPipelinePreference[] | null; shortcutRecovery: DisplayError | null;
 }
 export interface SettingsDraft {
+  session: number;
   values: Omit<VaultData, 'ApiKey' | 'ProviderKeys'>;
+  modelEdits?: ModelField[];
+  shortcutEdits?: ShortcutField[];
+  responseEdits?: ('ResponseMode' | 'CustomInstruction')[];
+  appearanceEdits?: (keyof AppearanceSettings)[];
   keyPresence: Record<ApiProvider, boolean>;
   keyUpdates: Partial<Record<ApiProvider, string>>;
+  pipelineUpdates: ModelPipelinePreference[];
 }
+export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
   | { type: 'inputHeight'; height: number }
-  | { type: 'recordShortcut'; recording: boolean }
-  | { type: 'settingsDraftChanged'; dirty: boolean }
+  | { type: 'recordShortcut'; recording: boolean; session: number; focusRevision: number }
+  | { type: 'settingsDraftChanged'; dirty: boolean; session: number }
   | { type: 'beginResize'; edge: ResizeEdge };
 export interface SetupRequest { provider: ApiProvider; apiKey: string }
 export interface DesktopApi {
@@ -125,8 +137,8 @@ export interface DesktopApi {
   setup(request: SetupRequest): Promise<void>;
   command(command: AppCommand): Promise<void>;
   getSettingsDraft(): Promise<SettingsDraft>;
-  saveSettings(draft: SettingsDraft): Promise<void>;
-  discardSettings(): Promise<void>;
+  saveSettings(draft: SettingsDraft): Promise<SettingsSaveResult>;
+  discardSettings(session: number): Promise<void>;
   chooseColor(initialColor: string): Promise<string | null>;
   update(action: UpdateAction): Promise<void>;
   subscribe(listener: (state: AppState) => void): () => void;

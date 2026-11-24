@@ -1,6 +1,6 @@
 {
   "name": "sc-desktop",
-  "version": "0.5.0-beta.14",
+  "version": "0.5.0-beta.16",
   "private": true,
   "description": "SC desktop companion",
   "homepage": "https://github.com/Ziyadin23/ScreenCompanion",
@@ -47,10 +47,6 @@
     "directories": {
       "output": "dist"
     },
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
     "extraResources": [
       {
         "from": "../LICENSE",
@@ -68,7 +64,7 @@
         "ru"
       ],
       "files": [
-        "out/**/*",
+        "out/{main,preload,renderer}/**/*",
         "package.json",
         "!**/node_modules/@astryxdesign/core{,/**/*}",
         "!**/node_modules/@astryxdesign/theme-neutral{,/**/*}",
@@ -98,7 +94,17 @@
       "artifactName": "SC-v${version}.${ext}",
       "requestedExecutionLevel": "asInvoker"
     },
+    "mac": {
+      "files": [
+        "out/**/*",
+        "package.json"
+      ]
+    },
     "linux": {
+      "files": [
+        "out/**/*",
+        "package.json"
+      ],
       "icon": "../assets/brand/sc-icon-512.png",
       "target": [
         "rpm"

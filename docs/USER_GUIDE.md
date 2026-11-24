@@ -1,6 +1,6 @@
 # SC user guide
 
-This guide covers setup and controls for the TypeScript/Electron application. Linux target verification is in progress. See the [README](../README.md#release-status) for the current source version and downloads. The latest published prerelease is 0.5.0-beta.6. The latest published C# download is v0.4.14, with its own [user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md).
+This guide covers the Windows beta.16 controls and the Linux source port. See the [Windows downloads](../README.md#release-status) and [beta.16 release notes](releases/v0.5.0-beta.16.md). Earlier releases have versioned guides for [Windows beta.6](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.6/docs/USER_GUIDE.md) and the [stable C# v0.4.14](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.4.14/docs/USER_GUIDE.md).
 
 ## Linux setup and controls
 
@@ -59,21 +59,22 @@ Update by manually installing a newer Linux RPM.
 ## Setup and migration
 
 The following setup and shortcut details target **Windows 11 x64**. Windows 10
-is outside the current support target. Fresh-account/machine operation without
-installed developer tools remains unqualified; existing development-VM checks
-have the narrower scope in the [support matrix](VERIFICATION.md#platform-support).
+is outside the support target. The beta.16 installer and portable EXE opened
+first-run setup in a standard account on a Windows 11 development VM. A newly
+created account and a clean machine without developer tools still need testing. See the
+[support matrix](VERIFICATION.md#platform-support).
 Linux uses the [controls above](#linux-setup-and-controls).
 
-In the current source, Escape closes an open service menu first. With the menu
+Escape closes an open service menu first. With the menu
 closed, Escape and Cancel exit setup while it is idle. Setup stays open during
 Save so it can finish or show an error.
 
-1. Use the [published TypeScript beta](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation). For beta.6, run `SC-Setup-v0.5.0-beta.6.exe` to install SC for the current Windows account, then use its Desktop or Start menu shortcut. No administrator rights are requested. The portable `SC-v0.5.0-beta.6.exe` is also available in a matching ZIP containing that EXE and `README.txt`. Both editions include their Electron runtime; the application does not use .NET. This packaging does not establish clean-machine operation without developer tools. The v0.4.14 download linked in the README contains the previous C# application.
+1. Close any running copy of SC. Run `SC-Setup-v0.5.0-beta.16.exe` to install it for your Windows account, then use its Desktop or Start menu shortcut. Installation works without administrator rights. For a portable copy, run `SC-v0.5.0-beta.16.exe` or extract it from the ZIP. The ZIP includes the EXE and the original `README.txt` from before publication. Both editions include their runtime. See [Windows downloads](../README.md#release-status) or [build from source](../README.md#build-and-further-documentation).
 2. Launch installed SC from its shortcut, or double-click the portable EXE. On first launch, choose your **API service**, enter that service's API key and click **Save**. There is no app password and setup makes no model request or account-access check. SC saves the selected service's default models. Open **Settings → Models & API** to change models, pipeline or keys later. Internet access, model access and any required credits must be available on your selected provider account.
 3. On later launches in the same Windows account, the app loads the encrypted key automatically. The saved key and settings are in `%LOCALAPPDATA%\SC\sc.user.key`, protected for that Windows account. SC copies the encrypted key and settings from the old `%LOCALAPPDATA%\ScreenCompanion\screencompanion.user.key` location on its first launch when no SC vault exists; the original is retained. Replacing the EXE on the same PC keeps them. A different Windows account or PC needs its own key setup. Older password-protected `screencompanion.key` files are left untouched; enter the API key once in this version, then reapply any old custom settings you need.
 4. Commands appear after setup. Older settings without the help marker show them on startup until an explicit Settings Save persists the marker; loading alone never rewrites the vault. Later launches start hidden with no saved answer. Press **Ctrl+Enter** to open temporary question input, then Enter or **Send** to send text only. While the question field has focus, **Ctrl+Enter** or **Send with screenshot** captures the monitor containing the panel once at send time and includes it with your text. Esc returns to the answer. The typed question determines the task; no screen is captured for a text-only send.
 
-In current source, the setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
+The setup service list opens below **API service** and scrolls within the available space. Use the pointer or press Arrow Down to open it, then use the arrow keys to move, Home or End to reach the first or last service, and Enter to select. An outline marks the active option, and the current selection stays bold. With the pointer over the open first-launch **API service** menu, the wheel scrolls its options and stops at either end. Close the menu to scroll the setup form beneath it.
 
 Press **Tab** or **Shift+Tab** to move through setup. A
 pale outline marks keyboard focus on **Show API key**, **Save**, and **Cancel**.
@@ -100,7 +101,7 @@ The following shortcuts and panel controls apply to the TypeScript beta:
 | **Ctrl+Backspace** | Exit the app, including from Settings. |
 | **Ctrl+Enter** | Open or focus temporary input; while typing in Question, send text with a fresh screenshot. |
 
-The current source uses the approved SC icon in setup, Settings, the window,
+SC uses its icon in setup, Settings, the window,
 the tray and the Windows and Linux packages. The tray icon has a badge and a
 working tooltip while a request runs.
 
@@ -109,6 +110,22 @@ The tray menu offers Show / Hide, Type a question, Settings, Capture test and Ex
 The compact answer view reveals Capture screen, Question, Settings, Hide and Exit controls on hover or keyboard focus. Their reserved row keeps them clear of the answer without moving the text. Question input remains temporary, and the answer has no visible scrollbar. At very small input heights, the previous answer is temporarily hidden to keep the composer usable; it returns when input closes. Hover over it and use the mouse wheel without first clicking. Text can be selected and copied. Move it with **Alt + left drag** anywhere, and resize it by dragging an invisible edge or corner. Hiding the panel or switching its surface ends the current drag; release and press again to move or resize. SC saves the latest size you drag the panel to, including a return to earlier dimensions. On the next launch, SC restores that size within the current panel limits. The file at `%LOCALAPPDATA%\SC\window-size.json` contains only dimensions. The panel and tray icon indicate a running request, and the last answer remains intact while waiting. Only one request runs at a time. Esc hides the focused answer panel.
 
 Open **Settings → Panel** to set background transparency from 0% (opaque) to 100% (text only), text visibility from 15% to 100%, and font size from 8 to 28 points. Choose Dark, Light, Midnight, or Forest, or expand **Advanced appearance** for independent text visibility and custom background, text, and button colors. These choices affect the answer panel and its input/button colors. Settings and API-key setup retain a readable dark palette. The preview updates immediately; **Save** applies and encrypts the changes, then returns to the preserved answer. **Back** discards edits and returns. **Restore appearance** selects the neutral dark background at 90% opacity (10% transparency), 100% text visibility, and 11-point text. New setups use these same defaults. Settings and key setup stay opaque. Existing saved appearance is preserved. Missing fields in older files keep their historical defaults, and loading never rewrites the vault. Background adaptation is manual. **Settings → Commands** repeats the shortcut help.
+
+If you open Question while a Settings save is finishing, SC keeps the current surface open. You can reopen Settings and edit a new draft. If Save asks you to wait, try again when the earlier save finishes. The retry keeps the keys and settings you left untouched. Shortcut fields show the latest saved bindings with your edits applied. **Restore shortcuts** sets all six bindings to defaults in the draft. If you leave the service and model settings untouched, the retry uses the service and models saved by the earlier draft. A DeepSeek reasoning suggestion leaves a saved token limit in place. For the same service and answer model, a new pipeline choice applies on Save, including Thorough. The saved choice applies when you leave Request pipeline untouched.
+
+The label above the API key field identifies the service for that replacement.
+Choose **API service** to select the service for future questions. In a short
+Settings window, use the arrow keys on the tabs to reach each page.
+
+If an earlier save changes **Answer mode** while you type in **Custom instruction**,
+you can finish typing in that field. The latest saved mode applies unless you
+changed it in your draft. If Settings cannot load the latest preferences, choose
+**Try loading again**. You can keep editing your draft while it loads. **Save**
+becomes available when the latest preferences load. If focus is still on the
+retry button, it moves to the page heading and scrolls it into view. Press
+**Escape** to use Back.
+
+Back returns to the answer even if a saved shortcut is occupied. When the saved shortcut becomes available, open Settings and use Back to restore it. If SC cannot restore the saved shortcuts, Answer and Question show the restart message alongside their controls. Open Settings to see the diagnostic code and report ID. If Settings also reports a load or validation error, both messages appear above Save and Back. You can scroll longer messages in a short window. With large text in a short Answer panel, you can read complete lines with the keyboard and with small mouse wheel movements in either direction.
 
 ## Application updates
 
@@ -119,18 +136,16 @@ Installation is blocked while a model request, settings save or color picker is
 active. Save Settings edits before restarting; unsaved drafts are temporary.
 Closing SC normally does not install a downloaded update automatically.
 
-Beta builds accept newer beta and stable releases; stable builds accept stable
-releases. Updates never intentionally downgrade SC. The public release must
-include its installer and matching update metadata; the existing C# releases
-cannot supply Electron updates. Until an installer release is published, checking
-can report that no update feed is available. A local installer delivery does not
-publish a GitHub release.
+Installed beta builds can accept newer beta and stable releases. Stable builds
+accept stable releases. An update requires a published Electron installer and its
+matching metadata. The public beta.4 → beta.6 installed update passed on Windows
+11. A public installed update to beta.16 still needs testing. [Recorded update test](VERIFICATION.md#public-github-installed-update-2026-11-03)
 
 API keys, model preferences, shortcuts and appearance remain in the same
 Windows-account encrypted vault across installation and updates. Uninstalling SC
 leaves this existing settings storage intact. To move to another account or PC,
-enter your API key again there. The current local beta is unsigned, so Windows or
-managed-PC policy may warn or block it as with the portable build.
+enter your API key again there. The beta.16 installer and portable EXE are
+unsigned. Windows or a managed-PC policy can warn about or block either file.
 
 The portable EXE, development builds and key-free previews do not check for or
 install updates. Their Updates page explains the installed-version requirement.
@@ -146,7 +161,7 @@ Enter the selected service's API key and click **Save**. The service and model s
 
 **DeepSeek:** select **DeepSeek**, keep `deepseek-flash` in both model fields, enter a key from your [DeepSeek API account](https://platform.deepseek.com/), and click **Save**. This uses DeepSeek directly rather than OpenRouter and requires DeepSeek API credits. `deepseek-flash` supports screenshot images; `deepseek-v4-pro` does not. DeepSeek requests use the Responses API with schema-based JSON; old settings retain non-thinking mode. DeepSeek documents stateless Responses with `store: false`; this does not guarantee zero retention under its API policies. See [vision support](https://api-docs.deepseek.com/guides/vision/), [Responses behavior](https://api-docs.deepseek.com/guides/responses_api/) and [pricing](https://api-docs.deepseek.com/quick_start/pricing/). The historical C# campaign completed seven initial scenarios with six correct primary answers and one failed automatic Thorough diagram answer. A separate fixed-region follow-up passed. Those results do not establish TypeScript answer quality; see [verification limits](VERIFICATION.md#live-providers-and-model-quality).
 
-**Stronger DeepSeek models:** choose `deepseek-v4-pro` in **Answer model** for typed text or Thorough tasks without required images, and keep `deepseek-flash` for screen reading. Pro is not suggested for vision or accepted in Direct. If extracted task images are necessary, SC reports a readable incompatibility before sending them to Pro; it never drops images or switches models automatically. For screenshots in Direct, keep Flash and choose **DeepSeek reasoning → Low, High, or Max**. This controls answering only; extraction stays non-thinking. Off remains the compatibility default. Higher reasoning can increase latency and billed output tokens. Selecting a non-Off level suggests a visible **16,000** answer-token budget; adjust **Answer output token limit** from 256 to 32,000 before Save if needed. Reasoning and the visible answer share that budget. Model, reasoning and budget persist together; explicit saved budgets override the process answer limit. These choices do not establish a measured accuracy improvement.
+**Stronger DeepSeek models:** choose `deepseek-v4-pro` in **Answer model** for typed text or Thorough tasks without required images, and keep `deepseek-flash` for screen reading. Pro is not suggested for vision or accepted in Direct. If extracted task images are necessary, SC reports a readable incompatibility before sending them to Pro; it never drops images or switches models automatically. For screenshots in Direct, keep Flash and choose **DeepSeek reasoning → Low, High, or Max**. This controls answering only; extraction stays non-thinking. Off remains the compatibility default. Higher reasoning can increase latency and billed output tokens. When there is no saved or edited budget, selecting a non-Off level suggests **16,000** answer tokens. Adjust **Answer output token limit** from 256 to 32,000 before Save if needed. Reasoning and the visible answer share that budget. Model, reasoning and budget persist together; explicit saved budgets override the process answer limit. These choices do not establish a measured accuracy improvement.
 
 **Request pipeline:** in Models & API, choose **Thorough** (default) or **Direct screenshot** for a compatible model on any supported service. Thorough makes three ordinary calls: locate, extract, answer; there is no separate extraction-verification request. Direct sends the full captured monitor and any typed question straight to the answer model in one call, without extraction, cropping, automatic retry or fallback. The answer model must accept images and structured responses; the screen-reading model is disabled and unused in Direct. Unknown custom model IDs still depend on provider/account support. Typed intent and response modes apply in both paths. Save remembers each model's pipeline and applies the active selection to screenshot requests; Back discards all unsaved edits. Text-only Enter/Send requests bypass screen reading regardless of the screenshot pipeline and use one answering call. Historical Balanced selections and process defaults resolve to Thorough without rewriting settings until Save; old numeric Direct selections keep their meaning.
 
@@ -154,7 +169,7 @@ Saved service/model and pipeline choices take priority over process defaults. Se
 
 OpenAI uses Responses with `store: false`; the new DeepSeek option also uses stateless Responses. The other services use stateless Chat Completions with no conversation history. OpenRouter requests providers supporting all required parameters and disallows routing that permits data collection. This does not guarantee zero retention. The Settings page describes provider data policies; review your account settings before sending sensitive screen content. Groq requests containing more than three task images fail explicitly rather than dropping images.
 
-All six provider adapters have mocked transport coverage. Beta.7 source passed the [full Windows 11 native/vault/UI matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03); beta.6 retains its [separately recorded checks](VERIFICATION.md#beta6-extraction-guidance). These results do not establish live account/model access, representative answer accuracy, recorder exclusion or fresh-machine readiness.
+All six provider adapters have mocked transport coverage. Live answer accuracy for beta.16 still needs testing. See the [live model evidence](VERIFICATION.md#live-providers-and-model-quality) and [beta.16 Windows checks](VERIFICATION.md#beta16-windows-qualification-2026-11-22). The earlier [beta.7 Windows matrix](VERIFICATION.md#windows-full-ui-matrix-2026-11-03) and [beta.6 checks](VERIFICATION.md#beta6-extraction-guidance) describe those builds.
 
 ## Installed and portable updates
 

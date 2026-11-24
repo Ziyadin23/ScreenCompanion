@@ -46,7 +46,8 @@ test('compact panel keeps selectable text, independent alpha and revealable cont
   await expect(page.getByTestId('question-input')).toHaveCount(0);
   await expect(page.locator('.resize-edge')).toHaveCount(8);
   const style = await page.getByTestId('answer-text').evaluate((element) => {
-    const text = getComputedStyle(element); const panel = getComputedStyle(element.parentElement!);
+    const text = getComputedStyle(element);
+    const panel = getComputedStyle(element.closest('[data-testid="answer-panel"]')!);
     return { text: text.color, background: panel.backgroundColor, opacity: panel.opacity, select: text.userSelect, whitespace: text.whiteSpace,
       edge: getComputedStyle(document.querySelector('.edge-left')!).width, scrollbar: text.scrollbarWidth };
   });

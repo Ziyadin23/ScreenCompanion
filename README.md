@@ -19,33 +19,28 @@ own API key. Provider usage charges apply.
 
 | Edition | Version | Downloads and notes |
 | --- | --- | --- |
-| Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.6** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-Setup-v0.5.0-beta.6.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.6/SC-v0.5.0-beta.6.zip) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.6) |
+| Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.16** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-Setup-v0.5.0-beta.16.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.zip) · [Portable EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.exe) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.16) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source, unpublished | **0.5.0-beta.14** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Current source | **0.5.0-beta.16** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
-**Current source includes the new setup and Settings interface**, separate
-text-only and text-with-screenshot sends, and Thorough/Direct pipeline preferences
-for each answer model. The first-launch service list keeps wheel scrolling inside
-the open menu. A new runnable beta with this combined interface still
-needs its final Windows UI, packaged-startup and recorder checks. See the
-[current verification gates](docs/VERIFICATION.md#current-candidate-and-open-gates).
-
-The Windows beta downloads above contain beta.6, whose typed questions also capture the screen.
-Use its [versioned user guide](https://github.com/Ziyadin23/ScreenCompanion/blob/v0.5.0-beta.6/docs/USER_GUIDE.md)
-for that release's controls and pipeline choices. The current-source controls
-below describe the newer interface.
+**Windows beta.16** adds separate text-only and screenshot actions, a redesigned
+Settings window and smaller Windows packages. The `README.txt` release asset is
+the original file inside the portable ZIP. It still lists beta.6 as the public
+download. See the [beta.16 release notes](docs/releases/v0.5.0-beta.16.md) and
+[previous beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
 
 **Linux is available as source only**, targeting Fedora 44 x86-64 with Hyprland
 Wayland. No Linux RPM has been published, and target desktop checks remain open.
-Source availability does not establish stable-release parity. See the
-[verification limits](docs/VERIFICATION.md) and [beta.6 release notes](docs/releases/v0.5.0-beta.6.md).
+See the [Linux verification limits](docs/VERIFICATION.md#linux-port-status).
 
 ## Quick start
 
 ### Windows 11 x64
 
-The Windows support target is **Windows 11 x64**. Fresh-account and clean-machine
-setup without installed developer tools remains unqualified; see the
+The support target is **Windows 11 x64**. Beta.16 reached first-run setup in both
+editions on a standard account in one Windows 11 development VM. A newly created
+Windows account, a clean machine without developer tools and two physical monitors
+at different scales still need testing. Windows 10 is outside the support target. See the
 [support matrix](docs/VERIFICATION.md#platform-support).
 
 1. **Install.** Download the Windows beta installer above. Close any older running
@@ -54,26 +49,22 @@ setup without installed developer tools remains unqualified; see the
    the ZIP and run its EXE. Both editions include their runtime.
 2. **Connect a service.** Choose your API service, enter its key and click **Save**.
    Saving makes no model request. Your account needs access to the selected models
-   and any required credits. In current source, you can scroll the service list
+   and any required credits. You can scroll the service list
    beneath **API service** when setup space is limited. An outline marks the option **Enter** will choose.
-3. **Ask a question.** Press **Ctrl+Alt+Space** to capture the foreground app's
-   monitor, or **Ctrl+Enter** to open question input. In the downloaded beta.6,
-   **Enter** or **Send** submits your text with a fresh screenshot. Current source
-   provides the [separate text and screenshot actions below](#panel-and-settings).
+3. **Ask a question.** Press **Ctrl+Enter** to open **Question**. **Enter** or
+   **Send** sends only your text. While typing, **Ctrl+Enter** or **Send with
+   screenshot** adds one fresh capture. To ask about the foreground app's monitor
+   without typing, press **Ctrl+Alt+Space**.
 4. **Control the panel.** Use **Ctrl+/** to hide/show it and **Ctrl+I** for Settings.
    Later launches load saved settings and start hidden; opening another copy
    restores the running app.
 
-Installed copies use **Settings → Updates**; you choose when to download and
-restart. For portable copies, close SC before replacing the EXE manually.
+Installed copies offer **Settings → Updates**. You choose when to download and
+restart. A public GitHub update to beta.16 still needs an installed-client test.
+For portable copies, close SC before replacing the EXE manually.
 Existing ScreenCompanion settings migrate without removing the original encrypted
 file. See [setup and migration](docs/USER_GUIDE.md#setup-and-migration) and
 [updates](docs/USER_GUIDE.md#application-updates).
-
-Windows 10 is outside the current support target. Fresh Windows 11 setup,
-mixed-DPI behavior, recorder output and live answer quality still have open
-[verification gates](docs/VERIFICATION.md#current-candidate-and-open-gates).
-The verification guide retains the candidate-specific results and earlier failures.
 
 ### Linux (unpublished port)
 
@@ -92,7 +83,7 @@ need qualification. See [Linux setup, prerequisites and limits](docs/USER_GUIDE.
 
 ## Shortcuts
 
-These defaults describe the **current source** on Windows.
+These are the default shortcuts for the Windows beta.
 
 | Default shortcut | Action |
 | --- | --- |
@@ -109,9 +100,9 @@ window controls and optional Hyprland bindings.
 
 ## Panel and settings
 
-In the **current source**, **Enter / Send** submits typed text only, without
-capturing the screen. **Ctrl+Enter / Send with screenshot** includes one fresh
-capture; your typed question takes priority over unrelated visible questions.
+**Enter / Send** submits typed text without capturing the screen.
+**Ctrl+Enter / Send with screenshot** includes one fresh capture. Your typed
+question takes priority over unrelated visible questions.
 
 Select and copy answer text directly. On Windows, hover over the panel and use
 the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
@@ -126,10 +117,19 @@ Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance
 scale with the renderer's default font size. A pale outline marks keyboard focus as you press **Tab** or
 **Shift+Tab**. The five Settings categories adapt to a narrow window, with Save
-and Back kept visible at the bottom. Panel appearance changes affect the answer
+and Back kept visible at the bottom. Settings keeps validation and shortcut
+recovery messages readable together in a short window. Panel appearance changes affect the answer
 panel and its preview while Settings keeps its readable palette.
 
-In the current source, Escape closes the setup service menu first and cancels
+A Settings save that finishes after you switch surfaces
+keeps Question or a newer Settings draft open. The API key field keeps your
+edit for the service named in its label. A retry keeps the saved settings
+you leave untouched. If focus stays on **Try loading again**, a successful retry
+brings the focused page heading into view. Back discards its draft and restores
+saved shortcuts when they are available. If recovery fails, the panel tells you
+to restart SC. Small wheel movements scroll a compact Answer in both directions.
+
+Escape closes the setup service menu first and cancels
 idle setup when the menu is closed. Setup stays open while Save is pending.
 
 In Settings:
@@ -140,7 +140,7 @@ In Settings:
 - **Models & API** keeps provider keys, answer models and screenshot pipelines
   together; expand advanced controls when needed.
 - **Commands** shows control help; **Updates** manages installed-copy updates.
-- **Save** applies changes; **Back** discards them.
+- **Save** applies changes. If an earlier save is finishing, wait and try **Save** again. **Back** discards the current draft.
 
 See the [user guide](docs/USER_GUIDE.md) for full controls. For failed requests,
 use the panel's diagnostic code and report ID with the [troubleshooting guide](docs/USER_GUIDE.md#diagnose-a-failure).
@@ -148,7 +148,7 @@ For campus Wi-Fi failures, see [network troubleshooting](docs/USER_GUIDE.md#work
 
 ## Models and request pipelines
 
-In **current source**, open **Settings → Models & API** and expand advanced model
+Open **Settings → Models & API** and expand advanced model
 settings to choose a screenshot pipeline. Direct is available across supported
 services when the selected answer model supports images.
 
@@ -179,13 +179,14 @@ for compatible models, DeepSeek reasoning and answer output-token limits.
 - **What SC stores:** no screenshot or answer history. Windows keys/settings are
   encrypted for your Windows account; Linux settings require a secure keyring.
   OpenAI requests use `store: false`; provider retention policies still apply.
-- **Recording visibility:** Windows exclusion is best effort, and the tray icon
-  remains visible. Beta.6's recorder checks did not establish exclusion. Linux
-  windows may appear in recordings and screen shares; no exclusion is claimed.
+- **Recording visibility.** One 1920 × 1080 Edge whole-monitor VP8 recording
+  omitted the tested beta.16 setup, answer and Settings windows. The Windows tray
+  icon stays visible. Check the saved video or received stream for your recorder.
+  Linux windows may appear in recordings and screen shares.
 
-Live answer quality, mixed-DPI behavior and recorder output still have open checks.
-Mocked tests do not establish model accuracy. See the [privacy details](docs/USER_GUIDE.md#privacy)
-and [verification results](docs/VERIFICATION.md) for the full limits and recorded evidence.
+Live answer accuracy and other recorder paths still need testing. See the
+[privacy details](docs/USER_GUIDE.md#privacy) and
+[beta.16 Windows checks](docs/VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 
 ## Build and further documentation
 
@@ -232,3 +233,6 @@ SC project code is available under the [MIT license](LICENSE), including commerc
 reuse and redistribution. Keep the copyright and license notice with copies.
 [Third-party components](THIRD_PARTY_NOTICES.txt) retain their own terms. Provider
 API access and usage charges are handled by your provider account.
+
+For the beta.16 portable EXE, include the separate notice with redistributed
+copies. It adds the license terms and credits for the bundled Elevate helper. [Beta.16 third-party notices](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/THIRD_PARTY_NOTICES.txt)
