@@ -12,7 +12,7 @@ import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
 
 export interface DesktopHost {
-  publish(state: AppState, capturing: boolean): void;
+  publish(state: AppState, capturing: boolean): void | Promise<void>;
   panelHandle(): Buffer;
   scroll(delta: number): void;
   exit(): void;
@@ -64,6 +64,7 @@ export class ApplicationController {
   private state: AppState;
   private capturing = false;
   private exiting = false;
+  private disposed = false;
   private pendingActivation = false;
   private afterCapture: (() => void)[] = [];
   private cancellation: AbortController | null = null;
@@ -88,7 +89,7 @@ export class ApplicationController {
     return this.state.ready && !this.exiting && !this.state.busy && this.settingsActions === 0 && !this.state.settingsDirty && !this.recording &&
       this.state.surface === 'settings' && this.state.visible;
   }
-  private publish(): void { if (!this.exiting) this.deps.host.publish(this.getState(), this.capturing); }
+  publish(): void | Promise<void> { if (!this.exiting) return this.deps.host.publish(this.getState(), this.capturing); }
   private defer(action: () => void): boolean {
     if (!this.capturing) return false;
     this.afterCapture.push(action); return true;
@@ -204,7 +205,7 @@ export class ApplicationController {
   }
   async command(command: AppCommand): Promise<AppCommandResult> {
     if (this.exiting) return;
-    if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
+    if (command.type === 'exit') { this.beginShutdown(); this.deps.host.exit(); return; }
     if (this.state.updates.status === 'installing') return;
     if (!this.state.ready && this.vaultState !== 'missing') {
       if (command.type === 'toggleVisibility') this.pendingActivation = true;
@@ -217,7 +218,7 @@ export class ApplicationController {
       if (!this.state.visible && this.state.surface === 'settings') this.state.settingsFocusRevision++;
       this.deps.platform.setOwnedDialogsVisible(this.deps.host.panelHandle(), this.state.visible);
       if (!this.state.visible) await this.setRecording(false);
-      this.publish(); return;
+      return this.publish();
     }
     if (!this.state.ready) return;
     switch (command.type) {
@@ -254,7 +255,7 @@ export class ApplicationController {
           this.keepQuestionDiagnostic = false;
           this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish();
         }
-        else { this.state.visible = false; this.hiddenByUser = true; this.publish(); }
+        else { this.state.visible = false; this.hiddenByUser = true; return this.publish(); }
         break;
       case 'settingsDraftChanged':
         if (this.ownsSettings(command.session)) { this.state.settingsDirty = command.dirty; this.publish(); }
@@ -481,10 +482,16 @@ export class ApplicationController {
       getSettingsDraft: async () => this.getSettingsDraft(), saveSettings: draft => this.saveSettings(draft),
       discardSettings: session => this.discardSettings(session), chooseColor: color => this.chooseColor(color) };
   }
-  dispose(): void {
+  beginShutdown(): void {
     if (this.exiting) return;
     this.exiting = true; this.cancellation?.abort(); this.afterCapture.length = 0;
-    this.detachWheel?.(); this.detachWheel = null; this.deps.platform.dispose(); this.settings = null;
+    this.detachWheel?.(); this.detachWheel = null; this.settings = null;
     this.registeredShortcutSettings = null;
+  }
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.beginShutdown();
+    this.deps.platform.dispose();
   }
 }

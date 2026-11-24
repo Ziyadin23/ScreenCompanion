@@ -56,7 +56,7 @@ function versionJson(before: string, path: string, reservation: VersionReservati
 function versionDocument(before: string, path: string, reservation: VersionReservation): string {
   const old = reservation.previousVersion, next = reservation.version;
   if (path === 'README.md') {
-    const sourceLabels = ['Current source', 'Current source, unpublished'];
+    const sourceLabels = ['Current source', 'Current source, unpublished', 'Local candidate source'];
     const sourceRows = [];
     for (const row of before.matchAll(/^.*\|.*$/gm)) {
       const [label, versionCell] = row[0].trimStart().replace(/^\|/, '').split('|', 2);

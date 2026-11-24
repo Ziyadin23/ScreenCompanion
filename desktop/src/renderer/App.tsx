@@ -227,6 +227,9 @@ export function App() {
     return () => document.removeEventListener('keydown', keyDown);
   }, [state?.surface]);
   if (!state) return error ? <div className="fixed-theme startup-error" role="alert">{error}</div> : null;
+  const windowRole = new URLSearchParams(window.location.search).get('window-role');
+  const dialog = state.surface === 'setup' || state.surface === 'settings';
+  if (state.platform === 'linux' && ((windowRole === 'panel' && dialog) || (windowRole === 'dialog' && !dialog))) return null;
   if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
   if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={state.settingsSession} state={state} /></Theme>;
   return <Answer state={state} onCommand={command} question={draft.text} setQuestion={text => setDraft(current => ({ ...current, text }))} />;

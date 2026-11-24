@@ -21,7 +21,7 @@ own API key. Provider usage charges apply.
 | --- | --- | --- |
 | Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.16** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-Setup-v0.5.0-beta.16.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.zip) · [Portable EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.exe) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.16) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Current source | **0.5.0-beta.16** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Local candidate source | **0.5.0-beta.17** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Windows beta.16** adds separate text-only and screenshot actions, a redesigned
 Settings window and smaller Windows packages. The `README.txt` release asset is
@@ -108,9 +108,12 @@ or timeout to edit your text and send it again.
 
 Select and copy answer text directly. On Windows, hover over the panel and use
 the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
-edges and corners. Hiding it ends the current drag. SC remembers the last size
-you choose across launches.
-Linux uses native window controls for moving and resizing.
+edges and corners. Hiding it ends the current drag. Linux uses native window
+controls for moving and resizing. SC remembers the last size you chose for a
+Windows panel or a floating Linux panel across normal restarts. When Settings
+closes on Linux, a floating panel restores your chosen size or fits the
+current content if you have never resized it. A tiled panel returns to
+Hyprland's tiled layout, including after opening Settings from a hidden panel.
 
 Setup and Settings use a consistent opaque dark interface. Setup keeps the API
 key available for retry when secure storage fails. Setup headings and guidance

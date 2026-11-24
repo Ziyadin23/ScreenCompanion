@@ -121,17 +121,28 @@ async function boundedRead(path: string, max: number): Promise<Buffer> {
     } finally { bytes.fill(0); }
   } finally { await file.close(); }
 }
-async function atomicWrite(path: string, contents: Buffer): Promise<void> {
+async function atomicWrite(path: string, contents: Buffer, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted();
   await fs.mkdir(dirname(path), { recursive: true });
   const temporary = join(dirname(path), `.${randomUUID()}.new`);
   try {
     const file = await fs.open(temporary, 'wx', 0o600);
     try { await file.writeFile(contents); await file.sync(); } finally { await file.close(); }
-    await fs.rename(temporary, path);
+    if (!signal) { await fs.rename(temporary, path); return; }
+    signal.throwIfAborted();
+    // At the quit deadline, remove the unique source of an outstanding rename.
+    // Whichever filesystem operation wins, this instance can no longer replace a successor's file.
+    let revoke!: () => void;
+    const revoked = new Promise<never>((_, reject) => {
+      revoke = () => { void fs.unlink(temporary).then(() => reject(signal.reason), () => {}); };
+    });
+    signal.addEventListener('abort', revoke, { once: true });
+    try { await Promise.race([fs.rename(temporary, path), revoked]); }
+    finally { signal.removeEventListener('abort', revoke); }
   } finally { await fs.unlink(temporary).catch(() => {}); }
 }
 
-export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData' | 'unprotectData'>, localAppData: string, options: { platform?: 'windows' | 'linux' } = {}): SettingsStore {
+export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData' | 'unprotectData'>, localAppData: string, options: { platform?: 'windows' | 'linux'; windowSizeSignal?: AbortSignal } = {}): SettingsStore {
   const linux = options.platform === 'linux';
   const current = join(localAppData, 'SC', linux ? 'sc.linux.key' : 'sc.user.key');
   const legacy = join(localAppData, 'ScreenCompanion', 'screencompanion.user.key');
@@ -190,7 +201,7 @@ export function createSettingsStore(platform: Pick<WindowsPlatform, 'protectData
     async saveWindowSize(size) {
       if (!validSize(size)) return false;
       const bytes = Buffer.from(JSON.stringify({ Width: size.Width, Height: size.Height }));
-      const write = sizeWrites.then(() => atomicWrite(sizePath, bytes));
+      const write = sizeWrites.then(() => atomicWrite(sizePath, bytes, options.windowSizeSignal));
       sizeWrites = write.catch(() => {});
       try { await write; return true; } catch { return false; } finally { bytes.fill(0); }
     },
