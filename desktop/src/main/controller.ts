@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
+import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppCommandResult, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
@@ -7,6 +7,7 @@ import { applyPreferenceEdits, customInstructionError } from '../contracts/setti
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText, SHORTCUT_FIELDS, shortcutsByAction } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
+import { PipelineFailure } from '../pipeline/trace';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
 
@@ -196,7 +197,7 @@ export class ApplicationController {
     queueMicrotask(() => this.publish());
     return this.setRecording(false, this.state.settingsSession);
   }
-  async command(command: AppCommand): Promise<void> {
+  async command(command: AppCommand): Promise<AppCommandResult> {
     if (this.exiting) return;
     if (command.type === 'exit') { this.dispose(); this.deps.host.exit(); return; }
     if (this.state.updates.status === 'installing') return;
@@ -216,7 +217,7 @@ export class ApplicationController {
     if (!this.state.ready) return;
     switch (command.type) {
       case 'capture': await this.request(); break;
-      case 'submit': await this.request(command.question.trim(), command.includeScreenshot); break;
+      case 'submit': return this.request(command.question.trim(), command.includeScreenshot);
       case 'inputHeight':
         if (this.state.surface === 'input' && !this.capturing) this.deps.host.inputHeight?.(command.height);
         break;
@@ -405,7 +406,7 @@ export class ApplicationController {
     try { return await this.deps.platform.chooseColor(this.deps.host.panelHandle(), initialColor); }
     finally { this.settingsActions--; }
   }
-  private async request(typedQuestion?: string, includeScreenshot = true): Promise<void> {
+  private async request(typedQuestion?: string, includeScreenshot = true): Promise<AppCommandResult> {
     if (!this.settings || this.state.busy || (this.state.surface === 'settings' && this.state.visible) || (typedQuestion !== undefined && !typedQuestion)) return;
     if (this.deps.mode && this.deps.mode !== 'production') {
       this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.')); return;
@@ -442,11 +443,14 @@ export class ApplicationController {
       if (!this.hiddenByUser) this.state.visible = true;
     } catch (error) {
       if (!this.exiting) {
-        if (!this.hiddenByUser) this.state.visible = true;
+        const retryQuestion = !includeScreenshot && error instanceof PipelineFailure &&
+          (error.pipelineCode === 'Network' || error.pipelineCode === 'Timeout');
+        if (!retryQuestion && !this.hiddenByUser) this.state.visible = true;
         const retryInput = stage === 'Capture' && typedQuestion !== undefined && this.deps.platform.captureSelection === 'portal';
         if (retryInput) this.state.surface = 'input';
         this.fail(stage, error);
         if (retryInput) throw new AppError('CAPTUREFAILED', 'Screen capture was cancelled or unavailable. Try again.');
+        if (retryQuestion) return 'retry-question';
       }
     }
     finally {

@@ -124,6 +124,7 @@ export interface SettingsDraft {
   pipelineUpdates: ModelPipelinePreference[];
 }
 export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
+export type AppCommandResult = 'retry-question' | void;
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
@@ -135,7 +136,7 @@ export interface SetupRequest { provider: ApiProvider; apiKey: string }
 export interface DesktopApi {
   getState(): Promise<AppState>;
   setup(request: SetupRequest): Promise<void>;
-  command(command: AppCommand): Promise<void>;
+  command(command: AppCommand): Promise<AppCommandResult>;
   getSettingsDraft(): Promise<SettingsDraft>;
   saveSettings(draft: SettingsDraft): Promise<SettingsSaveResult>;
   discardSettings(session: number): Promise<void>;

@@ -7,8 +7,10 @@ import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/co
 import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { commandSchema, settingsDraftSchema } from '../../src/main/validation';
+import { createPipelineRunner } from '../../src/pipeline';
 import { validateShortcuts } from '../../src/platform/shortcuts';
 import { controllerFixture, deferred } from '../main/controller-fixture';
+import { canonical, context, envelope, images, StrictTransport } from '../pipeline/fixtures';
 import userEvent from '@testing-library/user-event';
 
 afterEach(cleanup);
@@ -151,6 +153,124 @@ function choose(name: string, value: string) {
   fireEvent.click(screen.getByRole('option', { name: value }));
 }
 function value(name: string) { return (screen.getByRole('textbox', { name }) as HTMLInputElement).value; }
+
+describe('text-only question recovery', () => {
+  const original = 'Synthetic input for connection recovery';
+
+  async function sendQuestion(text = original) {
+    const production = controllerFixture();
+    const firstResponse = deferred<never>();
+    const transport = new StrictTransport([() => firstResponse.promise]);
+    production.run.mockImplementation(createPipelineRunner({ transport, cropper: production.platform }).run);
+    const user = userEvent.setup();
+    await renderController(production);
+    await user.click(await screen.findByRole('button', { name: 'Question' }));
+    await user.type(screen.getByRole('textbox', { name: 'Question' }), text);
+    await user.keyboard('{Enter}');
+    expect(transport.requests).toHaveLength(1);
+    expect(context(transport.payloads[0]!)).toMatchObject({ request_source: 'typed_text', typed_question: text.trim() });
+    expect(images(transport.payloads[0]!)).toEqual([]);
+    async function fail(code: 'Network' | 'Timeout') {
+      const reason = new Error(text);
+      if (code === 'Timeout') reason.name = 'TimeoutError';
+      await act(async () => firstResponse.reject(reason));
+    }
+    return { production, user, transport, fail };
+  }
+
+  it.each(['Network', 'Timeout'] as const)('recovers the question after %s for one edited text-only retry', async code => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail(code);
+    const diagnostic = screen.getByTestId('answer-text').textContent;
+    expect(diagnostic).toContain('ANSWER-' + code.toUpperCase());
+    expect(diagnostic).not.toContain(original);
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    const input = screen.getByRole('textbox', { name: 'Question' });
+    expect(document.activeElement).toBe(input);
+    expect(value('Question')).toHaveLength(original.length);
+    expect(value('Question')).toBe(original);
+    expect(screen.getByTestId('answer-text').textContent).toBe(diagnostic);
+    await user.type(input, ' again');
+    expect(transport.requests).toHaveLength(1);
+    transport.steps.push(payload => envelope('OpenAI', canonical(payload, 'Edited answer')));
+    if (code === 'Network') await user.keyboard('{Enter}');
+    else await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByTestId('answer-text').textContent).toBe('Edited answer');
+    transport.done();
+    expect(context(transport.payloads[1]!)).toMatchObject({ request_source: 'typed_text', typed_question: original + ' again' });
+    expect(images(transport.payloads[1]!)).toEqual([]);
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+    expect(production.save).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+  });
+
+  it.each(['Settings', 'Hide'] as const)('respects %s during the request and discards the recovered question with Escape', async action => {
+    const draft = '  ' + original + ' ✓  ';
+    const { production, user, transport, fail } = await sendQuestion(draft);
+    await user.click(screen.getByRole('button', { name: action }));
+    if (action === 'Settings') await screen.findByRole('combobox', { name: 'Answer mode' });
+    const focus = document.activeElement;
+    production.host.activate.mockClear();
+    await fail('Network');
+    expect(production.controller.getState()).toMatchObject({
+      surface: action === 'Settings' ? 'settings' : 'answer', visible: action === 'Settings',
+      error: { code: 'ANSWER-NETWORK' }, busy: false
+    });
+    expect(production.host.activate).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(focus);
+    if (action === 'Settings') await user.click(screen.getByTestId('settings-back'));
+    else await act(async () => production.controller.onAction('visibility'));
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(draft);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('textbox', { name: 'Question' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('opens an empty Question after exit and restart', async () => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail('Timeout');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(original);
+    await user.click(screen.getByRole('button', { name: 'Exit' }));
+    expect(production.platform.dispose).toHaveBeenCalledOnce();
+    expect(production.save).not.toHaveBeenCalled();
+    transport.done();
+    cleanup();
+    await renderController(controllerFixture());
+    await user.click(await screen.findByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+  });
+
+  it('leaves the capture test hidden when the user closes it before the connection fails', async () => {
+    const { production, transport, fail } = await sendQuestion();
+    await act(async () => production.controller.onAction('test'));
+    await act(async () => production.controller.onAction('test'));
+    expect(production.controller.getState()).toMatchObject({ surface: 'captureTest', visible: false });
+    await fail('Timeout');
+    expect(production.controller.getState()).toMatchObject({ surface: 'captureTest', visible: false, error: { code: 'ANSWER-TIMEOUT' } });
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('clears the key-free preview input and keeps its diagnostic and retained answer', async () => {
+    const preview = controllerFixture(undefined, 'Thorough', 'windows', 'synthetic');
+    await renderController(preview);
+    await act(async () => preview.controller.onAction('input'));
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole('textbox', { name: 'Question' }), original);
+    await user.keyboard('{Enter}');
+    expect(value('Question')).toBe('');
+    expect(screen.getByTestId('answer-text').textContent).toContain('APIREQUEST-PREVIEWONLY');
+    expect(preview.controller.getState().answer).toBe('Synthetic SC answer');
+    expect(preview.run).not.toHaveBeenCalled();
+    expect(preview.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+});
 
 describe('answer and temporary input', () => {
   it.each([

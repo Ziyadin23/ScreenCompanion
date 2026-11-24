@@ -103,6 +103,8 @@ window controls and optional Hyprland bindings.
 **Enter / Send** submits typed text without capturing the screen.
 **Ctrl+Enter / Send with screenshot** includes one fresh capture. Your typed
 question takes priority over unrelated visible questions.
+In the development build, reopen **Question** after a text-only connection error
+or timeout to edit your text and send it again.
 
 Select and copy answer text directly. On Windows, hover over the panel and use
 the mouse wheel to scroll; move it with **Alt + left drag** or resize from its
