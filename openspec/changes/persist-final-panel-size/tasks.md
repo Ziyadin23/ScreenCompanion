@@ -205,3 +205,9 @@ and test inputs. The two-process Fedora checks also passed 14 Exit cases,
 including both rename/unlink orderings and actual process exit. Separate
 Windows runtime, recorder and destination checks still require their own
 results.
+
+A follow-up reproduced the checked-in-record assertion failure with each
+of the two earlier supported README row labels. The assertion now locates
+the single supported row and compares the entire document after replacing
+only its version cell. The checked-in-record and two ambiguity cases passed
+against each of the three labels (nine checks). The frozen README is intact.

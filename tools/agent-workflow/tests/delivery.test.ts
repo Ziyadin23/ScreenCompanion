@@ -91,8 +91,12 @@ test('version preparation supports the checked-in source table and status header
   const prepared = prepareVersionRecords(root, reservation), { previousVersion: old, version: next } = reservation;
   const readme = prepared.changes[2]!, publishing = prepared.changes[3]!, status = prepared.changes[4]!;
   assert.notEqual(next, published);
+  const sourceRows = ['Current source', 'Current source, unpublished', 'Local candidate source']
+    .map(label => `| ${label} | **${old}** |`).filter(row => readme.before.includes(row));
+  assert.equal(sourceRows.length, 1);
+  const sourceRow = sourceRows[0]!;
   for (const [change, from, to] of [
-    [readme, `| Local candidate source | **${old}** |`, `| Local candidate source | **${next}** |`],
+    [readme, sourceRow, sourceRow.replace(`**${old}**`, `**${next}**`)],
     [publishing, `The current source version is **${old}**.`, `The current source version is **${next}**.`],
     [status, `Application source is **${old}**.`, `Application source is **${next}**.`],
   ] as const) {
