@@ -202,12 +202,10 @@ export function App() {
     try {
       const result = await window.sc.command(value);
       // A late reply belongs to the submitted text, even if the user has since edited or discarded it.
-      if (submitted && result !== 'retry-question') setDraft(current => current === submitted ? EMPTY_QUESTION : current);
+      if (submitted && (result === 'clear-question' || !submitted.keepForRetry))
+        setDraft(current => current === submitted ? EMPTY_QUESTION : current);
       return true;
-    } catch {
-      if (submitted) setDraft(current => current === submitted ? { ...submitted, keepForRetry: false } : current);
-      return false;
-    }
+    } catch { return false; }
   }
   useEffect(() => {
     // Setup and Settings handle Escape with their own Cancel and Back actions.

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
-import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
+import { PROVIDERS, type AppState, type HttpResponse, type SettingsDraft } from '../../src/contracts';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { commandSchema, settingsDraftSchema } from '../../src/main/validation';
 import { createPipelineRunner } from '../../src/pipeline';
@@ -159,30 +159,37 @@ describe('text-only question recovery', () => {
 
   async function sendQuestion(text = original) {
     const production = controllerFixture();
-    const firstResponse = deferred<never>();
+    const firstResponse = deferred<HttpResponse>();
     const transport = new StrictTransport([() => firstResponse.promise]);
     production.run.mockImplementation(createPipelineRunner({ transport, cropper: production.platform }).run);
     const user = userEvent.setup();
-    await renderController(production);
+    const driver = await renderController(production);
     await user.click(await screen.findByRole('button', { name: 'Question' }));
     await user.type(screen.getByRole('textbox', { name: 'Question' }), text);
     await user.keyboard('{Enter}');
     expect(transport.requests).toHaveLength(1);
     expect(context(transport.payloads[0]!)).toMatchObject({ request_source: 'typed_text', typed_question: text.trim() });
     expect(images(transport.payloads[0]!)).toEqual([]);
-    async function fail(code: 'Network' | 'Timeout') {
+    async function fail(code: 'Network' | 'Timeout' | number) {
+      if (typeof code === 'number') {
+        await act(async () => firstResponse.resolve({ status: code, headers: { 'content-type': 'application/json' }, body: Buffer.from('{}') }));
+        return;
+      }
       const reason = new Error(text);
       if (code === 'Timeout') reason.name = 'TimeoutError';
       await act(async () => firstResponse.reject(reason));
     }
-    return { production, user, transport, fail };
+    return { production, driver, user, transport, fail };
   }
 
-  it.each(['Network', 'Timeout'] as const)('recovers the question after %s for one edited text-only retry', async code => {
+  it.each(['Network', 'Timeout', 408, 504] as const)('recovers the question after %s for one edited text-only retry', async code => {
     const { production, user, transport, fail } = await sendQuestion();
     await fail(code);
     const diagnostic = screen.getByTestId('answer-text').textContent;
-    expect(diagnostic).toContain('ANSWER-' + code.toUpperCase());
+    if (typeof code === 'number') {
+      expect(diagnostic).toContain('ANSWER-HTTPFAILURE');
+      expect(diagnostic).toContain('status ' + code);
+    } else expect(diagnostic).toContain('ANSWER-' + code.toUpperCase());
     expect(diagnostic).not.toContain(original);
     await user.click(screen.getByRole('button', { name: 'Question' }));
     const input = screen.getByRole('textbox', { name: 'Question' });
@@ -203,6 +210,45 @@ describe('text-only question recovery', () => {
     expect(production.save).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Question' }));
     expect(value('Question')).toBe('');
+  });
+
+  it('keeps a queued edit when Settings opens before the controller receives the retry', async () => {
+    const { production, driver, user, transport, fail } = await sendQuestion();
+    await fail('Network');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    await user.type(screen.getByRole('textbox', { name: 'Question' }), ' edited');
+    const edited = value('Question');
+    const deliver = deferred<void>();
+    const invoke = driver.api.command.getMockImplementation()!;
+    driver.api.command.mockImplementationOnce(async command => { await deliver.promise; return invoke(command); });
+    await user.keyboard('{Enter}');
+    expect(driver.api.command.mock.lastCall).toEqual([{ type: 'submit', question: edited, includeScreenshot: false }]);
+    const queued = driver.api.command.mock.results.at(-1)!.value;
+    await act(async () => production.controller.onAction('settings'));
+    await screen.findByRole('combobox', { name: 'Answer mode' });
+    await act(async () => { deliver.resolve(); await queued; });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', busy: false, error: { code: 'ANSWER-NETWORK' } });
+    await user.click(screen.getByTestId('settings-back'));
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(edited);
+    expect(transport.requests).toHaveLength(1);
+    transport.steps.push(payload => envelope('OpenAI', canonical(payload, 'Edited answer')));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByTestId('answer-text').textContent).toBe('Edited answer');
+    transport.done();
+    expect(context(transport.payloads[1]!)).toMatchObject({ request_source: 'typed_text', typed_question: edited });
+    expect(images(transport.payloads[1]!)).toEqual([]);
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing behavior for a non-timeout HTTP failure', async () => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail(503);
+    expect(screen.getByTestId('answer-text').textContent).toContain('ANSWER-HTTPFAILURE');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
   });
 
   it.each(['Settings', 'Hide'] as const)('respects %s during the request and discards the recovered question with Escape', async action => {

@@ -38,7 +38,7 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
       if (command.type === 'showInput') emit({ surface: 'input' });
       if (command.type === 'captureTest') emit({ surface: 'captureTest' });
       if (command.type === 'escape') emit(state.surface === 'input' || state.surface === 'captureTest' ? { surface: 'answer' } : { visible: false });
-      if (command.type === 'submit') emit({ busy: true, surface: 'answer' });
+      if (command.type === 'submit') { emit({ busy: true, surface: 'answer' }); return 'clear-question'; }
       if (command.type === 'settingsDraftChanged' && state.surface === 'settings' && command.session === state.settingsSession)
         emit({ settingsDirty: command.dirty });
     }),

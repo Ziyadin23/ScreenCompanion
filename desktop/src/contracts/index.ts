@@ -124,7 +124,7 @@ export interface SettingsDraft {
   pipelineUpdates: ModelPipelinePreference[];
 }
 export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
-export type AppCommandResult = 'retry-question' | void;
+export type AppCommandResult = 'clear-question' | void;
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'submit'; question: string; includeScreenshot: boolean }

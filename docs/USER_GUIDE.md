@@ -184,7 +184,8 @@ upgrading and uninstalling preserve the encrypted settings for your Windows acco
 
 If an answer fails, the panel shows the error, a diagnostic code and a report ID. `CAPTURE-...` means capture failed before the API request. Codes such as `ANSWER-NETWORK`, `ANSWER-TIMEOUT` or `ANSWER-HTTPFAILURE` identify the stage and failure class; the safe message/log metadata can include the numeric HTTP status.
 
-If a text-only send gives `ANSWER-NETWORK` or `ANSWER-TIMEOUT`, reopen **Question**.
+If a text-only send gives `ANSWER-NETWORK`, `ANSWER-TIMEOUT`, or an HTTP timeout
+(status 408 or 504), reopen **Question**.
 Edit your text, then press **Enter** or choose **Send** to try again.
 SC keeps the draft only in memory. A successful send clears it.
 Press **Esc** in Question or exit SC to discard it.

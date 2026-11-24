@@ -38,6 +38,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
       if (command.type === 'settingsDraftChanged' && ownsSettings(command.session))
         emit({ settingsDirty: command.dirty });
       if (['escape', 'exit', 'submit', 'capture'].includes(command.type)) emit({ surface: 'answer', settingsDirty: false });
+      if (command.type === 'submit') return 'clear-question';
     },
     getSettingsDraft: async () => ({ ...structuredClone(draft), session: state.settingsSession }),
     saveSettings: async (next) => {

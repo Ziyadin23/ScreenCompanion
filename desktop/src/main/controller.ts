@@ -409,12 +409,16 @@ export class ApplicationController {
   private async request(typedQuestion?: string, includeScreenshot = true): Promise<AppCommandResult> {
     if (!this.settings || this.state.busy || (this.state.surface === 'settings' && this.state.visible) || (typedQuestion !== undefined && !typedQuestion)) return;
     if (this.deps.mode && this.deps.mode !== 'production') {
-      this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.')); return;
+      this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.'));
+      return 'clear-question';
     }
     const settings = structuredClone(this.settings);
     const configuration = this.deps.configuration(settings);
     const key = this.keyFor(configuration.provider, settings);
-    if (!key) { this.fail('Credentials', new AppError('MISSINGKEY', 'Add the selected service API key in Settings.')); return; }
+    if (!key) {
+      this.fail('Credentials', new AppError('MISSINGKEY', 'Add the selected service API key in Settings.'));
+      return 'clear-question';
+    }
     this.cancellation = new AbortController();
     this.state.busy = true; this.state.error = null;
     let jpeg: Buffer | null = null;
@@ -444,19 +448,21 @@ export class ApplicationController {
     } catch (error) {
       if (!this.exiting) {
         const retryQuestion = !includeScreenshot && error instanceof PipelineFailure &&
-          (error.pipelineCode === 'Network' || error.pipelineCode === 'Timeout');
+          (error.pipelineCode === 'Network' || error.pipelineCode === 'Timeout' ||
+            (error.pipelineCode === 'HttpFailure' && (error.httpStatus === 408 || error.httpStatus === 504)));
         if (!retryQuestion && !this.hiddenByUser) this.state.visible = true;
         const retryInput = stage === 'Capture' && typedQuestion !== undefined && this.deps.platform.captureSelection === 'portal';
         if (retryInput) this.state.surface = 'input';
         this.fail(stage, error);
         if (retryInput) throw new AppError('CAPTUREFAILED', 'Screen capture was cancelled or unavailable. Try again.');
-        if (retryQuestion) return 'retry-question';
+        if (retryQuestion) return;
       }
     }
     finally {
       jpeg?.fill(0); this.finishCapture(); this.state.busy = false; this.cancellation = null;
       this.publish();
     }
+    return 'clear-question';
   }
   captureTestText(): string {
     return `CAPTURE EXCLUSION TEST\n\nVerify this panel using an entire-monitor recording or received stream. Capture exclusion is best effort.\n\nWindows status: ${this.state.captureProtection}.\n\nCtrl+/ hides or shows. Ctrl+Alt+T closes or reopens. Ctrl+Backspace exits.`;
