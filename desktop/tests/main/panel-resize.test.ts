@@ -126,6 +126,8 @@ vi.mock('../../src/platform', async () => {
 
 function store() { return createSettingsStore(cryptor, profile, { platform }); }
 async function resizeAndWaitForSave(size: Electron.Size, signal: AbortSignal) {
+  // A disk read can finish after Vitest has started the next case.
+  signal.throwIfAborted();
   const nextSave = once(sizeWrites, profile, { signal });
   panel.resizeFromDesktop(size);
   const [write] = await nextSave;
@@ -183,6 +185,7 @@ it.for([
   expect(panel.getSize()).toEqual(sizeA);
   expect(await store().loadWindowSize()).toEqual(savedA);
 
+  signal.throwIfAborted();
   close();
   // A fresh fit would be taller, so matching A on startup proves restoration.
   measuredTextHeight = 260;
