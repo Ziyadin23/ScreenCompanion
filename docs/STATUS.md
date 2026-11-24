@@ -1,6 +1,8 @@
 # SC project status
 
-Snapshot updated **2026-11-24 UTC**. Application source is **0.5.0-beta.17**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+Snapshot updated **2026-11-24 UTC**. Application source is **0.5.0-beta.18**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+
+Local Windows candidate beta.18 includes the integrated panel sizing fix and keeps a typed question available after a connection failure. Focused Windows verification is pending. [Question recovery PR](https://github.com/Ziyadin23/ScreenCompanion/pull/147)
 
 On 17 November, [PR #85](https://github.com/Ziyadin23/ScreenCompanion/pull/85) integrated Windows package optimization at `6c8d671` on baseline `e7a844f`. Beta.16 combines the subsequent package fixes with the Settings fixes from `4003e5d`. The installer, portable EXE, ZIP and README passed copied-byte verification. [PR #135](https://github.com/Ziyadin23/ScreenCompanion/pull/135) integrated the qualification on 22 November at `1d40e93`. See the [Windows results](VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 
