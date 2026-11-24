@@ -47,7 +47,7 @@ A standard account on Windows 11 x64 updated its installed copy of SC from 0.5.0
 
 Uninstall exited 0. A fresh postflight matched the starting state for all four protected vault and size paths, the original cache directory identity and contents, installation records and shortcuts. The test processes and temporary scheduler entry were gone. The VM returned to its original powered-off state with its original configuration, disks, snapshots and USB filter.
 
-Three early fixture checks stopped before the first download. Two assumed a different form of the Windows uninstall registration. The third stopped while submitting synthetic setup. The completed run checked the registered uninstaller and waited for the setup form to become visible.
+Three early fixture checks stopped before the first download. Two assumed a different form of the Windows uninstall registration. The third recorded a generic error at the beta.6 application-bridge check. Its last observation identified the setup screen as the active surface, with `ready` false and the updater idle. The exact operation that failed is unknown. The successful retry waited for beta.6 to report that the setup screen was visible before submitting the synthetic setup.
 
 ## Beta.16 Windows qualification (2026-11-22)
 
