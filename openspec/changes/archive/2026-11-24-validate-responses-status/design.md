@@ -11,4 +11,4 @@ OpenAI and DeepSeek share the adapter that decodes successful Responses HTTP bod
 
 ## Risks and verification
 
-Older responses can omit `status`. Exercise that case through both providers and run the existing incomplete-response and refusal suites. Synthetic transport checks cover the envelope boundary and pipeline behavior. A numbered Windows candidate and verified local beta copy require separate acceptance. [Publishing](../../../docs/PUBLISHING.md#local-beta-handoff)
+Older responses can omit `status`. Exercise that case through both providers and run the existing incomplete-response and refusal suites. Synthetic transport checks cover the envelope boundary and pipeline behavior. A numbered Windows candidate and verified local beta copy require separate acceptance. [Publishing](../../../../docs/PUBLISHING.md#local-beta-handoff)

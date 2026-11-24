@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from 'node:util';
-import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
+import type { ApiProvider, AppAction, DesktopAction, AppCommand, AppCommandResult, AppState, CaptureProtectionResult, DesktopApi, PipelineConfiguration, PipelineMode, PipelineRunner, SettingsDraft, SettingsSaveResult, SettingsStore, SetupRequest, UpdateState, VaultData, WindowsPlatform } from '../contracts';
 import { PROVIDERS } from '../contracts';
 import { defaultModels, defaultSettings } from '../contracts/defaults';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
@@ -7,6 +7,7 @@ import { applyPreferenceEdits, customInstructionError } from '../contracts/setti
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText, SHORTCUT_FIELDS, shortcutsByAction } from '../contracts/shortcut-display';
 import { ShortcutRestoreError } from '../platform/shortcuts';
+import { PipelineFailure } from '../pipeline/trace';
 import { AppError, type Diagnostics } from './diagnostics';
 import { disabledUpdates } from './updates';
 
@@ -67,6 +68,7 @@ export class ApplicationController {
   private pendingActivation = false;
   private afterCapture: (() => void)[] = [];
   private cancellation: AbortController | null = null;
+  private keepQuestionDiagnostic = false;
   private recording = false;
   private hiddenByUser = false;
   private detachWheel: (() => void) | null = null;
@@ -97,7 +99,11 @@ export class ApplicationController {
     const actions = this.afterCapture.splice(0);
     for (const action of actions) { if (!this.exiting) action(); }
   }
-  private fail(stage: string, error: unknown): void { this.state.error = this.deps.diagnostics.failure(stage, error); this.publish(); }
+  private fail(stage: string, error: unknown, keepForRetry = false): void {
+    this.state.error = this.deps.diagnostics.failure(stage, error);
+    this.keepQuestionDiagnostic = keepForRetry;
+    this.publish();
+  }
   setCaptureProtection(result: CaptureProtectionResult): void { this.state.captureProtection = result; this.publish(); }
   async initialize(): Promise<void> {
     const mode = this.deps.mode ?? 'production';
@@ -197,7 +203,7 @@ export class ApplicationController {
     queueMicrotask(() => this.publish());
     return this.setRecording(false, this.state.settingsSession);
   }
-  async command(command: AppCommand): Promise<void> {
+  async command(command: AppCommand): Promise<AppCommandResult> {
     if (this.exiting) return;
     if (command.type === 'exit') { this.beginShutdown(); this.deps.host.exit(); return; }
     if (this.state.updates.status === 'installing') return;
@@ -217,7 +223,7 @@ export class ApplicationController {
     if (!this.state.ready) return;
     switch (command.type) {
       case 'capture': await this.request(); break;
-      case 'submit': await this.request(command.question.trim(), command.includeScreenshot); break;
+      case 'submit': return this.request(command.question.trim(), command.includeScreenshot);
       case 'inputHeight':
         if (this.state.surface === 'input' && !this.capturing) this.deps.host.inputHeight?.(command.height);
         break;
@@ -245,7 +251,10 @@ export class ApplicationController {
         this.publish(); break;
       case 'escape':
         if (this.state.surface === 'settings') break;
-        if (this.state.surface === 'input') { this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish(); }
+        if (this.state.surface === 'input') {
+          this.keepQuestionDiagnostic = false;
+          this.state.surface = 'answer'; this.deps.platform.setHoverInputHeight(0); this.publish();
+        }
         else { this.state.visible = false; this.hiddenByUser = true; return this.publish(); }
         break;
       case 'settingsDraftChanged':
@@ -379,7 +388,7 @@ export class ApplicationController {
     this.state.settingsModels = candidate.Models;
     this.state.settingsModelPipelines = candidate.ModelPipelines;
     if (!this.recording && this.registeredShortcutSettings === candidate) this.state.shortcutRecovery = null;
-    if (this.closeSettings(session) && this.state.error === priorError) this.state.error = null;
+    if (this.closeSettings(session) && this.state.error === priorError && !this.keepQuestionDiagnostic) this.state.error = null;
     return 'saved';
   }
   private reportShortcutRestoreFailure(): SettingsSaveResult {
@@ -406,17 +415,21 @@ export class ApplicationController {
     try { return await this.deps.platform.chooseColor(this.deps.host.panelHandle(), initialColor); }
     finally { this.settingsActions--; }
   }
-  private async request(typedQuestion?: string, includeScreenshot = true): Promise<void> {
+  private async request(typedQuestion?: string, includeScreenshot = true): Promise<AppCommandResult> {
     if (!this.settings || this.state.busy || (this.state.surface === 'settings' && this.state.visible) || (typedQuestion !== undefined && !typedQuestion)) return;
     if (this.deps.mode && this.deps.mode !== 'production') {
-      this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.')); return;
+      this.fail('ApiRequest', new AppError('PREVIEWONLY', 'This key-free preview makes no API requests.'));
+      return 'clear-question';
     }
     const settings = structuredClone(this.settings);
     const configuration = this.deps.configuration(settings);
     const key = this.keyFor(configuration.provider, settings);
-    if (!key) { this.fail('Credentials', new AppError('MISSINGKEY', 'Add the selected service API key in Settings.')); return; }
+    if (!key) {
+      this.fail('Credentials', new AppError('MISSINGKEY', 'Add the selected service API key in Settings.'));
+      return 'clear-question';
+    }
     this.cancellation = new AbortController();
-    this.state.busy = true; this.state.error = null;
+    this.state.busy = true; this.state.error = null; this.keepQuestionDiagnostic = false;
     let jpeg: Buffer | null = null;
     let stage = includeScreenshot ? 'Capture' : 'ApiRequest';
     try {
@@ -443,17 +456,22 @@ export class ApplicationController {
       if (!this.hiddenByUser) this.state.visible = true;
     } catch (error) {
       if (!this.exiting) {
-        if (!this.hiddenByUser) this.state.visible = true;
+        const retryQuestion = !includeScreenshot && error instanceof PipelineFailure &&
+          (error.pipelineCode === 'Network' || error.pipelineCode === 'Timeout' ||
+            (error.pipelineCode === 'HttpFailure' && (error.httpStatus === 408 || error.httpStatus === 504)));
+        if (!retryQuestion && !this.hiddenByUser) this.state.visible = true;
         const retryInput = stage === 'Capture' && typedQuestion !== undefined && this.deps.platform.captureSelection === 'portal';
         if (retryInput) this.state.surface = 'input';
-        this.fail(stage, error);
+        this.fail(stage, error, retryQuestion);
         if (retryInput) throw new AppError('CAPTUREFAILED', 'Screen capture was cancelled or unavailable. Try again.');
+        if (retryQuestion) return;
       }
     }
     finally {
       jpeg?.fill(0); this.finishCapture(); this.state.busy = false; this.cancellation = null;
       this.publish();
     }
+    return 'clear-question';
   }
   captureTestText(): string {
     return `CAPTURE EXCLUSION TEST\n\nVerify this panel using an entire-monitor recording or received stream. Capture exclusion is best effort.\n\nWindows status: ${this.state.captureProtection}.\n\nCtrl+/ hides or shows. Ctrl+Alt+T closes or reopens. Ctrl+Backspace exits.`;

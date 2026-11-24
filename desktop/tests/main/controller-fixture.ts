@@ -2,12 +2,13 @@ import { vi } from 'vitest';
 import type { AppState, PipelineConfiguration, PipelineMode, PipelineInput, PipelineResult, VaultData } from '../../src/contracts';
 import { withSavedSettings } from '../../src/pipeline/configuration';
 import { defaultSettings } from '../../src/contracts/defaults';
-import { ApplicationController } from '../../src/main/controller';
+import { ApplicationController, type ControllerDependencies } from '../../src/main/controller';
 import { createPreviewPlatform } from '../../src/main/preview';
 import { createDiagnostics } from '../../src/main/diagnostics';
 
 export function deferred<T>() { let resolve!: (value: T) => void; let reject!: (error: Error) => void; const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
-export function controllerFixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough', platformName: 'windows' | 'linux' = 'windows') {
+export function controllerFixture(initial: VaultData | null = { ...defaultSettings('synthetic-key'), CommandsShown: true }, processMode: PipelineMode = 'Thorough',
+  platformName: 'windows' | 'linux' = 'windows', mode: ControllerDependencies['mode'] = 'production') {
   const platform = createPreviewPlatform();
   const jpeg = Buffer.from('synthetic-monitor');
   platform.activeMonitor = vi.fn(() => ({ x: -1920, y: 0, width: 1920, height: 1080 }));
@@ -38,6 +39,6 @@ export function controllerFixture(initial: VaultData | null = { ...defaultSettin
   const controller = new ApplicationController({ platform, store: { load, save,
     loadWindowSize: async () => null, saveWindowSize: async () => true, legacyPasswordVaultExists },
     pipeline: { run }, host,
-    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName });
+    diagnostics: createDiagnostics(null, 'test'), configuration: settings => withSavedSettings(configuration, settings), defaultPipelineMode: processMode, validateSettings() {}, version: 'test', captureDelayMs: 0, platformName, mode });
   return { controller, platform, applyShortcuts, load, legacyPasswordVaultExists, save, delaySave, run, outcome, states, jpeg, host };
 }

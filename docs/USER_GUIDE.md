@@ -193,6 +193,13 @@ upgrading and uninstalling preserve the encrypted settings for your Windows acco
 
 If an answer fails, the panel shows the error, a diagnostic code and a report ID. `CAPTURE-...` means capture failed before the API request. Codes such as `ANSWER-NETWORK`, `ANSWER-TIMEOUT` or `ANSWER-HTTPFAILURE` identify the stage and failure class; the safe message/log metadata can include the numeric HTTP status.
 
+If a text-only send gives `ANSWER-NETWORK`, `ANSWER-TIMEOUT`, or an HTTP timeout
+(status 408 or 504), reopen **Question**.
+Edit your text, then press **Enter** or choose **Send** to try again.
+You can change and save Settings first. The diagnostic code and report ID stay in the panel.
+SC keeps the draft only in memory. A successful send clears it.
+Press **Esc** in Question or exit SC to discard it.
+
 Stages include `LOCATE`, `CROP`, `EXTRACT`, `ANSWER` and `VALIDATEANSWER`. Stage events share a request ID and record attempts, outcomes, elapsed time and numeric HTTP status. Thorough uses location, extraction and answering; Direct and text-only sends use answering without extraction. Neither structure/crop checks nor canonical-answer validation establish that a model's answer is correct. See the [pipeline reference](PIPELINE.md).
 
 On Windows, open `%LOCALAPPDATA%\SC\diagnostics.log` using Win+R or File Explorer. On Linux, open `$XDG_CONFIG_HOME/SC/diagnostics.log` (normally `~/.config/SC/diagnostics.log`). The app writes `PROCESSSTARTED` during startup, `READY` when initialized and bounded failure/stage/usage entries. Entries contain a UTC timestamp, app version and selected technical metadata such as stage, code, report ID and numeric HTTP status. The log is capped at roughly 64 KB and contains no API key, request or response body, question, screenshot, answer, or raw exception message. If the app cannot write the log, the error still displays a diagnostic code and says the log was not saved.
