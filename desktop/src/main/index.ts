@@ -26,6 +26,7 @@ interface LinuxPanelLayout {
   transition: AbortController | null;
   restorePlacement: Exclude<HyprlandPanelPlacement, 'fullscreen'> | null;
   remapBounds: Electron.Rectangle | null;
+  mappedSize: Electron.Size | null;
   mapGeometry: ReturnType<typeof readHyprlandPanelGeometry> | null;
   resizeCheck: Promise<void> | null;
 }
@@ -294,6 +295,7 @@ async function refreshLinuxPanelLayout(panel: BrowserWindow, layout: LinuxPanelL
   layout.transition = null;
   layout.restorePlacement = null;
   layout.remapBounds = null;
+  layout.mappedSize = null;
   layout.mapGeometry = null;
   panelBounds = panel.getBounds();
   layout.placement = geometry?.placement ?? null;
@@ -438,7 +440,7 @@ function publish(state: AppState, capturing: boolean): Promise<void> | undefined
       const remapBounds = window.isMaximized() ? window.getNormalBounds() : null;
       const restorePlacement = linuxPanelLayout?.restorePlacement ?? null;
       linuxPanelLayout = { placement: null, hiddenPlacement: null, hideCheck: null, transition: null, restorePlacement,
-        remapBounds, mapGeometry: null, resizeCheck: null };
+        remapBounds, mappedSize: null, mapGeometry: null, resizeCheck: null };
       void refreshLinuxPanelLayout(window, linuxPanelLayout);
       window.show();
       // Sample the compositor's map rule before paint or an interactive resize can change the size.
@@ -582,8 +584,9 @@ async function boot(): Promise<void> {
       }
       if (restorePlacement === 'tiled') return;
       // Ignore the size applied on map. A distinct native resize can precede the first paint.
-      if (mapped?.placement === 'floating' && sameSize(bounds, mapped)) return;
-      if (transition && !previousPlacement && !mapped) return;
+      const mappedSize = layout.mappedSize ?? (mapped?.placement === 'floating' ? mapped : null);
+      if (mappedSize && sameSize(bounds, mappedSize)) return;
+      if (transition && !previousPlacement && !mapped && !mappedSize) return;
       if (previousPlacement && previousPlacement !== 'floating') {
         // The first floating configure belongs to the mode change. Later resizes have their own snapshots.
         if (current === layout && restorePlacement !== 'floating') void refreshLinuxPanelLayout(panel, layout);
@@ -591,6 +594,7 @@ async function boot(): Promise<void> {
       }
       if (order <= savedResizeOrder || !sameSize(bounds, geometry)) return;
       layout.remapBounds = null;
+      layout.mappedSize = null;
       layout.mapGeometry = null;
       savedResizeOrder = order;
       rememberSize(bounds);
@@ -608,6 +612,12 @@ async function boot(): Promise<void> {
       if (layout.resizeCheck === check) layout.resizeCheck = null;
     });
   };
+  if (linux) window.on('maximize', () => {
+    // On Wayland, Electron enters its maximized state with the first mapped configure,
+    // even on a floating panel. Its bounds belong to that configure, before a later resize.
+    const layout = linuxPanelLayout;
+    if (window && layout?.mapGeometry && layout.transition) layout.mappedSize ??= window.getBounds();
+  });
   window.on('resize', () => {
     if (closing || !window || applyingWindowGeometry || !isPanel(surface)) return;
     const previous = panelBounds;

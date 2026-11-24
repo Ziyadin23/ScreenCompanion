@@ -184,11 +184,12 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const stats = await stat(path, { bigint: true });
     return { size: await readFile(path, 'utf8'), inode: String(stats.ino), modified: String(stats.mtimeNs) };
   };
-  const editAppearance = async (panel, action) => {
+  const editAppearance = async (panel, action, beforeReturn) => {
     await panel.getByRole('button', { name: 'Settings', exact: true }).press('Enter');
     const settings = await showing('settings-save');
     await settings.getByRole('tab', { name: 'Panel', exact: true }).click();
     await settings.getByRole('spinbutton', { name: 'Answer text size' }).fill('28');
+    await beforeReturn?.();
     await settings.getByRole('button', { name: action, exact: true }).click();
     await expect(panel.getByTestId('answer-text')).toBeVisible();
     await expect.poll(() => panel.evaluate(async () => (await globalThis.sc.getState()).appearance.TextSizePoints))
@@ -606,14 +607,28 @@ process.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\
             };
             return { waiting: () => waiting, finish: () => { contents.executeJavaScript = execute; release(); } };
           });
+          const query = join(fixtureBin, 'hyprctl');
+          const sampled = join(configHome(profile), 'allow-query');
+          const started = join(configHome(profile), 'query-started');
           try {
-            await editAppearance(panel, action);
+            // Hold the command before it samples the window. Its first result will already contain the user's size.
+            await editAppearance(panel, action, () => writeFile(query, `#!/bin/sh
+if [ "$1" = -j ] && [ "$2" = clients ]; then
+  touch "${started}"
+  while [ ! -f "${sampled}" ]; do sleep .005; done
+fi
+exec /usr/bin/hyprctl "$@"
+`, { mode: 0o700 }));
             await expect.poll(() => paint.evaluate(gate => gate.waiting())).toBe(true);
-            await expect.poll(() => activeClient()?.floating).toBe(true);
+            await expect.poll(() => existsSync(started) && activeClient()?.floating).toBe(true);
             sizeWindow(activeClient().address, chosen);
-            await expect.poll(geometry).toEqual(chosen);
+            await expect.poll(geometry, { intervals: [5, 10] }).toEqual(chosen);
+            await expect.poll(() => native.evaluate(window => window.getSize()), { intervals: [5, 10] }).toEqual(chosen);
+            await writeFile(sampled, '');
             await expect.poll(() => savedSize(profile)).toEqual({ Width: chosen[0], Height: chosen[1] });
           } finally {
+            await writeFile(sampled, '');
+            await rm(query, { force: true });
             await paint.evaluate(gate => gate.finish());
           }
           await closeApp();
