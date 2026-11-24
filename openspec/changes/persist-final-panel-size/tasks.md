@@ -171,9 +171,10 @@ to quit if a write or compositor reply stalls.
 
 Desktop verification passed type checking, lint, all 1,367 tests in 39 files
 and the production build. On Fedora the modeled Windows entry point passed
-seven applicable cases. The independent two-process Windows fixture passed
-both Exit routes, normal restart and both scales. A separate command Exit
-timeout also preserved the successor's 550×248. The delayed 125% rename
+seven applicable cases. Two real Fedora processes using a modeled Windows
+mutex at scale factor 1 passed eight Exit scenarios. Separate in-process
+Vitest cases checked the stored dimensions at 100% and 125%. A separate
+command Exit timeout also preserved the successor's 550×248. The delayed 125% rename
 passed both scale tests. Dropping it failed only 125%, and writing 777×222
 failed both scales. Expiring a 100% read and releasing it in the next test
 failed only 100%. Chromium passed 35 shortcut cases and 17 compact Setup
