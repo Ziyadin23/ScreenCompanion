@@ -46,7 +46,7 @@ async function findPointerManager(socket) {
   throw new Error('The compositor did not expose a virtual pointer');
 }
 
-export async function dragWaylandPointer(socketPath, start, end, output) {
+export async function dragWaylandPointer(socketPath, start, end, output, confirmSize) {
   const socket = createConnection(socketPath);
   let socketError;
   socket.on('error', error => { socketError = error; });
@@ -75,6 +75,9 @@ export async function dragWaylandPointer(socketPath, start, end, output) {
       send(0, ...delta.map(value => 256 * (Math.trunc(value * step / steps) - Math.trunc(value * (step - 1) / steps))));
       await delay(50);
     }
+    // Set the exact endpoint and wait for its configure before releasing the drag.
+    send(1, ...end, ...output);
+    await confirmSize?.();
     send(2, rightButton, 0);
     await delay(200);
     if (socketError) throw socketError;

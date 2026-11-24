@@ -412,3 +412,38 @@ also replayed 18 earlier Wayland cases with Lua compositor controls. All
 five replay commands exited 0. They covered quick Hide and Show, hidden
 Settings, tiled Question and Escape, an older resize reply arriving on a
 new mapping, Exit with a delayed or missing reply, and capture after tray Exit.
+
+### Beta.17 map and manual resize verification
+
+The earlier source at `099624f` still saved a 654×318 floating map rule on
+first-run Setup, ordinary Hide and Show, and same-profile startup. The
+independent tests reproduced these paths with a saved 530×238, or with no
+file on first run. Repeated pre-paint Save also exposed a race. Electron's
+show and first normal-bounds configure could both precede Hyprland's map.
+When both queries returned no client, SC could reject a later manual 480×144
+and restore 530×238. The focused test for two absent map replies failed on
+`099624f` and passed on the correction.
+
+Beta.17 product `c7635e5` observes every map until the compositor reports
+the window. SC ignores the rule's initial dimensions and can record a
+distinct resize before paint. On the same Fedora 44, Hyprland 0.57.2, KWin
+6.8.3 and Electron 45 host, all 30 scenarios in the isolated suite passed
+on the corrected product. Setup kept automatic fitting without a size file.
+The four return or startup routes kept the original file. On Setup, Show
+and startup a real 554×252 resize before the initial restore survived a new
+process. After the restore, an explicit resize to the rule's own 654×318
+became the new saved size. Twelve successive early Save runs reached
+480×144. The four independent fast Back/Save cases also passed with a
+15 ms compositor sampling window. The five independent map cases and all
+seven standards-review cases passed. They covered Settings Back/Save,
+ordinary visibility, startup and fresh Setup. All 18 earlier lifecycle and
+shutdown replay cases also passed against this product.
+
+During a subsequent run one virtual-pointer drag released a motion increment
+short at 519×230 before the test opened Settings. With an absolute final
+pointer position and a compositor size acknowledgment before button release,
+24 consecutive real drags reached the requested endpoint. The complete suite
+then passed all 30 scenarios and its parent, with zero skips. The product, root
+README and Windows fixtures come from the frozen commit above. The
+[combined handoff](../persist-final-panel-size/tasks.md#beta17-product-and-windows-handoff)
+records the size-write checks and open qualifications.

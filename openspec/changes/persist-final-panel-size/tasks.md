@@ -144,3 +144,46 @@ The workflow self-test, 141 Markdown files and 634 local links or anchors,
 14 strict OpenSpec items and `git diff --check origin/main` passed.
 The coordinator owns independent review of the exact updated PR head and the
 Windows queue. Tasks 2.2–2.4 stay open pending their own evidence.
+
+### Beta.17 product and Windows handoff
+
+Ordinary merge `215b8b1` brings in current main at
+`1ae3729cdbf7b1908a1444abc2074488e5d5a27e`. This includes the public
+beta.6 → beta.16 update evidence from [PR #142](https://github.com/Ziyadin23/ScreenCompanion/pull/142).
+Beta.17 product `c7635e51aeef3d9a9aae312635adf1f0614084ec` uses desktop
+tree `6231c065d43ef33263d3efd36b6c6e5a7858208d`. The Windows operator
+has that commit, the combined #141/#122 fixture and the root README. The
+fixture blob is `45cc83bfa5d2254274fcbaa058a5e718e94d8860`. The README
+SHA-256 is `4b2ee29741e1ce844bd41e717c7843d6cbe0854a697a903c8c0ef2b9ef7d3e6b`.
+The published beta.16 packages retain their original verification. Ordinary
+merge `0a5cc1d` also includes main at `c004876` and its Windows Setup
+records from [PR #143](https://github.com/Ziyadin23/ScreenCompanion/pull/143).
+Its three documentation changes preserve all frozen package inputs.
+
+The reviewer reproduced the same ownership race through tray and command Exit.
+An old instance held a 510×252 rename. A successor loaded 530×238 and saved
+550×248. The old rename then replaced that file. Both ownership regressions
+and the deadline regression failed against the preceding implementation.
+Beta.17 stops commands at the start of shutdown. It holds the instance lock
+until a final write completes or its temporary file can no longer replace
+the successor's file. The one-second deadline still permits the old process
+to quit if a write or compositor reply stalls.
+
+Desktop verification passed type checking, lint, all 1,367 tests in 39 files
+and the production build. On Fedora the modeled Windows entry point passed
+seven applicable cases. The independent two-process Windows fixture passed
+both Exit routes, normal restart and both scales. A separate command Exit
+timeout also preserved the successor's 550×248. The delayed 125% rename
+passed both scale tests. Dropping it failed only 125%, and writing 777×222
+failed both scales. Expiring a 100% read and releasing it in the next test
+failed only 100%. Chromium passed 35 shortcut cases and 17 compact Setup
+cases. The Windows UI fixture listed 38 cases in five files. The built Astryx
+doctor reported 19 passes and two existing font warnings. The workflow
+self-test, 144 Markdown files and 650 local links or anchors, 14 strict
+OpenSpec items and `git diff --check origin/main` passed.
+
+The [Linux checkpoint](../linux-platform-support/tasks.md#beta17-map-and-manual-resize-verification)
+records the real compositor results. Independent review of the replacement
+head, interactive Windows Settings and same-profile answer/input restarts,
+native and vault checks, named recorder, packaged startup and verified transfer
+of the numbered beta remain with the corresponding owners. #61 stays open.

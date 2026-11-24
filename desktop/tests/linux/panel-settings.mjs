@@ -159,7 +159,8 @@ test('Hyprland panel geometry and Settings visibility', async t => {
     const current = activeClient();
     const start = current.at.map((axis, index) => axis + current.size[index] - 12);
     const end = start.map((axis, index) => axis + size[index] - current.size[index]);
-    await dragWaylandPointer(join(runtime, env.WAYLAND_DISPLAY), start, end, [width, height]);
+    await dragWaylandPointer(join(runtime, env.WAYLAND_DISPLAY), start, end, [width, height],
+      () => expect.poll(geometry, { message: 'The compositor should reach the final size while the button is held' }).toEqual(size));
     await expect.poll(geometry).toEqual(size);
   };
   const setupProduction = async profile => {
