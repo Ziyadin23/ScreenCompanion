@@ -4,11 +4,14 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.18**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
-The verified, locally delivered Windows beta.17 was built from
+The locally delivered Windows beta.18 was built from
+`5c3f59fed119a04ab877727a99f032f974911b27`. It includes typed-question recovery
+and the Linux panel correction that followed local beta.17.
+[Beta.18 Windows results and hashes](VERIFICATION.md#beta18-windows-question-recovery-2026-11-24)
+
+The verified Windows beta.17 was built from
 `c7635e51aeef3d9a9aae312635adf1f0614084ec`.
-Local Windows candidate beta.18 includes the subsequent Linux panel correction
-and the [typed-question recovery fix](https://github.com/Ziyadin23/ScreenCompanion/pull/147).
-[Local transfer and hashes](VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
+[Beta.17 local transfer and hashes](VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
 
 Windows beta.16 is the latest public prerelease. It uses the installer, portable EXE and two-file ZIP qualified on Windows 11 x64. The separate `README.txt` asset matches the file inside the ZIP byte for byte. Both contain the prepublication snapshot that lists beta.6 as the public download. The [beta.16 release notes](releases/v0.5.0-beta.16.md) describe the published files and [Windows qualification](VERIFICATION.md#beta16-windows-qualification-2026-11-22).
 

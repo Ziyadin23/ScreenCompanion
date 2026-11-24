@@ -11,6 +11,10 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
+Local Windows beta.18 passed focused typed-question recovery and packaged startup
+on Windows 11 x64. The four delivered files matched the Windows build.
+[Beta.18 results and hashes](#beta18-windows-question-recovery-2026-11-24)
+
 Windows beta.17 passed qualification and local delivery from frozen
 panel-size source `c7635e5`. The later Hyprland correction at
 `8b8002f` changes the shared JavaScript bundle.
@@ -37,6 +41,38 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
+
+## Beta.18 Windows question recovery (2026-11-24)
+
+Windows 11 x64 ran all 11 focused observations on the first attempt from frozen
+commit `5c3f59fed119a04ab877727a99f032f974911b27`. The run used the production
+panel, preload, controller, pipeline and native shortcuts with controlled
+provider responses. [Issue #146](https://github.com/Ziyadin23/ScreenCompanion/issues/146) · [PR #147](https://github.com/Ziyadin23/ScreenCompanion/pull/147)
+
+Reopening Question restored the full draft after a network error, timeout,
+HTTP 408 or HTTP 504. The HTTP 503 control cleared it. Settings Save preserved
+the diagnostic and report ID. Opening Settings before a queued retry arrived
+preserved the edit. Reopening by shortcut restored typing focus and respected
+Tab and Hide. A successful send, Esc in Question and exit each cleared the
+draft. A restart with the same profile opened an empty Question.
+
+Of 13 submit commands, one reached Settings and stopped before transport. The
+other 12 made text-only requests with zero monitor lookups or captures. Both
+deliberate edited retries sent once. All ten failure codes and report IDs
+matched their diagnostic records. A scan of the 38 files in the closed test
+profile found zero matches for the generated questions or answers.
+
+The portable and installed builds both opened Setup with an empty key field.
+All 24 live portable files and 23 installed files matched their packages.
+The four copied files and both entries in the portable ZIP passed SHA-256
+verification.
+
+| Local beta.18 file | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.18.exe` | 104,545,527 | `d3e6b1597e9863e791cf317f7a7aa311ebf0d7326cc57335814c90a30ab52dec` |
+| `SC-Setup-v0.5.0-beta.18.exe` | 115,175,619 | `2b0e1d1b492475202be26b186cff4bfde81b9a671e6fb88ab3a9be5c2ba4d03d` |
+| `SC-v0.5.0-beta.18-README.txt` | 14,371 | `9fdf8d72a4718d0d5e05a10ba9390529c0356343e103aef0f4c93144c683c287` |
+| `SC-v0.5.0-beta.18.zip` | 104,270,890 | `ee8b04ba4e90e32aa92b8b40c9722ead11f670db91a75b49216a7823e24e847c` |
 
 ## Public Windows update from beta.6 to beta.16 (2026-11-24)
 
