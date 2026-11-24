@@ -92,7 +92,7 @@ test('version preparation supports the checked-in source table and status header
   const readme = prepared.changes[2]!, publishing = prepared.changes[3]!, status = prepared.changes[4]!;
   assert.notEqual(next, published);
   for (const [change, from, to] of [
-    [readme, `| Current source | **${old}** |`, `| Current source | **${next}** |`],
+    [readme, `| Local candidate source | **${old}** |`, `| Local candidate source | **${next}** |`],
     [publishing, `The current source version is **${old}**.`, `The current source version is **${next}**.`],
     [status, `Application source is **${old}**.`, `Application source is **${next}**.`],
   ] as const) {
@@ -128,6 +128,7 @@ test('differently valued current records are ambiguous across supported layouts'
       ['README.md', current ? `| Current source, unpublished | **${other}** | conflicting |` :
         `The current source version is **${other}**, not yet published.`],
       ['README.md', `| Current source | **${other}** | conflicting |`],
+      ['README.md', `| Local candidate source | **${other}** | conflicting |`],
       ['docs/STATUS.md', current ? `Source remains unpublished **${other}**;` : `Application source is **${other}**;`],
       ['docs/STATUS.md', `Application source is **${other}**.`],
       ['docs/PUBLISHING.md', `The current source version is ${other} and is unpublished.`],

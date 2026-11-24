@@ -188,3 +188,12 @@ records the real compositor results. Independent review of the replacement
 head, interactive Windows Settings and same-profile answer/input restarts,
 native and vault checks, named recorder, packaged startup and verified transfer
 of the numbered beta remain with the corresponding owners. #61 stays open.
+
+The frozen beta.17 product passed the hosted Windows build, native bridge
+compilation, nine vault interoperability cases, installer and portable
+packaging, 19 ZIP fixtures and the final EXE/README comparison. Its hosted
+workflow verification exposed an unrecognized candidate-version label.
+The delivery tool now recognizes the frozen README's local-candidate row
+and uses the established publishing and status headers. The failing
+checked-in-record test and all 22 delivery and policy cases passed after
+the correction. The frozen README and Windows package inputs are identical.
