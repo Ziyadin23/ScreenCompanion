@@ -130,8 +130,8 @@ Closing SC normally does not install a downloaded update automatically.
 
 Installed beta builds can accept newer beta and stable releases. Stable builds
 accept stable releases. An update requires a published Electron installer and its
-matching metadata. The public beta.4 → beta.6 installed update passed on Windows
-11. A public installed update to beta.16 still needs testing. [Recorded update test](VERIFICATION.md#public-github-installed-update-2026-11-03)
+matching metadata. The public beta.4 → beta.6 and beta.6 → beta.16 updates both
+passed on Windows 11. [Beta.6 update test](VERIFICATION.md#public-github-installed-update-2026-11-03) · [Beta.16 update test](VERIFICATION.md#public-windows-update-from-beta6-to-beta16-2026-11-24)
 
 API keys, model preferences, shortcuts and appearance remain in the same
 Windows-account encrypted vault across installation and updates. Uninstalling SC
