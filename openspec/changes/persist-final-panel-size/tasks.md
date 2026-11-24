@@ -98,9 +98,9 @@ assertions. The correction limits the refresh to leaving Question.
 Task 2.2 reopened for the combined diff. The earlier review of `a230000`
 remains recorded above. The workflow self-test, 141 Markdown files and 633
 local links or anchors, all 14 strict OpenSpec items and the whitespace
-check passed. The coordinator will integrate the accepted
+check passed. The coordinator scheduled the
 [test-only #140 correction](https://github.com/Ziyadin23/ScreenCompanion/pull/141)
-on main before this draft. Its two-scale write assertions and this draft's
+first. The next checkpoint records its integration. Its two-scale write assertions and this draft's
 held-rename, shutdown and remap cases share one fixture.
 
 Tasks 2.3 and 2.4 remain open. The Windows queue puts #130 ahead of this
@@ -110,3 +110,37 @@ recorder, packaged startup and a newly numbered, verified local beta still
 need candidate-specific evidence. The beta.16 public downloads and local
 handoff identify the previously qualified build. The coordinator owns the
 review of the final integrated diff and the Windows lab assignment.
+
+
+### Integration with the accepted write test
+
+Main merged [PR #141](https://github.com/Ziyadin23/ScreenCompanion/pull/141)
+at `22fb9deb358246704702d5097c9cda751a35da99`. Ordinary merge
+`6f5d94b558823b2d91c088ece911a0439c00b74e` brings that main into #122.
+The single conflict was in `desktop/tests/main/panel-resize.test.ts`.
+The combined fixture subscribes to each profile's real write promise for
+the two scale cases. It also retains the controlled rename and compositor
+replies for shutdown and remap. A timed-out test checks its cancellation
+signal before closing the old app and before starting a fresh instance.
+
+In a disposable copy of this merge, delaying the final 125% rename by
+1.3 seconds passed both scale cases. Dropping that rename failed the 125%
+disk assertion with the previous 625×315 instead of 600×250. The 100% case
+still passed. Holding the 100% final read past a two-second test timeout
+also failed only that case. The 125% run passed after the old read resumed.
+These controls used the real temporary file and the focused Vitest filter `-t 'remembers a manual return'`.
+
+This merge also includes source correction `7c5a2d9`. The
+[Linux checkpoint](../linux-platform-support/tasks.md#26-settings-return-on-current-main-2026-11-24)
+records the direct floating resize before paint and the map-rule controls.
+
+The final desktop tree is `896fce345b57776bc5710108b17828f0176f6d43`.
+All commands in the host table above ran again on the merged source and
+exited 0. Desktop verification passed 1,364 tests in 39 files. The focused
+suite passed 287 in ten files. The isolated Hyprland run passed 24 scenarios
+and their parent. The Chromium runs passed 35 and 17 cases, Astryx reported
+19 passes and two font warnings, and Playwright listed all 38 Windows tests.
+The workflow self-test, 141 Markdown files and 634 local links or anchors,
+14 strict OpenSpec items and `git diff --check origin/main` passed.
+The coordinator owns independent review of the exact updated PR head and the
+Windows queue. Tasks 2.2–2.4 stay open pending their own evidence.

@@ -397,3 +397,18 @@ Task 2.6 stays open for independent review and the Windows Settings, resize
 and recorder checks. The [combined checkpoint](../persist-final-panel-size/tasks.md#source-integration-on-24-november-2026)
 records the host commands and the Windows queue. Task 2.7 retains final
 packaging and the verified numbered beta handoff.
+
+A subsequent native replay at `9270c16` held the first renderer paint while
+a rule reopened the panel floating. After Back or Save, Hyprland accepted
+554×252 but the file retained 530×238. Source `7c5a2d9` samples the
+compositor's geometry as the panel maps. SC consumes that size as automatic
+and can accept a different confirmed size while the paint is pending. The
+tracked Back case chooses 554×252. The Save case returns to the earlier
+automatic 480×144. Both check the file and a same-profile restart.
+
+On the merged source at `6f5d94b`, the isolated suite passed all 24
+scenarios and their parent (25 passes, zero skips, exit 0). The implementer
+also replayed 18 earlier Wayland cases with Lua compositor controls. All
+five replay commands exited 0. They covered quick Hide and Show, hidden
+Settings, tiled Question and Escape, an older resize reply arriving on a
+new mapping, Exit with a delayed or missing reply, and capture after tray Exit.

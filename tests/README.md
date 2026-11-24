@@ -244,7 +244,9 @@ manual size file. The fixture checks that switching layouts leaves that file
 intact. A 654×318 rule on Back or Save must preserve the saved 530×238 size
 through restart. Separate cases resize the panel with the real compositor
 after it restores floating placement and before SC receives the dispatch reply.
-Both the visible panel and the next launch must use that new size.
+Both the visible panel and the next launch must use that new size. A second
+pair holds the first renderer paint on an already floating map. A native
+resize before that paint must also survive restart.
 One native resize to a previous automatic fit also saves that size.
 A virtual Wayland pointer drives
 Hyprland's interactive resize binding to change the floating size and drag
