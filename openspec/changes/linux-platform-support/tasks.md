@@ -475,3 +475,11 @@ Only the Linux execution path changed. The shared main-process JavaScript
 bundle has different bytes. Windows beta.17 qualification and delivery use
 the frozen `c7635e5` package inputs. A future Windows binary built from
 this later source requires its own version.
+
+Independent review verified the corrected #19 path on the same desktop
+tree. Both held-sample gestures, ordinary Back, and the automatic-rule
+Back and Save controls passed. The first ordinary Save attempt timed out
+before the compositor reported the requested size. On the targeted repeat,
+both Electron and Hyprland showed 480×144, the file contained 480×144 and
+a fresh process restored it. The Windows and local delivery gates remain
+with the frozen candidate.
