@@ -6,10 +6,9 @@ on:
 permissions: {}
 jobs:
   find-older-pushes:
-    if: >-
-      github.event.workflow_run.event == 'push' &&
-      startsWith(github.event.workflow_run.display_title, 'Push branch (default ')
+    if: github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 3
     permissions:
       actions: read
       contents: read
