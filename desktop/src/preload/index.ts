@@ -1,10 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppCommand, AppState, DesktopApi, SettingsDraft, SettingsSaveResult, SetupRequest, UpdateAction } from '../contracts';
+import type { AppCommand, AppCommandResult, AppState, DesktopApi, SettingsDraft, SettingsSaveResult, SetupRequest, UpdateAction } from '../contracts';
 
 const api: DesktopApi = {
   getState: () => ipcRenderer.invoke('sc:getState') as Promise<AppState>,
   setup: (request: SetupRequest) => ipcRenderer.invoke('sc:setup', request) as Promise<void>,
-  command: (command: AppCommand) => ipcRenderer.invoke('sc:command', command) as Promise<void>,
+  command: (command: AppCommand) => ipcRenderer.invoke('sc:command', command) as Promise<AppCommandResult>,
   getSettingsDraft: () => ipcRenderer.invoke('sc:getSettingsDraft') as Promise<SettingsDraft>,
   saveSettings: (draft: SettingsDraft) => ipcRenderer.invoke('sc:saveSettings', draft) as Promise<SettingsSaveResult>,
   discardSettings: session => ipcRenderer.invoke('sc:discardSettings', session) as Promise<void>,

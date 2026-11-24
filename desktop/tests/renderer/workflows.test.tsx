@@ -1,14 +1,16 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
-import { PROVIDERS, type AppState, type SettingsDraft } from '../../src/contracts';
+import { PROVIDERS, type AppState, type HttpResponse, type SettingsDraft } from '../../src/contracts';
 import { modelPipeline, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { commandSchema, settingsDraftSchema } from '../../src/main/validation';
+import { createPipelineRunner } from '../../src/pipeline';
 import { validateShortcuts } from '../../src/platform/shortcuts';
 import { controllerFixture, deferred } from '../main/controller-fixture';
+import { canonical, context, envelope, images, StrictTransport } from '../pipeline/fixtures';
 import userEvent from '@testing-library/user-event';
 
 afterEach(cleanup);
@@ -151,6 +153,222 @@ function choose(name: string, value: string) {
   fireEvent.click(screen.getByRole('option', { name: value }));
 }
 function value(name: string) { return (screen.getByRole('textbox', { name }) as HTMLInputElement).value; }
+
+describe('text-only question recovery', () => {
+  const original = 'Synthetic input for connection recovery';
+
+  async function sendQuestion(text = original, submitReply?: Promise<void>) {
+    const production = controllerFixture();
+    const firstResponse = deferred<HttpResponse>();
+    const transport = new StrictTransport([() => firstResponse.promise]);
+    production.run.mockImplementation(createPipelineRunner({ transport, cropper: production.platform }).run);
+    const user = userEvent.setup();
+    const driver = await renderController(production);
+    production.host.inputAction.mockImplementation(driver.inputAction);
+    if (submitReply) {
+      const invoke = driver.api.command.getMockImplementation()!;
+      driver.api.command.mockImplementation(async command => {
+        const result = await invoke(command);
+        if (command.type === 'submit') await submitReply;
+        return result;
+      });
+    }
+    await user.click(await screen.findByRole('button', { name: 'Question' }));
+    await user.type(screen.getByRole('textbox', { name: 'Question' }), text);
+    await user.keyboard('{Enter}');
+    expect(transport.requests).toHaveLength(1);
+    expect(context(transport.payloads[0]!)).toMatchObject({ request_source: 'typed_text', typed_question: text.trim() });
+    expect(images(transport.payloads[0]!)).toEqual([]);
+    async function fail(code: 'Network' | 'Timeout' | number) {
+      if (typeof code === 'number') {
+        await act(async () => firstResponse.resolve({ status: code, headers: { 'content-type': 'application/json' }, body: Buffer.from('{}') }));
+        return;
+      }
+      const reason = new Error(text);
+      if (code === 'Timeout') reason.name = 'TimeoutError';
+      await act(async () => firstResponse.reject(reason));
+    }
+    return { production, driver, user, transport, fail };
+  }
+
+  it.each(['Network', 'Timeout', 408, 504] as const)('recovers the question after %s for one edited text-only retry', async code => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail(code);
+    const diagnostic = screen.getByTestId('answer-text').textContent;
+    if (typeof code === 'number') {
+      expect(diagnostic).toContain('ANSWER-HTTPFAILURE');
+      expect(diagnostic).toContain('status ' + code);
+    } else expect(diagnostic).toContain('ANSWER-' + code.toUpperCase());
+    expect(diagnostic).not.toContain(original);
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    const input = screen.getByRole('textbox', { name: 'Question' });
+    expect(document.activeElement).toBe(input);
+    expect(value('Question')).toHaveLength(original.length);
+    expect(value('Question')).toBe(original);
+    expect(screen.getByTestId('answer-text').textContent).toBe(diagnostic);
+    await user.type(input, ' again');
+    expect(transport.requests).toHaveLength(1);
+    transport.steps.push(payload => envelope('OpenAI', canonical(payload, 'Edited answer')));
+    if (code === 'Network') await user.keyboard('{Enter}');
+    else await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByTestId('answer-text').textContent).toBe('Edited answer');
+    transport.done();
+    expect(context(transport.payloads[1]!)).toMatchObject({ request_source: 'typed_text', typed_question: original + ' again' });
+    expect(images(transport.payloads[1]!)).toEqual([]);
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+    expect(production.save).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+  });
+
+  it('keeps a queued edit when Settings opens before the controller receives the retry', async () => {
+    const { production, driver, user, transport, fail } = await sendQuestion();
+    await fail('Network');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    await user.type(screen.getByRole('textbox', { name: 'Question' }), ' edited');
+    const edited = value('Question');
+    const deliver = deferred<void>();
+    const invoke = driver.api.command.getMockImplementation()!;
+    driver.api.command.mockImplementationOnce(async command => { await deliver.promise; return invoke(command); });
+    await user.keyboard('{Enter}');
+    expect(driver.api.command.mock.lastCall).toEqual([{ type: 'submit', question: edited, includeScreenshot: false }]);
+    const queued = driver.api.command.mock.results.at(-1)!.value;
+    await act(async () => production.controller.onAction('settings'));
+    await screen.findByRole('combobox', { name: 'Answer mode' });
+    await act(async () => { deliver.resolve(); await queued; });
+    expect(production.controller.getState()).toMatchObject({ surface: 'settings', busy: false, error: { code: 'ANSWER-NETWORK' } });
+    await user.click(screen.getByTestId('settings-back'));
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(edited);
+    expect(transport.requests).toHaveLength(1);
+    transport.steps.push(payload => envelope('OpenAI', canonical(payload, 'Edited answer')));
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    expect(screen.getByTestId('answer-text').textContent).toBe('Edited answer');
+    transport.done();
+    expect(context(transport.payloads[1]!)).toMatchObject({ request_source: 'typed_text', typed_question: edited });
+    expect(images(transport.payloads[1]!)).toEqual([]);
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('keeps the existing behavior for a non-timeout HTTP failure', async () => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail(503);
+    expect(screen.getByTestId('answer-text').textContent).toContain('ANSWER-HTTPFAILURE');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it.each(['Settings Back', 'Settings Save', 'Hide'] as const)('respects %s during the request and discards the recovered question with Escape', async action => {
+    const draft = '  ' + original + ' ✓  ';
+    const { production, user, transport, fail } = await sendQuestion(draft);
+    const inSettings = action !== 'Hide';
+    await user.click(screen.getByRole('button', { name: inSettings ? 'Settings' : 'Hide' }));
+    if (inSettings) await screen.findByRole('combobox', { name: 'Answer mode' });
+    const focus = document.activeElement;
+    production.host.activate.mockClear();
+    await fail('Network');
+    expect(production.controller.getState()).toMatchObject({
+      surface: inSettings ? 'settings' : 'answer', visible: inSettings,
+      error: { code: 'ANSWER-NETWORK' }, busy: false
+    });
+    expect(production.host.activate).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(focus);
+    const reportId = production.controller.getState().error!.reportId;
+    if (inSettings) await user.click(screen.getByTestId(action === 'Settings Save' ? 'settings-save' : 'settings-back'));
+    else await act(async () => production.controller.onAction('visibility'));
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(draft);
+    expect(screen.getByTestId('answer-text').textContent).toContain(reportId);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('textbox', { name: 'Question' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('clears an unrelated shortcut diagnostic after saving Settings', async () => {
+    const production = controllerFixture();
+    production.applyShortcuts.mockRejectedValueOnce(new Error('Synthetic unavailable shortcut'));
+    await renderController(production);
+    expect(production.controller.getState().error?.code).toBe('SHORTCUTS-UNEXPECTED');
+    await openSettingsFromPanel();
+    await userEvent.setup().click(screen.getByTestId('settings-save'));
+    await screen.findByTestId('answer-text');
+    expect(production.controller.getState().error).toBeNull();
+  });
+
+  it.each(['type', 'Tab', 'Hide'] as const)('respects the next keyboard action (%s) when Question reopens before the submit reply', async action => {
+    const reply = deferred<void>();
+    const { production, user, transport, fail } = await sendQuestion(original, reply.promise);
+    await fail('Network');
+    await act(async () => production.controller.onAction('input'));
+    const input = screen.getByRole<HTMLInputElement>('textbox', { name: 'Question' });
+    expect(input.disabled).toBe(true);
+    if (action === 'Tab') {
+      await user.tab();
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Settings' }));
+    }
+    if (action === 'Hide') await act(async () => production.controller.onAction('visibility'));
+    const focus = document.activeElement;
+    await act(async () => reply.resolve());
+    expect(input.disabled).toBe(false);
+    expect(input.value).toBe(original);
+    if (action === 'type') {
+      expect(document.activeElement).toBe(input);
+      await user.keyboard('x');
+      expect(input.value).toBe(original + 'x');
+    } else expect(document.activeElement).toBe(focus);
+    expect(production.controller.getState().visible).toBe(action !== 'Hide');
+    expect(transport.requests).toHaveLength(1);
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('opens an empty Question after exit and restart', async () => {
+    const { production, user, transport, fail } = await sendQuestion();
+    await fail('Timeout');
+    await user.click(screen.getByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe(original);
+    const exit = vi.spyOn(production.host, 'exit');
+    await user.click(screen.getByRole('button', { name: 'Exit' }));
+    expect(exit).toHaveBeenCalledOnce();
+    expect(production.save).not.toHaveBeenCalled();
+    transport.done();
+    // Complete the host's quit before starting a fresh renderer and controller.
+    production.controller.dispose();
+    cleanup();
+    await renderController(controllerFixture());
+    await user.click(await screen.findByRole('button', { name: 'Question' }));
+    expect(value('Question')).toBe('');
+  });
+
+  it('leaves the capture test hidden when the user closes it before the connection fails', async () => {
+    const { production, transport, fail } = await sendQuestion();
+    await act(async () => production.controller.onAction('test'));
+    await act(async () => production.controller.onAction('test'));
+    expect(production.controller.getState()).toMatchObject({ surface: 'captureTest', visible: false });
+    await fail('Timeout');
+    expect(production.controller.getState()).toMatchObject({ surface: 'captureTest', visible: false, error: { code: 'ANSWER-TIMEOUT' } });
+    transport.done();
+    expect(production.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+
+  it('clears the key-free preview input and keeps its diagnostic and retained answer', async () => {
+    const preview = controllerFixture(undefined, 'Thorough', 'windows', 'synthetic');
+    await renderController(preview);
+    await act(async () => preview.controller.onAction('input'));
+    const user = userEvent.setup();
+    await user.type(await screen.findByRole('textbox', { name: 'Question' }), original);
+    await user.keyboard('{Enter}');
+    expect(value('Question')).toBe('');
+    expect(screen.getByTestId('answer-text').textContent).toContain('APIREQUEST-PREVIEWONLY');
+    expect(preview.controller.getState().answer).toBe('Synthetic SC answer');
+    expect(preview.run).not.toHaveBeenCalled();
+    expect(preview.platform.captureMonitor).not.toHaveBeenCalled();
+  });
+});
 
 describe('answer and temporary input', () => {
   it.each([

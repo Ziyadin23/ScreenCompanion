@@ -1,5 +1,5 @@
 import { vi } from 'vitest';
-import type { AppCommand, AppState, DesktopApi, SettingsDraft, SetupRequest } from '../../src/contracts';
+import type { AppState, DesktopApi, SettingsDraft, SetupRequest } from '../../src/contracts';
 import { defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../../src/contracts/model-pipelines';
 import { shortcutsByAction } from '../../src/contracts/shortcut-display';
@@ -33,12 +33,12 @@ export function fixture(stateOverrides: Partial<AppState> = {}, draftOverrides: 
   const api = {
     getState: vi.fn(async () => structuredClone(state)),
     setup: vi.fn(async (_request: SetupRequest) => { emit({ surface: 'answer' }); }),
-    command: vi.fn(async (command: AppCommand) => {
+    command: vi.fn<DesktopApi['command']>(async command => {
       if (command.type === 'settings') emit({ surface: 'settings' });
       if (command.type === 'showInput') emit({ surface: 'input' });
       if (command.type === 'captureTest') emit({ surface: 'captureTest' });
       if (command.type === 'escape') emit(state.surface === 'input' || state.surface === 'captureTest' ? { surface: 'answer' } : { visible: false });
-      if (command.type === 'submit') emit({ busy: true, surface: 'answer' });
+      if (command.type === 'submit') { emit({ busy: true, surface: 'answer' }); return 'clear-question'; }
       if (command.type === 'settingsDraftChanged' && state.surface === 'settings' && command.session === state.settingsSession)
         emit({ settingsDirty: command.dirty });
     }),

@@ -10,6 +10,7 @@ import { formatShortcut } from './shortcuts';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 const WHEEL_DELTA = 120;
+const EMPTY_QUESTION = { text: '', keepForRetry: false };
 const PANEL_ACTIONS: { label: string; icon: IconName; command: AppCommand; request?: boolean }[] = [
   { label: 'Capture screen', icon: 'capture', command: { type: 'capture' }, request: true },
   { label: 'Question', icon: 'question', command: { type: 'showInput' }, request: true },
@@ -26,8 +27,10 @@ function captureTestText(state: AppState): string {
   return `CAPTURE EXCLUSION TEST\n\nRecording exclusion is best effort. Check whether this panel appears in an Edge or Chrome whole-monitor recording, OBS Display Capture or Discord whole-screen share. Inspect the saved video or received stream on another device.\n\n${formatShortcut(state.shortcuts.visibility)} hides or shows the panel. ${formatShortcut(state.shortcuts.test)} or Esc closes it.\n${formatShortcut(state.shortcuts.exit)} exits the app.\n\n${status}`;
 }
 
-function Answer({ state, onCommand }: { state: AppState; onCommand: (command: AppCommand) => Promise<boolean> }) {
-  const [question, setQuestion] = useState('');
+function Answer({ state, onCommand, question, setQuestion }: {
+  state: AppState; onCommand: (command: AppCommand) => Promise<boolean>;
+  question: string; setQuestion: (text: string) => void;
+}) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
@@ -35,6 +38,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
   const text = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  const focusInputWhenReady = useRef(false);
   const composer = useRef<HTMLFormElement>(null);
   const panel = useRef<HTMLElement>(null);
   const alive = useRef(true);
@@ -91,12 +95,19 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     if (content.current) content.current.scrollTop = 0;
   }, [state.answer, state.error, state.surface === 'captureTest']);
   useEffect(() => {
+    const field = input.current;
+    focusInputWhenReady.current = state.visible && field?.disabled === true;
     if (!state.visible) return;
-    if (state.surface === 'input' && !state.busy) input.current?.focus();
+    if (field && !field.disabled) field.focus();
     else panel.current?.focus({ preventScroll: true });
   }, [state.surface, state.visible]);
   useEffect(() => {
-    if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) { setQuestion(''); setError(''); }
+    if (!focusInputWhenReady.current || state.busy || submitting) return;
+    focusInputWhenReady.current = false;
+    if (document.hasFocus() && document.activeElement === panel.current) input.current?.focus();
+  }, [state.busy, submitting]);
+  useEffect(() => {
+    if (state.surface !== 'input' && !(state.platform === 'linux' && state.busy)) setError('');
   }, [state.surface, state.platform, state.busy]);
   useEffect(() => window.sc.onInputAction((submitScreenshot) => {
     if (state.surface !== 'input' || !state.visible || state.busy || pending.current || composing.current) return;
@@ -120,7 +131,7 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
     pending.current = true; setSubmitting(true); setError('');
     const success = await onCommand({ type: 'submit', question: value.slice(0, 4000), includeScreenshot });
     pending.current = false;
-    if (alive.current) { setSubmitting(false); if (success) setQuestion(''); else setError('The question could not be submitted. Try again.'); }
+    if (alive.current) { setSubmitting(false); if (!success) setError('The question could not be submitted. Try again.'); }
   }
   async function control(command: AppCommand) {
     setError('');
@@ -178,6 +189,12 @@ function Answer({ state, onCommand }: { state: AppState; onCommand: (command: Ap
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [error, setError] = useState('');
+  // Opening Settings unmounts Answer while a text-only request can still be running.
+  const [draft, setDraft] = useState(EMPTY_QUESTION);
+  const leftInput = state?.surface !== 'input' && !(state?.platform === 'linux' && state.busy);
+  useEffect(() => {
+    if (leftInput && !draft.keepForRetry) setDraft(EMPTY_QUESTION);
+  }, [leftInput, draft.keepForRetry]);
   useEffect(() => {
     let active = true;
     let receivedEvent = false;
@@ -187,8 +204,16 @@ export function App() {
     return () => { active = false; unsubscribe(); };
   }, []);
   async function command(value: AppCommand): Promise<boolean> {
-    try { await window.sc.command(value); return true; }
-    catch { return false; }
+    const submitted = value.type === 'submit' ? { text: draft.text, keepForRetry: !value.includeScreenshot } : null;
+    if (submitted) setDraft(submitted);
+    if (value.type === 'escape' && state?.surface === 'input') setDraft(EMPTY_QUESTION);
+    try {
+      const result = await window.sc.command(value);
+      // A late reply belongs to the submitted text, even if the user has since edited or discarded it.
+      if (submitted && (result === 'clear-question' || !submitted.keepForRetry))
+        setDraft(current => current === submitted ? EMPTY_QUESTION : current);
+      return true;
+    } catch { return false; }
   }
   useEffect(() => {
     // Setup and Settings handle Escape with their own Cancel and Back actions.
@@ -207,5 +232,5 @@ export function App() {
   if (state.platform === 'linux' && ((windowRole === 'panel' && dialog) || (windowRole === 'dialog' && !dialog))) return null;
   if (state.surface === 'setup') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Setup legacyNotice={state.setupLegacyNotice} platform={state.platform} onCommand={(value) => { void command(value); }} /></Theme>;
   if (state.surface === 'settings') return <Theme theme={themes[defaultThemeSlug]} mode="dark"><Settings key={state.settingsSession} state={state} /></Theme>;
-  return <Answer state={state} onCommand={command} />;
+  return <Answer state={state} onCommand={command} question={draft.text} setQuestion={text => setDraft(current => ({ ...current, text }))} />;
 }
