@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
@@ -24,11 +23,36 @@ function needsApplicationChecks(base, head, gitOptions) {
   }
 }
 
-function featurePushGroup({ GITHUB_EVENT_NAME, GITHUB_REF, GITHUB_REF_PROTECTED, DEFAULT_BRANCH }) {
+function featurePushBranch({ GITHUB_EVENT_NAME, GITHUB_REF, GITHUB_REF_PROTECTED, DEFAULT_BRANCH }) {
   if (GITHUB_EVENT_NAME !== 'push' || GITHUB_REF_PROTECTED !== 'false' || !DEFAULT_BRANCH ||
       !GITHUB_REF?.startsWith('refs/heads/') || GITHUB_REF === `refs/heads/${DEFAULT_BRANCH}`) return '';
-  // Git refs are case-sensitive, but Actions concurrency groups are case-insensitive.
-  return `push-${createHash('sha256').update(GITHUB_REF).digest('hex')}`;
+  return GITHUB_REF.slice('refs/heads/'.length);
+}
+
+function activePushRuns(repository, branch) {
+  const api = (...args) => execFileSync('gh', ['api', '--method', 'GET',
+    `repos/${repository}/actions/workflows/desktop.yml/runs`, '-f', 'event=push', '-f', `branch=${branch}`,
+    '-F', 'per_page=100', '-F', 'exclude_pull_requests=true', ...args], { encoding: 'utf8', timeout: 30000 });
+  const fields = '.workflow_runs[] | select(.status != "completed") | {id, run_number, head_branch, status}';
+  const first = JSON.parse(api('--jq', `{total: .total_count, active: [${fields}]}`));
+  if (first.total <= 100) return first.active;
+
+  // Query active states directly on long-lived branches instead of paging through completed history.
+  return ['requested', 'waiting', 'pending', 'queued', 'in_progress'].flatMap(status => {
+    const rows = api('--paginate', '-f', `status=${status}`, '--jq', `${fields} | @json`).trim();
+    return rows ? rows.split('\n').map(row => JSON.parse(row)) : [];
+  });
+}
+
+function olderPushIds(runs, branch, runNumber) {
+  if (!Number.isSafeInteger(runNumber) || runNumber < 1) return [];
+  const older = runs.filter(run => run.head_branch === branch && Number.isSafeInteger(run.run_number) &&
+    run.run_number > 0 && run.run_number < runNumber && Number.isSafeInteger(run.id) && run.id > 0);
+  // Actions accepts up to 256 matrix jobs. Retire executing runs first if the queue exceeds that limit.
+  older.sort((a, b) => Number(b.status === 'in_progress') - Number(a.status === 'in_progress'));
+  const ids = [...new Set(older.map(run => run.id))];
+  if (ids.length > 256) console.warn(`::warning::Retiring 256 of ${ids.length} older feature pushes.`);
+  return ids.slice(0, 256);
 }
 
 function withoutCode(markdown) {
@@ -83,13 +107,20 @@ function checkDocuments(root, files) {
 
 function selftest() {
   const push = { GITHUB_EVENT_NAME: 'push', GITHUB_REF_PROTECTED: 'false', DEFAULT_BRANCH: 'main' };
-  const group = (ref, overrides) => featurePushGroup({ ...push, GITHUB_REF: ref, ...overrides });
-  assert.match(group('refs/heads/Main'), /^push-[0-9a-f]{64}$/);
-  assert.notEqual(group('refs/heads/feature/Fix').toLowerCase(), group('refs/heads/feature/fix').toLowerCase());
-  assert.equal(group('refs/heads/main'), '');
-  assert.equal(group('refs/tags/v1'), '');
-  assert.equal(group('refs/heads/release', { GITHUB_REF_PROTECTED: 'true' }), '');
-  assert.equal(group('refs/pull/1/merge', { GITHUB_EVENT_NAME: 'pull_request' }), '');
+  const branch = (ref, overrides) => featurePushBranch({ ...push, GITHUB_REF: ref, ...overrides });
+  assert.equal(branch('refs/heads/Main'), 'Main');
+  assert.equal(branch('refs/heads/main'), '');
+  assert.equal(branch('refs/tags/Main'), '');
+  assert.equal(branch('refs/heads/release', { GITHUB_REF_PROTECTED: 'true' }), '');
+  assert.equal(branch('refs/pull/1/merge', { GITHUB_EVENT_NAME: 'pull_request' }), '');
+  const docsPush = { id: 40, run_number: 8, head_branch: 'feature/Fix' };
+  const codePush = { id: 10, run_number: 9, head_branch: 'feature/Fix' };
+  const nextCodePush = { id: 20, run_number: 10, head_branch: 'feature/Fix' };
+  const runs = [nextCodePush, docsPush, codePush, { id: 30, run_number: 7, head_branch: 'feature/fix' }];
+  // The newest build starts first. A delayed docs or code push can only retire an earlier run.
+  assert.deepEqual(olderPushIds(runs, 'feature/Fix', nextCodePush.run_number), [docsPush.id, codePush.id]);
+  assert.deepEqual(olderPushIds(runs, 'feature/Fix', codePush.run_number), [docsPush.id]);
+  assert.deepEqual(olderPushIds(runs, 'feature/Fix', docsPush.run_number), []);
 
   assert.equal(documentationOnly(['README.md', 'docs/history/a.md', 'openspec/changes/a/tasks.md']), true);
   for (const file of ['desktop/src/main/index.ts', 'desktop/package-lock.json', '.github/workflows/desktop.yml',
@@ -136,16 +167,21 @@ function selftest() {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-  console.log('Workflow checker selftest passed: conservative routing, fallback and broken-document rejection.');
+  console.log('Workflow checker selftest passed for change routing, documentation links and older push selection.');
 }
 
 switch (process.argv[2]) {
   case 'changes': {
     const application = needsApplicationChecks(process.env.BASE_SHA, process.env.HEAD_SHA ?? 'HEAD');
-    if (process.env.GITHUB_OUTPUT) {
-      appendFileSync(process.env.GITHUB_OUTPUT, `application=${application}\npush_group=${featurePushGroup(process.env)}\n`);
-    }
+    if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `application=${application}\n`);
     console.log(`Application checks required: ${application}`);
+    break;
+  }
+  case 'older-pushes': {
+    const branch = featurePushBranch(process.env);
+    const ids = branch ? olderPushIds(activePushRuns(process.env.GITHUB_REPOSITORY, branch), branch,
+      Number(process.env.GITHUB_RUN_NUMBER)) : [];
+    appendFileSync(process.env.GITHUB_OUTPUT, `runs=${JSON.stringify(ids)}\n`);
     break;
   }
   case 'docs': {
@@ -159,5 +195,5 @@ switch (process.argv[2]) {
     break;
   }
   case 'selftest': selftest(); break;
-  default: throw new Error('Usage: node .github/scripts/workflow-checks.mjs changes|docs|selftest');
+  default: throw new Error('Usage: node .github/scripts/workflow-checks.mjs changes|older-pushes|docs|selftest');
 }

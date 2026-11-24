@@ -1,17 +1,19 @@
 name: Desktop checks
 on: [push, pull_request]
 concurrency:
-  # Each push keeps its own run until changes identifies the exact feature ref.
-  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
+  group: >-
+    ${{ github.event_name == 'pull_request' && format('desktop-pr-{0}', github.event.pull_request.number) ||
+        format('desktop-push-{0}-{1}', github.ref_protected && 'protected' || github.ref_type, github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   changes:
     runs-on: ubuntu-latest
     permissions:
+      actions: read
       contents: read
     outputs:
       application: ${{ steps.paths.outputs.application }}
-      push_group: ${{ steps.paths.outputs.push_group }}
+      older_pushes: ${{ steps.older.outputs.runs }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,8 +25,15 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.sha }}
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: node .github/scripts/workflow-checks.mjs changes
+      - name: Find older feature pushes
+        id: older
+        if: github.event_name == 'push' && github.ref_type == 'branch' && !github.ref_protected
+        continue-on-error: true
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/workflow-checks.mjs older-pushes
   documentation:
     runs-on: ubuntu-latest
     permissions:
@@ -44,9 +53,6 @@ jobs:
       - run: git show --format= --check HEAD
   agent-workflow:
     needs: [changes, documentation]
-    concurrency:
-      group: ${{ github.workflow }}-agent-workflow-${{ needs.changes.outputs.push_group || github.run_id }}
-      cancel-in-progress: true
     runs-on: ubuntu-24.04
     if: ${{ !cancelled() }}
     timeout-minutes: 15
@@ -77,9 +83,6 @@ jobs:
         run: echo 'Documentation and routing gates passed; executable workflow checks are unchanged.'
   portable:
     needs: [changes, documentation]
-    concurrency:
-      group: ${{ github.workflow }}-portable-${{ needs.changes.outputs.push_group || github.run_id }}
-      cancel-in-progress: true
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: ubuntu-latest
     defaults:
@@ -102,9 +105,6 @@ jobs:
       - run: npm run verify
   windows-build:
     needs: [changes, documentation]
-    concurrency:
-      group: ${{ github.workflow }}-windows-build-${{ needs.changes.outputs.push_group || github.run_id }}
-      cancel-in-progress: true
     if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.application != 'false' || needs.documentation.result != 'success') }}
     runs-on: windows-latest
     defaults:
@@ -170,17 +170,18 @@ jobs:
         run: ../.github/scripts/verify-windows-zip.ps1
       # Interactive capture/UI/recorder gates run separately on a Windows desktop.
 
-  # Skipped builds never enter their groups. A documentation-only push must still stop older builds.
-  supersede-skipped-builds:
-    needs: [changes, documentation]
-    if: needs.changes.outputs.push_group != '' && needs.changes.outputs.application == 'false'
+  supersede-older-pushes:
+    needs: changes
+    if: needs.changes.outputs.older_pushes != '' && needs.changes.outputs.older_pushes != '[]'
     strategy:
+      fail-fast: false
       matrix:
-        build: [portable, windows-build]
+        run_id: ${{ fromJSON(needs.changes.outputs.older_pushes) }}
+    # Only the selected older branch run owns this workflow group. Tags use a different group.
     concurrency:
-      group: ${{ github.workflow }}-${{ matrix.build }}-${{ needs.changes.outputs.push_group }}
+      group: desktop-push-branch-${{ matrix.run_id }}
       cancel-in-progress: true
     runs-on: ubuntu-latest
     permissions: {}
     steps:
-      - run: echo 'This revision only needs documentation checks.'
+      - run: 'true'
