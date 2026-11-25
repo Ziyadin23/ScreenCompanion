@@ -14,9 +14,11 @@ portal from a trusted repository before installing SC. The test used the
 third-party sdegler/hyprland COPR already configured on the development machine.
 Other Linux desktops and package formats are not qualified. An
 unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
-storage. Setup shows the unlock instruction with the API key field. Unlock the
-keyring and restart SC if saved settings cannot be opened;
-if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
+storage. Setup shows the unlock instruction with the API key field. If saved
+settings cannot be opened, dismiss the message, start or unlock the keyring,
+and restart SC. Existing bytes are retained. If the first Setup save fails,
+start or unlock the keyring and select **Save** again. If Save still fails,
+restart SC and enter your API key again. Linux uses
 `$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
 does not migrate Windows DPAPI files.
 
@@ -95,7 +97,7 @@ Press **Space** on **Show API key** to toggle key visibility.
 
 The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
 
-Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, unlock your secure keyring before retrying.
+Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, start or unlock your secure keyring before retrying. If Save still fails, restart SC and enter your API key again.
 
 Setup headings and guidance follow the renderer's default font size. Scroll the
 setup form to read all guidance in a short window. Save and Cancel sit below

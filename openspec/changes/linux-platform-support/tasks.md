@@ -28,7 +28,7 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 ## 2. Remaining target qualification and integration readiness
 
 - [ ] 2.1 Complete [installed-app capture/cancellation (#14)](https://github.com/Ziyadin23/ScreenCompanion/issues/14): verify interactive monitor choice, actual dimensions and physical multi-monitor behavior; cancellation/failure must retain answer/question and make no provider request. Record candidate/environment, outcomes and any required fixture/guidance corrections with that evidence.
-- [ ] 2.2 Complete [keyring recovery (#15)](https://github.com/Ziyadin23/ScreenCompanion/issues/15): diagnose the dialog deadline and verify ordinary dismissal, genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes and no weak fallback; update relevant tests and guidance alongside any fix.
+- [x] 2.2 Complete [keyring recovery (#15)](https://github.com/Ziyadin23/ScreenCompanion/issues/15): diagnose the dialog deadline and verify ordinary dismissal, genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes and no weak fallback; update relevant tests and guidance alongside any fix.
 - [ ] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
 - [ ] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
@@ -57,8 +57,9 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   `ebc84d1`, exit 0. Its SHA-256 and captured dimensions are in the
   verification record.
 - Keep task 2.1 open for both physical monitor selections, their output
-  identity and dimensions, consent, and cleanup. The coordinator owns
-  independent review, integration and the combined beta.19 local handoff.
+  identity and dimensions, consent, and cleanup. PR #155 merged at `6aa75c9`.
+  The [combined beta.19 local handoff](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
+  passed copied-byte verification.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
@@ -524,3 +525,36 @@ Hyprland's final native configure correction is `8b8002f`. The other six
 Linux qualification groups remain open.
 [Windows qualification](../../../docs/VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
 and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#issuecomment-7126321089).
+
+### 2.2 Keyring recovery checkpoint (2026-11-25)
+
+- [Issue #15](https://github.com/Ziyadin23/ScreenCompanion/issues/15) owns this
+  Linux-only continuation. Source `5402c15` on base `e467cac` changes the Linux
+  Setup save alert, its renderer assertion and the user guidance. The existing
+  native dialog dismissed normally when the compositor delivered input.
+- `npm --prefix desktop ci` passed in the issue checkout. The focused
+  `npm --prefix desktop test -- tests/renderer/workflows.test.tsx -t 'announces a .* storage failure'`
+  first failed its Linux restart-guidance assertion and passed both platform
+  cases after the change. `npm --prefix desktop run verify` passed 1,383 tests
+  across 39 files, type checking, lint and production builds. From `desktop/`,
+  `npx playwright test --config playwright.preview.config.ts` passed all 17
+  compact Setup cases, and `npx astryx doctor --built out/renderer` exited 0
+  with warnings about the existing theme font stylesheet.
+- The [installed receipt](../../../docs/VERIFICATION.md#linux-keyring-recovery-2026-11-25)
+  records the original dialog deadline, three startup failure modes and secure
+  recovery on the candidate. The local lab RPM SHA-256 is
+  `4ce5f27b5a13e7ba991bf782d26f69d72770d513f5171191f8b53e21713dc33e`.
+  The package build used the verified production bundle and a local gzip
+  compression override. Its install and recovered profile both used the
+  disposable lab. The package retained the branch's beta.18 version for
+  qualification only. The first build attempt could not load `libcrypt.so.1`.
+  The corrected build used locally extracted Fedora tools. The first disposable
+  RPM transactions had a copied-database conflict and missing scriptlet paths.
+  The corrected transaction and installed qualify run both exited 0.
+- The combined beta.19 RPM at `ebc84d1cad664c18ea496dec5cda9375572d9531`
+  passed the same [installed matrix](../../../docs/VERIFICATION.md#combined-beta19-rpm),
+  exit 0. All three recovery dialogs closed normally, all six vault comparisons
+  matched, and the two failed Setup saves left no vault. Independent source
+  review passed. The coordinator confirmed the [local delivery](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
+  after all five destination files matched the qualified build. PR #154
+  carries the task 2.2 checkpoint for final review and integration.

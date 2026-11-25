@@ -4,7 +4,13 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.19**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
-The locally delivered Windows beta.18 was built from
+The current local beta.19 was built from
+`ebc84d1cad664c18ea496dec5cda9375572d9531`. The four Windows files and Linux RPM
+passed copied-byte verification. Windows installed and portable startup passed
+with key-free profiles. The Linux RPM passed isolated capture and keyring
+recovery checks. [Beta.19 local handoff and hashes](VERIFICATION.md#beta19-local-handoff-2026-11-25)
+
+The earlier local Windows beta.18 was built from
 `5c3f59fed119a04ab877727a99f032f974911b27`. It includes typed-question recovery
 and the Linux panel correction that followed local beta.17.
 [Beta.18 Windows results and hashes](VERIFICATION.md#beta18-windows-question-recovery-2026-11-24)

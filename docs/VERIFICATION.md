@@ -11,6 +11,11 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
+Local beta.19 passed installed capture and keyring recovery on isolated
+Fedora 44 with Hyprland, plus key-free installed and portable startup on
+Windows 11 x64. All five delivered files matched the build.
+[Beta.19 local handoff and hashes](#beta19-local-handoff-2026-11-25)
+
 Local Windows beta.18 passed focused typed-question recovery and packaged startup
 on Windows 11 x64. The four delivered files matched the Windows build.
 [Beta.18 results and hashes](#beta18-windows-question-recovery-2026-11-24)
@@ -37,7 +42,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
-| Linux beta.7 | [Source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests; [runtime/package attempts](#linux-port-status) retain their narrower scope. | The beta.17 follow-up completed the Settings-to-answer sizing item. The other six [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open. |
+| Linux port | [Beta.7 source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests. Later follow-ups completed Settings-to-answer sizing and installed keyring recovery. | Five [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open, including capture on two physical monitors. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
@@ -923,9 +928,9 @@ harness. This does not establish cancellation in the full packaged workflow.
 A packaged-app synthetic vault survived a session-bus-unavailable restart with
 `STARTUP-KEYRING` guidance, and reopened after its keyring was restored, with
 the vault bytes unchanged. The unavailable-phase dialog did not close before
-the test deadline and the process was terminated; normal dialog dismissal and
-a genuinely locked keyring remain unverified. A prior different-app-identity
+the test deadline and the process was terminated. A prior different-app-identity
 fixture failed recovery and is retained as a separate inconclusive attempt.
+See the [later installed keyring qualification](#linux-keyring-recovery-2026-11-25).
 
 An isolated Wayland appearance check showed the default transparent answer
 against a synthetic background and an opaque answer after changing the setting.
@@ -968,6 +973,57 @@ preview. Existing vault fingerprints were unchanged during both Windows runs.
 Prior beta.6 results below are historical and do not establish beta.7 compatibility.
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
+
+## Linux keyring recovery (2026-11-25)
+
+[Issue #15](https://github.com/Ziyadin23/ScreenCompanion/issues/15) ran the RPM
+from `5402c15d1cac23c628b87a9b7afe896f08e244b0` in a disposable Fedora 44
+x86-64 installation overlay. The candidate uses Electron 45.0.0 and ran on
+Hyprland 0.57.2 nested in headless KWin 6.8.3. GNOME Keyring 50.0 and its GCR
+prompter used a private D-Bus session with Secret Service activation disabled.
+The app used a temporary profile and a loopback-only network. Electron ran with
+`--no-sandbox` inside the outer namespace. The test used synthetic keys and made
+no provider calls. It launched the installed executable through its named
+launcher. The installed ASAR matched the packaged ASAR byte for byte.
+
+The earlier deadline was reproduced with virtual-keyboard input on unmodified
+beta.18. The dialog was mapped and focused, but the process stayed open.
+Hyprland's keyboard dispatch delivered Return to the dialog, and the process
+exited normally on the installed beta.7 and the unmodified beta.18. An OK click
+also dismissed the beta.18 dialog when the session bus was absent. The original
+attempt's input path is unknown. The follow-up isolates an input difference and
+confirms normal dismissal with the existing dialog.
+
+| Installed candidate check | Result |
+| --- | --- |
+| Session-bus address unavailable | SC showed `STARTUP-KEYRING`. Return dismissed the dialog and SC exited. With the correct bus restored, the same profile showed the saved appearance and key presence. |
+| Real login collection locked | Secret Service reported `Locked=true`. Canceling the real unlock prompts left it locked and SC displayed its recovery dialog. Return dismissed the dialog and SC exited. The correct synthetic passphrase in the real unlock prompt made Secret Service report `Locked=false`. SC then reopened the same profile. |
+| Secret Service absent while the session bus stayed live | SC showed the same guidance. Return dismissed the dialog and SC exited. Restarting the same keyring against the temporary data let SC reopen the original profile. |
+| First Setup save and retry with Secret Service restored | Setup refused a write while the service was absent. A retry in the same process after the service returned still failed. Setup announced the restart instructions, kept the key field unchanged and enabled Save and Cancel. Canceling setup, reopening the same profile and entering the key again created a secure vault. |
+
+The saved vault remained byte-identical at each failure and after each
+successful reopen. Both successful saves produced a Linux vault with `v11`
+ciphertext and no plaintext occurrence of the synthetic key. Failed initial
+Setup and the repeat Save created no vault. The three startup failures exited
+with status 0 after dismissal, as observed in this candidate.
+
+### Combined beta.19 RPM
+
+The same installed matrix passed on the combined build at
+`ebc84d1cad664c18ea496dec5cda9375572d9531`. The x86-64 RPM SHA-256 was
+`2ce60a6830e4657c9613efefb4613e6dea8e8c323553ef38f3c235546b3cb23b`.
+The disposable installation and the matrix both exited 0. The installed
+ASAR matched the RPM payload. The run used the same isolated compositor and
+private keyring, with the host home directory hidden and a loopback-only network.
+
+All three startup recovery dialogs dismissed normally with Return and exited
+with status 0. Each recovery reopened the original profile with the saved
+appearance and key presence. Its encrypted bytes matched at all three failure
+points and all three recoveries. Both failed Setup saves left no vault. The
+repeat Save kept the draft and showed the restart instructions. The initial
+save and the save after restarting Setup each wrote `v11` ciphertext with no
+plaintext key. Full RPM upgrade qualification remains with
+[#17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
 
 ## Linux portal capture and cancellation (2026-11-25)
 
@@ -1023,6 +1079,28 @@ desktop with two connected outputs. Select each output in turn and record its
 identity and captured pixel dimensions. Check Cancel and a capture failure
 with the same layout, including draft and answer retention, zero provider
 calls and stream cleanup. [Installed capture issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14)
+
+## Beta.19 local handoff (2026-11-25)
+
+The combined `0.5.0-beta.19` build came from
+`ebc84d1cad664c18ea496dec5cda9375572d9531`. The Linux RPM passed the isolated
+[installed capture](#linux-portal-capture-and-cancellation-2026-11-25) and
+[keyring recovery](#combined-beta19-rpm) checks. On Windows 11 x64, the
+installer and portable launcher both reached Setup with key-free profiles and
+exited normally. The Windows uninstall and lab restoration checks passed.
+
+All five destination files matched the verified build. Both portable ZIP
+entries matched the separately delivered EXE and README.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.19-x86_64.rpm` | 95,873,565 | `2ce60a6830e4657c9613efefb4613e6dea8e8c323553ef38f3c235546b3cb23b` |
+| `SC-v0.5.0-beta.19.exe` | 104,599,122 | `7e23083f48609eb05033a426df7df9018f96837e961075187250a1ff34abedb6` |
+| `SC-Setup-v0.5.0-beta.19.exe` | 115,176,029 | `963a4dd5c7880f92d9359d20c4355c1a9f2bc6a00b3c661649599eb7849fba65` |
+| `SC-v0.5.0-beta.19-README.txt` | 14,535 | `be6e546a37a75e2f25af7feaca717dfde70d786d9bbe175831a277380767f6b9` |
+| `SC-v0.5.0-beta.19.zip` | 104,324,544 | `a42ac63b6781c58dc368f83b0b066c9ce4e3419bcf2b30ee0701ee6eb012cf79` |
+
+The latest public Windows prerelease is still [beta.16](releases/v0.5.0-beta.16.md).
 
 ## Linux authenticated proxy qualification (2026-11-19)
 

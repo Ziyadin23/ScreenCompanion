@@ -70,7 +70,8 @@ file. See [setup and migration](docs/USER_GUIDE.md#setup-and-migration) and
 
 The Linux port requires Fedora 44 x86-64, Hyprland Wayland, PipeWire,
 `xdg-desktop-portal-hyprland` and an unlocked Secret Service keyring. SC shows
-the unlock instruction next to the API key during setup. Use
+the unlock instruction next to the API key during setup. If Save still fails
+after the keyring is ready, restart SC and enter the key again. Use
 **Question** for text-only input without opening the screen-sharing prompt. For a
 screenshot, use **Capture screen**, or **Ctrl+Enter / Send with screenshot** while
 typing, then select a monitor in the system prompt. Cancel in the prompt to
