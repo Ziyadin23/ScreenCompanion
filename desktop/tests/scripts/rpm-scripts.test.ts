@@ -9,7 +9,7 @@ let root: string, bin: string, opt: string;
 beforeEach(async () => {
   root = await fs.mkdtemp(join(tmpdir(), 'sc-rpm-synthetic-')); bin = join(root, 'bin'); opt = join(root, 'opt');
   await fs.mkdir(bin); await fs.mkdir(join(opt, 'SC'), { recursive: true });
-  for (const name of ['bash', 'ln', 'rm', 'readlink', 'chmod', 'unshare']) await fs.copyFile(`/usr/bin/${name}`, join(bin, name));
+  for (const name of ['bash', 'ln', 'rm', 'readlink', 'chmod', 'unshare', 'true']) await fs.copyFile(`/usr/bin/${name}`, join(bin, name));
   await fs.writeFile(join(opt, 'SC', 'io.github.ziyadin23.sc'), 'synthetic executable');
   await fs.writeFile(join(opt, 'SC', 'chrome-sandbox'), 'synthetic sandbox');
 });
@@ -20,6 +20,26 @@ function script(name: string, arg: string) {
 }
 
 describe.skipIf(!canIsolate)('RPM launcher scripts in an isolated filesystem', () => {
+  it('sets the sandbox helper to mode 0755 when the namespace probe succeeds', async () => {
+    const sandbox = join(opt, 'SC', 'chrome-sandbox');
+    await fs.chmod(sandbox, 0o4755);
+    // Run the real probe command without requiring a nested user namespace.
+    await fs.writeFile(join(bin, 'unshare'), `#!/bin/bash
+[ "$#" -eq 2 ] && [ "$1" = --user ] && [ "$2" = true ] || exit 2
+exec "$2"
+`);
+    expect(script('rpm-after-install.sh', '1').status).toBe(0);
+    expect((await fs.stat(sandbox)).mode & 0o7777).toBe(0o755);
+  });
+
+  it('sets the sandbox helper to mode 4755 when user namespaces are unavailable', async () => {
+    const sandbox = join(opt, 'SC', 'chrome-sandbox');
+    await fs.chmod(sandbox, 0o755);
+    await fs.writeFile(join(bin, 'unshare'), '#!/bin/bash\nexit 1\n');
+    expect(script('rpm-after-install.sh', '1').status).toBe(0);
+    expect((await fs.stat(sandbox)).mode & 0o7777).toBe(0o4755);
+  });
+
   it('keeps its launcher across an upgrade and removes only its own link on final uninstall', async () => {
     await fs.writeFile(join(bin, 'sc'), 'unrelated sc command');
     expect(script('rpm-after-install.sh', '1').status).toBe(0);
