@@ -1000,8 +1000,25 @@ The saved vault remained byte-identical at each failure and after each
 successful reopen. Both successful saves produced a Linux vault with `v11`
 ciphertext and no plaintext occurrence of the synthetic key. Failed initial
 Setup and the repeat Save created no vault. The three startup failures exited
-with status 0 after dismissal, as observed in this candidate. Wider RPM
-installation and the combined beta handoff have separate qualification gates.
+with status 0 after dismissal, as observed in this candidate.
+
+### Combined beta.19 RPM
+
+The same installed matrix passed on the combined build at
+`ebc84d1cad664c18ea496dec5cda9375572d9531`. The x86-64 RPM SHA-256 was
+`2ce60a6830e4657c9613efefb4613e6dea8e8c323553ef38f3c235546b3cb23b`.
+The disposable installation and the matrix both exited 0. The installed
+ASAR matched the RPM payload. The run used the same isolated compositor and
+private keyring, with the host home directory hidden and a loopback-only network.
+
+All three startup recovery dialogs dismissed normally with Return and exited
+with status 0. Each recovery reopened the original profile with the saved
+appearance and key presence. Its encrypted bytes matched at all three failure
+points and all three recoveries. Both failed Setup saves left no vault. The
+repeat Save kept the draft and showed the restart instructions. The initial
+save and the save after restarting Setup each wrote `v11` ciphertext with no
+plaintext key. Full RPM upgrade qualification remains with
+[#17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
 
 ## Linux authenticated proxy qualification (2026-11-19)
 
