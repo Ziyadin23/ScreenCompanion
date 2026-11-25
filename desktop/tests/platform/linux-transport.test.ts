@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type RequestListener, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { connect, createServer as createTcpServer } from 'node:net';
+import { errorMonitor, once } from 'node:events';
 import type { Duplex } from 'node:stream';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -21,6 +22,19 @@ afterEach(async () => {
 async function listen(handler: RequestListener): Promise<number> {
   server = createServer(handler); await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   return (server.address() as { port: number }).port;
+}
+function handleConnectClientError(client: Duplex): void {
+  client.on('error', (error: NodeJS.ErrnoException) => {
+    // A peer can reset its read side after the proxy has finished sending.
+    if (client.writableFinished && error.code === 'ECONNRESET' && error.syscall === 'read') return;
+    throw error;
+  });
+}
+async function closeTunnelSockets(sockets: Set<Duplex>): Promise<void> {
+  await Promise.all([...sockets].map(socket => new Promise<void>(resolve => {
+    socket.once('close', resolve);
+    socket.destroy();
+  })));
 }
 const request = (url: string) => ({ url, headers: { Authorization: 'synthetic-key', 'Content-Type': 'application/json' }, body: Buffer.from('{"fixture":true}') });
 const hasOpenSsl = spawnSync('openssl', ['version'], { stdio: 'ignore' }).status === 0;
@@ -52,6 +66,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
     server = createServer(); let connects = 0, authorization: string | undefined;
     const sockets = new Set<Duplex>();
     server.on('connect', (req, socket) => {
+      handleConnectClientError(socket);
       connects++; authorization = req.headers.authorization ?? req.headers['proxy-authorization']; sockets.add(socket);
       socket.on('close', () => sockets.delete(socket));
       socket.write('HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm="fixture"\r\nContent-Length: 999\r\n\r\n');
@@ -66,8 +81,35 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       expect(Date.now() - started).toBeLessThan(1000);
       expect(connects).toBe(1); expect(originCalls).toBe(0); expect(authorization).toBeUndefined();
     } finally {
-      for (const socket of sockets) socket.destroy();
+      await closeTunnelSockets(sockets);
       origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
+    }
+  });
+  it('settles a CONNECT client reset after the proxy finishes writing', async () => {
+    server = createServer();
+    const accepted = once(server, 'connect');
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    const peer = connect({ port, host: '127.0.0.1', allowHalfOpen: true });
+    let client: Duplex | undefined;
+    try {
+      peer.write('CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: 127.0.0.1:443\r\n\r\n');
+      [, client] = await accepted as [unknown, Duplex];
+      handleConnectClientError(client);
+      const reset = vi.fn();
+      client.on(errorMonitor, reset);
+      const closed = new Promise<void>(resolve => client!.once('close', resolve));
+      const peerEnded = once(peer, 'end');
+      peer.resume();
+      client.resume();
+      client.end('HTTP/1.1 200 Connection Established\r\n\r\n');
+      await peerEnded;
+      peer.resetAndDestroy();
+      await closed;
+      expect(reset).toHaveBeenCalledWith(expect.objectContaining({ code: 'ECONNRESET', syscall: 'read' }));
+    } finally {
+      peer.destroy();
+      client?.destroy();
     }
   });
   it.skipIf(!hasOpenSsl).each([
@@ -95,6 +137,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       const originPort = (tlsServer.address() as { port: number }).port;
       server = createServer();
       server.on('connect', (req, client, head) => {
+        handleConnectClientError(client);
         connects++;
         providerAuthorizationAtProxy ||= Boolean(req.headers.authorization);
         sockets.add(client); client.on('close', () => sockets.delete(client));
@@ -120,7 +163,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       if (status === 200) expect(result.body.toString()).toBe('{"ok":true}');
       else { expect(result.headers.location).toBe('/other'); expect(result.body).toHaveLength(0); }
     } finally {
-      for (const socket of sockets) socket.destroy();
+      await closeTunnelSockets(sockets);
       tlsServer?.closeAllConnections();
       if (tlsServer) await new Promise<void>(resolve => tlsServer!.close(() => resolve()));
       await rm(dir, { recursive: true, force: true });
