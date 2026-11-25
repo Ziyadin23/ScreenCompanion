@@ -50,7 +50,7 @@ export function Setup({ legacyNotice, platform, onCommand }: { legacyNotice: boo
     try { await window.sc.setup({ provider, apiKey: key.trim() }); if (alive.current) { setKey(''); setShowKey(false); } }
     catch {
       if (alive.current) setError({ type: 'save', message: platform === 'linux'
-        ? 'The key could not be saved. Unlock your secure Linux keyring and try again.'
+        ? 'The key could not be saved. Start or unlock your secure Linux keyring. If Save still fails, restart SC and enter your key again.'
         : 'The key could not be saved. Try again.' });
     }
     finally { pending.current = false; if (alive.current) setSaving(false); }

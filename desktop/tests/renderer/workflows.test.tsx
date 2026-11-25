@@ -1204,7 +1204,7 @@ describe('service and key setup', () => {
   });
   it.each([
     ['windows', 'The key could not be saved. Try again.'],
-    ['linux', 'The key could not be saved. Unlock your secure Linux keyring and try again.']
+    ['linux', 'The key could not be saved. Start or unlock your secure Linux keyring. If Save still fails, restart SC and enter your key again.']
   ] as const)('announces a %s storage failure at the form and retries the same key', async (platform, message) => {
     const driver = fixture({ surface: 'setup', platform }); let reject!: (reason: Error) => void;
     driver.api.setup.mockImplementationOnce(() => new Promise((_resolve, fail) => { reject = fail; }));
