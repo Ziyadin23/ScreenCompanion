@@ -28,8 +28,10 @@ monitor offsets are not exposed by this capture path.
 
 After setup, hover over the panel or focus its controls with the keyboard to reveal
 **Capture screen**, **Question**, **Settings**, **Hide** and **Exit**. Choose Capture screen, or use Ctrl+Enter / Send with screenshot from Question, then select one monitor in
-the desktop screen-sharing prompt. Enter / Send in Question sends only text and does not open the portal. Cancellation or failure makes no provider
-request and retains the prior answer and any unsent question. SC hides its window while capturing, but
+the desktop screen-sharing prompt. SC allows up to two minutes for the prompt
+and initial video. Enter / Send in Question sends only text and does not open
+the portal. Cancellation or failure makes no provider request and retains the
+prior answer and any unsent question. SC hides its window while capturing, but
 SC windows can appear in recordings or screen shares; Linux does not provide a
 recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
 Reopening SC restores its window if the tray is unavailable.

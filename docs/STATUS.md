@@ -1,6 +1,6 @@
 # SC project status
 
-Snapshot updated **2026-11-24 UTC**. Application source is **0.5.0-beta.18**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+Snapshot updated **2026-11-25 UTC**. Application source is **0.5.0-beta.19**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
 
 Local Windows beta.18 keeps a typed question available after a connection failure and includes the integrated panel sizing fix. The frozen build at `5c3f59f` passed all 11 focused Windows observations, portable and installed startup, and verification of the four delivered files. [Windows results and hashes](VERIFICATION.md#beta18-windows-question-recovery-2026-11-24) · [Question recovery PR](https://github.com/Ziyadin23/ScreenCompanion/pull/147)
 
