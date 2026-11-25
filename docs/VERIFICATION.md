@@ -923,9 +923,9 @@ harness. This does not establish cancellation in the full packaged workflow.
 A packaged-app synthetic vault survived a session-bus-unavailable restart with
 `STARTUP-KEYRING` guidance, and reopened after its keyring was restored, with
 the vault bytes unchanged. The unavailable-phase dialog did not close before
-the test deadline and the process was terminated; normal dialog dismissal and
-a genuinely locked keyring remain unverified. A prior different-app-identity
+the test deadline and the process was terminated. A prior different-app-identity
 fixture failed recovery and is retained as a separate inconclusive attempt.
+See the [later installed keyring qualification](#linux-keyring-recovery-2026-11-25).
 
 An isolated Wayland appearance check showed the default transparent answer
 against a synthetic background and an opaque answer after changing the setting.
@@ -968,6 +968,40 @@ preview. Existing vault fingerprints were unchanged during both Windows runs.
 Prior beta.6 results below are historical and do not establish beta.7 compatibility.
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
+
+## Linux keyring recovery (2026-11-25)
+
+[Issue #15](https://github.com/Ziyadin23/ScreenCompanion/issues/15) ran the RPM
+from `5402c15d1cac23c628b87a9b7afe896f08e244b0` in a disposable Fedora 44
+x86-64 installation overlay. The candidate uses Electron 45.0.0 and ran on
+Hyprland 0.57.2 nested in headless KWin 6.8.3. GNOME Keyring 50.0 and its GCR
+prompter used a private D-Bus session with Secret Service activation disabled.
+The app used a temporary profile and a loopback-only network. Electron ran with
+`--no-sandbox` inside the outer namespace. The test used synthetic keys and made
+no provider calls. It launched the installed executable through its named
+launcher. The installed ASAR matched the packaged ASAR byte for byte.
+
+The earlier deadline was reproduced with virtual-keyboard input on unmodified
+beta.18. The dialog was mapped and focused, but the process stayed open.
+Hyprland's keyboard dispatch delivered Return to the dialog, and the process
+exited normally on the installed beta.7 and the unmodified beta.18. An OK click
+also dismissed the beta.18 dialog when the session bus was absent. The original
+attempt's input path is unknown. The follow-up isolates an input difference and
+confirms normal dismissal with the existing dialog.
+
+| Installed candidate check | Result |
+| --- | --- |
+| Session-bus address unavailable | SC showed `STARTUP-KEYRING`. Return dismissed the dialog and SC exited. With the correct bus restored, the same profile showed the saved appearance and key presence. |
+| Real login collection locked | Secret Service reported `Locked=true`. Canceling the real unlock prompts left it locked and SC displayed its recovery dialog. Return dismissed the dialog and SC exited. The correct synthetic passphrase in the real unlock prompt made Secret Service report `Locked=false`. SC then reopened the same profile. |
+| Secret Service absent while the session bus stayed live | SC showed the same guidance. Return dismissed the dialog and SC exited. Restarting the same keyring against the temporary data let SC reopen the original profile. |
+| First Setup save and retry with Secret Service restored | Setup refused a write while the service was absent. A retry in the same process after the service returned still failed. Setup announced the restart instructions, kept the key field unchanged and enabled Save and Cancel. Canceling setup, reopening the same profile and entering the key again created a secure vault. |
+
+The saved vault remained byte-identical at each failure and after each
+successful reopen. Both successful saves produced a Linux vault with `v11`
+ciphertext and no plaintext occurrence of the synthetic key. Failed initial
+Setup and the repeat Save created no vault. The three startup failures exited
+with status 0 after dismissal, as observed in this candidate. Wider RPM
+installation and the combined beta handoff have separate qualification gates.
 
 ## Linux authenticated proxy qualification (2026-11-19)
 

@@ -499,3 +499,31 @@ Hyprland's final native configure correction is `8b8002f`. The other six
 Linux qualification groups remain open.
 [Windows qualification](../../../docs/VERIFICATION.md#beta17-windows-panel-sizing-2026-11-24)
 and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#issuecomment-7126321089).
+
+### 2.2 Keyring recovery checkpoint (2026-11-25)
+
+- [Issue #15](https://github.com/Ziyadin23/ScreenCompanion/issues/15) owns this
+  Linux-only continuation. Source `5402c15` on base `e467cac` changes the Linux
+  Setup save alert, its renderer assertion and the user guidance. The existing
+  native dialog dismissed normally when the compositor delivered input.
+- `npm --prefix desktop ci` passed in the issue checkout. The focused
+  `npm --prefix desktop test -- tests/renderer/workflows.test.tsx -t 'announces a .* storage failure'`
+  first failed its Linux restart-guidance assertion and passed both platform
+  cases after the change. `npm --prefix desktop run verify` passed 1,383 tests
+  across 39 files, type checking, lint and production builds. From `desktop/`,
+  `npx playwright test --config playwright.preview.config.ts` passed all 17
+  compact Setup cases, and `npx astryx doctor --built out/renderer` exited 0
+  with warnings about the existing theme font stylesheet.
+- The [installed receipt](../../../docs/VERIFICATION.md#linux-keyring-recovery-2026-11-25)
+  records the original dialog deadline, three startup failure modes and secure
+  recovery on the candidate. The local lab RPM SHA-256 is
+  `4ce5f27b5a13e7ba991bf782d26f69d72770d513f5171191f8b53e21713dc33e`.
+  The package build used the verified production bundle and a local gzip
+  compression override. Its install and recovered profile both used the
+  disposable lab. The package retained the branch's beta.18 version for
+  qualification only. The first build attempt could not load `libcrypt.so.1`.
+  The corrected build used locally extracted Fedora tools. The first disposable
+  RPM transactions had a copied-database conflict and missing scriptlet paths.
+  The corrected transaction and installed qualify run both exited 0.
+- Task 2.2 stays open for independent review and the combined beta.19 handoff.
+  The coordinator owns version reservation, integration and delivery.
