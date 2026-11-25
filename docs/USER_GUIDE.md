@@ -5,9 +5,9 @@ This guide covers the Windows beta.16 controls and the Linux source port. See th
 ## Linux setup and controls
 
 The Linux port targets Fedora 44 x86-64, Hyprland on Wayland, PipeWire and
-`xdg-desktop-portal-hyprland`. A headless synthetic capture passed with an
-automated picker and shared-memory portal configuration; interactive consent and
-installed desktop checks remain open. Fedora container install, reinstall and
+`xdg-desktop-portal-hyprland`. The installed beta.19 passed capture and
+cancellation through the Hyprland chooser on one synthetic output. Physical
+multi-monitor qualification remains open. Fedora container install, reinstall and
 removal passed with the Hyprland repository enabled. Fedora 44 base repositories
 do not provide the Hyprland portal package: install Hyprland and its matching
 portal from a trusted repository before installing SC. The test used the
@@ -28,8 +28,10 @@ monitor offsets are not exposed by this capture path.
 
 After setup, hover over the panel or focus its controls with the keyboard to reveal
 **Capture screen**, **Question**, **Settings**, **Hide** and **Exit**. Choose Capture screen, or use Ctrl+Enter / Send with screenshot from Question, then select one monitor in
-the desktop screen-sharing prompt. Enter / Send in Question sends only text and does not open the portal. Cancellation or failure makes no provider
-request and retains the prior answer and any unsent question. SC hides its window while capturing, but
+the desktop screen-sharing prompt. SC allows up to two minutes for the prompt
+and initial video. Enter / Send in Question sends only text and does not open
+the portal. Cancellation or failure makes no provider request and retains the
+prior answer and any unsent question. SC hides its window while capturing, but
 SC windows can appear in recordings or screen shares; Linux does not provide a
 recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
 Reopening SC restores its window if the tray is unavailable.

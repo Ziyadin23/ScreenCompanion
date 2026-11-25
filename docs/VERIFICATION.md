@@ -969,6 +969,61 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+## Linux portal capture and cancellation (2026-11-25)
+
+The installed beta.18 baseline at `e467cac` reproduced three failures on
+Fedora 44 x86-64 with Hyprland 0.57.2, xdg-desktop-portal-hyprland 1.5.0,
+PipeWire 1.6.11 and Electron 45.0.0. Cancel ended the track while SC waited
+for its ten-second frame timeout. Leaving the chooser open for 12 seconds let
+SC remap behind the chooser without a provider request. After monitor selection,
+Chromium started video playback on the static output, but SC timed out waiting
+for a presentation callback. [Capture defect #153](https://github.com/Ziyadin23/ScreenCompanion/issues/153)
+
+The isolated harness used headless KWin with nested Hyprland, a 1280 × 900
+synthetic Wayland output, a fresh D-Bus session and keyring, and the portal's
+`force_shm` option. It sent pointer input to the real chooser. The application
+ran its production request path with a synthetic key and a counted fixture at
+the curl boundary. The network namespace had only loopback. The fixture
+decoded JPEG dimensions from the request and returned a synthetic answer.
+
+Both the unpacked and the RPM-installed beta.19 at `4ae1a5c` passed the
+isolated run, exit 0 each. Cancel returned the prior answer and unsent
+question in 0.934 seconds unpacked and 1.737 seconds installed, with zero
+additional requests. The chooser stayed open for 65 seconds with SC hidden.
+Typed-with-screen and capture-only each produced one 1280 × 900 JPEG and
+released the stream. A playback rejection injected after real consent
+retained the prior answer and question, released the stream and sent zero
+requests. The local fixture counted three requests in the run, one per
+successful submission including the text-only answer used to seed retention.
+
+The combined beta.19 RPM at `ebc84d1cad664c18ea496dec5cda9375572d9531`
+passed the same installed run, exit 0. The RPM SHA-256 was
+`2ce60a6830e4657c9613efefb4613e6dea8e8c323553ef38f3c235546b3cb23b`.
+Cancel restored the panel in 1.754 seconds. Both successful captures and the
+65-second chooser wait passed. Cancel and the injected post-consent failure
+retained answer and draft, sent zero additional requests and released the
+stream. SC shut down with exit 0.
+
+The RPM transaction installed the payload in a disposable root with dependency
+checks and scriptlets skipped. The RPM passed its internal digest check. Its
+size and SHA-512 matched the builder metadata, and its installed application
+archive matched the unpacked archive. The branch-only packaging command
+reported exit 143 after writing the RPM and metadata. Full RPM upgrade and dependency
+qualification remain tracked by [issue #17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
+
+Chromium exposes a live, unmuted track before the chooser maps. The track
+does not distinguish an open chooser from a stream that stalls before
+playback. Beta.19 handles a track ending immediately and bounds a silent
+pre-playback stall at 120 seconds. After playback, it uses decoded image data
+when available and keeps a ten-second deadline for the fallback presentation
+callback.
+
+Physical two-monitor qualification still requires user consent on a supported
+desktop with two connected outputs. Select each output in turn and record its
+identity and captured pixel dimensions. Check Cancel and a capture failure
+with the same layout, including draft and answer retention, zero provider
+calls and stream cleanup. [Installed capture issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14)
+
 ## Linux authenticated proxy qualification (2026-11-19)
 
 [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) uses a Fedora

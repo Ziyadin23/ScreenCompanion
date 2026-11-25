@@ -2,7 +2,7 @@
 
 ## Source and release status
 
-`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.18**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
+`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.19**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
 The locally delivered Windows beta.18 was built from
 `5c3f59fed119a04ab877727a99f032f974911b27`. It includes typed-question recovery

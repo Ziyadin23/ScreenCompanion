@@ -18,16 +18,35 @@ export function createCaptureGate(contents: object, frame: object, trustedUrl: (
 
 // Runs only in the trusted top-level renderer after the controller hides the window.
 export const FRAME_SCRIPT = `(async () => {
-  let stream, video, canvas, timer;
+  let stream, video, canvas;
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({ video: { width: { ideal: 32768 }, height: { ideal: 32768 }, frameRate: { ideal: 1, max: 1 } }, audio: false });
     const track = stream.getVideoTracks()[0];
     if (!track || (track.getSettings().displaySurface && track.getSettings().displaySurface !== 'monitor')) throw new Error('monitor required');
     video = document.createElement('video'); video.muted = true; video.srcObject = stream;
+    let removeFrameWait;
     await new Promise((resolve, reject) => {
-      timer = setTimeout(() => reject(new Error('frame timeout')), 10000);
-      video.play().then(() => video.requestVideoFrameCallback(() => { clearTimeout(timer); resolve(); }), reject);
-    });
+      const onEnded = () => reject(new Error('capture ended'));
+      if (track.readyState === 'ended') { onEnded(); return; }
+      track.addEventListener('ended', onEnded, { once: true });
+      // PipeWire exposes a live track before consent and provides no separate consent event.
+      const timeout = () => reject(new Error('frame timeout'));
+      let timer = setTimeout(timeout, 120000), frameCallback, waiting = true;
+      removeFrameWait = () => {
+        waiting = false;
+        clearTimeout(timer);
+        track.removeEventListener('ended', onEnded);
+        if (frameCallback !== undefined) video.cancelVideoFrameCallback(frameCallback);
+      };
+      video.play().then(() => {
+        if (!waiting) return;
+        // A static monitor may never present a second frame.
+        if (video.readyState >= video.HAVE_CURRENT_DATA) { resolve(); return; }
+        clearTimeout(timer);
+        timer = setTimeout(timeout, 10000);
+        frameCallback = video.requestVideoFrameCallback(resolve);
+      }).catch(reject);
+    }).finally(() => removeFrameWait?.());
     const width = video.videoWidth, height = video.videoHeight;
     if (!width || !height || width > 32768 || height > 32768 || width * height > 134217728) throw new Error('invalid frame');
     canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
@@ -37,7 +56,7 @@ export const FRAME_SCRIPT = `(async () => {
     if (!blob) throw new Error('encoding failed');
     return { width, height, bytes: await blob.arrayBuffer() };
   } finally {
-    clearTimeout(timer); if (stream) for (const track of stream.getTracks()) track.stop();
+    if (stream) for (const track of stream.getTracks()) track.stop();
     if (video) video.srcObject = null; if (canvas) { canvas.width = 0; canvas.height = 0; }
   }
 })()`;
