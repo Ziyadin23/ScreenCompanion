@@ -34,7 +34,17 @@ SC windows can appear in recordings or screen shares; Linux does not provide a
 recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
 Reopening SC restores its window if the tray is unavailable.
 
-Hyprland users can configure their own bindings, for example:
+To bind Ctrl+Alt+Space to screen capture and Ctrl+Enter to Question with screenshot,
+use the example that matches your Hyprland configuration file.
+
+For `hyprland.lua`:
+
+```lua
+hl.bind("CTRL + ALT + space", hl.dsp.exec_cmd("/opt/SC/io.github.ziyadin23.sc --action=capture"))
+hl.bind("CTRL + Return", hl.dsp.exec_cmd("/opt/SC/io.github.ziyadin23.sc --action=input-with-screenshot"))
+```
+
+For the legacy `hyprland.conf`:
 
 ```ini
 bind = CTRL ALT, SPACE, exec, /opt/SC/io.github.ziyadin23.sc --action=capture
