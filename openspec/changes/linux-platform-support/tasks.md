@@ -35,6 +35,31 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 - [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
 - [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
+### 2.1 Installed capture checkpoint (2026-11-25)
+
+- [Issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14) owns
+  this continuation. The [verification record](../../../docs/VERIFICATION.md#linux-portal-capture-and-cancellation-2026-11-25)
+  preserves the isolated installed beta.18 failures. [Issue #153](https://github.com/Ziyadin23/ScreenCompanion/issues/153)
+  and [PR #155](https://github.com/Ziyadin23/ScreenCompanion/pull/155) own the
+  immediate cancellation, consent wait and first-frame fix.
+- Beta.19 capture source is `4ae1a5c0dce2056bcbb47006feae3655dd236f04`.
+  The focused capture and controller suites passed 75 tests, exit 0. The
+  earlier chooser-wait and first-decoded-frame regressions each failed before
+  their fix, exit 1. `npm --prefix desktop run verify` passed 1,387 tests
+  across 39 files, type checking, lint and production bundles, exit 0.
+- Both unpacked beta.19 and the same build installed into a disposable RPM
+  root passed the real chooser run, exit 0 each. The run checked 65 seconds
+  of consent wait, prompt Cancel, one selected 1280 × 900 JPEG per successful
+  request, and zero provider calls on Cancel and injected post-consent
+  failure. The [verification record](../../../docs/VERIFICATION.md#linux-portal-capture-and-cancellation-2026-11-25)
+  lists the RPM transaction and packaging limitations.
+- The same isolated installed matrix passed on the combined beta.19 RPM from
+  `ebc84d1`, exit 0. Its SHA-256 and captured dimensions are in the
+  verification record.
+- Keep task 2.1 open for both physical monitor selections, their output
+  identity and dimensions, consent, and cleanup. The coordinator owns
+  independent review, integration and the combined beta.19 local handoff.
+
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
 - [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) owns this continuation on branch `Ziyadin23/issue-18-linux-proxy`, based on `9caa0c26af6670363b6991a78939d3c991a2b0c0`. Application commit `211d2eda7b8d0ef8e3d6e51b9b68011a465a0374` changes `desktop/src/platform/linux-transport.ts`, `desktop/src/providers/index.ts` and the corresponding two regression suites. The proxy credentials are scoped to the selected HTTP proxy and passed through curl's private config pipe.

@@ -5,9 +5,9 @@ This guide covers the Windows beta.16 controls and the Linux source port. See th
 ## Linux setup and controls
 
 The Linux port targets Fedora 44 x86-64, Hyprland on Wayland, PipeWire and
-`xdg-desktop-portal-hyprland`. A headless synthetic capture passed with an
-automated picker and shared-memory portal configuration; interactive consent and
-installed desktop checks remain open. Fedora container install, reinstall and
+`xdg-desktop-portal-hyprland`. The installed beta.19 passed capture and
+cancellation through the Hyprland chooser on one synthetic output. Physical
+multi-monitor qualification remains open. Fedora container install, reinstall and
 removal passed with the Hyprland repository enabled. Fedora 44 base repositories
 do not provide the Hyprland portal package: install Hyprland and its matching
 portal from a trusted repository before installing SC. The test used the
