@@ -19,15 +19,85 @@ describe('Linux screen-capture authorization', () => {
     expect(gate.consume(frame, true, false, true)).toBe(true);
     expect(gate.consume(frame, true, false, true)).toBe(false);
   });
-  it('stops the capture stream if a selected screen never starts delivering frames', async () => {
+  it('stops the capture stream if it never starts delivering frames', async () => {
     vi.useFakeTimers();
     try {
-      const track = { stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) };
+      const track = Object.assign(new EventTarget(), { stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) });
       const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
       const promise = runInNewContext(FRAME_SCRIPT, { navigator: { mediaDevices: { getDisplayMedia: async () => stream } },
         document: { createElement: () => ({ play: () => new Promise(() => {}) }) }, setTimeout, clearTimeout }) as Promise<unknown>;
       const rejection = expect(promise).rejects.toThrow('frame timeout');
-      await vi.advanceTimersByTimeAsync(10001); await rejection;
+      await vi.advanceTimersByTimeAsync(120_001); await rejection;
+      expect(track.stop).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  }, 2000);
+  it('keeps waiting while the portal chooser is open beyond a minute and stops promptly on cancellation', async () => {
+    vi.useFakeTimers();
+    try {
+      const track = Object.assign(new EventTarget(), { stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) });
+      const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
+      const video = { play: () => new Promise(() => {}) };
+      const promise = runInNewContext(FRAME_SCRIPT, { navigator: { mediaDevices: { getDisplayMedia: async () => stream } },
+        document: { createElement: () => video }, setTimeout, clearTimeout }) as Promise<unknown>;
+      const outcome = promise.catch(error => error);
+      await vi.advanceTimersByTimeAsync(65_000);
+      const stoppedWhileWaiting = track.stop.mock.calls.length;
+      track.dispatchEvent(new Event('ended'));
+      expect(await outcome).toHaveProperty('message', 'capture ended');
+      expect(stoppedWhileWaiting).toBe(0);
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  }, 2000);
+  it('releases a track that already ended before playback can start', async () => {
+    const track = { readyState: 'ended', stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) };
+    const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
+    const video = { play: vi.fn() };
+    const promise = runInNewContext(FRAME_SCRIPT, { navigator: { mediaDevices: { getDisplayMedia: async () => stream } },
+      document: { createElement: () => video } }) as Promise<unknown>;
+    await expect(promise).rejects.toThrow('capture ended');
+    expect(video.play).not.toHaveBeenCalled();
+    expect(track.stop).toHaveBeenCalledOnce();
+  });
+  it('bounds presentation after playback starts and cancels a pending video callback', async () => {
+    vi.useFakeTimers();
+    try {
+      const track = Object.assign(new EventTarget(), { stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) });
+      const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
+      const video = {
+        play: () => new Promise(resolve => setTimeout(resolve, 12_000)),
+        requestVideoFrameCallback: vi.fn(() => 4),
+        cancelVideoFrameCallback: vi.fn()
+      };
+      const promise = runInNewContext(FRAME_SCRIPT, { navigator: { mediaDevices: { getDisplayMedia: async () => stream } },
+        document: { createElement: () => video }, setTimeout, clearTimeout }) as Promise<unknown>;
+      const outcome = promise.catch(error => error);
+      await vi.advanceTimersByTimeAsync(12_000);
+      expect(video.requestVideoFrameCallback).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(await outcome).toHaveProperty('message', 'frame timeout');
+      expect(video.cancelVideoFrameCallback).toHaveBeenCalledWith(4);
+      expect(track.stop).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally { vi.useRealTimers(); }
+  }, 2000);
+  it('captures an already decoded frame without waiting for another presentation', async () => {
+    vi.useFakeTimers();
+    try {
+      const track = Object.assign(new EventTarget(), { stop: vi.fn(), getSettings: () => ({ displaySurface: 'monitor' }) });
+      const stream = { getVideoTracks: () => [track], getTracks: () => [track] };
+      const video = { play: async () => {}, readyState: 2, HAVE_CURRENT_DATA: 2, videoWidth: 1280, videoHeight: 900,
+        requestVideoFrameCallback: vi.fn(() => 1), cancelVideoFrameCallback: vi.fn() };
+      const drawImage = vi.fn();
+      const bytes = new ArrayBuffer(3);
+      const canvas = { getContext: () => ({ drawImage }), toBlob: (callback: (blob: unknown) => void) => callback({ arrayBuffer: async () => bytes }) };
+      const promise = runInNewContext(FRAME_SCRIPT, { navigator: { mediaDevices: { getDisplayMedia: async () => stream } },
+        document: { createElement: (name: string) => name === 'video' ? video : canvas }, setTimeout, clearTimeout }) as Promise<unknown>;
+      const outcome = promise.catch(error => ({ error: error.message }));
+      await vi.advanceTimersByTimeAsync(10_001);
+      expect(await outcome).toEqual({ width: 1280, height: 900, bytes });
+      expect(drawImage).toHaveBeenCalledWith(video, 0, 0, 1280, 900);
+      expect(video.requestVideoFrameCallback).not.toHaveBeenCalled();
       expect(track.stop).toHaveBeenCalledOnce();
     } finally { vi.useRealTimers(); }
   }, 2000);

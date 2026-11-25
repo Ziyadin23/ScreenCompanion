@@ -5,18 +5,20 @@ This guide covers the Windows beta.16 controls and the Linux source port. See th
 ## Linux setup and controls
 
 The Linux port targets Fedora 44 x86-64, Hyprland on Wayland, PipeWire and
-`xdg-desktop-portal-hyprland`. A headless synthetic capture passed with an
-automated picker and shared-memory portal configuration; interactive consent and
-installed desktop checks remain open. Fedora container install, reinstall and
+`xdg-desktop-portal-hyprland`. The installed beta.19 passed capture and
+cancellation through the Hyprland chooser on one synthetic output. Physical
+multi-monitor qualification remains open. Fedora container install, reinstall and
 removal passed with the Hyprland repository enabled. Fedora 44 base repositories
 do not provide the Hyprland portal package: install Hyprland and its matching
 portal from a trusted repository before installing SC. The test used the
 third-party sdegler/hyprland COPR already configured on the development machine.
 Other Linux desktops and package formats are not qualified. An
 unlocked Secret Service keyring is required; SC refuses insecure `basic_text`
-storage. Setup shows the unlock instruction with the API key field. Unlock the
-keyring and restart SC if saved settings cannot be opened;
-if saving fails, unlock it and try again. Existing bytes are retained. Linux uses
+storage. Setup shows the unlock instruction with the API key field. If saved
+settings cannot be opened, dismiss the message, start or unlock the keyring,
+and restart SC. Existing bytes are retained. If the first Setup save fails,
+start or unlock the keyring and select **Save** again. If Save still fails,
+restart SC and enter your API key again. Linux uses
 `$XDG_CONFIG_HOME/SC/sc.linux.key` (normally `~/.config/SC/sc.linux.key`) and
 does not migrate Windows DPAPI files.
 
@@ -28,13 +30,25 @@ monitor offsets are not exposed by this capture path.
 
 After setup, hover over the panel or focus its controls with the keyboard to reveal
 **Capture screen**, **Question**, **Settings**, **Hide** and **Exit**. Choose Capture screen, or use Ctrl+Enter / Send with screenshot from Question, then select one monitor in
-the desktop screen-sharing prompt. Enter / Send in Question sends only text and does not open the portal. Cancellation or failure makes no provider
-request and retains the prior answer and any unsent question. SC hides its window while capturing, but
+the desktop screen-sharing prompt. SC allows up to two minutes for the prompt
+and initial video. Enter / Send in Question sends only text and does not open
+the portal. Cancellation or failure makes no provider request and retains the
+prior answer and any unsent question. SC hides its window while capturing, but
 SC windows can appear in recordings or screen shares; Linux does not provide a
 recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
 Reopening SC restores its window if the tray is unavailable.
 
-Hyprland users can configure their own bindings, for example:
+To bind Ctrl+Alt+Space to screen capture and Ctrl+Enter to Question with screenshot,
+use the example that matches your Hyprland configuration file.
+
+For `hyprland.lua`:
+
+```lua
+hl.bind("CTRL + ALT + space", hl.dsp.exec_cmd("/opt/SC/io.github.ziyadin23.sc --action=capture"))
+hl.bind("CTRL + Return", hl.dsp.exec_cmd("/opt/SC/io.github.ziyadin23.sc --action=input-with-screenshot"))
+```
+
+For the legacy `hyprland.conf`:
 
 ```ini
 bind = CTRL ALT, SPACE, exec, /opt/SC/io.github.ziyadin23.sc --action=capture
@@ -83,7 +97,7 @@ Press **Space** on **Show API key** to toggle key visibility.
 
 The public EXE contains no API key. The app does not request administrator rights. Managed PCs can block unsigned executables; Windows may show a first-launch warning. Keep your API key private. Anyone with access to your signed-in Windows account can use the saved key through the app.
 
-Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, unlock your secure keyring before retrying.
+Setup shows an empty or invalid entry next to the API key field. If saving fails, read the message above **Save** and try again with the same key. On Linux, start or unlock your secure keyring before retrying. If Save still fails, restart SC and enter your API key again.
 
 Setup headings and guidance follow the renderer's default font size. Scroll the
 setup form to read all guidance in a short window. Save and Cancel sit below
