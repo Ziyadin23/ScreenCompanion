@@ -16,6 +16,10 @@ Fedora 44 with Hyprland, plus key-free installed and portable startup on
 Windows 11 x64. All five delivered files matched the build.
 [Beta.19 local handoff and hashes](#beta19-local-handoff-2026-11-25)
 
+The local beta.13 to beta.19 RPM upgrade passed on Fedora 44 with nested
+Hyprland, including desktop launch, encrypted settings retention and removal
+of the installed package. [Installed RPM upgrade](#linux-installed-rpm-upgrade-2026-11-26)
+
 Local Windows beta.18 passed focused typed-question recovery and packaged startup
 on Windows 11 x64. The four delivered files matched the Windows build.
 [Beta.18 results and hashes](#beta18-windows-question-recovery-2026-11-24)
@@ -1022,8 +1026,8 @@ appearance and key presence. Its encrypted bytes matched at all three failure
 points and all three recoveries. Both failed Setup saves left no vault. The
 repeat Save kept the draft and showed the restart instructions. The initial
 save and the save after restarting Setup each wrote `v11` ciphertext with no
-plaintext key. Full RPM upgrade qualification remains with
-[#17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
+plaintext key. The later [installed RPM upgrade](#linux-installed-rpm-upgrade-2026-11-26)
+uses this same combined beta.19 RPM.
 
 ## Linux portal capture and cancellation (2026-11-25)
 
@@ -1064,8 +1068,9 @@ The RPM transaction installed the payload in a disposable root with dependency
 checks and scriptlets skipped. The RPM passed its internal digest check. Its
 size and SHA-512 matched the builder metadata, and its installed application
 archive matched the unpacked archive. The branch-only packaging command
-reported exit 143 after writing the RPM and metadata. Full RPM upgrade and dependency
-qualification remain tracked by [issue #17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
+reported exit 143 after writing the RPM and metadata. The later
+[installed RPM upgrade](#linux-installed-rpm-upgrade-2026-11-26) includes
+dependency checks and scriptlets.
 
 Chromium exposes a live, unmuted track before the chooser maps. The track
 does not distinguish an open chooser from a stream that stalls before
@@ -1101,6 +1106,48 @@ entries matched the separately delivered EXE and README.
 | `SC-v0.5.0-beta.19.zip` | 104,324,544 | `a42ac63b6781c58dc368f83b0b066c9ce4e3419bcf2b30ee0701ee6eb012cf79` |
 
 The latest public Windows prerelease is still [beta.16](releases/v0.5.0-beta.16.md).
+
+## Linux installed RPM upgrade (2026-11-26)
+
+[Issue #17](https://github.com/Ziyadin23/ScreenCompanion/issues/17) used the
+full transfer RPMs from [beta.13](#astryx-beta13-settings-matrix-and-local-handoff-2026-11-20)
+at `1c0483f` and [beta.19](#beta19-local-handoff-2026-11-25) at `ebc84d1`.
+Both RPMs matched the recorded transfer SHA-256 hashes and passed the RPM
+digest check. The installed application archive matched its RPM payload at
+each version. The running lab's RPM database reported these installed
+package identifiers before and after the upgrade.
+
+| Stage | Installed name, epoch, version, release and architecture |
+| --- | --- |
+| Before upgrade | `sc-desktop-0:0.5.0~beta.13-1.x86_64` |
+| After upgrade | `sc-desktop-0:0.5.0~beta.19-1.x86_64` |
+
+The run used Fedora 44 x86-64, Hyprland 0.57.2 nested in headless KWin 6.8.3,
+and GNOME Keyring 50.0. Disposable filesystem mounts and an RPM database
+snapshot exposed the installed Fedora dependency packages. The snapshot
+excluded the host's existing SC installation. Every declared dependency
+resolved, including xdg-desktop-portal-hyprland 1.5.0. The RPM transactions
+ran dependency checks, scriptlets and triggers. The app ran as an unprivileged
+user with a private profile, session bus and keyring on a loopback-only
+network. The desktop launches used the unmodified desktop entries with no
+extra flags. The compositor reported the desktop ID for both mapped windows,
+and each process's executable resolved to `/opt/SC/io.github.ziyadin23.sc`.
+The separate Settings checks used Playwright with
+`--no-sandbox` inside the outer namespace.
+
+| Check | Result |
+| --- | --- |
+| Install beta.13 | `rpm -ivh` and `rpm -V sc-desktop` exited 0. The installed desktop file validated, and `gtk-launch io.github.ziyadin23.sc` mapped the installed executable as a native Wayland window. Launching the named command opened beta.13. Setup saved a synthetic OpenAI key and Settings saved a 28-point answer text size. |
+| Upgrade to beta.19 | `rpm -Uvh` and `rpm -V sc-desktop` exited 0. The transaction replaced beta.13 and retained the named launcher. The beta.19 desktop entry validated and launched a native Wayland window. The named command opened beta.19 and showed the saved key and 28-point size. Electron decrypted the exact synthetic key using GNOME Keyring, and the `v11` ciphertext remained byte-identical. Updates displayed the manual RPM instructions. Both Settings runs exited 0 through the app's Exit control. |
+| Uninstall beta.19 | `rpm -ev sc-desktop` exited 0. The package entry, payload, desktop file, icons and named launcher were removed. The unrelated `sc` command, desktop entry, icon and application data matched their original hashes. The encrypted vault remained byte-identical. |
+
+The complete isolated run exited 0. Earlier attempts exposed fixture issues
+with writable mounts, the RPM database lock, the compositor runtime path and
+graphics devices, and the UI harness waiting for a process to exit. The final
+run corrected the fixture and used the original transfer RPMs. It made zero
+provider requests and qualifies the installed upgrade with preinstalled target
+dependencies on this nested desktop. Fresh repository dependency acquisition,
+physical monitors and other Linux desktops are outside this run's scope.
 
 ## Linux authenticated proxy qualification (2026-11-19)
 
