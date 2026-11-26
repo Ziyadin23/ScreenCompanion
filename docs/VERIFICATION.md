@@ -962,7 +962,9 @@ Fedora base repositories did not provide `xdg-desktop-portal-hyprland`. The
 container had no running Hyprland desktop and does not establish interactive
 application behavior or a version-to-version upgrade. Interactive monitor selection and full-app cancellation, multi-monitor behavior,
 locked-keyring recovery, compositor shortcut activation, duplicate
-launch, installed desktop operation and manual version upgrade remain separate target checks.
+launch, installed desktop operation and manual version upgrade were separate
+target checks for the beta.7 candidate. See the later [installed desktop
+controls and relaunch check](#linux-desktop-controls-and-relaunch-2026-11-26).
 Linux windows may appear in recordings and screen shares. For the final beta.7
 source, Windows `npm run verify` passed 1,277 tests with 24 Linux-only tests
 skipped, and native compilation, 54 native checks, eight vault interoperability
@@ -1079,6 +1081,35 @@ desktop with two connected outputs. Select each output in turn and record its
 identity and captured pixel dimensions. Check Cancel and a capture failure
 with the same layout, including draft and answer retention, zero provider
 calls and stream cleanup. [Installed capture issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14)
+
+## Linux desktop controls and relaunch (2026-11-26)
+
+The transferred beta.19 RPM from `ebc84d1cad664c18ea496dec5cda9375572d9531`
+matched the [local handoff hash](#beta19-local-handoff-2026-11-25) and passed
+its digest check. The RPM transaction installed the payload in a disposable
+root with dependency checks and scriptlets skipped. The installed
+`app.asar` SHA-256 matched the prior capture qualification receipt at
+`ad52eb9391612bfe250ab4a2cd9389396149ab48db829033620edf79024bf9e8`.
+
+The runs used Fedora 44 x86-64, Hyprland 0.57.2 nested in headless KWin
+6.8.3, Electron 45.0.0 and one synthetic 1280 × 900 Wayland output. Each
+run used a disposable profile, Secret Service keyring and D-Bus session.
+Only loopback was available. A counted curl fixture returned the synthetic
+answers. There was no desktop tray watcher or XWayland.
+
+| Check | Observed result |
+| --- | --- |
+| Compositor bindings | Wayland virtual keyboard input triggered the Lua bindings for Capture, Question with screenshot, Question, Settings, visibility, Capture test and Exit. Ctrl+Alt+Space opened the real chooser. Ctrl+Enter opened Question from the answer and opened the chooser when the typed question had focus. Selecting the output sent the exact typed question and one 1280 × 900 image to the fixture. Cancel retained the answer and unsent text and made zero additional provider requests. |
+| Early activation | During first-run Setup, the Ctrl+Enter binding started the installed executable and the secondary process exited before Save. After Save, the primary process opened Question with no provider request. |
+| Duplicate activation | A second launch without action arguments exited normally. The same primary PID and focused Wayland window returned with the exact hidden Question text or Settings edit intact. Settings retained its session for both visible and hidden relaunch. |
+| Controls without tray or bindings | In a fresh session with zero bindings, Wayland pointer input operated Capture screen, Question, Settings, Hide and Exit. Text Send returned the fixture answer without capture. Back discarded the Settings edit and Save applied a new one. Both retained the answer. Relaunch restored the hidden panel and Exit shut down normally. |
+
+The Lua run used Hyprland's symbol matching for the virtual keyboard's
+keymap. The legacy configuration attempt stopped before the app launched
+because this Hyprland build selected the Lua parser. The qualification
+covers the installed executable on the isolated Wayland session. Package
+dependencies and full upgrade remain with [issue #17](https://github.com/Ziyadin23/ScreenCompanion/issues/17).
+[Desktop controls and relaunch issue #16](https://github.com/Ziyadin23/ScreenCompanion/issues/16)
 
 ## Beta.19 local handoff (2026-11-25)
 

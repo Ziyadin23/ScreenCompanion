@@ -29,7 +29,7 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 
 - [ ] 2.1 Complete [installed-app capture/cancellation (#14)](https://github.com/Ziyadin23/ScreenCompanion/issues/14): verify interactive monitor choice, actual dimensions and physical multi-monitor behavior; cancellation/failure must retain answer/question and make no provider request. Record candidate/environment, outcomes and any required fixture/guidance corrections with that evidence.
 - [x] 2.2 Complete [keyring recovery (#15)](https://github.com/Ziyadin23/ScreenCompanion/issues/15): diagnose the dialog deadline and verify ordinary dismissal, genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes and no weak fallback; update relevant tests and guidance alongside any fix.
-- [ ] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
+- [x] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
 - [ ] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
 - [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
@@ -60,6 +60,25 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   identity and dimensions, consent, and cleanup. PR #155 merged at `6aa75c9`.
   The [combined beta.19 local handoff](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
   passed copied-byte verification.
+
+### 2.3 Desktop controls and relaunch checkpoint (2026-11-26)
+
+- [Issue #16](https://github.com/Ziyadin23/ScreenCompanion/issues/16) owns
+  this check on base `8419dd3`. The transferred beta.19 RPM from `ebc84d1`
+  passed installed desktop qualification. The
+  [verification record](../../../docs/VERIFICATION.md#linux-desktop-controls-and-relaunch-2026-11-26)
+  records the candidate, environment and results.
+- The private harness ran `bash "$fixture_dir/run.sh" "$PWD" bound` and
+  `bash "$fixture_dir/run.sh" "$PWD" fallback`. Both exited 0. It used
+  Bubblewrap, a separate D-Bus session and headless KWin with nested
+  Hyprland. Wayland input exercised the production bindings and controls.
+  Standalone duplicate executable launches restored the same process and
+  preserved the exact active draft.
+- The workflow self-test, documentation links, strict OpenSpec validation
+  and whitespace checks exited 0. OpenSpec recorded task 2.3 complete.
+- This change updates verification, status and user guidance. The
+  maintainer owns PR review and integration. Task 2.4 continues to own RPM
+  dependencies and full upgrade. Task 2.7 retains final-source reconciliation.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 

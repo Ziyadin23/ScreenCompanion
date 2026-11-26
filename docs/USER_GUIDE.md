@@ -35,8 +35,10 @@ and initial video. Enter / Send in Question sends only text and does not open
 the portal. Cancellation or failure makes no provider request and retains the
 prior answer and any unsent question. SC hides its window while capturing, but
 SC windows can appear in recordings or screen shares; Linux does not provide a
-recording-exclusion guarantee. The panel also provides Settings, Hide and Exit.
-Reopening SC restores its window if the tray is unavailable.
+recording-exclusion guarantee. The panel controls work without a tray or
+Hyprland bindings. If you hide SC, reopen the installed app to show the
+existing window. SC keeps the unsent question or Settings edits on that
+window when you reopen it.
 
 To bind Ctrl+Alt+Space to screen capture and Ctrl+Enter to Question with screenshot,
 use the example that matches your Hyprland configuration file.
