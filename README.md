@@ -80,8 +80,11 @@ window, or configure optional Hyprland bindings. Linux uses a separate encrypted
 settings vault and manual RPM updates. HTTPS API requests can use Basic proxy
 authentication from a matching process proxy setting. See the [proxy guidance](docs/USER_GUIDE.md#works-on-a-hotspot-but-fails-on-university-wi-fi).
 
-Interactive consent, compositor shortcuts and installed desktop operation still
-need qualification. See [Linux setup, prerequisites and limits](docs/USER_GUIDE.md#linux-setup-and-controls).
+On Fedora 44 with nested Hyprland, installed beta.19 passed monitor selection
+and cancellation on one virtual display, all seven compositor shortcuts, and
+relaunch with the draft preserved. The full beta.13 to beta.19 RPM upgrade kept
+encrypted settings. Capture on two physical monitors still needs verification.
+See [Linux setup, prerequisites and limits](docs/USER_GUIDE.md#linux-setup-and-controls).
 
 ## Shortcuts
 
