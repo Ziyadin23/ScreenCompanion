@@ -1114,7 +1114,13 @@ full transfer RPMs from [beta.13](#astryx-beta13-settings-matrix-and-local-hando
 at `1c0483f` and [beta.19](#beta19-local-handoff-2026-11-25) at `ebc84d1`.
 Both RPMs matched the recorded transfer SHA-256 hashes and passed the RPM
 digest check. The installed application archive matched its RPM payload at
-each version.
+each version. The running lab's RPM database reported these installed
+package identifiers before and after the upgrade.
+
+| Stage | Installed name, epoch, version, release and architecture |
+| --- | --- |
+| Before upgrade | `sc-desktop-0:0.5.0~beta.13-1.x86_64` |
+| After upgrade | `sc-desktop-0:0.5.0~beta.19-1.x86_64` |
 
 The run used Fedora 44 x86-64, Hyprland 0.57.2 nested in headless KWin 6.8.3,
 and GNOME Keyring 50.0. Disposable filesystem mounts and an RPM database
@@ -1124,7 +1130,9 @@ resolved, including xdg-desktop-portal-hyprland 1.5.0. The RPM transactions
 ran dependency checks, scriptlets and triggers. The app ran as an unprivileged
 user with a private profile, session bus and keyring on a loopback-only
 network. The desktop launches used the unmodified desktop entries with no
-extra flags. The separate Settings checks used Playwright with
+extra flags. The compositor reported the desktop ID for both mapped windows,
+and each process's executable resolved to `/opt/SC/io.github.ziyadin23.sc`.
+The separate Settings checks used Playwright with
 `--no-sandbox` inside the outer namespace.
 
 | Check | Result |
