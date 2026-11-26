@@ -2,7 +2,13 @@
 
 [Design](design.md) maps the accepted Linux requirements to the four specs and identifies the existing implementation. Checked tasks below import inspected implementation/evidence; they do not claim fresh runtime verification during this workflow migration. The [Linux verification record](../../../docs/VERIFICATION.md#linux-port-status) owns the recorded outcomes and limits.
 
-## Current continuation — 2026-11-24
+## Current continuation — 2026-11-26
+
+Task 2.4 passed the full installed beta.13 to beta.19 RPM upgrade on Fedora 44
+with nested Hyprland. Continue the broader qualification at task 2.1.
+[Task 2.4 evidence](#24-installed-rpm-upgrade-checkpoint-2026-11-26)
+
+## Earlier continuation — 2026-11-24
 
 Task 2.6 passed for the Settings-to-answer sizing issue. The corresponding
 Windows beta.17 passed the affected target checks and local delivery.
@@ -30,7 +36,7 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 - [ ] 2.1 Complete [installed-app capture/cancellation (#14)](https://github.com/Ziyadin23/ScreenCompanion/issues/14): verify interactive monitor choice, actual dimensions and physical multi-monitor behavior; cancellation/failure must retain answer/question and make no provider request. Record candidate/environment, outcomes and any required fixture/guidance corrections with that evidence.
 - [x] 2.2 Complete [keyring recovery (#15)](https://github.com/Ziyadin23/ScreenCompanion/issues/15): diagnose the dialog deadline and verify ordinary dismissal, genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes and no weak fallback; update relevant tests and guidance alongside any fix.
 - [ ] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
-- [ ] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
+- [x] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
 - [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
 - [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
@@ -60,6 +66,22 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   identity and dimensions, consent, and cleanup. PR #155 merged at `6aa75c9`.
   The [combined beta.19 local handoff](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
   passed copied-byte verification.
+
+### 2.4 Installed RPM upgrade checkpoint (2026-11-26)
+
+- [Issue #17](https://github.com/Ziyadin23/ScreenCompanion/issues/17) owns this
+  continuation from main `8419dd3`. The transfer RPMs came from beta.13
+  `1c0483f` and beta.19 `ebc84d1`. The isolated Fedora 44 x86-64 and nested
+  Hyprland run exited 0. Both transfer hashes and installed payload hashes
+  matched. [Candidate details and commands](../../../docs/VERIFICATION.md#linux-installed-rpm-upgrade-2026-11-26)
+- `rpm -ivh`, `rpm -Uvh` and `rpm -ev sc-desktop` each exited 0 with
+  the actual dependencies and scriptlets. Both installed desktop entries and
+  named launcher starts passed. The exact encrypted synthetic key and saved
+  text size survived the version change. The uninstall removed SC's integration
+  and kept the unrelated files and vault byte-identical.
+- The branch changes the task and verification documentation. Application and
+  package bytes match the existing local handoff. The next action for #17 is
+  review of the evidence; the broader Linux change remains active.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
