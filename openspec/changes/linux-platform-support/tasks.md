@@ -5,10 +5,12 @@
 ## Current continuation — 2026-11-26
 
 Task 2.3 passed installed desktop controls and relaunch on beta.19.
-Task 2.4 passed the full installed beta.13 to beta.19 RPM upgrade. Both
-used Fedora 44 with nested Hyprland. Continue at task 2.1.
+Task 2.4 passed the full installed beta.13 to beta.19 RPM upgrade.
+Task 2.5 passed installed proxy and transport qualification on beta.19.
+These runs used Fedora 44 with nested Hyprland. Continue at task 2.1.
 [Task 2.3 evidence](#23-desktop-controls-and-relaunch-checkpoint-2026-11-26)
 [Task 2.4 evidence](#24-installed-rpm-upgrade-checkpoint-2026-11-26)
+[Task 2.5 evidence](#25-installed-proxy-and-transport-checkpoint-2026-11-26)
 
 ## Earlier continuation — 2026-11-24
 
@@ -39,7 +41,7 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 - [x] 2.2 Complete [keyring recovery (#15)](https://github.com/Ziyadin23/ScreenCompanion/issues/15): diagnose the dialog deadline and verify ordinary dismissal, genuine lock/unlock and unavailable/restored recovery with unchanged encrypted bytes and no weak fallback; update relevant tests and guidance alongside any fix.
 - [x] 2.3 Complete [desktop controls and relaunch (#16)](https://github.com/Ziyadin23/ScreenCompanion/issues/16): verify actual compositor bindings, early/duplicate activation and installed fallback controls with drafts/input retained; record results and keep controls/setup documentation consistent.
 - [x] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
-- [ ] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
+- [x] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
 - [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
 - [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
@@ -103,6 +105,26 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 - The branch changes the task and verification documentation. Application and
   package bytes match the existing local handoff. The next action for #17 is
   review of the evidence; the broader Linux change remains active.
+
+### 2.5 Installed proxy and transport checkpoint (2026-11-26)
+
+- [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) owns
+  this documentation-only continuation on base
+  `cb78358b0947d5dcbf78385689193d2b0fe5243f`. The transferred beta.19 RPM
+  from `ebc84d1cad664c18ea496dec5cda9375572d9531` retained the
+  [local handoff hash](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25).
+  The [installed verification](../../../docs/VERIFICATION.md#linux-installed-proxy-and-transport-qualification-2026-11-26)
+  records the package, running executable, ASAR digest and per-case results.
+- `timeout 175s bash "$fixture_dir/run.sh"` passed 13/13, exit 0.
+  `timeout 65s bash "$fixture_dir/run-pac.sh"` passed the separate
+  proxy-resolution check, exit 0. Both commands installed and verified the
+  transferred RPM in disposable roots. This PR records the results for the
+  existing application and package. The earlier source and portable checks
+  remain below.
+- The workflow self-test and documentation checks, strict OpenSpec validation
+  and `git diff --check` passed. The issue-linked PR is ready for independent
+  review. Task 2.7 owns final reconciliation against merged main. Task 2.1
+  still owns physical monitor selection. The RPM remains a local handoff.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
