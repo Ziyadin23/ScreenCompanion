@@ -46,7 +46,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
-| Linux port | [Beta.7 source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests. Later follow-ups completed Settings-to-answer sizing and installed keyring recovery. | Five [Linux qualification groups](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open, including capture on two physical monitors. |
+| Linux port | [Beta.7 source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests. Later follow-ups completed Settings-to-answer sizing and installed keyring recovery. | [Linux tasks 2.1 and 2.7](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open for physical monitor selection and final reconciliation. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
@@ -1181,6 +1181,62 @@ provider requests and qualifies the installed upgrade with preinstalled target
 dependencies on this nested desktop. Fresh repository dependency acquisition,
 physical monitors and other Linux desktops are outside this run's scope.
 
+## Linux installed proxy and transport qualification (2026-11-26)
+
+The transferred beta.19 RPM from `ebc84d1cad664c18ea496dec5cda9375572d9531`
+matched the [local handoff hash](#beta19-local-handoff-2026-11-25) and passed
+the RPM digest check. `rpm -ivh` and `rpm -V sc-desktop` exited 0 with the
+declared dependencies and package scriptlets in a disposable root.
+The installed package was `sc-desktop-0:0.5.0~beta.19-1.x86_64`.
+Its `/opt/SC/resources/app.asar` matched the RPM payload at SHA-256
+`ad52eb9391612bfe250ab4a2cd9389396149ab48db829033620edf79024bf9e8`.
+The running process resolved to `/opt/SC/io.github.ziyadin23.sc` through
+`/proc/<pid>/exe` and reported that installed ASAR as its application path.
+
+The runs used Fedora 44 x86-64, Hyprland 0.57.2 nested in headless KWin 6.8.3,
+Electron 45.0.0, curl 8.18.0 with OpenSSL 3.5.9, and a disposable profile,
+D-Bus session and GNOME Keyring. The application window used native Wayland
+with the Chromium sandbox enabled. The network namespace exposed only loopback. The
+harness submitted text-only questions through the installed renderer's
+preload API. The packaged main process resolved the configured PAC route
+through Electron and sent requests through the system curl. A process-local
+CA bundle kept TLS and hostname validation enabled. The host trust store
+stayed unchanged.
+
+| Installed application case | Primary CONNECTs / origin POSTs | Observed outcome |
+| --- | --- | --- |
+| Correct Basic credentials and trusted certificate | 1 / 1 | The origin received the intact UTF-8 text-only POST. SC displayed the expected answer. |
+| Wrong password, no credentials, or credentials for another proxy | 1 / 0 per case | HTTP 407 and authentication guidance. Only the wrong-password case sent a proxy authorization header. |
+| Untrusted certificate or wrong certificate name | 1 / 0 per case | TLS guidance before any POST. |
+| Redirect, HTML login, and HTTP 511 | 1 / 1 per case | SC reported the applicable network error. The redirect destination received zero requests. |
+| Connection dropped after POST | 1 / 1 | SC reported a network error and retained the prior answer. |
+| Stalled CONNECT | 1 / 0 | The 15-second connection deadline reported `ANSWER-TIMEOUT` and closed the proxy socket in 15,034 ms. |
+| Stalled response body | 1 / 1 | The 90-second total deadline reported `ANSWER-TIMEOUT` and closed both sockets in 90,033 ms. |
+| Exit during response body | 1 / 1 | The request stopped, both sockets closed, and SC exited 0 in 48 ms from Exit. |
+
+All 13 cases passed in one execution. Every case used the primary route with
+zero attempts at the configured fallback. The provider key reached only the
+TLS origin, and proxy credentials stayed in CONNECT. The three stalled or
+cancelled requests had a verified `/usr/bin/curl` child of the installed
+process. All three child processes ended. Persistent diagnostics contained
+the expected codes and HTTP statuses without synthetic credentials, question,
+answer or response-body markers.
+
+A separate installed run held the PAC response open. SC reported
+`ANSWER-TIMEOUT` after 15,022 ms without starting curl. Both
+qualification runs and their post-run RPM verification exited 0.
+
+Earlier fixture attempts stopped on background proxy requests, PAC route
+spacing, dropped-tunnel cleanup and the renderer harness closing with an
+in-flight IPC promise. Every run used the original transferred RPM.
+
+The installed result covers a controlled Basic HTTP CONNECT proxy and the
+text-only provider path on the named Fedora/Hyprland target. Other proxy
+schemes, provider account access and live services were outside this run.
+The [earlier source and portable checks](#linux-authenticated-proxy-qualification-2026-11-19)
+retain their own candidate and scope. [Task 2.7](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness)
+owns final merged-source reconciliation. [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18)
+
 ## Linux authenticated proxy qualification (2026-11-19)
 
 [Issue #18](https://github.com/Ziyadin23/ScreenCompanion/issues/18) uses a Fedora
@@ -1220,7 +1276,7 @@ This scope covers Basic authentication to a loopback HTTP CONNECT proxy using
 matching process credentials. Pinned beta.7 remains affected. Repeat the
 applicable checks on the selected integrated candidate under task 2.7.
 Installed desktop, Windows lab qualification and verified runnable beta
-delivery remain pending for the changed application.
+delivery remained pending at this checkpoint. The later [installed beta.19 run](#linux-installed-proxy-and-transport-qualification-2026-11-26) owns the RPM evidence.
 
 ## Hyprland panel geometry (2026-11-19)
 
