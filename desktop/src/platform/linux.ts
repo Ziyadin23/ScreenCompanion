@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { DesktopAction, CapturedFrame, DesktopPlatform, HttpTransport } from '../contracts';
+import { LINUX_ACTIONS } from '../contracts/linux-actions';
 import { validateShortcuts } from './shortcuts';
 
 const runHyprctl = promisify(execFile);
@@ -61,7 +62,6 @@ interface LinuxOptions {
   argv: string[]; capture(): Promise<CapturedFrame>; imageFromBuffer(buffer: Buffer): Image;
   cryptor: Pick<DesktopPlatform, 'protectData' | 'unprotectData'>; transport: HttpTransport;
 }
-const ACTIONS: DesktopAction[] = ['capture', 'test', 'visibility', 'settings', 'exit', 'input', 'input-with-screenshot'];
 const unavailable = (): never => { throw new Error('Wayland monitor selection is handled by the screen-sharing portal.'); };
 export function createLinuxPlatform(options: LinuxOptions): DesktopPlatform {
   let action: ((value: DesktopAction) => void) | undefined, activate: (() => void) | undefined;
@@ -69,7 +69,7 @@ export function createLinuxPlatform(options: LinuxOptions): DesktopPlatform {
   const pending: DesktopAction[] = [];
   function route(argv: string[], restore: boolean): void {
     const value = argv.find(arg => arg.startsWith('--action='))?.slice('--action='.length) as DesktopAction | undefined;
-    if (value && ACTIONS.includes(value)) {
+    if (value && Object.hasOwn(LINUX_ACTIONS, value)) {
       if (initialized && action) action(value); else pending.push(value);
     } else if (restore) activate?.();
   }

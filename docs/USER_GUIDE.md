@@ -57,8 +57,12 @@ bind = CTRL ALT, SPACE, exec, /opt/SC/io.github.ziyadin23.sc --action=capture
 bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input-with-screenshot
 ```
 
-Use `--action=input` for a custom focus-only opening binding. The explicit `input-with-screenshot` action opens input from elsewhere and submits with a screenshot only when the question field has focus. Other actions are `settings`, `visibility`, `test` and `exit`. Desktop bindings
-are managed by Hyprland, rather than the Windows shortcut editor. Use the native
+The initial command help, **Settings → Commands**, and **Settings → Answer &
+shortcuts → Keyboard shortcuts** list all seven actions. Use `--action=input`
+to open or focus Question. Use `--action=input-with-screenshot` to open Question
+or send your draft with a screenshot if the question field has focus. In
+Question, Enter sends text only. The other actions are `capture`, `settings`,
+`visibility`, `test` and `exit`. Configure these bindings in Hyprland. Use the native
 window controls to move the panel or resize it from an edge or corner. Setup and
 Settings open in their own window. Back and Save return to the answer panel.
 The floating answer panel fits its contents automatically until you resize it.
