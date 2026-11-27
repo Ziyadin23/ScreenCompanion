@@ -656,22 +656,17 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
 - The #14 target operator owns the physical two-output gate under 2.1. This
   host has one connected physical display. The test needs a second connected
   output and user consent for capture on a synthetic desktop.
-- The [#163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) author
-  owns Linux help and its direct regressions. The Linux package operator
-  owns the changed RPM's command-help and binding smoke and an installed
-  upgrade/start/erase check with a synthetic encrypted profile. The existing
-  installed capture, keyring, controls and proxy matrices retain the
-  beta.19 candidate; the final diff determines which behavior needs a
-  targeted repeat.
-- The Windows lab operator owns the final combined candidate's
-  `npm run test:windows`, `npm run test:ui` and package startup and cleanup.
-  Use the hosted native build, vault and package jobs for that candidate
-  alongside the interactive results. The Windows VM is reserved for other
-  work during this checkpoint.
-- The coordinator owns independent review of this evidence PR, final
-  combined-candidate selection and the local beta.20 handoff. Review and
-  integrate this baseline first. Bring it into #163 before freezing the
-  combined candidate. Attach the applicable source, target and handoff
-  checks to that revision before accepting final qualification. Record
-  integration and any release decision separately. Tasks 2.1 and 2.7
-  remain open.
+- The [beta.20 product PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
+  freezes application, package and distributed README inputs at
+  `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. The #163 operator owns
+  the installed RPM help evidence. The Windows lab operator owns the
+  Windows `npm run verify`, `npm run test:windows`, two focused Commands
+  and shortcut UI cases, exact packaged Windows Commands text, the
+  key-free installer and portable startup checks and cleanup. The
+  coordinator tracks copied-byte verification and product integration.
+- Integrate the reviewed product PR first. Update this evidence PR against
+  that merged source, preserve the historical beta.19 receipts and attach
+  the completed beta.20 checks. Compare the final application, packaging and
+  README inputs with the freeze. A documentation-only change that preserves
+  those inputs reuses the same build. Record integration and release
+  separately. Tasks 2.1 and 2.7 remain open.
