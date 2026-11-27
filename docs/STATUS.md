@@ -1,6 +1,9 @@
 # SC project status
 
-Snapshot updated **2026-11-26 UTC**. Application source is **0.5.0-beta.19**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+Snapshot updated **2026-11-27 UTC**. Application source is **0.5.0-beta.20**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+
+Beta.20 shows all seven Hyprland actions in the Linux command help and explains
+when the screenshot action submits a question. [Linux shortcut help issue](https://github.com/Ziyadin23/ScreenCompanion/issues/163)
 
 Local beta.19 combines the Linux capture and keyring recovery fixes. The combined build at `ebc84d1` passed both isolated installed Linux checks and both Windows startup checks with key-free profiles. All five delivered files passed copied-byte verification. [Beta.19 local handoff](VERIFICATION.md#beta19-local-handoff-2026-11-25)
 
