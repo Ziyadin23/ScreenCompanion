@@ -75,6 +75,11 @@ ASAR check with the preview files still on disk. The portable suite also checks
 the ASAR verifier with a production archive and two archives containing stray
 output.
 
+```sh
+# Check the packaged renderer's script and stylesheet references from desktop/.
+npx vitest run tests/packaging/windows-asar.test.ts
+```
+
 After `npm run package:win`, Windows CI runs `npm run package:zip`. It opens the
 ZIP, requires the versioned portable EXE and `README.txt` at the root, and
 compares their SHA-256 digests with the standalone EXE and the repository

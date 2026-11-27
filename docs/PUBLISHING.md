@@ -94,6 +94,8 @@ and only the three production directories under `out`. They also check that
 each entry point contains data. Validate dependency contents and matched
 control/optimized package sizes as part of qualification.
 
+[Packaged renderer script and stylesheet checks](../desktop/scripts/verify-windows-asar.mjs)
+
 ## Local beta handoff
 
 After beta application changes, build a new version and leave its verified EXE,
