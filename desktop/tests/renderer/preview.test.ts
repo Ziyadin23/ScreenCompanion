@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import { previewBridge } from '../../preview/bridge';
+import { PROVIDERS } from '../../src/contracts';
+import { defaultModels } from '../../src/contracts/defaults';
 
 describe('synthetic preview bridge', () => {
+  it.each(PROVIDERS)('opens Settings with the service selected in %s setup', async (provider) => {
+    const { api } = previewBridge('setup');
+    const apiKey = 'synthetic-setup-only';
+    await api.setup({ provider, apiKey });
+    expect((await api.getState()).surface).toBe('answer');
+    await api.command({ type: 'settings' });
+    const draft = await api.getSettingsDraft();
+    const models = defaultModels(provider);
+    expect(draft.values.Models).toEqual(models);
+    expect(draft.values.ModelPipelines).toEqual([{ Provider: provider, AnswerModel: models.AnswerModel, PipelineMode: 'Thorough' }]);
+    expect(PROVIDERS.filter(service => draft.keyPresence[service])).toEqual([provider]);
+    expect(JSON.stringify([draft, await api.getState()])).not.toContain(apiKey);
+  });
+
   it('rejects a stale Save and preserves the current preview draft', async () => {
     const { api } = previewBridge();
     const stale = await api.getSettingsDraft();
