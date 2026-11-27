@@ -11,7 +11,13 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
-Local beta.19 passed installed capture and keyring recovery on isolated
+Local beta.20 passed installed Linux shortcut help and the beta.19 to
+beta.20 RPM upgrade. Windows passed the scoped native, vault, UI and
+package checks. All five delivered files matched the verified build.
+[Beta.20 verification](#beta20-shortcut-help-candidate-2026-11-27) ·
+[Local handoff and hashes](#beta20-local-handoff)
+
+The earlier local beta.19 passed installed capture and keyring recovery on isolated
 Fedora 44 with Hyprland, plus key-free installed and portable startup on
 Windows 11 x64. All five delivered files matched the build.
 [Beta.19 local handoff and hashes](#beta19-local-handoff-2026-11-25)
@@ -46,7 +52,7 @@ Main's earlier beta.13 qualification checkpoint integrated through [PR #82](http
 | SC icon | The original beta.9 passed host 1,320/32, Windows native 54, vault 8/136 and UI 37/37, packaged branding and a bounded Edge recording. The website icon is published, and beta.9 was delivered locally. [Beta.9 evidence](#sc-icon-integration-2026-11-12) | The [source refresh](#sc-icon-source-refresh-2026-11-20) has local verification. Review, hosted checks, target qualification and versioned handoff remain open. [PR #56](https://github.com/Ziyadin23/ScreenCompanion/pull/56), [OpenSpec tasks](../openspec/changes/refresh-sc-icon-integration/tasks.md) |
 | Interface beta.8 | [Final candidate checks](#interface-beta8-verification-2026-11-12): host 1,320, Windows native 54/vault 8/136/UI 37/37; packaged previews, bounded Edge recording and local handoff. | Local unpublished source; broader recorder, installed Linux, fresh-machine and mixed-DPI qualification remain open. |
 | Windows beta.7 | The [2026-11-03 full run](#windows-full-ui-matrix-2026-11-03) passed 1,277 portable tests, 54 native checks, eight vault cases and all 37 UI cases in one run. | Packaged duplicate launches, fresh Windows 11 account/machine, mixed-DPI, recorder output and live answer quality have separate owners. |
-| Linux port | [Beta.7 source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests. Later follow-ups completed Settings-to-answer sizing and installed keyring recovery. | [Linux tasks 2.1 and 2.7](../openspec/changes/linux-platform-support/tasks.md#2-remaining-target-qualification-and-integration-readiness) remain open for physical monitor selection and final reconciliation. |
+| Linux port | [Beta.7 source-publication checks](#linux-source-publication-checks-2026-11-02) passed 1,301 portable tests. The [beta.20 checkpoint](#beta20-shortcut-help-candidate-2026-11-27) records the final scoped regressions and handoff. | [Task 2.1](../openspec/changes/linux-platform-support/tasks.md#21-installed-capture-checkpoint-2026-11-25) remains open for physical two-monitor selection. |
 | Published Windows beta.6 | [Packaged activation qualification](#packaged-beta6-activation-qualification-2026-11-05) passed six duplicate states, direct portable startup and ten rapid first-window closes. The [public beta.4 → beta.6 update](#public-github-installed-update-2026-11-03) passed 32 ordered checks and independent restoration postflight. [Earlier evidence](#beta6-extraction-guidance) retains failed attempts. | The historical activation stall remains unexplained. Fresh Windows 11 account/machine, mixed-DPI, recorder and live-quality gates remain separate; no beta.7 packaged result is implied. |
 
 The sections below are dated evidence, followed by support procedures and historical limits.
@@ -1014,7 +1020,7 @@ evidence.
 | --- | --- | --- |
 | L1 / 2.1 | The combined beta.19 RPM passed the real chooser on one isolated synthetic output. Both successful paths sent one frame. Cancel and injected frame failure retained answer and draft, sent no provider request and released the stream. [Capture run](#linux-portal-capture-and-cancellation-2026-11-25) | The #14 target operator needs two connected physical outputs and consent for a synthetic desktop test. Check each output's identity and pixel dimensions, Cancel, failure retention and stream cleanup. |
 | L2 / 2.2 | Combined beta.19 passed real keyring lock/unlock, unavailable-service recovery, dialog dismissal and unchanged vault readback. [Keyring run](#combined-beta19-rpm) | Merged in [PR #154](https://github.com/Ziyadin23/ScreenCompanion/pull/154). Recheck recovery if Setup or storage behavior changes. |
-| L3 / 2.3 | Combined beta.19 passed all seven Lua bindings, early activation, same-process relaunch with drafts and fallback controls. [Installed controls](#linux-desktop-controls-and-relaunch-2026-11-26) | Merged in [PR #159](https://github.com/Ziyadin23/ScreenCompanion/pull/159). [#163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) owns the missing action in the in-app help. The binding worked in beta.19. |
+| L3 / 2.3 | Combined beta.19 passed all seven Lua bindings, early activation, same-process relaunch with drafts and fallback controls. [Installed controls](#linux-desktop-controls-and-relaunch-2026-11-26) | [PR #159](https://github.com/Ziyadin23/ScreenCompanion/pull/159) merged the controls evidence. [PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164) closed the in-app help gap in #163. [Installed beta.20 help](#linux-shortcut-help-in-beta20-2026-11-27) |
 | L4 / 2.4 | The full beta.13 to beta.19 transaction passed with installed desktop launches, retained encrypted settings and owned-file cleanup. [RPM run](#linux-installed-rpm-upgrade-2026-11-26) | Merged in [PR #158](https://github.com/Ziyadin23/ScreenCompanion/pull/158). This is the full upgrade receipt for beta.19. |
 | L5 / 2.5 | Combined beta.19 passed 13 installed Basic CONNECT/TLS/cancellation/deadline cases and the separate PAC deadline. [Installed transport](#linux-installed-proxy-and-transport-qualification-2026-11-26) | Merged in [PR #162](https://github.com/Ziyadin23/ScreenCompanion/pull/162). The later fixture change affects portable verification. Repeat the installed proxy matrix if routing, transport or its runtime inputs change. |
 | L6 / 2.6 | The Linux correction at `8b8002f` and the Windows beta.17 Settings, resize, restart and Edge observations at `c7635e5` have their own receipts. [Linux correction](../openspec/changes/linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply), [Windows results](#beta17-windows-panel-sizing-2026-11-24) | Merged in [PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122). The earlier Windows installed resize and Edge output remain beta.17 evidence. |
@@ -1061,8 +1067,66 @@ The approved target scope covers the installed Linux RPM shortcut help,
 the Windows production verification and native/vault suites, two focused
 Windows Commands and shortcut UI cases, an exact Commands text comparison
 in the packaged Windows renderer, and key-free installed and portable
-startup. The [task 2.7 checkpoint](../openspec/changes/linux-platform-support/tasks.md#27-final-qualification-checkpoint-2026-11-27)
-tracks the outstanding receipts and copied-byte handoff.
+startup. The Windows lab ran four selected UI cases within this scope.
+The [task 2.7 checkpoint](../openspec/changes/linux-platform-support/tasks.md#27-final-qualification-checkpoint-2026-11-27)
+records the scope, results and remaining physical check.
+
+#### Beta.20 Windows verification
+
+The [hosted Windows job for PR #164](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/46050498799/job/140680512011)
+passed type checking, lint, production bundles and 1,337 portable tests
+with 56 Linux-only skips. Native compilation, nine DPAPI vault cases,
+the Windows installer and portable build, and ASAR and ZIP verification
+passed. The [merged product Windows job](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/46051658811/job/140684302333)
+also passed. Hosted checks cover compilation, vault interoperability
+and packaging.
+
+The first Windows lab `npm run verify` attempt exited 1 with 1,335
+passes, 56 Linux-only skips and two 10-second timeouts in the unchanged
+synthetic ledger tests at `tests/lab/execution.test.ts`.
+[#166](https://github.com/Ziyadin23/ScreenCompanion/issues/166) owns the
+test-only follow-up. Its fixture changes have no effect on the beta.20
+application, package or distributed README. On the original freeze,
+`npm test -- tests/lab/execution.test.ts --testTimeout=30000` passed all
+16 tests, exit 0. The full default-command pass is recorded by hosted
+Windows CI.
+
+The later packaging run on the same freeze exited 0.
+`npm run package:win` built the installer and portable EXE.
+`npm run package:zip` and both ZIP verifiers passed. The package check
+built the developer preview first and verified its exclusion from the
+production ASAR.
+
+On the frozen Windows build, `npm run test:windows` exited 0 with 54 native
+checks and nine vault cases, including 143 C# fixture checks. The per-user
+installer and portable EXE opened key-free Setup and exited normally on
+Cancel. The installed test uninstalled the package.
+
+`npm run test:ui` passed four selected cases with one worker, zero retries
+and zero skips. They covered native Ctrl+Enter focus and single submission,
+key-free global shortcuts from an unfocused panel, Settings navigation and
+fit, and hidden draft retention with Commands and capture-test guidance.
+The packaged Windows renderer displayed the exact six shortcut labels and
+recording notice on Settings → Commands. This was a synthetic renderer
+check. The full Windows UI and recorder matrices retain their earlier
+candidate results.
+
+#### Beta.20 local handoff
+
+The Linux RPM and four Windows files copied from the frozen beta.20 build
+matched their source sizes and SHA-256 digests. Readback with `sha256sum`,
+`rpm -K` and Python `zipfile` passed. The ZIP contained the matching
+portable EXE and distributed README, and both CRCs passed. The Windows
+lab's guest and host restoration checks passed. The local transfer
+preserved earlier files.
+
+| File | Bytes | SHA-256 |
+| --- | ---: | --- |
+| `SC-v0.5.0-beta.20-x86_64.rpm` | 95,878,893 | `2abb187b84a50bfb5ba4f71ec6bef555548d55f2916f3920d51a8749cf459202` |
+| `SC-v0.5.0-beta.20.exe` | 104,579,109 | `93688ef4d3aef5b46578d826f690ea906abe104cad895fd4542cf934dc79e0af` |
+| `SC-Setup-v0.5.0-beta.20.exe` | 115,175,822 | `e72bbeabc4c34fddc41494446293d61e70ac9808b49d13bfae852ea14f87297d` |
+| `SC-v0.5.0-beta.20-README.txt` | 14,908 | `60b735e6462b6a6575772649e2490dca2f58e2e3627938c9464d956ba98fa34f` |
+| `SC-v0.5.0-beta.20.zip` | 104,304,656 | `a387841fbe30e89a520da457d7ac7e36a966c99fe67f049dc28da7c7e83e3b2e` |
 
 #### Beta.19 to beta.20 installed RPM upgrade
 
@@ -1215,6 +1279,14 @@ keyring and a network namespace with only loopback. Both runs exited 0.
   screen-sharing chooser. Cancel restored the draft and made no provider
   request. A second launch restored the hidden window with the same process
   and draft. These runs made zero provider calls.
+
+The first unpacked and installed attempts reached the initial help and then
+timed out at the fixture's fixed-window resize precondition. The passing
+compact fixture used the window's native size on a scaled synthetic output.
+A supplemental installed `bash run.sh <worktree> bound compact-settings 4`
+run exited 0. The Keyboard shortcuts and Commands help wrapped and scrolled
+in a 320 × 225 logical-pixel viewport with 89 logical pixels of visible
+scrollable content. This supplemental run covered the two Settings surfaces.
 
 [Issue #163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) ·
 [PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)

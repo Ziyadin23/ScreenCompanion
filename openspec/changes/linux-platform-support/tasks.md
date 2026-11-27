@@ -4,9 +4,10 @@
 
 ## Current continuation — 2026-11-27
 
-Task 2.7 compares merged main `64cc206` with the delivered beta.19 at
-`ebc84d1`. Tasks 2.2–2.6 have merged evidence for their recorded scopes.
-Tasks 2.1 and 2.7 remain open. [Final qualification checkpoint](#27-final-qualification-checkpoint-2026-11-27)
+Task 2.7 reconciles the older beta.19 evidence and the verified beta.20 at
+`38d1e3e`. Product PR #164 merged first. The scoped Linux and Windows
+checks and local handoff passed. PR #165 awaits final evidence review.
+Task 2.1 remains open for physical capture. [Final qualification checkpoint](#27-final-qualification-checkpoint-2026-11-27)
 
 ## Earlier continuation — 2026-11-26
 
@@ -666,21 +667,29 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   distributed README inputs match the freeze at
   `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. Both
   [installed help runs](../../../docs/VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
-  passed. The Windows lab operator owns the
-  Windows `npm run verify`, `npm run test:windows`, two focused Commands
-  and shortcut UI cases, exact packaged Windows Commands text, the
-  key-free installer and portable startup checks and cleanup. The
-  coordinator tracks copied-byte verification and product integration.
+  passed. A supplemental 320 × 225 logical-pixel run passed on both
+  Settings surfaces.
 - The [beta.19 to beta.20 RPM upgrade](../../../docs/VERIFICATION.md#beta19-to-beta20-installed-rpm-upgrade)
   passed on Fedora 44 with the frozen beta.20 package. The full
   `timeout 180s bash run.sh` fixture exited 0. Package verification,
   both installed desktop launches, encrypted settings readback and
   owned-file cleanup passed. The vault and four unrelated files kept
   their original hashes.
+- The [beta.20 Windows verification](../../../docs/VERIFICATION.md#beta20-windows-verification)
+  records two hosted full verify passes with 1,337 tests and 56 Linux-only
+  skips each. The first local full run reached two synthetic test deadlines.
+  The bounded retry passed all 16 ledger tests. The local native suite passed
+  54 checks and nine vault cases, with 143 C# fixture checks. Four focused
+  UI cases passed. Exact Windows Commands text matched in the packaged
+  renderer. Windows packaging, per-user installer and portable startup,
+  uninstall and lab restoration passed.
+- The [local handoff](../../../docs/VERIFICATION.md#beta20-local-handoff)
+  covers the exact frozen RPM and four Windows files. All five transferred
+  files, the RPM digests and both ZIP entries passed readback.
 - This evidence branch includes merged main `27c31af`. Its diff against
   the freeze is empty for `desktop/`, the root README, assets, licenses
   and CI. The branch retains the historical beta.19 receipts and reuses
-  the frozen beta.20 build. Before independent final review, attach the
-  Windows results and copied-byte handoff. Source integration has passed
-  for the product. No new release was published. Tasks 2.1 and 2.7 remain
-  open.
+  the frozen beta.20 build. Product source integration is complete. No
+  new release was published. The maintainer owns final evidence review
+  of [PR #165](https://github.com/Ziyadin23/ScreenCompanion/pull/165)
+  and task 2.7 acceptance. Task 2.1 stays with #14.
