@@ -2,7 +2,14 @@
 
 [Design](design.md) maps the accepted Linux requirements to the four specs and identifies the existing implementation. Checked tasks below import inspected implementation/evidence; they do not claim fresh runtime verification during this workflow migration. The [Linux verification record](../../../docs/VERIFICATION.md#linux-port-status) owns the recorded outcomes and limits.
 
-## Current continuation — 2026-11-26
+## Current continuation — 2026-11-27
+
+Task 2.7 is complete at the verified beta.20 freeze `38d1e3e`. The scoped
+Linux and Windows checks and local handoff passed. The maintainer accepted
+the results. PR #165 records the closeout. Task 2.1 remains open for physical
+capture. [Final qualification checkpoint](#27-final-qualification-checkpoint-2026-11-27)
+
+## Earlier continuation — 2026-11-26
 
 Task 2.3 passed installed desktop controls and relaunch on beta.19.
 Task 2.4 passed the full installed beta.13 to beta.19 RPM upgrade.
@@ -43,7 +50,7 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
 - [x] 2.4 Complete [supported RPM install/upgrade (#17)](https://github.com/Ziyadin23/ScreenCompanion/issues/17): verify full installed desktop operation and version-to-version upgrade with dependencies, settings and owned launchers preserved; retain fixture/container limits and document any package corrections with their checks.
 - [x] 2.5 Complete [real proxy/transport qualification (#18)](https://github.com/Ziyadin23/ScreenCompanion/issues/18): verify authenticated proxy behavior, certificate/redirect/interception handling, cancellation and both deadlines using controlled endpoints and synthetic credentials; record relevant fixture and guidance updates with any fix.
 - [x] 2.6 Resolve [Settings-to-answer sizing (#19)](https://github.com/Ziyadin23/ScreenCompanion/issues/19): reproduce the compositor outcome, verify a fix or explicitly accepted limitation, and check usable answer/input fit and remembered sizing with corresponding tests/guidance.
-- [ ] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
+- [x] 2.7 Complete [final qualification readiness (#20)](https://github.com/Ziyadin23/ScreenCompanion/issues/20): reconcile all open outcomes against the final merged source and current shared-main baseline; run applicable portable/Windows/native/vault/UI/package checks, reusing only candidate-matched recorded results, record exact commands/candidate/limits, satisfy the local beta handoff if application bytes changed, and confirm the public diff contains no private state. Older-snapshot passes do not establish final-source coverage.
 
 ### 2.1 Installed capture checkpoint (2026-11-25)
 
@@ -86,8 +93,8 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   preserved the exact active draft.
 - The workflow self-test, documentation links, strict OpenSpec validation
   and whitespace checks exited 0. OpenSpec recorded task 2.3 complete.
-- This change updates verification, status and user guidance. The
-  maintainer owns PR review and integration. Task 2.4 records its own
+- [PR #159](https://github.com/Ziyadin23/ScreenCompanion/pull/159) merged
+  the reviewed verification, status and user guidance. Task 2.4 records its own
   installed upgrade evidence. Task 2.7 retains final-source reconciliation.
 
 ### 2.4 Installed RPM upgrade checkpoint (2026-11-26)
@@ -102,9 +109,9 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   named launcher starts passed. The exact encrypted synthetic key and saved
   text size survived the version change. The uninstall removed SC's integration
   and kept the unrelated files and vault byte-identical.
-- The branch changes the task and verification documentation. Application and
-  package bytes match the existing local handoff. The next action for #17 is
-  review of the evidence; the broader Linux change remains active.
+- [PR #158](https://github.com/Ziyadin23/ScreenCompanion/pull/158) merged
+  the task and verification documentation. The existing local handoff
+  matches the tested package. The broader Linux change remains active.
 
 ### 2.5 Installed proxy and transport checkpoint (2026-11-26)
 
@@ -122,9 +129,10 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   existing application and package. The earlier source and portable checks
   remain below.
 - The workflow self-test and documentation checks, strict OpenSpec validation
-  and `git diff --check` passed. The issue-linked PR is ready for independent
-  review. Task 2.7 owns final reconciliation against merged main. Task 2.1
-  still owns physical monitor selection. The RPM remains a local handoff.
+  and `git diff --check` passed. [PR #162](https://github.com/Ziyadin23/ScreenCompanion/pull/162)
+  merged after independent evidence review. Task 2.7 owns final reconciliation
+  against merged main. Task 2.1 still owns physical monitor selection.
+  The RPM remains a local handoff.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
@@ -621,5 +629,70 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   exit 0. All three recovery dialogs closed normally, all six vault comparisons
   matched, and the two failed Setup saves left no vault. Independent source
   review passed. The coordinator confirmed the [local delivery](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
-  after all five destination files matched the qualified build. PR #154
-  carries the task 2.2 checkpoint for final review and integration.
+  after all five destination files matched the qualified build.
+  [PR #154](https://github.com/Ziyadin23/ScreenCompanion/pull/154) merged the
+  task 2.2 checkpoint.
+
+### 2.7 Final qualification checkpoint (2026-11-27)
+
+- [Issue #20](https://github.com/Ziyadin23/ScreenCompanion/issues/20) owns
+  this evidence-only continuation from `64cc206`. The
+  [baseline comparison and platform results](../../../docs/VERIFICATION.md#linux-final-qualification-baseline-2026-11-27)
+  reconcile L1–L6, hosted Windows CI and the private beta.19 package receipt.
+  The earlier beta.19 artifacts came from `ebc84d1`. The final diff against
+  main changes only status, publishing, verification and this task file.
+  It contains no private lab paths, profiles, recordings or credentials.
+- `npm --prefix desktop ci` and
+  `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` exited 0. All 1,390
+  portable tests in 39 files passed. The five-file `sha256sum` readback,
+  `rpm -K` and Python `zipfile` checks of both ZIP entries exited 0. The
+  RPM ASAR extracted with `rpm2cpio` and `cpio` contained the same nine
+  production output files as the fresh build, byte for byte.
+- The [documented Bubblewrap geometry command](../../../tests/README.md#hyprland-panel-geometry)
+  ran `node --test desktop/tests/linux/panel-settings.mjs` with an isolated
+  D-Bus session and one synthetic Wayland output. It passed all 30 scenarios
+  and the parent test, exit 0, zero skips. It used the verified Fedora build.
+- Workflow self-test, documentation links, strict OpenSpec validation and
+  `git diff --check` exited 0. At the beta.19 baseline, 11 of 13 tasks were
+  complete.
+- L1 disposition for #20: beta.19 passed installed consent, capture and
+  cancellation on one synthetic output. Beta.20 repeated the chooser
+  and Cancel path for the changed shortcut. The maintainer confirmed
+  that a second physical display is unavailable. Keep task 2.1 open.
+  The [#14 target operator](https://github.com/Ziyadin23/ScreenCompanion/issues/14#remaining-physical-test)
+  owns the separate labeled-output procedure for consent, actual pixel
+  dimensions, retention, request counts and stream cleanup when two
+  physical displays and consent are available.
+- The [beta.20 product PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
+  merged first at `27c31af` and closed #163. Application, package and
+  distributed README inputs match the freeze at
+  `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. Both
+  [installed help runs](../../../docs/VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
+  passed. A supplemental 320 × 225 logical-pixel run passed on both
+  Settings surfaces.
+- The [beta.19 to beta.20 RPM upgrade](../../../docs/VERIFICATION.md#beta19-to-beta20-installed-rpm-upgrade)
+  passed on Fedora 44 with the frozen beta.20 package. The full
+  `timeout 180s bash run.sh` fixture exited 0. Package verification,
+  both installed desktop launches, encrypted settings readback and
+  owned-file cleanup passed. The vault and four unrelated files kept
+  their original hashes.
+- The [beta.20 Windows verification](../../../docs/VERIFICATION.md#beta20-windows-verification)
+  records two hosted full verify passes with 1,337 tests and 56 Linux-only
+  skips each. The first local full run reached two synthetic test deadlines.
+  The bounded retry passed all 16 ledger tests. The local native suite passed
+  54 checks and nine vault cases, with 143 C# fixture checks. Four focused
+  UI cases passed. Exact Windows Commands text matched in the packaged
+  renderer. Windows packaging, per-user installer and portable startup,
+  uninstall and lab restoration passed.
+- The [local handoff](../../../docs/VERIFICATION.md#beta20-local-handoff)
+  covers the exact frozen RPM and four Windows files. All five transferred
+  files, the RPM digests and both ZIP entries passed readback.
+- This evidence branch includes main `5e6fb3e`. The only desktop change
+  since the freeze is the synthetic ledger test budget from
+  [PR #167](https://github.com/Ziyadin23/ScreenCompanion/pull/167) for #166.
+  Application, packaging and distributed README inputs match the verified
+  beta.20. The maintainer independently accepted the scoped results and
+  five delivered files. The release decision was a local beta.20 handoff.
+  [PR #165](https://github.com/Ziyadin23/ScreenCompanion/pull/165) closes #20
+  on merge. OpenSpec records 12 of 13 tasks complete. Task 2.1 stays with
+  #14 for physical two-monitor qualification.

@@ -7,6 +7,10 @@
 Beta.20 updates the in-app Linux help for Hyprland bindings. The installed
 RPM passed focused help and binding checks on Fedora 44. [Beta.20 Linux evidence](VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
 
+The latest local beta is **0.5.0-beta.20**, built from `38d1e3e`.
+The Linux RPM and all four Windows files passed copied-byte verification.
+[Beta.20 local handoff and hashes](VERIFICATION.md#beta20-local-handoff)
+
 The previous local beta.19 was built from
 `ebc84d1cad664c18ea496dec5cda9375572d9531`. The four Windows files and Linux RPM
 passed copied-byte verification. Windows installed and portable startup passed
