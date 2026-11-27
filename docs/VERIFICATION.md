@@ -1087,6 +1087,34 @@ identity and captured pixel dimensions. Check Cancel and a capture failure
 with the same layout, including draft and answer retention, zero provider
 calls and stream cleanup. [Installed capture issue #14](https://github.com/Ziyadin23/ScreenCompanion/issues/14)
 
+## Linux shortcut help in beta.20 (2026-11-27)
+
+The Linux RPM was built from `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`.
+`npm run verify` passed 1,393 tests in 39 files, type checking, lint and the
+production build. The three new help tests failed on beta.19 and passed on
+beta.20. The RPM's internal digests passed. It installed into a disposable RPM
+root with scriptlets and dependency resolution disabled for this focused test.
+Its application archive matched the build output.
+
+Two runs of the installed executable on Fedora 44 x86-64 used nested Hyprland
+0.57.2 and headless KWin 6.8.3. Each used an isolated profile, disposable
+keyring and a network namespace with only loopback. Both runs exited 0.
+
+- Initial commands after Setup showed the complete help in a 340 × 160
+  logical-pixel panel. Both Settings views showed the same text in a
+  512 × 360 logical-pixel viewport on a scaled display. The help wrapped and
+  scrolled to the recording notice, and the Commands page retained its
+  capture test button.
+- A real Hyprland `input-with-screenshot` binding opened Question from the
+  answer. The `input` binding kept focus and the draft without opening the
+  chooser. With a focused draft, `input-with-screenshot` opened the real
+  screen-sharing chooser. Cancel restored the draft and made no provider
+  request. A second launch restored the hidden window with the same process
+  and draft. These runs made zero provider calls.
+
+[Issue #163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) ·
+[PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
+
 ## Linux desktop controls and relaunch (2026-11-26)
 
 The transferred beta.19 RPM from `ebc84d1cad664c18ea496dec5cda9375572d9531`
