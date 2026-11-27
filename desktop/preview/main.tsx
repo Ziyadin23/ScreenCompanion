@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Theme } from '@astryxdesign/core/theme';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -29,7 +30,13 @@ createRoot(document.getElementById('root')!).render(
           <Button label="Setup preview" size="sm" variant="ghost" onClick={() => bridge.open('setup')}>Setup</Button>
         </HStack>
       </HStack>
-      <VStack className="preview-frame"><App /></VStack>
+      <PreviewFrame />
     </VStack>
   </Theme>
 );
+
+function PreviewFrame() {
+  const active = useSyncExternalStore(bridge.api.subscribe, bridge.getSurface);
+  const dialog = active === 'setup' || active === 'settings';
+  return <VStack className="preview-frame" role={dialog ? 'main' : undefined}><App /></VStack>;
+}

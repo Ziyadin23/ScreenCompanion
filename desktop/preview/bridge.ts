@@ -71,5 +71,5 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     onScroll: () => () => {},
     onInputAction: () => () => {}
   };
-  return { api, open: (next: Surface) => emit({ surface: next, visible: true, settingsDirty: false }) };
+  return { api, getSurface: () => state.surface, open: (next: Surface) => emit({ surface: next, visible: true, settingsDirty: false }) };
 }
