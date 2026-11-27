@@ -12,7 +12,11 @@ import './preview.css';
 import { previewBridge } from './bridge';
 
 const params = new URLSearchParams(location.search);
-const bridge = previewBridge(params.get('surface') === 'setup' ? 'setup' : 'settings', params.get('platform') === 'linux' ? 'linux' : 'windows');
+const surface = params.get('surface');
+const bridge = previewBridge(
+  surface === 'setup' || surface === 'answer' || surface === 'input' ? surface : 'settings',
+  params.get('platform') === 'linux' ? 'linux' : 'windows'
+);
 window.sc = bridge.api;
 
 createRoot(document.getElementById('root')!).render(
