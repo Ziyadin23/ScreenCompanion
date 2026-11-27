@@ -10,6 +10,9 @@ import { measureRun } from './measure';
 import { phaseRuns, type CampaignIdentity } from './campaign';
 import { MetadataResults } from './results';
 
+// Full on-disk campaign runs can exceed the 10s default timeout on slower machines.
+const FULL_CAMPAIGN_TEST_TIMEOUT_MS = 30_000;
+
 describe('phase/candidate scoped preflight and qualification gates (synthetic transport only)', () => {
   let directory: string, registry: string;
   const opened: CampaignLedger[] = [];
@@ -28,7 +31,7 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
           cropper: new FixtureCropper(), requiredVisuals: FAKE_REQUIRED_VISUALS, jpeg: Buffer.from('synthetic'), apiKey: 'synthetic-only', signal });
       }, async record() { if (options.writeFailure) throw new Error('Synthetic result write failure.'); } });
   }
-  it.each([FAKE_CANDIDATE, 'b'.repeat(64)])('always runs current33/64 after initial2+diagnostic11 with final candidate %s', async candidate => {
+  it.each([FAKE_CANDIDATE, 'b'.repeat(64)])('always runs current33/64 after initial2+diagnostic11 with final candidate %s', { timeout: FULL_CAMPAIGN_TEST_TIMEOUT_MS }, async candidate => {
     let ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'initial-preflight' }); await perform(ledger, phaseRuns('initial-preflight')); expect(ledger.count).toBe(2); await ledger.close();
     ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'diagnostic' }); await perform(ledger, phaseRuns('diagnostic')); expect(ledger.count).toBe(13); await ledger.close();
     await freeze(candidate); ledger = await open({ candidate, phase: 'qualification' });
@@ -139,7 +142,7 @@ describe('phase/candidate scoped preflight and qualification gates (synthetic tr
     await expect(perform(ledger, [runs[0]!], { repeat: phase === 'reserve', calls })).rejects.toMatchObject({ code: 'unresolved' });
     expect(calls).toEqual([]); expect(ledger.count).toBe(1); expect(ledger.remaining).toBe(119);
   });
-  it('isolates diagnostic orphans from an otherwise complete qualification', async () => {
+  it('isolates diagnostic orphans from an otherwise complete qualification', { timeout: FULL_CAMPAIGN_TEST_TIMEOUT_MS }, async () => {
     const run = phaseRuns('diagnostic')[0]!, calls: string[] = [];
     let ledger = await open({ candidate: FAKE_CANDIDATE, phase: 'diagnostic' });
     await ledger.reserve(run.id, 1, 'Answer');
