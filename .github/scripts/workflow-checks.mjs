@@ -6,13 +6,21 @@ import { dirname, extname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const git = (args, options) => execFileSync('git', args, { ...options, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+const knownDocuments = new Set([
+  'README.md', 'AGENTS.md', 'CODING_STANDARDS.md', 'CONTRIBUTING.md', 'DESIGN.md', 'PRODUCT.md', 'SECURITY.md',
+  'assets/brand/sboku/README.md', 'desktop/AGENTS.md', 'desktop/GEMINI.md', 'desktop/REWRITE.md',
+  '.impeccable/surfaces/desktop-src-renderer-app-tsx.md',
+  'desktop/native/VERIFICATION.md', 'tests/README.md', 'openspec/config.yaml', 'openspec/changes/archive/.gitkeep',
+  'openspec/specs/.gitkeep', 'openspec/changes/add-local-langgraph-workflow/protection-proposal.json',
+]);
 const documentationOnly = files => files.length > 0 && files.every(file =>
-  /^(README|AGENTS|CODING_STANDARDS)\.md$/.test(file) ||
-  /^docs\/.*\.md$/.test(file) || file === 'tests/README.md' || file === 'desktop/REWRITE.md' ||
+  knownDocuments.has(file) || /^docs\/.*\.md$/.test(file) ||
   /^desktop\/tests\/(?:.*\/)?README\.md$/.test(file) ||
-  /^openspec\//.test(file) ||
+  /^openspec\/(changes|specs)\/.+\.md$/.test(file) ||
+  /^openspec\/changes\/(?:archive\/)?[^/]+\/\.openspec\.yaml$/.test(file) ||
   /^\.(agents|claude)\/skills\/.*\.md$/.test(file) ||
   /^\.opencode\/.*\.md$/.test(file));
+const checkMarkdown = file => file.endsWith('.md') && (!file.startsWith('.') || documentationOnly([file]));
 
 function needsApplicationChecks(base, head, gitOptions) {
   if (!base || /^0+$/.test(base)) return true;
@@ -168,13 +176,24 @@ async function selftest() {
   for (const unusable of [undefined, '', '   ']) assert.equal(featurePushBranch({ ...first, subject: unusable }), null);
 
   assert.equal(documentationOnly(['README.md', 'docs/history/a.md', 'openspec/changes/a/tasks.md']), true);
+  assert.equal(documentationOnly(['CONTRIBUTING.md', 'SECURITY.md', 'DESIGN.md', 'PRODUCT.md',
+    'desktop/AGENTS.md', 'desktop/GEMINI.md', 'desktop/native/VERIFICATION.md', 'assets/brand/sboku/README.md',
+    '.impeccable/surfaces/desktop-src-renderer-app-tsx.md']), true);
+  assert.equal(documentationOnly(['openspec/config.yaml', 'openspec/changes/work/.openspec.yaml',
+    'openspec/changes/archive/dated-work/.openspec.yaml', 'openspec/specs/work/spec.md',
+    'openspec/changes/add-local-langgraph-workflow/protection-proposal.json',
+    'openspec/changes/archive/.gitkeep', 'openspec/specs/.gitkeep']), true);
   for (const file of ['desktop/src/main/index.ts', 'desktop/package-lock.json', '.github/workflows/desktop.yml',
     'tools/agent-workflow/src/cli.ts', 'tools/agent-workflow/package-lock.json',
     'docs/retro/reproduce.cjs', 'desktop/tests/fixtures/input.json', 'desktop/tests/fixtures/input.md',
-    'unknown', 'README.md\nsource.ts']) {
+    '.impeccable/design.json', 'openspec/changes/work/report.mjs', 'openspec/changes/work/example.json', 'openspec/unknown.yaml',
+    'unknown', 'CONTRIBUTING.md.ts', 'README.md\nsource.ts']) {
     assert.equal(documentationOnly(['docs/a.md', file]), false, file);
   }
   assert.equal(documentationOnly([]), false);
+  assert.equal(checkMarkdown('.impeccable/surfaces/desktop-src-renderer-app-tsx.md'), true);
+  assert.equal(checkMarkdown('.agents/skills/sample/SKILL.md'), true);
+  assert.equal(checkMarkdown('.private/notes.md'), false);
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'sc-docs-check-')));
   try {
     writeFileSync(join(root, 'source.md'), '# Source\n\n[ok](<target file.md#repeat-1>)\n\n```md\n[example](absent.md)\n```\n');
@@ -233,7 +252,7 @@ switch (process.argv[2]) {
   }
   case 'docs': {
     const files = git(['ls-files', '--cached', '--others', '--exclude-standard', '-z']).split('\0')
-      .filter(file => file.endsWith('.md') && !file.startsWith('.') && existsSync(file));
+      .filter(file => checkMarkdown(file) && existsSync(file));
     const { errors, links } = checkDocuments(process.cwd(), files);
     if (errors.length) {
       console.error(errors.join('\n'));
