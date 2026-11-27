@@ -1084,9 +1084,12 @@ and packaging.
 The first Windows lab `npm run verify` attempt exited 1 with 1,335
 passes, 56 Linux-only skips and two 10-second timeouts in the unchanged
 synthetic ledger tests at `tests/lab/execution.test.ts`.
-[#166](https://github.com/Ziyadin23/ScreenCompanion/issues/166) owns the
-test-only follow-up. Its fixture changes have no effect on the beta.20
-application, package or distributed README. On the original freeze,
+[PR #167](https://github.com/Ziyadin23/ScreenCompanion/pull/167) merged
+at `5e6fb3e` and closed [#166](https://github.com/Ziyadin23/ScreenCompanion/issues/166).
+It raises the deadline on the two test definitions and leaves the
+beta.20 application, package and distributed README inputs unchanged.
+Its [hosted Windows job](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/46053086931/job/140689042580)
+passed the default verification command. On the original freeze,
 `npm test -- tests/lab/execution.test.ts --testTimeout=30000` passed all
 16 tests, exit 0. The full default-command pass is recorded by hosted
 Windows CI.
@@ -1118,7 +1121,7 @@ matched their source sizes and SHA-256 digests. Readback with `sha256sum`,
 `rpm -K` and Python `zipfile` passed. The ZIP contained the matching
 portable EXE and distributed README, and both CRCs passed. The Windows
 lab's guest and host restoration checks passed. The local transfer
-preserved earlier files.
+preserved earlier files. The release decision was a local beta.20 handoff.
 
 | File | Bytes | SHA-256 |
 | --- | ---: | --- |
