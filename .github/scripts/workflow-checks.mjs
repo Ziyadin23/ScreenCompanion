@@ -112,6 +112,13 @@ function anchors(markdown) {
 
 function checkDocuments(root, files) {
   const errors = [];
+  const headingsByFile = new Map();
+  function hasAnchor(target, fragment) {
+    if (!headingsByFile.has(target)) {
+      headingsByFile.set(target, anchors(readFileSync(target, 'utf8')));
+    }
+    return headingsByFile.get(target).has(fragment);
+  }
   let links = 0;
   for (const file of files) {
     const fullPath = resolve(root, file);
@@ -134,7 +141,7 @@ function checkDocuments(root, files) {
       const target = pathPart ? resolve(dirname(fullPath), pathPart) : fullPath;
       if (!existsSync(target)) {
         errors.push(`${file}: missing target ${destination}`);
-      } else if (fragment && extname(target) === '.md' && !anchors(readFileSync(target, 'utf8')).has(fragment)) {
+      } else if (fragment && extname(target) === '.md' && !hasAnchor(target, fragment)) {
         errors.push(`${file}: missing anchor ${destination}`);
       }
     }
