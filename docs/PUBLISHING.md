@@ -2,9 +2,12 @@
 
 ## Source and release status
 
-`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.19**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
+`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.20**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
-The current local beta.19 was built from
+Beta.20 updates the in-app Linux help for Hyprland bindings. The installed
+RPM passed focused help and binding checks on Fedora 44. [Beta.20 Linux evidence](VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
+
+The previous local beta.19 was built from
 `ebc84d1cad664c18ea496dec5cda9375572d9531`. The four Windows files and Linux RPM
 passed copied-byte verification. Windows installed and portable startup passed
 with key-free profiles. The Linux RPM passed isolated capture and keyring

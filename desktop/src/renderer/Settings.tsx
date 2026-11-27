@@ -11,6 +11,7 @@ import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } f
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
 import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
+import { LINUX_SHORTCUT_HELP } from '../contracts/linux-actions';
 import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
@@ -348,7 +349,8 @@ export function Settings({ state }: { state: AppState }) {
         }} />)}
     </VStack>
     <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
-      <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading><p className="hint">{PAGE_HINTS[page]}</p></VStack>
+      <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading>
+        {(state.platform !== 'linux' || page !== 'Commands') && <p className="hint">{PAGE_HINTS[page]}</p>}</VStack>
       {(!draft || showRetry) && <VStack className="settings-loading"><p role="status">{loadStatus === 'failed' ? 'Settings unavailable.' : 'Loading settings…'}</p>
         {showRetry && <Button ref={retryButton} label="Try loading again" type="button" isLoading={loadStatus === 'retrying'} onClick={() => {
           setLoadStatus('retrying'); setLoadAttempt((value) => value + 1);
@@ -371,7 +373,7 @@ export function Settings({ state }: { state: AppState }) {
             event.preventDefault(); if (!blocked) { stopRecording(); setShortcutsOpen((value) => !value); }
           }}>Keyboard shortcuts</summary>
           <VStack className="advanced-content" hidden={!shortcutsOpen}>
-          {state.platform === 'linux' ? <p className="hint">Configure Hyprland bindings to run SC with --action=capture, input, settings, visibility, test or exit. If the tray is unavailable, reopening SC restores the window.</p> : <>
+          {state.platform === 'linux' ? <pre className="commands-text">{LINUX_SHORTCUT_HELP}</pre> : <>
           <p className="hint" id="shortcut-help">Click a field, then press a key or combination. Click elsewhere to stop. Single keys may interrupt typing in other apps. Visibility and exit stay active while recording.</p>
           <VStack className="shortcut-fields">
             {SHORTCUT_FIELDS.map(({ field, label }) => <VStack className="shortcut-row" key={field}>
@@ -474,7 +476,7 @@ export function Settings({ state }: { state: AppState }) {
           </details>
           <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`} The pipeline is saved per answer model; text-only sends skip screen reading.</p>
         </>}
-        {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? 'Use the window controls. Hyprland bindings can launch SC with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(state.shortcuts)}</pre>
+        {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? LINUX_SHORTCUT_HELP : commandsText(state.shortcuts)}</pre>
           <Button label="Open capture test" type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</Button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}

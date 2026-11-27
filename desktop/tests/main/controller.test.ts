@@ -37,6 +37,19 @@ describe('production lifecycle with injected native boundaries', () => {
     await f.controller.command({ type: 'settings' }); await f.controller.saveSettings(f.controller.getSettingsDraft());
     expect(f.save).toHaveBeenCalledTimes(1); expect(f.save.mock.calls[0]![0].CommandsShown).toBe(true);
   });
+  it('shows Linux shortcut help when commands have never been shown', async () => {
+    const f = fixture({ ...defaultSettings('synthetic-key'), CommandsShown: false }, 'Thorough', 'linux');
+    await f.controller.initialize();
+    const state = f.controller.getState();
+    expect(state).toMatchObject({ visible: true, surface: 'answer' });
+    const actions = [...state.answer.matchAll(/^--action=([\w-]+) /gm)].map(match => match[1]).sort();
+    expect(actions).toEqual(['capture', 'exit', 'input', 'input-with-screenshot', 'settings', 'test', 'visibility']);
+    expect(state.answer).toMatch(/--action=input — Open or focus Question\./);
+    expect(state.answer).toMatch(/--action=input-with-screenshot — Open Question, or send .* with a screenshot if the question field has focus\./);
+    expect(state.answer).toContain('Enter sends text only.');
+    expect(state.answer).toContain('Reopen SC to restore a hidden window.');
+    expect(state.answer).toContain('SC windows can appear in recordings.');
+  });
   it('keeps generic Linux input opening separate from the explicit screenshot shortcut action', async () => {
     const f = fixture(undefined, 'Thorough', 'linux'); await f.controller.initialize(); f.host.isFocused.mockReturnValue(true);
     f.controller.onAction('input'); expect(f.host.inputAction).toHaveBeenLastCalledWith(false);

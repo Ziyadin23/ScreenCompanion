@@ -6,6 +6,7 @@ import { applyModelEdits, screenModelError } from '../contracts/model-selection'
 import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../contracts/model-pipelines';
 import { commandsText, SHORTCUT_FIELDS, shortcutsByAction } from '../contracts/shortcut-display';
+import { LINUX_SHORTCUT_HELP } from '../contracts/linux-actions';
 import { ShortcutRestoreError } from '../platform/shortcuts';
 import { PipelineFailure } from '../pipeline/trace';
 import { AppError, type Diagnostics } from './diagnostics';
@@ -143,7 +144,8 @@ export class ApplicationController {
     this.state.appearance = { ...this.settings.Appearance }; this.state.shortcuts = shortcutsByAction(this.settings);
     if (!this.settings.CommandsShown || showCommands) {
       this.settings.CommandsShown = true;
-      this.state.answer = this.state.platform === 'linux' ? 'Use the window controls to capture or type a question. Configure Hyprland shortcuts with --action=capture, input, settings, visibility, test or exit. Reopen SC to restore a hidden window. SC windows can appear in recordings.' : commandsText(this.state.shortcuts); this.state.visible = true;
+      this.state.answer = this.state.platform === 'linux' ? LINUX_SHORTCUT_HELP : commandsText(this.state.shortcuts);
+      this.state.visible = true;
     }
     if (this.state.platform === 'linux' && !this.state.visible) { this.state.visible = true; this.state.surface = 'input'; }
     this.deps.diagnostics.event('READY');

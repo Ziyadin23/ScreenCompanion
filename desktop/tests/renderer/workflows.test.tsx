@@ -1621,6 +1621,22 @@ describe('settings drafts and protected controls', () => {
       expect(help).not.toContain(shortcut);
     }
   });
+  it.each(['Keyboard shortcuts', 'Commands'])('shows all Linux actions and notices in %s', async surface => {
+    fixture({ platform: 'linux' }); render(<App />); await screen.findByTestId('answer-text');
+    await openSettings();
+    if (surface === 'Keyboard shortcuts') disclose(surface);
+    else tab(surface);
+
+    const help = screen.getByText(/--action=capture/).textContent!;
+    const actions = [...help.matchAll(/^--action=([\w-]+) /gm)].map(match => match[1]).sort();
+    expect(actions).toEqual(['capture', 'exit', 'input', 'input-with-screenshot', 'settings', 'test', 'visibility']);
+    expect(help).toMatch(/--action=input — Open or focus Question\./);
+    expect(help).toMatch(/--action=input-with-screenshot — Open Question, or send .* with a screenshot if the question field has focus\./);
+    expect(help).toContain('Enter sends text only.');
+    expect(help).toContain('Reopen SC to restore a hidden window.');
+    expect(help).toContain('SC windows can appear in recordings.');
+    expect(screen.queryByText(/Change them in Answer & shortcuts/)).toBeNull();
+  });
   it('records six shortcuts, rejects duplicates and F12, notifies native host and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();
     disclose('Keyboard shortcuts');
