@@ -653,9 +653,14 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   and the parent test, exit 0, zero skips. It used the verified Fedora build.
 - Workflow self-test, documentation links, strict OpenSpec validation and
   `git diff --check` exited 0. The apply state remains 11 of 13 tasks complete.
-- The #14 target operator owns the physical two-output gate under 2.1. This
-  host has one connected physical display. The test needs a second connected
-  output and user consent for capture on a synthetic desktop.
+- L1 disposition for #20: beta.19 passed installed consent, capture and
+  cancellation on one synthetic output. Beta.20 repeated the chooser
+  and Cancel path for the changed shortcut. The maintainer confirmed
+  that a second physical display is unavailable. Keep task 2.1 open.
+  The [#14 target operator](https://github.com/Ziyadin23/ScreenCompanion/issues/14#remaining-physical-test)
+  owns the separate labeled-output procedure for consent, actual pixel
+  dimensions, retention, request counts and stream cleanup when two
+  physical displays and consent are available.
 - The [beta.20 product PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
   freezes application, package and distributed README inputs at
   `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. The #163 operator owns
@@ -664,6 +669,12 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   and shortcut UI cases, exact packaged Windows Commands text, the
   key-free installer and portable startup checks and cleanup. The
   coordinator tracks copied-byte verification and product integration.
+- The [beta.19 to beta.20 RPM upgrade](../../../docs/VERIFICATION.md#beta19-to-beta20-installed-rpm-upgrade)
+  passed on Fedora 44 with the frozen beta.20 package. The full
+  `timeout 180s bash run.sh` fixture exited 0. Package verification,
+  both installed desktop launches, encrypted settings readback and
+  owned-file cleanup passed. The vault and four unrelated files kept
+  their original hashes.
 - Integrate the reviewed product PR first. Update this evidence PR against
   that merged source, preserve the historical beta.19 receipts and attach
   the completed beta.20 checks. Compare the final application, packaging and

@@ -1049,6 +1049,10 @@ freezes the beta.20 application, packaging inputs and distributed README at
 first-run answer and two Settings surfaces share the action list. Three
 new tests failed on beta.19 and passed on beta.20. Fedora source verification
 passed 1,393 tests in 39 files, type checking, lint and production builds.
+The freeze retains the portal capture, storage, proxy, panel geometry
+and native Windows implementation files from `64cc206`. The shared
+controller and Settings bundle changed, so the Windows target scope
+includes the affected help surfaces as well as native and package checks.
 
 The approved target scope covers the installed Linux RPM shortcut help,
 the Windows production verification and native/vault suites, two focused
@@ -1056,6 +1060,26 @@ Windows Commands and shortcut UI cases, an exact Commands text comparison
 in the packaged Windows renderer, and key-free installed and portable
 startup. The [task 2.7 checkpoint](../openspec/changes/linux-platform-support/tasks.md#27-final-qualification-checkpoint-2026-11-27)
 tracks the outstanding receipts and copied-byte handoff.
+
+#### Beta.19 to beta.20 installed RPM upgrade
+
+The full [#17 transaction fixture](#linux-installed-rpm-upgrade-2026-11-26)
+ran on 27 November with the transferred beta.19 RPM and the beta.20 RPM
+from `38d1e3e` (SHA-256
+`2abb187b84a50bfb5ba4f71ec6bef555548d55f2916f3920d51a8749cf459202`).
+Its `timeout 180s bash run.sh` command exited 0 on the first run. Fedora 44
+x86-64 ran nested Hyprland and GNOME Keyring in a disposable environment
+with one synthetic Wayland output and loopback-only networking.
+
+`rpm -K --nosignature` verified both payload digests. `rpm -ivh` installed
+beta.19, `rpm -Uvh` upgraded to beta.20, and `rpm -V sc-desktop` passed on
+both versions. Dependency checks, scriptlets and triggers ran. Each
+installed ASAR matched its package. Both unmodified desktop entries
+started native Wayland windows and both Settings runs exited 0.
+Beta.20 read back the exact synthetic key and the saved 28-point text size.
+The vault matched byte for byte across the upgrade, application launches
+and `rpm -ev sc-desktop`. Erase removed all package-owned paths and
+preserved the hashes of all four unrelated files.
 
 ## Linux keyring recovery (2026-11-25)
 
