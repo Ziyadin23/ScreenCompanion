@@ -980,6 +980,96 @@ Prior beta.6 results below are historical and do not establish beta.7 compatibil
 The later [full merged-source Windows matrix](#windows-full-ui-matrix-2026-11-03)
 records a separate current-candidate result.
 
+### Linux final qualification baseline (2026-11-27)
+
+[Merged main at `64cc206`](https://github.com/Ziyadin23/ScreenCompanion/pull/162)
+has the same tracked application, native bridge, dependency and packaging
+inputs as the delivered beta.19 at `ebc84d1`. The only changed file under
+`desktop/` is the Linux CONNECT test fixture from
+[PR #157](https://github.com/Ziyadin23/ScreenCompanion/pull/157).
+[PR #161](https://github.com/Ziyadin23/ScreenCompanion/pull/161) changed the
+root README copied into the Windows ZIP. A ZIP built from current main would
+contain different README bytes. The delivered beta.19 files keep their
+[original hashes](#beta19-local-handoff-2026-11-25).
+
+On Fedora 44 x86-64, `npm --prefix desktop ci` and
+`VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` exited 0 at this
+baseline. Type checking, lint, all 1,390 tests in 39 files and production
+bundles passed, including the updated Linux CONNECT fixture.
+Extracting `app.asar` with `rpm2cpio` and `cpio` reproduced the installed
+archive hash. The ASAR file list and all nine files under `out/` matched
+the fresh production build byte for byte. This ties the tested Linux
+bundles at `64cc206` to the transferred beta.19 RPM.
+
+The [isolated Hyprland geometry command](../tests/README.md#hyprland-panel-geometry)
+ran the fresh bundles on Fedora 44 x86-64, Hyprland 0.57.2 nested in
+headless KWin 6.8.3 and Electron 45.0.0. All 30 scenarios and their parent
+passed, exit 0 with zero skips. The suite used one synthetic output and
+temporary profiles. It covered Settings Back/Save, automatic fit,
+tiling, manual resize and same-profile restart, with injected capture
+cancellation. The separate installed portal run supplies real chooser
+evidence.
+
+| Group | Applicable evidence at this baseline | Remaining check or scope |
+| --- | --- | --- |
+| L1 / 2.1 | The combined beta.19 RPM passed the real chooser on one isolated synthetic output. Both successful paths sent one frame. Cancel and injected frame failure retained answer and draft, sent no provider request and released the stream. [Capture run](#linux-portal-capture-and-cancellation-2026-11-25) | The #14 target operator needs two connected physical outputs and consent for a synthetic desktop test. Check each output's identity and pixel dimensions, Cancel, failure retention and stream cleanup. |
+| L2 / 2.2 | Combined beta.19 passed real keyring lock/unlock, unavailable-service recovery, dialog dismissal and unchanged vault readback. [Keyring run](#combined-beta19-rpm) | Merged in [PR #154](https://github.com/Ziyadin23/ScreenCompanion/pull/154). Recheck recovery if Setup or storage behavior changes. |
+| L3 / 2.3 | Combined beta.19 passed all seven Lua bindings, early activation, same-process relaunch with drafts and fallback controls. [Installed controls](#linux-desktop-controls-and-relaunch-2026-11-26) | Merged in [PR #159](https://github.com/Ziyadin23/ScreenCompanion/pull/159). [#163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) owns the missing action in the in-app help. The binding worked in beta.19. |
+| L4 / 2.4 | The full beta.13 to beta.19 transaction passed with installed desktop launches, retained encrypted settings and owned-file cleanup. [RPM run](#linux-installed-rpm-upgrade-2026-11-26) | Merged in [PR #158](https://github.com/Ziyadin23/ScreenCompanion/pull/158). Verify the next RPM's install/upgrade, launcher and version on the changed candidate. |
+| L5 / 2.5 | Combined beta.19 passed 13 installed Basic CONNECT/TLS/cancellation/deadline cases and the separate PAC deadline. [Installed transport](#linux-installed-proxy-and-transport-qualification-2026-11-26) | Merged in [PR #162](https://github.com/Ziyadin23/ScreenCompanion/pull/162). The later fixture change affects portable verification. Repeat the installed proxy matrix if routing, transport or its runtime inputs change. |
+| L6 / 2.6 | The Linux correction at `8b8002f` and the Windows beta.17 Settings, resize, restart and Edge observations at `c7635e5` have their own receipts. [Linux correction](../openspec/changes/linux-platform-support/tasks.md#native-configure-before-the-first-geometry-reply), [Windows results](#beta17-windows-panel-sizing-2026-11-24) | Merged in [PR #122](https://github.com/Ziyadin23/ScreenCompanion/pull/122). The earlier Windows installed resize and Edge output remain beta.17 evidence. |
+
+[Main CI at `8419dd3`](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/45566432369)
+ran Windows `npm run verify` (1,334 passed, 56 Linux-only skips), native
+compilation, nine DPAPI vault cases and `npm run package:win` plus
+`npm run package:zip` and ASAR/ZIP verification. Its Windows application,
+test and build inputs match `64cc206`; its ZIP used the older root README.
+[Main CI at `64cc206`](https://github.com/Ziyadin23/ScreenCompanion/actions/runs/45762940583)
+used the documentation route and skipped the portable and Windows jobs.
+
+The private Windows beta.19 receipt matches `ebc84d1`. It verified both
+x64 package payloads, production ASAR entries and 5,532 installer update
+blocks. The unpacked, installer and portable inventories agreed on the
+native addon's size and SHA-256. Per-user install, key-free Setup and Cancel
+from the installed app and portable launcher, uninstall and restoration
+passed. A read-only `sha256sum` of all five transferred files and `rpm -K` of the RPM passed
+on 27 November. Python's `zipfile` verified both entry names, CRCs and
+SHA-256 matches to the separate EXE and README.
+
+The beta.19 lab receipt covers packaging and startup. Final-candidate
+`npm run test:windows` and `npm run test:ui` remain open. The beta.7
+five-case and 37-case runs, beta.16 full 38-case run, beta.17 resize/Edge
+run and beta.18 typed-question recovery retain their original candidates.
+The later shared controller, input/preload and panel changes make Windows
+question recovery, shortcut/input handling, Settings return and native
+resize/restart relevant in the final UI run. Use the final combined
+candidate for the interactive native and UI suites when the Windows lab
+becomes available. Claims about recorder output, clean accounts and mixed
+DPI retain their separate target owners. [Recorded Windows gates](#current-candidate-and-open-gates)
+
+The [beta.20 help PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
+for #163 shares the action list between the Linux launch router, first-run
+answer and two Settings help surfaces. The author reported three failing
+help checks on beta.19 and all three passing on beta.20, plus 1,393 passing
+portable tests and a production build at `38d1e3e`. These are source checks.
+In the installed RPM, check all three surfaces with a synthetic
+profile, then check action routing in early and duplicate launches and
+verify the screenshot-question binding opens Question or submits once when
+focused. Check that plain Enter still sends text only. Keep the installed
+keyring and full proxy matrices on beta.19 while their implementation and
+dependencies match. A help and version change calls for a new RPM
+install/upgrade/launch/erase check and handoff.
+
+Run final portable and hosted Windows build/vault/package checks on the
+combined source. The shared controller and Settings bundle change even
+though the new help is Linux-specific. Include Windows first-run commands
+and Settings shortcut/Commands pages in the final UI check. The Windows
+lab operator owns installed and portable Setup/Cancel and installer
+cleanup on the new package. The coordinator owns comparing the final diff,
+scheduling the lab, verifying copied beta.20 files against their build
+and deciding integration separately from release.
+[Task 2.7 checkpoint](../openspec/changes/linux-platform-support/tasks.md#27-final-qualification-checkpoint-2026-11-27)
+
 ## Linux keyring recovery (2026-11-25)
 
 [Issue #15](https://github.com/Ziyadin23/ScreenCompanion/issues/15) ran the RPM

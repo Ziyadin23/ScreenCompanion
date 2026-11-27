@@ -2,7 +2,13 @@
 
 [Design](design.md) maps the accepted Linux requirements to the four specs and identifies the existing implementation. Checked tasks below import inspected implementation/evidence; they do not claim fresh runtime verification during this workflow migration. The [Linux verification record](../../../docs/VERIFICATION.md#linux-port-status) owns the recorded outcomes and limits.
 
-## Current continuation — 2026-11-26
+## Current continuation — 2026-11-27
+
+Task 2.7 compares merged main `64cc206` with the delivered beta.19 at
+`ebc84d1`. Tasks 2.2–2.6 have merged evidence for their recorded scopes.
+Tasks 2.1 and 2.7 remain open. [Final qualification checkpoint](#27-final-qualification-checkpoint-2026-11-27)
+
+## Earlier continuation — 2026-11-26
 
 Task 2.3 passed installed desktop controls and relaunch on beta.19.
 Task 2.4 passed the full installed beta.13 to beta.19 RPM upgrade.
@@ -86,8 +92,8 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   preserved the exact active draft.
 - The workflow self-test, documentation links, strict OpenSpec validation
   and whitespace checks exited 0. OpenSpec recorded task 2.3 complete.
-- This change updates verification, status and user guidance. The
-  maintainer owns PR review and integration. Task 2.4 records its own
+- [PR #159](https://github.com/Ziyadin23/ScreenCompanion/pull/159) merged
+  the reviewed verification, status and user guidance. Task 2.4 records its own
   installed upgrade evidence. Task 2.7 retains final-source reconciliation.
 
 ### 2.4 Installed RPM upgrade checkpoint (2026-11-26)
@@ -102,9 +108,9 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   named launcher starts passed. The exact encrypted synthetic key and saved
   text size survived the version change. The uninstall removed SC's integration
   and kept the unrelated files and vault byte-identical.
-- The branch changes the task and verification documentation. Application and
-  package bytes match the existing local handoff. The next action for #17 is
-  review of the evidence; the broader Linux change remains active.
+- [PR #158](https://github.com/Ziyadin23/ScreenCompanion/pull/158) merged
+  the task and verification documentation. The existing local handoff
+  matches the tested package. The broader Linux change remains active.
 
 ### 2.5 Installed proxy and transport checkpoint (2026-11-26)
 
@@ -122,9 +128,10 @@ Continue the broader Linux qualification at task 2.1. Six groups remain open.
   existing application and package. The earlier source and portable checks
   remain below.
 - The workflow self-test and documentation checks, strict OpenSpec validation
-  and `git diff --check` passed. The issue-linked PR is ready for independent
-  review. Task 2.7 owns final reconciliation against merged main. Task 2.1
-  still owns physical monitor selection. The RPM remains a local handoff.
+  and `git diff --check` passed. [PR #162](https://github.com/Ziyadin23/ScreenCompanion/pull/162)
+  merged after independent evidence review. Task 2.7 owns final reconciliation
+  against merged main. Task 2.1 still owns physical monitor selection.
+  The RPM remains a local handoff.
 
 ### 2.5 Authenticated proxy checkpoint (2026-11-19)
 
@@ -621,5 +628,50 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   exit 0. All three recovery dialogs closed normally, all six vault comparisons
   matched, and the two failed Setup saves left no vault. Independent source
   review passed. The coordinator confirmed the [local delivery](../../../docs/VERIFICATION.md#beta19-local-handoff-2026-11-25)
-  after all five destination files matched the qualified build. PR #154
-  carries the task 2.2 checkpoint for final review and integration.
+  after all five destination files matched the qualified build.
+  [PR #154](https://github.com/Ziyadin23/ScreenCompanion/pull/154) merged the
+  task 2.2 checkpoint.
+
+### 2.7 Final qualification checkpoint (2026-11-27)
+
+- [Issue #20](https://github.com/Ziyadin23/ScreenCompanion/issues/20) owns
+  this evidence-only continuation from `64cc206`. The
+  [baseline comparison and platform results](../../../docs/VERIFICATION.md#linux-final-qualification-baseline-2026-11-27)
+  reconcile L1–L6, hosted Windows CI and the private beta.19 package receipt.
+  The delivered artifacts remain tied to `ebc84d1`. The final diff is scoped
+  to status, verification and this task file and contains no private lab
+  paths, profiles, recordings or credentials.
+- `npm --prefix desktop ci` and
+  `VITEST_MAX_WORKERS=1 npm --prefix desktop run verify` exited 0. All 1,390
+  portable tests in 39 files passed. The five-file `sha256sum` readback,
+  `rpm -K` and Python `zipfile` checks of both ZIP entries exited 0. The
+  RPM ASAR extracted with `rpm2cpio` and `cpio` contained the same nine
+  production output files as the fresh build, byte for byte.
+- The [documented Bubblewrap geometry command](../../../tests/README.md#hyprland-panel-geometry)
+  ran `node --test desktop/tests/linux/panel-settings.mjs` with an isolated
+  D-Bus session and one synthetic Wayland output. It passed all 30 scenarios
+  and the parent test, exit 0, zero skips. It used the verified Fedora build.
+- Workflow self-test, documentation links, strict OpenSpec validation and
+  `git diff --check` exited 0. The apply state remains 11 of 13 tasks complete.
+- The #14 target operator owns the physical two-output gate under 2.1. This
+  host has one connected physical display. The test needs a second connected
+  output and user consent for capture on a synthetic desktop.
+- The [#163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) author
+  owns Linux help and its direct regressions. The Linux package operator
+  owns the changed RPM's command-help and binding smoke and an installed
+  upgrade/start/erase check with a synthetic encrypted profile. The existing
+  installed capture, keyring, controls and proxy matrices retain the
+  beta.19 candidate; the final diff determines which behavior needs a
+  targeted repeat.
+- The Windows lab operator owns the final combined candidate's
+  `npm run test:windows`, `npm run test:ui` and package startup and cleanup.
+  Use the hosted native build, vault and package jobs for that candidate
+  alongside the interactive results. The Windows VM is reserved for other
+  work during this checkpoint.
+- The coordinator owns independent review of this evidence PR, final
+  combined-candidate selection and the local beta.20 handoff. Review and
+  integrate this baseline first. Bring it into #163 before freezing the
+  combined candidate. Attach the applicable source, target and handoff
+  checks to that revision before accepting final qualification. Record
+  integration and any release decision separately. Tasks 2.1 and 2.7
+  remain open.
