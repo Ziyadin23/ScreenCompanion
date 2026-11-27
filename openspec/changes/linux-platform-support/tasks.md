@@ -662,9 +662,11 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   dimensions, retention, request counts and stream cleanup when two
   physical displays and consent are available.
 - The [beta.20 product PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
-  freezes application, package and distributed README inputs at
-  `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. The #163 operator owns
-  the installed RPM help evidence. The Windows lab operator owns the
+  merged first at `27c31af` and closed #163. Application, package and
+  distributed README inputs match the freeze at
+  `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. Both
+  [installed help runs](../../../docs/VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
+  passed. The Windows lab operator owns the
   Windows `npm run verify`, `npm run test:windows`, two focused Commands
   and shortcut UI cases, exact packaged Windows Commands text, the
   key-free installer and portable startup checks and cleanup. The
@@ -675,9 +677,10 @@ and [independent review](https://github.com/Ziyadin23/ScreenCompanion/pull/122#i
   both installed desktop launches, encrypted settings readback and
   owned-file cleanup passed. The vault and four unrelated files kept
   their original hashes.
-- Integrate the reviewed product PR first. Update this evidence PR against
-  that merged source, preserve the historical beta.19 receipts and attach
-  the completed beta.20 checks. Compare the final application, packaging and
-  README inputs with the freeze. A documentation-only change that preserves
-  those inputs reuses the same build. Record integration and release
-  separately. Tasks 2.1 and 2.7 remain open.
+- This evidence branch includes merged main `27c31af`. Its diff against
+  the freeze is empty for `desktop/`, the root README, assets, licenses
+  and CI. The branch retains the historical beta.19 receipts and reuses
+  the frozen beta.20 build. Before independent final review, attach the
+  Windows results and copied-byte handoff. Source integration has passed
+  for the product. No new release was published. Tasks 2.1 and 2.7 remain
+  open.

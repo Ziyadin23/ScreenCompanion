@@ -1043,8 +1043,9 @@ beta.18 typed-question recovery retain their original candidates.
 
 ### Beta.20 shortcut help candidate (2026-11-27)
 
-[PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164) for #163
-freezes the beta.20 application, packaging inputs and distributed README at
+[PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164) merged
+and closed #163 at `27c31af`. Its beta.20 application, packaging inputs
+and distributed README match the freeze at
 `38d1e3ee65675e9fdd34d59d592b238aa9da64e1`. The Linux launch router,
 first-run answer and two Settings surfaces share the action list. Three
 new tests failed on beta.19 and passed on beta.20. Fedora source verification
@@ -1053,6 +1054,8 @@ The freeze retains the portal capture, storage, proxy, panel geometry
 and native Windows implementation files from `64cc206`. The shared
 controller and Settings bundle changed, so the Windows target scope
 includes the affected help surfaces as well as native and package checks.
+Both [installed Linux help runs](#linux-shortcut-help-in-beta20-2026-11-27)
+passed with a synthetic profile and zero provider calls.
 
 The approved target scope covers the installed Linux RPM shortcut help,
 the Windows production verification and native/vault suites, two focused
