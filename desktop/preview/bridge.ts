@@ -1,23 +1,27 @@
-import type { AppState, DesktopApi, SettingsDraft, Surface } from '../src/contracts';
+import type { ApiProvider, AppState, DesktopApi, SettingsDraft, Surface } from '../src/contracts';
 import { defaultModels, defaultSettings } from '../src/contracts/defaults';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../src/contracts/model-pipelines';
 import { shortcutsByAction } from '../src/contracts/shortcut-display';
 import { version } from '../package.json';
 
+function setupDraft(provider: ApiProvider): SettingsDraft {
+  const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
+  values.Models = defaultModels(provider); values.PipelineMode = 'Thorough';
+  values.ModelPipelines = rememberModelPipeline([], values.Models, values.PipelineMode);
+  const keyPresence = { OpenAI: false, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false };
+  keyPresence[provider] = true;
+  return { session: 0, values, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
+}
+
 /** In-memory review fixture. No filesystem, network, or credential-storage path. */
 export function previewBridge(surface: Surface = 'settings', platform: AppState['platform'] = 'windows') {
-  const { ApiKey: _key, ProviderKeys: _keys, ...values } = defaultSettings('');
-  values.Models = defaultModels(); values.PipelineMode = 'Thorough';
-  values.ModelPipelines = rememberModelPipeline([], values.Models, values.PipelineMode);
-  let draft: SettingsDraft = {
-    session: 0, values, keyPresence: { OpenAI: true, Groq: false, Gemini: false, Mistral: false, OpenRouter: false, DeepSeek: false }, keyUpdates: {}, pipelineUpdates: []
-  };
+  let draft = setupDraft('OpenAI');
   let state: AppState = {
     platform, ready: true, surface, visible: true, busy: false, settingsSession: surface === 'settings' ? 1 : 0, settingsRevision: 0, settingsFocusRevision: 0, settingsDirty: false, settingsSaving: false,
     settingsKeyPresence: null, settingsModels: null, settingsModelPipelines: null, shortcutRecovery: null,
     answer: 'The answer stays here while you adjust Settings.\n\nThis is synthetic preview text. No screen was captured and no service was contacted.',
-    error: null, appearance: { ...values.Appearance },
-    shortcuts: shortcutsByAction(values),
+    error: null, appearance: { ...draft.values.Appearance },
+    shortcuts: shortcutsByAction(draft.values),
     captureProtection: 'Failed', version, setupLegacyNotice: false,
     updates: { status: 'disabled', version: null, progress: null, message: 'Synthetic preview. Updates are disabled.' }
   };
@@ -27,10 +31,16 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     state = { ...state, settingsSession, ...patch };
     for (const listener of listeners) listener(structuredClone(state));
   }
+  function applyDraft(next: SettingsDraft) {
+    draft = next;
+    emit({ surface: 'answer', settingsRevision: state.settingsRevision + 1, settingsDirty: false,
+      settingsKeyPresence: draft.keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: draft.values.ModelPipelines,
+      appearance: { ...draft.values.Appearance }, shortcuts: shortcutsByAction(draft.values) });
+  }
   const ownsSettings = (session: number) => state.surface === 'settings' && session === state.settingsSession;
   const api: DesktopApi = {
     getState: async () => structuredClone(state),
-    setup: async () => { emit({ surface: 'answer' }); },
+    setup: async ({ provider }) => { applyDraft(setupDraft(provider)); },
     command: async (command) => {
       if (command.type === 'settings') emit({ surface: 'settings' });
       if (command.type === 'showInput') emit({ surface: 'input' });
@@ -48,10 +58,8 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
         if (next.keyUpdates[provider]?.trim()) keyPresence[provider] = true;
       }
       const pipelines = applyModelPipelineUpdates(draft.values, next.pipelineUpdates, next.values.Models);
-      draft = { session: next.session, values: { ...structuredClone(next.values), ...pipelines,
-        CustomInstruction: next.values.CustomInstruction.trim() }, keyPresence, keyUpdates: {}, pipelineUpdates: [] };
-      emit({ surface: 'answer', settingsRevision: state.settingsRevision + 1, settingsDirty: false, settingsKeyPresence: keyPresence, settingsModels: draft.values.Models, settingsModelPipelines: pipelines.ModelPipelines,
-        appearance: { ...draft.values.Appearance }, shortcuts: shortcutsByAction(draft.values) });
+      applyDraft({ session: next.session, values: { ...structuredClone(next.values), ...pipelines,
+        CustomInstruction: next.values.CustomInstruction.trim() }, keyPresence, keyUpdates: {}, pipelineUpdates: [] });
       return 'saved';
     },
     discardSettings: async (session) => {
@@ -63,5 +71,5 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     onScroll: () => () => {},
     onInputAction: () => () => {}
   };
-  return { api, open: (next: Surface) => emit({ surface: next, visible: true, settingsDirty: false }) };
+  return { api, getSurface: () => state.surface, open: (next: Surface) => emit({ surface: next, visible: true, settingsDirty: false }) };
 }

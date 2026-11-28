@@ -95,3 +95,20 @@ for (const viewport of [{ width: 560, height: 480 }, { width: 320, height: 420 }
     }
   }
 }
+
+test('keeps one main landmark when switching preview surfaces', async ({ page }) => {
+  await page.goto('/');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { name: 'SC settings' })).toBeVisible();
+  await page.getByRole('button', { name: 'Setup preview' }).click();
+  await expect(main.getByRole('heading', { name: 'Set up SC' })).toBeVisible();
+  await page.getByTestId('setup-key').fill('synthetic-setup');
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(main).toHaveCount(1);
+  await expect(main).toHaveAccessibleName('SC answer');
+  await main.getByRole('button', { name: 'Question' }).press('Enter');
+  await expect(main.getByRole('textbox', { name: 'Question' })).toBeFocused();
+  await expect(main).toHaveCount(1);
+  await page.getByRole('button', { name: 'Settings preview' }).press('Enter');
+  await expect(main.getByRole('heading', { name: 'SC settings' })).toBeVisible();
+});

@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Theme } from '@astryxdesign/core/theme';
 import { HStack, VStack } from '@astryxdesign/core/Layout';
@@ -12,7 +13,11 @@ import './preview.css';
 import { previewBridge } from './bridge';
 
 const params = new URLSearchParams(location.search);
-const bridge = previewBridge(params.get('surface') === 'setup' ? 'setup' : 'settings', params.get('platform') === 'linux' ? 'linux' : 'windows');
+const surface = params.get('surface');
+const bridge = previewBridge(
+  surface === 'setup' || surface === 'answer' || surface === 'input' ? surface : 'settings',
+  params.get('platform') === 'linux' ? 'linux' : 'windows'
+);
 window.sc = bridge.api;
 
 createRoot(document.getElementById('root')!).render(
@@ -25,7 +30,13 @@ createRoot(document.getElementById('root')!).render(
           <Button label="Setup preview" size="sm" variant="ghost" onClick={() => bridge.open('setup')}>Setup</Button>
         </HStack>
       </HStack>
-      <VStack className="preview-frame"><App /></VStack>
+      <PreviewFrame />
     </VStack>
   </Theme>
 );
+
+function PreviewFrame() {
+  const active = useSyncExternalStore(bridge.api.subscribe, bridge.getSurface);
+  const dialog = active === 'setup' || active === 'settings';
+  return <VStack className="preview-frame" role={dialog ? 'main' : undefined}><App /></VStack>;
+}

@@ -27,10 +27,15 @@ function invoke(root: string, ...args: string[]) {
     env: { PATH: process.env.PATH, HOME: root, CODEX_HOME: join(root, 'no-credentials'), LANGSMITH_TRACING: 'false' } });
 }
 
-test('installed command runs through the package bin symlink', t => {
+test('installed help runs through the package bin symlink without loading LangGraph', t => {
   const { root } = fixture(t);
   const link = join(root, 'sc-dev'); symlinkSync(cli, link);
-  const result = spawnSync(process.execPath, [link, '--help'], { encoding: 'utf8', timeout: 5000, env: {} });
+  const loader = join(root, 'help-loader.mjs');
+  writeFileSync(loader, `export function resolve(specifier, context, next) {
+    if (specifier.startsWith('@langchain/')) throw new Error('Help loaded ' + specifier);
+    return next(specifier, context);
+  }`);
+  const result = spawnSync(process.execPath, ['--loader', loader, link, '--help'], { encoding: 'utf8', timeout: 5000, env: {} });
   assert.equal(result.status, 0, result.stderr);
   assert.ok(JSON.parse(result.stdout).commands.includes('runs'));
 });

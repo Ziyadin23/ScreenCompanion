@@ -5,11 +5,9 @@ import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
-import { executeRun } from './graph.js';
 import { DEFAULT_LIMITS, WINDOWS_ACTIVE_MS, digest, makeManifest, WorkflowError } from './manifest.js';
-import { RunStore, type RunRecord } from './store.js';
+import type { RunRecord, RunStore } from './store.js';
 import { cancelRun } from './recovery.js';
-import { createActions } from './runtime.js';
 import { migrateState } from './migration.js';
 import { loadCodexProfile } from './worker.js';
 import { orcaExecutable } from './ownership.js';
@@ -196,6 +194,9 @@ export async function main(args = process.argv.slice(2)): Promise<number> {
       retentionDays < 1 || retentionDays > 3650)
     throw new WorkflowError('invalid_arguments', 'Retention must be between 1 and 3650 days for prune.');
   const repository = repositoryAt(values.repo ? resolve(values.repo) : process.cwd());
+  const { RunStore } = await import('./store.js');
+  const { executeRun } = await import('./graph.js');
+  const { createActions } = await import('./runtime.js');
   const stateDirectory = values['state-dir'] ? resolve(values['state-dir']) :
     join(process.env.XDG_STATE_HOME ?? join(homedir(), '.local', 'state'),
       'screencompanion-agent-workflow', digest(repository.repository).slice(0, 24));

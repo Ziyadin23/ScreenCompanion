@@ -75,6 +75,11 @@ ASAR check with the preview files still on disk. The portable suite also checks
 the ASAR verifier with a production archive and two archives containing stray
 output.
 
+```sh
+# Check the packaged renderer's script and stylesheet references from desktop/.
+npx vitest run tests/packaging/windows-asar.test.ts
+```
+
 After `npm run package:win`, Windows CI runs `npm run package:zip`. It opens the
 ZIP, requires the versioned portable EXE and `README.txt` at the root, and
 compares their SHA-256 digests with the standalone EXE and the repository
@@ -100,6 +105,11 @@ Add `&platform=linux` to inspect Linux notices. Use only synthetic input: this
 preview does not store keys, capture a screen, call a provider or run an updater.
 Save/Back operate on its in-memory draft; reload restores the fixture. The review
 toolbar opens Settings and setup.
+
+| Panel | Local preview |
+| --- | --- |
+| Answer | [Open Answer](http://127.0.0.1:43155/?surface=answer) |
+| Question | [Open Question with keyboard focus](http://127.0.0.1:43155/?surface=input) |
 
 With the preview running, use these commands from the repository root to check
 the setup service control at 320px in LTR and RTL. Install the Playwright browser
@@ -127,6 +137,11 @@ From `desktop/`, run `npx playwright install chromium` once, then run
 `npx playwright test --config playwright.preview.config.ts` for the compact setup
 regression. It starts the synthetic preview on port 43290 and uses isolated
 Chromium sessions for keyboard focus, error visibility and Save retry.
+
+```sh
+# Check the panel links and keyboard focus from desktop/.
+npx playwright test --config playwright.preview.config.ts panels.spec.ts
+```
 
 After `npm --prefix desktop run build`, run `node --test desktop/tests/preview/shortcut-recovery.test.mjs`
 from the repository root. Headless Chromium loads the production renderer with

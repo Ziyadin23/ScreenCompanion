@@ -211,6 +211,9 @@ For local interface review, `npm --prefix desktop run preview:astryx` serves a
 synthetic Astryx Settings/setup preview. The [preview guide](tests/README.md#electron-workflows-and-preview)
 explains its in-memory behavior and verification limits.
 
+[Local Answer preview](http://127.0.0.1:43155/?surface=answer) ·
+[Local Question preview](http://127.0.0.1:43155/?surface=input)
+
 For native builds, isolated UI previews, Windows packaging and Fedora RPMs, use
 the contributor, test and publishing guides below. Windows native builds require
 Visual Studio C++ Build Tools and the Windows SDK; .NET 10 is needed only for the
