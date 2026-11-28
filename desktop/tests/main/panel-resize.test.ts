@@ -101,6 +101,7 @@ class TestWindow extends EventEmitter {
   isDestroyed() { return false; }
   isMaximized() { return this.hasMapped; }
   isVisible() { return this.visible; }
+  isFocused() { return this.visible; }
   show() { this.visible = true; this.hasMapped = true; }
   showInactive() { this.show(); }
   hide() { this.visible = false; }
@@ -113,6 +114,7 @@ class TestWindow extends EventEmitter {
 
 vi.mock('electron', () => ({
   app, safeStorage: {}, session: {},
+  clipboard: { writeText: vi.fn() },
   BrowserWindow: function (...args: ConstructorParameters<typeof TestWindow>) {
     panel = new TestWindow(...args);
     return panel;
@@ -818,4 +820,31 @@ it.skipIf(platform !== 'linux')('keeps fit constraints until the compositor acce
     firstPaint.resume();
     nextPaint.resume();
   }
+});
+
+it.runIf(platform === 'linux')('waits for the Linux shortcut clipboard write and lets a failed copy be retried', async () => {
+  await boot();
+  await invoke('command', { type: 'settings' });
+  const write = vi.mocked((await import('electron')).clipboard.writeText);
+  const command = { type: 'copyLinuxCommand', action: 'input' };
+  const expected = '/opt/SC/io.github.ziyadin23.sc --action=input';
+  const gate = pause();
+  write.mockReturnValueOnce(gate.pending);
+  const completed = vi.fn();
+  const response = invoke('command', command).then(completed);
+  try {
+    await setImmediate();
+    expect(write).toHaveBeenCalledWith(expected);
+    expect(completed).not.toHaveBeenCalled();
+  } finally {
+    gate.resume();
+    await response;
+  }
+  expect(completed).toHaveBeenCalledWith('copied');
+
+  write.mockRejectedValueOnce(new Error('Synthetic clipboard denial'));
+  await expect(invoke('command', command)).rejects.toThrow();
+  write.mockResolvedValueOnce(undefined);
+  await expect(invoke('command', command)).resolves.toBe('copied');
+  expect(write).toHaveBeenLastCalledWith(expected);
 });

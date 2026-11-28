@@ -471,11 +471,11 @@ function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
     setup: value => controller!.setup(setupRequestSchema.parse(value)),
-    command: value => {
+    command: async value => {
       const command = commandSchema.parse(value);
       if (command.type !== 'copyLinuxCommand') return controller!.command(command);
       if (!linux || surface !== 'settings' || !activeWindow()?.isFocused()) throw new Error('Linux Settings is not focused.');
-      clipboard.writeText(linuxCommand(command.action));
+      await clipboard.writeText(linuxCommand(command.action));
       return 'copied';
     },
     getSettingsDraft: () => controller!.getSettingsDraft(),
