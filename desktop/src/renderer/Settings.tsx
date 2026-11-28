@@ -15,6 +15,7 @@ import { LINUX_ACTION_NAMES, LINUX_ACTIONS, LINUX_CONTROL_NOTICE, LINUX_SHORTCUT
 import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
+import { CopyDiagnostic } from './CopyDiagnostic';
 import { Icon, type IconName } from './Icon';
 import { contrastText, PALETTES, paletteName, panelStyle } from './appearance';
 import { bindingFromEvent, commandsText, duplicateShortcut, formatShortcut, modifierForKey, sameShortcut, SHORTCUT_FIELDS, shortcutProblem } from './shortcuts';
@@ -512,9 +513,13 @@ export function Settings({ state }: { state: AppState }) {
       </fieldset>}
     </VStack>
     </VStack>
-    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages">
+    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages"
+      tabIndex={state.shortcutRecovery ? 0 : undefined}>
       {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
-      {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
+      {state.shortcutRecovery && <>
+        <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>
+        <CopyDiagnostic key={state.shortcutRecovery.reportId} surface="settings" reportId={state.shortcutRecovery.reportId} />
+      </>}
     </VStack>}
     <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
       <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked || loadedRevision !== state.settingsRevision} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>

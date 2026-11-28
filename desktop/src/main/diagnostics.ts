@@ -8,6 +8,10 @@ import { ProviderError } from '../providers';
 export class AppError extends Error {
   constructor(public readonly code: string, message: string) { super(message); this.name = 'AppError'; }
 }
+
+export function diagnosticDetails({ code, reportId }: Pick<DisplayError, 'code' | 'reportId'>): string {
+  return `Code: ${code}\nReport ID: ${reportId}`;
+}
 const allowedStages = new Set(['Startup', 'Credentials', 'Shortcuts', 'Display', 'Capture', 'ApiRequest', 'Locate', 'Crop', 'Extract', 'Answer', 'ValidateAnswer', 'Updates']);
 const allowedCodes = new Set(['None', 'MalformedResponse', 'IncompleteResponse', 'IncompleteExtraction', 'IncompleteAnswer', 'TaskMismatch', 'InvalidChoice', 'HttpFailure', 'Network', 'Timeout', 'Unexpected', 'UnsupportedModel']);
 const allowedDetails = new Set(['None', 'ExtractionFormat', 'ExtractionStatus', 'QuestionRegion', 'EvidenceFormat', 'EvidenceStatus', 'EvidenceCount', 'EvidenceOrdinal', 'OptionCount', 'RequiredCode', 'RequiredVisual', 'Transcription', 'VisualCoverage']);

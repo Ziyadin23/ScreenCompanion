@@ -1,16 +1,17 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
 import electronUpdater from 'electron-updater';
+import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
+import type { AppState, DisplayError, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
 import { linuxCommand } from '../contracts/linux-actions';
 import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry,
   restoreHyprlandPanelPlacement, type HyprlandPanelPlacement } from '../platform';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
-import { createDiagnostics, AppError } from './diagnostics';
+import { createDiagnostics, diagnosticDetails, AppError } from './diagnostics';
 import { commandSchema, colorSchema, settingsDraftSchema, settingsSessionSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
@@ -59,6 +60,7 @@ let releaseLinuxPanelSize: (() => void) | null = null;
 let tray: Tray | null = null;
 let trayIcons: ReturnType<typeof createTrayImages> | undefined;
 let closing = false;
+let startupFailureShowing = false;
 let waitingForPanelSize = false;
 const panelSizeLifetime = new AbortController();
 const pendingLinuxResizes = new Set<Promise<void>>();
@@ -151,7 +153,7 @@ function activeWindow(): BrowserWindow | null {
   if (linuxPanelLayout?.hideCheck) return null;
   return linuxDialog?.surface === surface ? linuxDialog.window : null;
 }
-function createWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
+function createWindow(options: Electron.BrowserWindowConstructorOptions, startup = false): BrowserWindow {
   const target = new BrowserWindow({ title: 'SC', icon: appIconPath, show: false, frame: linux, transparent: true, maximizable: false,
     fullscreenable: false, alwaysOnTop: true, skipTaskbar: !linux, hasShadow: linux,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true,
@@ -160,6 +162,7 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions): Browse
   if (!linux) target.setContentProtection(true);
   target.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   target.webContents.on('will-navigate', event => event.preventDefault());
+  if (startup) return target;
   target.on('close', event => {
     if (closing) return;
     event.preventDefault();
@@ -168,7 +171,7 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions): Browse
   target.on('blur', () => { if (target === activeWindow()) void controller?.onWindowBlur(); });
   return target;
 }
-function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog'): Promise<void> {
+function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog' | 'startup'): Promise<void> {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const url = new URL(process.env.ELECTRON_RENDERER_URL);
     if (role) url.searchParams.set('window-role', role);
@@ -467,12 +470,27 @@ function trustedSender(event: Electron.IpcMainInvokeEvent, readState: boolean): 
   if (!target || event.sender !== target.webContents || event.senderFrame !== target.webContents.mainFrame) throw new Error('Untrusted application frame.');
   if (!trustedUrl(event.senderFrame.url)) throw new Error('Untrusted application origin.');
 }
+async function copyDiagnosticDetails(report: DisplayError): Promise<'copied'> {
+  const details = diagnosticDetails(report);
+  await clipboard.writeText(details);
+  // Native writes can fail without throwing. Compare locally and discard the readback.
+  if (await clipboard.readText() !== details) throw new Error('The diagnostic details were not copied.');
+  return 'copied';
+}
 function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
     setup: value => controller!.setup(setupRequestSchema.parse(value)),
     command: value => {
       const command = commandSchema.parse(value);
+      if (command.type === 'copyDiagnostic') {
+        const state = controller!.getState();
+        const target = activeWindow();
+        const report = command.surface === 'settings' ? state.shortcutRecovery : state.error;
+        if (!state.visible || !target?.isVisible() || !target.isFocused() || command.surface !== state.surface || report?.reportId !== command.reportId)
+          throw new Error('The displayed diagnostic is unavailable.');
+        return copyDiagnosticDetails(report);
+      }
       if (command.type !== 'copyLinuxCommand') return controller!.command(command);
       if (!linux || surface !== 'settings' || !activeWindow()?.isFocused()) throw new Error('Linux Settings is not focused.');
       return clipboard.writeText(linuxCommand(command.action)).then(() => 'copied');
@@ -661,14 +679,92 @@ async function boot(): Promise<void> {
   if (activationPending) { activationPending = false; controller.restore(); }
   void updates.action('check');
 }
-function startupFailure(error: unknown): void {
+async function showLinuxStartupFailure(title: string, report: DisplayError): Promise<void> {
+  // Wayland requires an input serial from the Chromium window that owns the clipboard.
+  const target = createWindow({ title, width: 480, height: 300, transparent: false, alwaysOnTop: false }, true);
+  const closed = new Promise<void>(resolve => target.once('closed', resolve));
+  function checkFrame(event: Electron.IpcMainInvokeEvent) {
+    if (event.sender !== target.webContents || event.senderFrame !== target.webContents.mainFrame || !trustedUrl(event.senderFrame.url))
+      throw new Error('Untrusted startup frame.');
+  }
+  target.webContents.ipc.handle('sc:getStartupReport', event => { checkFrame(event); return report; });
+  target.webContents.ipc.handle('sc:command', (event, value: unknown) => {
+    checkFrame(event);
+    const command = commandSchema.parse(value);
+    if (command.type === 'exit') { target.close(); return; }
+    if (closing || command.type !== 'copyDiagnostic' || command.surface !== 'startup' || command.reportId !== report.reportId ||
+        !target.isVisible() || !target.isFocused()) throw new Error('The displayed diagnostic is unavailable.');
+    return copyDiagnosticDetails(report);
+  });
+  const rendererGone = new Promise<never>((_resolve, reject) => {
+    target.webContents.once('render-process-gone', () => reject(new Error('SC could not load the startup window.')));
+  });
+  try {
+    await Promise.race([loadRenderer(target, 'startup'), rendererGone]);
+    if (!closing && !target.isDestroyed()) target.show();
+    await Promise.race([closed, rendererGone]);
+  } catch (error) {
+    if (!target.isDestroyed()) target.destroy();
+    if (!closing) throw error;
+  }
+}
+function copyLinuxStartupDetails(details: string): Promise<void> {
+  // The native dialog cannot give Chromium a Wayland input serial. Let wl-copy own the selection.
+  return new Promise((resolve, reject) => {
+    const writer = spawn('/usr/bin/wl-copy', ['--type', 'text/plain;charset=utf-8'], {
+      stdio: ['pipe', 'ignore', 'ignore'], timeout: 3_000, killSignal: 'SIGKILL'
+    });
+    writer.once('error', reject);
+    writer.once('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error('Could not write to the Wayland clipboard.'));
+    });
+    writer.stdin.once('error', reject);
+    writer.stdin.end(details);
+  });
+}
+async function startupFailure(error: unknown): Promise<void> {
   // Quitting can destroy the renderer while its startup load is still pending.
-  if (closing) return;
+  if (closing || startupFailureShowing) return;
+  startupFailureShowing = true;
   const report = diagnostics.failure('Startup', linux && error instanceof SettingsError ? new AppError('KEYRING', 'SC could not open its settings. Unlock or install a secure Linux keyring, then restart SC. Existing settings were retained.') : error);
   // Protected native setup is unavailable if initialization itself failed. Keep output content-free.
   console.error(`${report.code} / ${report.reportId}: ${report.message}`);
-  if ((process.platform === 'win32' || linux) && !synthetic) dialog.showErrorBox('SC could not start', `${report.message}\n\nDiagnostic: ${report.code} / ${report.reportId}`);
-  process.exitCode = 1; app.quit();
+  try {
+    if ((process.platform === 'win32' || linux) && !synthetic) {
+      const title = 'SC could not start';
+      const details = diagnosticDetails(report);
+      if (linux) {
+        try {
+          await showLinuxStartupFailure(title, report);
+          return;
+        } catch { /* The native dialog can still show the diagnostic. */ }
+      }
+      let feedback = '';
+      try {
+        while (!closing) {
+          const options: Electron.MessageBoxOptions = { title, type: 'error', message: report.message,
+            detail: feedback ? `${details}\n\n${feedback}` : details,
+            buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true };
+          // On Windows the capture-protection hook covers the application's UI thread.
+          const response = dialog.showMessageBoxSync(options);
+          if (response !== 0 || closing) break;
+          try {
+            if (linux) await copyLinuxStartupDetails(details);
+            else await copyDiagnosticDetails(report);
+            feedback = 'Diagnostic details copied.';
+          } catch { feedback = 'Could not copy. Try again.'; }
+        }
+      } catch {
+        if (closing) return;
+        const recovery = report.logSaved
+          ? `Report ID: ${report.reportId}\nThe diagnostic code is in the matching diagnostics.log entry.`
+          : `Report ID: ${report.reportId}\nSC could not save the log. Run SC from a terminal to see the diagnostic code.`;
+        try { dialog.showErrorBox(title, `${report.message}\n\n${recovery}`); }
+        catch { /* The diagnostic is already on standard error. */ }
+      }
+    }
+  } finally { process.exitCode = 1; app.quit(); }
 }
 app.on('window-all-closed', () => {});
 app.on('before-quit', event => {

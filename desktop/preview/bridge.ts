@@ -43,6 +43,7 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     getState: async () => structuredClone(state),
     setup: async ({ provider }) => { applyDraft(setupDraft(provider)); },
     command: async (command) => {
+      if (command.type === 'copyDiagnostic') throw new Error('No diagnostic is shown in the preview.');
       if (command.type === 'copyLinuxCommand') {
         if (state.platform !== 'linux' || state.surface !== 'settings' || !LINUX_ACTION_NAMES.includes(command.action))
           throw new Error('Linux command is unavailable.');

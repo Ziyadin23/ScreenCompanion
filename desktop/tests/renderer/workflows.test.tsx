@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
+import { StartupFailure } from '../../src/renderer/StartupFailure';
 import { previewBridge } from '../../preview/bridge';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
@@ -43,6 +44,75 @@ async function openSettingsFromPanel() {
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
   await screen.findByRole('combobox', { name: 'Answer mode' });
 }
+
+describe('diagnostic copy', () => {
+  const failure = { message: 'Synthetic failure', code: 'ANSWER-NETWORK', reportId: '0123456789ab', hint: 'Check connection', logSaved: true };
+
+  it('copies from the Question panel without changing the draft, scroll or keyboard focus', async () => {
+    const driver = fixture({ surface: 'input', platform: 'linux', error: failure });
+    driver.api.command.mockResolvedValue('copied');
+    render(<App />);
+    const input = await screen.findByRole<HTMLInputElement>('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep this draft' } });
+    const answer = screen.getByTestId('answer-text');
+    answer.scrollTop = 25;
+    const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+    button.focus();
+    await userEvent.setup().keyboard('{Enter}');
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'copyDiagnostic', surface: 'input', reportId: failure.reportId });
+    expect(await screen.findByText('Copied.')).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+    expect(input.value).toBe('Keep this draft');
+    expect(answer.scrollTop).toBe(25);
+  });
+
+  it('reports a failed copy and lets the user retry without losing their Settings edits', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    await act(async () => driver.emit({ shortcutRecovery: failure }));
+    const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+    const user = userEvent.setup();
+    button.focus();
+    driver.api.command.mockRejectedValueOnce(new Error('Secure clipboard unavailable'));
+    await user.keyboard(' ');
+    expect((await screen.findByText('Try again.')).closest('[role="status"]')).toBeTruthy();
+    driver.api.command.mockResolvedValue('copied');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Copied.')).toBeTruthy();
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'copyDiagnostic', surface: 'settings', reportId: failure.reportId });
+    expect(document.activeElement).toBe(button);
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
+    expect(driver.getState().settingsDirty).toBe(true);
+  });
+
+  it('copies the Linux startup report with keyboard retry and closes on Escape', async () => {
+    const { api } = fixture();
+    const report = { ...failure, code: 'STARTUP-KEYRING' };
+    vi.stubGlobal('scStartup', async () => report);
+    try {
+      api.command.mockRejectedValueOnce(new Error('Clipboard unavailable')).mockResolvedValueOnce('copied');
+      render(<StartupFailure />);
+      await screen.findByText(/Code: STARTUP-KEYRING/);
+      const user = userEvent.setup();
+      const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+      await user.tab();
+      expect(document.activeElement).toBe(button);
+      await user.keyboard('{Enter}');
+      await screen.findByText('Try again.');
+      await user.keyboard(' ');
+      await screen.findByText('Copied.');
+      expect(document.activeElement).toBe(button);
+      const copy = { type: 'copyDiagnostic', surface: 'startup', reportId: report.reportId };
+      expect(api.command.mock.calls).toEqual([[copy], [copy]]);
+      await user.keyboard('{Escape}');
+      expect(api.command).toHaveBeenLastCalledWith({ type: 'exit' });
+    } finally { vi.unstubAllGlobals(); }
+  });
+});
+
 function enterModel(name: string, value: string) {
   const model = screen.getByRole('combobox', { name });
   fireEvent.change(model, { target: { value } });

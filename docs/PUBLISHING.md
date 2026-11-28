@@ -2,12 +2,20 @@
 
 ## Source and release status
 
-`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.21**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
+`main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.22**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
+
+Beta.22 includes diagnostic copying on the desktop failure surfaces and the
+Linux Settings shortcut-copy fix. The Fedora RPM passed installed clipboard
+and startup checks. See the [qualification](VERIFICATION.md#diagnostic-copy-in-beta22-2026-11-28)
+and the [beta.22 package and local handoff record](https://github.com/Ziyadin23/ScreenCompanion/pull/184).
+
+Beta.21 introduced a Copy command button for each Linux shortcut.
+[Installed beta.21 verification](VERIFICATION.md#linux-command-copy-in-beta21-2026-11-28)
 
 Beta.20 updates the in-app Linux help for Hyprland bindings. The installed
 RPM passed focused help and binding checks on Fedora 44. [Beta.20 Linux evidence](VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
 
-The latest local beta is **0.5.0-beta.20**, built from `38d1e3e`.
+The earlier **0.5.0-beta.20** local build came from `38d1e3e`.
 The Linux RPM and all four Windows files passed copied-byte verification.
 [Beta.20 local handoff and hashes](VERIFICATION.md#beta20-local-handoff)
 
@@ -119,7 +127,8 @@ exclusion and for the production entry points. To exercise the exclusion, run
 `npm run preview:astryx -- build` before `npm run package:rpm`.
 
 The target requires Hyprland Wayland, PipeWire, its desktop portal and an
-unlocked Secret Service keyring. The RPM uses the
+unlocked Secret Service keyring. The RPM installs `wl-clipboard` for the
+native startup error dialog's Copy action. The RPM uses the
 `io.github.ziyadin23.sc` desktop identity and manual updates;
 it does not run the Windows updater. Before publication verify installation,
 desktop launch, portal monitor selection and full-resolution capture, keyring

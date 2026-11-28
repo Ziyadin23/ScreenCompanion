@@ -7,6 +7,7 @@ import { themes, defaultThemeSlug } from '../astryx-themes';
 import { Icon, type IconName } from './Icon';
 import { panelStyle } from './appearance';
 import { formatShortcut } from './shortcuts';
+import { CopyDiagnostic } from './CopyDiagnostic';
 
 const EDGES: ResizeEdge[] = ['left', 'right', 'top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right'];
 const WHEEL_DELTA = 120;
@@ -167,6 +168,8 @@ function Answer({ state, onCommand, question, setQuestion }: {
           </nav>
         </div>
         {state.shortcutRecovery && <p className="panel-recovery" role="alert">Restart SC to fix shortcuts.</p>}
+        {state.error && (state.surface === 'answer' || state.surface === 'input') &&
+          <CopyDiagnostic key={`${state.surface}:${state.error.reportId}`} surface={state.surface} reportId={state.error.reportId} />}
       </header>
       <div className="answer-text" data-testid="answer-text" ref={text} tabIndex={0} aria-label="Answer" role="region">{answer || <span className="answer-empty">Capture your screen or open Question to get started.</span>}</div>
       {state.surface === 'input' && <form ref={composer} className="question-form" onSubmit={(event) => { event.preventDefault(); if (!composing.current) void submit(); }}>

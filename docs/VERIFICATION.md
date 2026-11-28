@@ -11,6 +11,8 @@ recordings and local state belong outside this repository.
 
 ## Current candidate and open gates
 
+The beta.22 checks cover keyboard copying of a displayed failure code and report ID, plus the result of copying a Linux shortcut command from Settings. [Beta.22 diagnostic copy](#diagnostic-copy-in-beta22-2026-11-28)
+
 Local beta.20 passed installed Linux shortcut help and the beta.19 to
 beta.20 RPM upgrade. Windows passed the scoped native, vault, UI and
 package checks. All five delivered files matched the verified build.
@@ -1293,6 +1295,48 @@ scrollable content. This supplemental run covered the two Settings surfaces.
 
 [Issue #163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) ·
 [PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
+
+## Diagnostic copy in beta.22 (2026-11-28)
+
+The beta.22 application and packaging inputs came from
+`2aac04b6397cfbdfc657b4e3bab43bffcc3660f1`. **Copy diagnostic details**
+copies exactly two labelled lines from the failure on screen. The first is
+`Code:` and the second is `Report ID:`. The action is available in Answer,
+Question, Settings shortcut recovery and the startup error window.
+
+On Fedora, the portable suite passed 1,417 tests in 39 files. One Windows-only
+startup test was skipped. Type checking, lint and production bundles passed.
+The production renderer passed 35 preview checks before the emergency-dialog
+correction. That correction changed the main process and the RPM dependency list.
+
+Two earlier runs exposed user-visible failures. A separate Wayland client
+still pasted the previous text after the original GTK startup dialog reported
+success. Also, the first Linux shortcut fix changed when unrelated commands
+finished. A late window resize passed six times on the base and failed six
+times on that revision. Waiting only for the shortcut write fixed the resize
+and preserved feedback when a clipboard write was denied.
+
+The Fedora 44 x86-64 RPM was 95,877,445 bytes. Its SHA-256 was
+`fae16ec34ad78645058ddf6f6bcb023167b321282540f38424ca19e16f55b8c1`.
+The package requires `wl-clipboard`. The disposable install used an isolated
+Hyprland session and skipped dependency resolution and install scriptlets.
+Its application archive matched the staged package.
+
+- A separate Wayland client pasted both labelled lines from the regular
+  startup window. For the emergency test the fixture prevented the startup
+  renderer from loading. Denying access to the clipboard writer produced a
+  retry message and preserved the previous clipboard. Restoring access and
+  pressing Enter copied the same two identifiers through the native dialog.
+- A synthetic failed question exercised the installed panel. Settings used
+  a synthetic shortcut recovery state because Hyprland owns the shortcuts.
+  Keyboard copying and retry preserved the active view and focus. The clipboard
+  contained only the displayed identifiers. The focused shortcut test also
+  confirmed that a delayed clipboard rejection preserved the previous value
+  and that retry copied the selected command.
+
+The linked PR records the Windows checks and the five-file local handoff.
+
+[Diagnostic copy issue](https://github.com/Ziyadin23/ScreenCompanion/issues/172) · [Diagnostic copy PR and package record](https://github.com/Ziyadin23/ScreenCompanion/pull/184) · [Linux shortcut copy fix](https://github.com/Ziyadin23/ScreenCompanion/pull/187)
 
 ## Linux command copy in beta.21 (2026-11-28)
 

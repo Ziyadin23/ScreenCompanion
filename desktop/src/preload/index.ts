@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppCommand, AppCommandResult, AppState, DesktopApi, SettingsDraft, SettingsSaveResult, SetupRequest, UpdateAction } from '../contracts';
+import type { AppCommand, AppCommandResult, AppState, DesktopApi, DisplayError, SettingsDraft, SettingsSaveResult, SetupRequest, UpdateAction } from '../contracts';
 
 const api: DesktopApi = {
   getState: () => ipcRenderer.invoke('sc:getState') as Promise<AppState>,
@@ -24,3 +24,4 @@ const api: DesktopApi = {
   }
 };
 contextBridge.exposeInMainWorld('sc', Object.freeze(api));
+contextBridge.exposeInMainWorld('scStartup', () => ipcRenderer.invoke('sc:getStartupReport') as Promise<DisplayError>);

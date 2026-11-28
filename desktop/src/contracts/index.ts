@@ -128,6 +128,7 @@ export type AppCommandResult = 'clear-question' | 'copied' | void;
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
   | { type: 'copyLinuxCommand'; action: DesktopAction }
+  | { type: 'copyDiagnostic'; surface: 'answer' | 'input' | 'settings' | 'startup'; reportId: string }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
   | { type: 'inputHeight'; height: number }
   | { type: 'recordShortcut'; recording: boolean; session: number; focusRevision: number }
