@@ -1294,6 +1294,48 @@ scrollable content. This supplemental run covered the two Settings surfaces.
 [Issue #163](https://github.com/Ziyadin23/ScreenCompanion/issues/163) ·
 [PR #164](https://github.com/Ziyadin23/ScreenCompanion/pull/164)
 
+## Linux command copy in beta.21 (2026-11-28)
+
+The Fedora 44 x86-64 RPM came from frozen source
+`63ca5d6bcc2b0477fa4d976ee74c4e3098518f35`.
+`npm run package:rpm` exited 0. The 95,875,453-byte RPM passed its internal
+digest check. Its SHA-256 is
+`27b64d26916a37adec613f7c66740f2b5f181a059ca961c15d37e5161d26c870`.
+The disposable install reported beta.21 and its application archive matched the
+build output. The archive contained the production entry points and excluded
+the developer preview. The focused RPM transaction skipped dependency
+resolution and install scriptlets.
+
+Two runs of the installed executable used Hyprland 0.57.2 nested in headless
+KWin 6.8.3. Each used a fresh synthetic profile, a disposable keyring and
+clipboard, and a loopback-only network namespace. Both runs exited 0.
+
+- At 320 × 225 and 760 × 680 logical pixels, Tab focused each of the seven
+  Copy command buttons. Alternating Enter and Space copied the exact installed
+  executable path and action argument. An independent Wayland clipboard read
+  verified every value. The focus ring and a success message remained visible.
+- Copying kept the Settings state and native window. No configured binding
+  fired, no screen chooser opened, and no provider request occurred. Requests
+  with an unknown action or from outside Settings preserved the clipboard.
+- An injected write failure displayed the retry message in the live status
+  region and preserved focus and the previous clipboard text. Retrying with
+  the normal clipboard adapter succeeded.
+
+The first two unpacked attempts stopped in the test fixture during clipboard
+setup and status lookup. The corrected unpacked check and both installed runs
+passed. The renderer regression failed on beta.20 and passed with the change.
+Focused coverage also checked dirty Settings and browser preview clipboard
+denial. The Astryx built-output check exited 0 with two existing theme font
+warnings.
+
+A one-worker `npm run verify` passed 1,406 tests in 39 files, type checking,
+lint and production bundles. An earlier concurrent run reported one socket
+reset in the Linux transport fixture and two worker startup timeouts.
+[Transport fixture issue #169](https://github.com/Ziyadin23/ScreenCompanion/issues/169)
+
+[Issue #171](https://github.com/Ziyadin23/ScreenCompanion/issues/171) ·
+[PR #182](https://github.com/Ziyadin23/ScreenCompanion/pull/182)
+
 ## Linux desktop controls and relaunch (2026-11-26)
 
 The transferred beta.19 RPM from `ebc84d1cad664c18ea496dec5cda9375572d9531`
