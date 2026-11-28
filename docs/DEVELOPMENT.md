@@ -84,7 +84,7 @@ openspec validate --all --strict --no-interactive
 git diff --check
 ```
 
-The documentation checker resolves local files and Markdown anchors; external URLs and factual freshness require review against their owning sources. Hosted CI pins the OpenSpec CLI version.
+The documentation checker resolves local Markdown links, heading anchors and HTML image sources such as the README logo. Review external URLs and factual claims against their owning sources. Hosted CI pins the OpenSpec CLI version.
 
 ## OpenSpec lifecycle
 
