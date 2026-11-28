@@ -23,6 +23,16 @@ async function listen(handler: RequestListener): Promise<number> {
   server = createServer(handler); await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   return (server.address() as { port: number }).port;
 }
+function attributeTunnelErrors(socket: Duplex, role: string, isCleaningUp: () => boolean): void {
+  // Observe errors without acting as an error handler.
+  socket.on(errorMonitor, (error: NodeJS.ErrnoException) => {
+    Object.assign(error, {
+      fixtureSocket: role,
+      fixturePhase: isCleaningUp() ? 'cleanup' : 'exchange',
+      fixtureWriteFinished: socket.writableFinished
+    });
+  });
+}
 function handleConnectClientError(client: Duplex): void {
   client.on('error', (error: NodeJS.ErrnoException) => {
     // A peer can reset its read side after the proxy has finished sending.
@@ -65,7 +75,9 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
     vi.stubEnv('https_proxy', `http://other-user:other-pass@127.0.0.1:${originPort}`);
     server = createServer(); let connects = 0, authorization: string | undefined;
     const sockets = new Set<Duplex>();
+    let cleaningUp = false;
     server.on('connect', (req, socket) => {
+      attributeTunnelErrors(socket, 'CONNECT 407 client', () => cleaningUp);
       handleConnectClientError(socket);
       connects++; authorization = req.headers.authorization ?? req.headers['proxy-authorization']; sockets.add(socket);
       socket.on('close', () => sockets.delete(socket));
@@ -81,6 +93,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       expect(Date.now() - started).toBeLessThan(1000);
       expect(connects).toBe(1); expect(originCalls).toBe(0); expect(authorization).toBeUndefined();
     } finally {
+      cleaningUp = true;
       await closeTunnelSockets(sockets);
       origin.closeAllConnections(); await new Promise<void>(resolve => origin.close(() => resolve()));
     }
@@ -95,6 +108,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
     try {
       peer.write('CONNECT 127.0.0.1:443 HTTP/1.1\r\nHost: 127.0.0.1:443\r\n\r\n');
       [, client] = await accepted as [unknown, Duplex];
+      attributeTunnelErrors(client, 'CONNECT client', () => false);
       handleConnectClientError(client);
       const reset = vi.fn();
       client.on(errorMonitor, reset);
@@ -106,7 +120,10 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       await peerEnded;
       peer.resetAndDestroy();
       await closed;
-      expect(reset).toHaveBeenCalledWith(expect.objectContaining({ code: 'ECONNRESET', syscall: 'read' }));
+      expect(reset).toHaveBeenCalledWith(expect.objectContaining({
+        code: 'ECONNRESET', syscall: 'read', fixtureSocket: 'CONNECT client',
+        fixturePhase: 'exchange', fixtureWriteFinished: true
+      }));
     } finally {
       peer.destroy();
       client?.destroy();
@@ -121,7 +138,9 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
     const sockets = new Set<Duplex>();
     const proxyPassword = 'synthetic:quote"\\@%';
     const proxyAuthorization = `Basic ${Buffer.from(`fixture-user:${proxyPassword}`).toString('base64')}`;
+    const connectCase = `status=${status} authenticated=${authenticate}`;
     let connects = 0, providerAuthorizationAtProxy = false, proxyAuthorizationAtOrigin = false;
+    let cleaningUp = false;
     let tlsServer: ReturnType<typeof createHttpsServer> | undefined;
     try {
       execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'key.pem'),
@@ -137,6 +156,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       const originPort = (tlsServer.address() as { port: number }).port;
       server = createServer();
       server.on('connect', (req, client, head) => {
+        attributeTunnelErrors(client, `CONNECT client ${connectCase}`, () => cleaningUp);
         handleConnectClientError(client);
         connects++;
         providerAuthorizationAtProxy ||= Boolean(req.headers.authorization);
@@ -150,6 +170,7 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
           if (head.length) upstream.write(head);
           client.pipe(upstream); upstream.pipe(client);
         });
+        attributeTunnelErrors(upstream, `CONNECT upstream ${connectCase}`, () => cleaningUp);
         sockets.add(upstream); upstream.on('close', () => sockets.delete(upstream));
       });
       await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
@@ -163,22 +184,30 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
       if (status === 200) expect(result.body.toString()).toBe('{"ok":true}');
       else { expect(result.headers.location).toBe('/other'); expect(result.body).toHaveLength(0); }
     } finally {
+      cleaningUp = true;
       await closeTunnelSockets(sockets);
       tlsServer?.closeAllConnections();
       if (tlsServer) await new Promise<void>(resolve => tlsServer!.close(() => resolve()));
       await rm(dir, { recursive: true, force: true });
     }
   });
-  it.each([['SOCKS', 4], ['SOCKS4', 4], ['SOCKS5', 5]] as const)('uses %s as SOCKSv%i for a loopback request', async (route, version) => {
-    let handshakeVersion = 0, target = '';
+  async function startSocksProxy(version: number) {
+    const traffic = { handshakeVersion: 0, target: '' };
     const sockets = new Set<Duplex>();
+    let cleaningUp = false;
     const proxy = createTcpServer(socket => {
+      attributeTunnelErrors(socket, `SOCKSv${version} client`, () => cleaningUp);
       sockets.add(socket); socket.on('close', () => sockets.delete(socket));
       let stage = 'hello', input = Buffer.alloc(0);
+      socket.on('error', (error: NodeJS.ErrnoException) => {
+        // A half-open peer can reset after receiving the complete fixture response and FIN.
+        if (stage === 'done' && socket.writableFinished && error.code === 'ECONNRESET' && error.syscall === 'read') return;
+        throw error;
+      });
       socket.on('data', chunk => {
         input = Buffer.concat([input, typeof chunk === 'string' ? Buffer.from(chunk) : chunk]);
         if (stage === 'hello' && input.length >= 2) {
-          handshakeVersion = input[0]!;
+          traffic.handshakeVersion = input[0]!;
           if (version === 5) {
             const length = 2 + input[1]!; if (input.length < length) return;
             input = input.subarray(length); stage = 'connect'; socket.write(Buffer.from([5, 0]));
@@ -193,20 +222,67 @@ describe.skipIf(process.platform !== 'linux')('Linux HTTP transport with loopbac
           input = input.subarray(length); stage = 'request'; socket.write(Buffer.from([5, 0, 0, 1, 127, 0, 0, 1, 0, 80]));
         }
         if (stage === 'request' && input.includes('\r\n\r\n')) {
-          target = input.toString('latin1').split('\r\n', 1)[0]!; stage = 'done';
+          traffic.target = input.toString('latin1').split('\r\n', 1)[0]!; stage = 'done';
           socket.end('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok');
         }
       });
     });
     await new Promise<void>(resolve => proxy.listen(0, '127.0.0.1', resolve));
     const port = (proxy.address() as { port: number }).port;
+    return {
+      port, traffic, sockets,
+      async close() {
+        cleaningUp = true;
+        await closeTunnelSockets(sockets);
+        await new Promise<void>(resolve => proxy.close(() => resolve()));
+      }
+    };
+  }
+  it.each([['SOCKS', 4], ['SOCKS4', 4], ['SOCKS5', 5]] as const)('uses %s as SOCKSv%i for a loopback request', async (route, version) => {
+    const proxy = await startSocksProxy(version);
     try {
-      const result = await createLinuxTransport(async () => `${route} 127.0.0.1:${port}`)
+      const result = await createLinuxTransport(async () => `${route} 127.0.0.1:${proxy.port}`)
         .send({ ...request('http://127.0.0.1:12345/test'), timeoutMs: 2000 });
-      expect(handshakeVersion).toBe(version); expect(target).toBe('POST /test HTTP/1.1'); expect(result.body.toString()).toBe('ok');
+      expect(proxy.traffic).toEqual({ handshakeVersion: version, target: 'POST /test HTTP/1.1' });
+      expect(result.body.toString()).toBe('ok');
     } finally {
-      for (const socket of sockets) socket.destroy();
-      await new Promise<void>(resolve => proxy.close(() => resolve()));
+      await proxy.close();
+    }
+  });
+  it('settles a SOCKS client reset after sending the complete response', async () => {
+    const proxy = await startSocksProxy(4);
+    const peer = connect({ host: '127.0.0.1', port: proxy.port, allowHalfOpen: true });
+    try {
+      peer.write(Buffer.from([4, 1, 0x30, 0x39, 127, 0, 0, 1, 0]));
+      const granted = Buffer.from([0, 90, 0, 0, 0, 0, 0, 0]);
+      let reply: Buffer | null = peer.read(granted.length);
+      while (reply === null) {
+        await once(peer, 'readable');
+        reply = peer.read(granted.length);
+      }
+      expect(reply).toEqual(granted);
+
+      const response: Buffer[] = [];
+      peer.on('data', chunk => response.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk));
+      const ended = once(peer, 'end');
+      peer.write('POST /test HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n');
+      await ended;
+      expect(Buffer.concat(response).toString()).toBe('HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok');
+
+      const [socket] = proxy.sockets;
+      expect(socket?.writableFinished).toBe(true);
+      const reset = vi.fn();
+      socket!.once(errorMonitor, reset);
+      const closed = new Promise<void>(resolve => socket!.once('close', resolve));
+      peer.resetAndDestroy();
+      await closed;
+      expect(reset).toHaveBeenCalledWith(expect.objectContaining({
+        code: 'ECONNRESET', syscall: 'read', fixtureSocket: 'SOCKSv4 client',
+        fixturePhase: 'exchange', fixtureWriteFinished: true
+      }));
+    } finally {
+      peer.destroy();
+      await proxy.close();
     }
   });
   it('accepts explicit HTTP and HTTPS default proxy ports while rejecting malformed routes', async () => {
