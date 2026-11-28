@@ -1621,11 +1621,10 @@ describe('settings drafts and protected controls', () => {
       expect(help).not.toContain(shortcut);
     }
   });
-  it.each(['Keyboard shortcuts', 'Commands'])('shows all Linux actions and notices in %s', async surface => {
+  it('shows all Linux actions and notices in Keyboard shortcuts', async () => {
     fixture({ platform: 'linux' }); render(<App />); await screen.findByTestId('answer-text');
     await openSettings();
-    if (surface === 'Keyboard shortcuts') disclose(surface);
-    else tab(surface);
+    disclose('Keyboard shortcuts');
 
     const help = screen.getByText(/--action=capture/).textContent!;
     const actions = [...help.matchAll(/^--action=([\w-]+) /gm)].map(match => match[1]).sort();
@@ -1636,6 +1635,34 @@ describe('settings drafts and protected controls', () => {
     expect(help).toContain('Reopen SC to restore a hidden window.');
     expect(help).toContain('SC windows can appear in recordings.');
     expect(screen.queryByText(/Change them in Answer & shortcuts/)).toBeNull();
+  });
+  it('copies each Linux command from Settings with keyboard focus and feedback', async () => {
+    const driver = fixture({ platform: 'linux' }); render(<App />); await screen.findByTestId('answer-text');
+    await openSettings(); tab('Commands');
+    const user = userEvent.setup();
+    const actions = ['capture', 'input', 'input-with-screenshot', 'settings', 'visibility', 'test', 'exit'];
+    const commandPage = screen.getByRole('tabpanel');
+    commandPage.focus();
+    driver.api.command.mockClear().mockResolvedValue('copied');
+    expect(screen.getByText(/executable command for a Hyprland binding/)).toBeTruthy();
+    expect(screen.getByText(/SC windows can appear in recordings/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open capture test' })).toBeTruthy();
+    for (const action of actions) {
+      expect(screen.getByText(`/opt/SC/io.github.ziyadin23.sc --action=${action}`)).toBeTruthy();
+      const button = screen.getByRole('button', { name: `Copy command for ${action}` });
+      await user.tab();
+      expect(document.activeElement).toBe(button);
+      await user.keyboard('{Enter}');
+      expect((await screen.findByText(`Copied ${action} command.`)).closest('[role="status"]')).toBeTruthy();
+      expect(document.activeElement).toBe(button);
+    }
+    expect(driver.api.command.mock.calls).toEqual(actions.map(action => [{ type: 'copyLinuxCommand', action }]));
+    driver.api.command.mockRejectedValueOnce(new Error('synthetic clipboard failure'));
+    await user.keyboard(' ');
+    expect((await screen.findByText('Could not copy. Try again.')).closest('[role="status"]')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy command for exit' }));
+    await user.keyboard(' ');
+    await screen.findByText('Copied exit command.');
   });
   it('records six shortcuts, rejects duplicates and F12, notifies native host and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();

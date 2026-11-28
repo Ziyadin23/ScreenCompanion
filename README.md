@@ -21,7 +21,7 @@ own API key. Provider usage charges apply.
 | --- | --- | --- |
 | Latest published Windows beta (Electron/TypeScript) | **v0.5.0-beta.16** | [Installer](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-Setup-v0.5.0-beta.16.exe) · [Portable ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.zip) · [Portable EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.5.0-beta.16/SC-v0.5.0-beta.16.exe) · [Release notes and licenses](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.5.0-beta.16) |
 | Latest stable (previous C# application) | **v0.4.14** | [EXE](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.exe) · [ZIP](https://github.com/Ziyadin23/ScreenCompanion/releases/download/v0.4.14/SC-v0.4.14.zip) · [Release notes](https://github.com/Ziyadin23/ScreenCompanion/releases/tag/v0.4.14) |
-| Local candidate source | **0.5.0-beta.20** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
+| Local candidate source | **0.5.0-beta.21** | [Build from source](#build-and-further-documentation) · [Project status](docs/STATUS.md) |
 
 **Windows beta.16** adds separate text-only and screenshot actions, a redesigned
 Settings window and smaller Windows packages. The `README.txt` release asset is
@@ -76,9 +76,8 @@ after the keyring is ready, restart SC and enter the key again. Use
 screenshot, use **Capture screen**, or **Ctrl+Enter / Send with screenshot** while
 typing, then select a monitor in the system prompt. Cancel in the prompt to
 return to your previous answer and any unsent question. Reopen SC to restore a hidden
-window. For optional Hyprland bindings, see **Settings → Commands**. It lists
-`--action=input` to open or focus Question and `--action=input-with-screenshot`
-to send the focused question with a screenshot. Linux uses a separate encrypted
+window. Use **Settings → Commands** to copy any of the seven SC commands for
+your Hyprland bindings. Linux uses a separate encrypted
 settings vault and manual RPM updates. HTTPS API requests can use Basic proxy
 authentication from a matching process proxy setting. See the [proxy guidance](docs/USER_GUIDE.md#works-on-a-hotspot-but-fails-on-university-wi-fi).
 
