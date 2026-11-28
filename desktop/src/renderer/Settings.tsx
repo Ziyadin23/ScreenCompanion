@@ -49,6 +49,35 @@ const DATA_NOTICE: Record<ApiProvider, string> = {
   DeepSeek: 'Uses stateless Responses with store: false. This does not guarantee zero retention under DeepSeek API policies.'
 };
 
+function LinuxCommands() {
+  const latestCopy = useRef(0);
+  const [notice, setNotice] = useState<{ action: DesktopAction; revision: number; message: string } | null>(null);
+  async function copyCommand(action: DesktopAction) {
+    const revision = ++latestCopy.current;
+    let copied = false;
+    try { copied = await window.sc.command({ type: 'copyLinuxCommand', action }) === 'copied'; }
+    catch { /* Announce a failed copy next to the button. */ }
+    if (revision === latestCopy.current) {
+      setNotice({ action, revision, message: copied ? 'Command copied.' : 'Could not copy. Try again.' });
+    }
+  }
+  return <>
+    <VStack as="ul" className="linux-command-list" gap={4}>
+      {LINUX_ACTION_NAMES.map(action => <VStack as="li" key={action} gap={2} align="start">
+        <Text as="p" type="supporting">{LINUX_ACTIONS[action]}</Text>
+        <code>{linuxCommand(action)}</code>
+        <HStack gap={3} align="center">
+          <Button label={`Copy command for ${action}`} type="button" variant="secondary" onClick={() => { void copyCommand(action); }}>Copy command</Button>
+          <Text type="supporting" role="status">
+            {notice?.action === action && <Text key={notice.revision} type="inherit">{notice.message}</Text>}
+          </Text>
+        </HStack>
+      </VStack>)}
+    </VStack>
+    <p className="hint">{LINUX_CONTROL_NOTICE}</p>
+  </>;
+}
+
 export function Settings({ state }: { state: AppState }) {
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
   const draftRef = useRef<SettingsDraft | null>(null);
@@ -76,7 +105,6 @@ export function Settings({ state }: { state: AppState }) {
   const recordingRef = useRef<{ field: ShortcutField; focusRevision: number } | null>(null);
   const pendingModifier = useRef<HotkeyBinding | null>(null);
   const [recordNotice, setRecordNotice] = useState('');
-  const [copyNotice, setCopyNotice] = useState({ message: '', revision: 0 });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [choosingColor, setChoosingColor] = useState(false);
@@ -323,14 +351,7 @@ export function Settings({ state }: { state: AppState }) {
   }
   const blocked = saving || choosingColor;
   const linuxCommandsPage = state.platform === 'linux' && page === 'Commands';
-  const settingsStatus = saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : '';
   const showRetry = loadStatus === 'failed' || loadStatus === 'retrying';
-  async function copyCommand(action: DesktopAction) {
-    let copied = false;
-    try { copied = await window.sc.command({ type: 'copyLinuxCommand', action }) === 'copied'; }
-    catch { /* The footer announces a failed copy. */ }
-    setCopyNotice(({ revision }) => ({ revision: revision + 1, message: copied ? `Copied ${action} command.` : 'Could not copy. Try again.' }));
-  }
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
 
@@ -485,16 +506,7 @@ export function Settings({ state }: { state: AppState }) {
           </details>
           <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`} The pipeline is saved per answer model; text-only sends skip screen reading.</p>
         </>}
-        {page === 'Commands' && <>{linuxCommandsPage ? <>
-          <VStack as="ul" className="linux-command-list" gap={4}>
-            {LINUX_ACTION_NAMES.map(action => <VStack as="li" key={action} gap={2} align="start">
-              <Text as="p" type="supporting">{LINUX_ACTIONS[action]}</Text>
-              <code>{linuxCommand(action)}</code>
-              <Button label={`Copy command for ${action}`} type="button" variant="secondary" onClick={() => { void copyCommand(action); }}>Copy command</Button>
-            </VStack>)}
-          </VStack>
-          <p className="hint">{LINUX_CONTROL_NOTICE}</p>
-        </> : <pre className="commands-text">{commandsText(state.shortcuts)}</pre>}
+        {page === 'Commands' && <>{linuxCommandsPage ? <LinuxCommands /> : <pre className="commands-text">{commandsText(state.shortcuts)}</pre>}
           <Button label="Open capture test" type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</Button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}
@@ -504,9 +516,7 @@ export function Settings({ state }: { state: AppState }) {
       {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
       {state.shortcutRecovery && <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>}
     </VStack>}
-    <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">
-      {linuxCommandsPage && copyNotice.message && !blocked ? <Text key={copyNotice.revision} as="span" type="inherit">{copyNotice.message}</Text> : settingsStatus}
-    </Text>
+    <HStack as="footer" className="dialog-footer"><Text className="footer-status" role="status">{saving ? 'Saving settings…' : choosingColor ? 'Choose a color to continue.' : dirty ? 'Unsaved changes' : ''}</Text>
       <Button label={saving ? 'Saving…' : 'Save'} variant="primary" className="primary-action" type="button" data-testid="settings-save" isDisabled={!draft || blocked || loadedRevision !== state.settingsRevision} onClick={() => { void save(); }}>{saving ? 'Saving…' : 'Save'}</Button>
       <Button label="Back" variant="ghost" type="button" data-testid="settings-back" isDisabled={blocked} onClick={() => { void back(); }}>Back</Button></HStack>
   </section>;
