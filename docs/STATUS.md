@@ -2,6 +2,10 @@
 
 Snapshot updated **2026-11-28 UTC**. Application source is **0.5.0-beta.22**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
 
+Beta.22 adds **Copy diagnostic details** in Answer, Question, Settings shortcut
+recovery and startup. Linux Settings now waits for the clipboard before
+confirming a shortcut copy. [Beta.22 verification](VERIFICATION.md#diagnostic-copy-in-beta22-2026-11-28)
+
 Beta.21 adds a Copy command button for each of the seven Linux actions.
 The installed Fedora RPM passed keyboard and clipboard checks at two Settings
 sizes in isolated Hyprland. [Beta.21 Linux evidence](VERIFICATION.md#linux-command-copy-in-beta21-2026-11-28)

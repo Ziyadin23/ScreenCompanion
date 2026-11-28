@@ -4,10 +4,18 @@
 
 `main` develops the Electron/TypeScript application under `desktop/`. The current source version is **0.5.0-beta.22**. Read the version from the [manifest](../desktop/package.json). Keep download links on the published release when reserving the next source version. [Release status](../README.md#release-status)
 
+Beta.22 includes diagnostic copying on the desktop failure surfaces and the
+Linux Settings shortcut-copy fix. The Fedora RPM passed installed clipboard
+and startup checks. See the [qualification](VERIFICATION.md#diagnostic-copy-in-beta22-2026-11-28)
+and the [beta.22 package and local handoff record](https://github.com/Ziyadin23/ScreenCompanion/pull/184).
+
+Beta.21 introduced a Copy command button for each Linux shortcut.
+[Installed beta.21 verification](VERIFICATION.md#linux-command-copy-in-beta21-2026-11-28)
+
 Beta.20 updates the in-app Linux help for Hyprland bindings. The installed
 RPM passed focused help and binding checks on Fedora 44. [Beta.20 Linux evidence](VERIFICATION.md#linux-shortcut-help-in-beta20-2026-11-27)
 
-The latest local beta is **0.5.0-beta.20**, built from `38d1e3e`.
+The earlier **0.5.0-beta.20** local build came from `38d1e3e`.
 The Linux RPM and all four Windows files passed copied-byte verification.
 [Beta.20 local handoff and hashes](VERIFICATION.md#beta20-local-handoff)
 
