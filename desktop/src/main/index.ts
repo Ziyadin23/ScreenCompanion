@@ -1,5 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
 import electronUpdater from 'electron-updater';
+import { spawn } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -703,10 +704,24 @@ async function showLinuxStartupFailure(title: string, report: DisplayError): Pro
     if (!closing && !target.isDestroyed()) target.show();
     await Promise.race([closed, rendererGone]);
   } catch (error) {
-    if (target.isDestroyed()) return;
-    target.destroy();
-    throw error;
+    if (!target.isDestroyed()) target.destroy();
+    if (!closing) throw error;
   }
+}
+function copyLinuxStartupDetails(details: string): Promise<void> {
+  // The native dialog cannot give Chromium a Wayland input serial. Let wl-copy own the selection.
+  return new Promise((resolve, reject) => {
+    const writer = spawn('/usr/bin/wl-copy', ['--type', 'text/plain;charset=utf-8'], {
+      stdio: ['pipe', 'ignore', 'ignore'], timeout: 3_000, killSignal: 'SIGKILL'
+    });
+    writer.once('error', reject);
+    writer.once('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error('Could not write to the Wayland clipboard.'));
+    });
+    writer.stdin.once('error', reject);
+    writer.stdin.end(details);
+  });
 }
 async function startupFailure(error: unknown): Promise<void> {
   // Quitting can destroy the renderer while its startup load is still pending.
@@ -719,10 +734,15 @@ async function startupFailure(error: unknown): Promise<void> {
     if ((process.platform === 'win32' || linux) && !synthetic) {
       const title = 'SC could not start';
       const details = diagnosticDetails(report);
+      if (linux) {
+        try {
+          await showLinuxStartupFailure(title, report);
+          return;
+        } catch { /* The native dialog can still show the diagnostic. */ }
+      }
       let feedback = '';
       try {
-        if (linux) await showLinuxStartupFailure(title, report);
-        else while (!closing) {
+        while (!closing) {
           const options: Electron.MessageBoxOptions = { title, type: 'error', message: report.message,
             detail: feedback ? `${details}\n\n${feedback}` : details,
             buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true };
@@ -730,11 +750,19 @@ async function startupFailure(error: unknown): Promise<void> {
           const response = dialog.showMessageBoxSync(options);
           if (response !== 0 || closing) break;
           try {
-            await copyDiagnosticDetails(report);
+            if (linux) await copyLinuxStartupDetails(details);
+            else await copyDiagnosticDetails(report);
             feedback = 'Diagnostic details copied.';
           } catch { feedback = 'Could not copy. Try again.'; }
         }
-      } catch { if (!closing) dialog.showErrorBox(title, `${report.message}\n\n${details}`); }
+      } catch {
+        if (closing) return;
+        const recovery = report.logSaved
+          ? `Report ID: ${report.reportId}\nThe diagnostic code is in the matching diagnostics.log entry.`
+          : `Report ID: ${report.reportId}\nSC could not save the log. Run SC from a terminal to see the diagnostic code.`;
+        try { dialog.showErrorBox(title, `${report.message}\n\n${recovery}`); }
+        catch { /* The diagnostic is already on standard error. */ }
+      }
     }
   } finally { process.exitCode = 1; app.quit(); }
 }

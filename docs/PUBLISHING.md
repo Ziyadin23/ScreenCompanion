@@ -119,7 +119,8 @@ exclusion and for the production entry points. To exercise the exclusion, run
 `npm run preview:astryx -- build` before `npm run package:rpm`.
 
 The target requires Hyprland Wayland, PipeWire, its desktop portal and an
-unlocked Secret Service keyring. The RPM uses the
+unlocked Secret Service keyring. The RPM installs `wl-clipboard` for the
+native startup error dialog's Copy action. The RPM uses the
 `io.github.ziyadin23.sc` desktop identity and manual updates;
 it does not run the Windows updater. Before publication verify installation,
 desktop launch, portal monitor selection and full-resolution capture, keyring

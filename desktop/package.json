@@ -132,6 +132,7 @@
         "gnome-keyring",
         "curl",
         "pipewire",
+        "wl-clipboard",
         "xdg-desktop-portal",
         "xdg-desktop-portal-hyprland"
       ]

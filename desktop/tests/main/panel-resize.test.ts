@@ -1,7 +1,8 @@
 import { EventEmitter, once } from 'node:events';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Writable } from 'node:stream';
 import { setImmediate } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -22,6 +23,7 @@ let clipboardText: string;
 const clipboardWrite = vi.fn(async (value: string) => { clipboardText = value; });
 const showMessageBoxSync = vi.fn<(options: Electron.MessageBoxOptions) => number>();
 const showErrorBox = vi.fn();
+const spawnClipboard = vi.fn();
 const sizeWrites = new EventEmitter();
 let profile: string;
 let scaleFactor: number;
@@ -34,7 +36,7 @@ let nextSizeWrite: Promise<void> | null;
 let deferPanelConfigure: boolean;
 let instanceOwner: symbol | null;
 let exitFromTray: (() => void) | undefined;
-let failStartupRenderer: boolean;
+let startupRendererFailure: 'load' | 'crash' | null;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -58,6 +60,7 @@ class TestWindow extends EventEmitter {
   private maximum = { width: Infinity, height: Infinity };
   private visible = false;
   private hasMapped = false;
+  private startup = false;
   readonly webContents = Object.assign(new EventEmitter(), {
     mainFrame: { url: '' }, send() {}, setWindowOpenHandler() {}, invalidate() {},
     ipc: { handle: (name: string, handler: (event: unknown, value: unknown) => unknown) => this.startupIpc.set(name, handler) },
@@ -113,12 +116,18 @@ class TestWindow extends EventEmitter {
   isMaximized() { return this.hasMapped; }
   isVisible() { return this.visible; }
   isFocused() { return this.focused; }
-  show() { this.visible = true; this.hasMapped = true; }
+  show() {
+    this.visible = true;
+    this.hasMapped = true;
+    if (this.startup && startupRendererFailure === 'crash')
+      queueMicrotask(() => this.webContents.emit('render-process-gone'));
+  }
   showInactive() { this.show(); }
   hide() { this.visible = false; }
   focus() {}
   async loadFile(path: string, options?: Electron.LoadFileOptions) {
-    if (failStartupRenderer && options?.query?.['window-role'] === 'startup') throw new Error('Renderer load failed');
+    this.startup = options?.query?.['window-role'] === 'startup';
+    if (this.startup && startupRendererFailure === 'load') throw new Error('Renderer load failed');
     this.webContents.mainFrame.url = pathToFileURL(path).href;
     this.webContents.emit('did-finish-load');
   }
@@ -151,6 +160,10 @@ vi.mock('electron', () => ({
   screen: { getPrimaryDisplay: () => ({ workArea }), getDisplayMatching: () => ({ workArea, scaleFactor }) }
 }));
 vi.mock('electron-updater', () => ({ default: {} }));
+vi.mock(import('node:child_process'), async importOriginal => {
+  const childProcess = await importOriginal();
+  return { ...childProcess, spawn: spawnClipboard };
+});
 vi.mock(import('node:fs/promises'), async importOriginal => {
   const fs = await importOriginal();
   return { ...fs, rename: async (source, destination) => {
@@ -250,7 +263,7 @@ beforeEach(async () => {
   deferPanelConfigure = false;
   instanceOwner = null;
   exitFromTray = undefined;
-  failStartupRenderer = false;
+  startupRendererFailure = null;
   captureVisibility.mockClear();
   clipboardText = 'Unrelated clipboard text';
   vi.stubEnv('LOCALAPPDATA', profile);
@@ -351,19 +364,62 @@ it.skipIf(platform !== 'linux')('copies the Linux startup report only from its f
   } finally { process.exitCode = exitCode; log.mockRestore(); }
 });
 
-it.skipIf(platform !== 'linux')('falls back to a native error box when the Linux startup renderer cannot load', async () => {
+it.skipIf(platform !== 'linux').for(['load', 'crash'] as const)('can copy and retry from the native dialog after Linux startup renderer failure (%s)', async failure => {
   const exitCode = process.exitCode;
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   await writeFile(join(profile, 'SC', 'sc.linux.key'), 'synthetic damaged vault');
-  failStartupRenderer = true;
+  startupRendererFailure = failure;
+  const copiedDetails: string[] = [];
+  const clipboardProcess = (status: number) => {
+    const child = new EventEmitter();
+    return Object.assign(child, { stdin: new Writable({
+      write(chunk: Buffer, _encoding, callback) { copiedDetails.push(chunk.toString()); callback(); },
+      final(callback) { callback(); queueMicrotask(() => child.emit('close', status)); }
+    }) });
+  };
+  spawnClipboard.mockReset().mockImplementationOnce(() => clipboardProcess(1)).mockImplementationOnce(() => clipboardProcess(0));
   showErrorBox.mockClear();
+  showMessageBoxSync.mockReset().mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(1);
   try {
     vi.resetModules();
     const exited = once(app, 'quit');
     await import('../../src/main/index');
     await exited;
-    expect(showErrorBox).toHaveBeenCalledExactlyOnceWith('SC could not start', expect.stringMatching(/Code: STARTUP-KEYRING\nReport ID: [\da-f]{12}$/u));
+    const [initial, failed, copied] = showMessageBoxSync.mock.calls.map(([options]) => options);
+    expect(initial).toMatchObject({ title: 'SC could not start', buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1 });
+    expect(initial?.detail).toMatch(/^Code: STARTUP-KEYRING\nReport ID: [\da-f]{12}$/u);
+    expect(failed?.detail).toBe(`${initial?.detail}\n\nCould not copy. Try again.`);
+    expect(copied?.detail).toBe(`${initial?.detail}\n\nDiagnostic details copied.`);
+    expect(copiedDetails).toEqual([initial?.detail, initial?.detail]);
+    expect(spawnClipboard).toHaveBeenCalledTimes(2);
+    expect(spawnClipboard).toHaveBeenLastCalledWith('/usr/bin/wl-copy', ['--type', 'text/plain;charset=utf-8'],
+      { stdio: ['pipe', 'ignore', 'ignore'], timeout: 3_000, killSignal: 'SIGKILL' });
+    expect(showErrorBox).not.toHaveBeenCalled();
     expect(panel.isDestroyed()).toBe(true);
+    expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = exitCode; log.mockRestore(); }
+});
+
+it.skipIf(platform !== 'linux').for([true, false])('keeps a diagnostic reference when Linux cannot open the Copy dialog (log saved: %s)', async logSaved => {
+  const exitCode = process.exitCode;
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await writeFile(join(profile, 'SC', 'sc.linux.key'), 'synthetic damaged vault');
+  if (!logSaved) await mkdir(join(profile, 'SC', 'diagnostics.log'));
+  startupRendererFailure = 'load';
+  showErrorBox.mockClear();
+  showMessageBoxSync.mockReset().mockImplementationOnce(() => { throw new Error('Dialog unavailable'); });
+  try {
+    vi.resetModules();
+    const exited = once(app, 'quit');
+    await import('../../src/main/index');
+    await exited;
+    const reportId = /^STARTUP-KEYRING \/ ([0-9a-f]{12}):/u.exec(log.mock.calls[0]?.[0])?.[1];
+    expect(reportId).toBeDefined();
+    const recovery = logSaved ? 'matching diagnostics.log entry' : 'Run SC from a terminal';
+    expect(showErrorBox).toHaveBeenCalledExactlyOnceWith('SC could not start', expect.stringContaining(`Report ID: ${reportId}`));
+    expect(showErrorBox.mock.calls[0]?.[1]).toContain(recovery);
+    expect(showErrorBox.mock.calls[0]?.[1]).not.toContain('STARTUP-KEYRING');
+    expect(process.exitCode).toBe(1);
   } finally { process.exitCode = exitCode; log.mockRestore(); }
 });
 
