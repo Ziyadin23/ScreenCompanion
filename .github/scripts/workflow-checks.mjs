@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -110,6 +110,24 @@ function anchors(markdown) {
   return result;
 }
 
+function htmlImageSources(markdown) {
+  const rendered = markdown
+    .replace(/(?:^|\n[ \t]*\n)(?:(?: {4}|\t)[^\n]*(?:\n|$))+/g, '\n')
+    .replace(/<!--[\s\S]*?(?:-->|$)|(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, ' ');
+  const imageTag = /<img\s+((?:"[^"]*"|'[^']*'|[^<>"'])*)>/gi;
+  const attribute = /([^\s="'<>`/]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  const sources = [];
+  for (const [, attributes] of rendered.matchAll(imageTag)) {
+    for (const [, name, doubleQuoted, singleQuoted, unquoted] of attributes.matchAll(attribute)) {
+      if (name.toLowerCase() !== 'src') continue;
+      const source = (doubleQuoted ?? singleQuoted ?? unquoted ?? '').trim();
+      if (source) sources.push(source);
+      break;
+    }
+  }
+  return sources;
+}
+
 function checkDocuments(root, files) {
   const errors = [];
   const headingsByFile = new Map();
@@ -126,6 +144,7 @@ function checkDocuments(root, files) {
     const destinations = [
       ...[...markdown.matchAll(/\]\(\s*(<[^>]+>|[^\s)]+)(?:\s+["'][^\n]*?["'])?\s*\)/g)].map(match => match[1]),
       ...[...markdown.matchAll(/^ {0,3}\[[^\]]+\]:\s*(<[^>]+>|\S+)/gm)].map(match => match[1]),
+      ...htmlImageSources(markdown),
     ];
     for (let destination of destinations) {
       destination = destination.replace(/^<|>$/g, '');
@@ -208,6 +227,37 @@ async function selftest() {
     assert.deepEqual(checkDocuments(root, ['source.md']).errors, []);
     writeFileSync(join(root, 'source.md'), '[missing](absent.md)\n[anchor](target%20file.md#absent)\n');
     assert.equal(checkDocuments(root, ['source.md']).errors.length, 2);
+    mkdirSync(join(root, 'docs', 'assets'), { recursive: true });
+    writeFileSync(join(root, 'docs', 'assets', 'logo.png'), 'png');
+    writeFileSync(join(root, 'docs', 'images.md'), [
+      '# Images',
+      '<img src="assets/logo.png" alt="ok">',
+      `<IMG alt="src='ignored.png'" title='src="ignored.png"' data-src="ignored.png" Src='assets/logo.png' />`,
+      '<img width="16" src=assets/logo.png>',
+      '<img src="https://example.com/logo.png">',
+      '<img src="//example.com/logo.png">',
+      'Inline `<img src="missing-inline.png">` and <!-- <img src="missing-comment.png"> -->.',
+      'Two backticks also delimit code: ``a ` and <img src="missing-inline.png">``.',
+      '```html',
+      '<img src="missing-fenced.png">',
+      '```',
+      '~~~html',
+      '<img src="missing-tilde.png">',
+      '~~~',
+      '',
+      '    <img src="missing-indented.png">',
+    ].join('\n'));
+    assert.deepEqual(checkDocuments(root, ['docs/images.md']).errors, []);
+    writeFileSync(join(root, 'docs', 'nested.md'), [
+      '<img alt="broken" src="assets/missing-double.png">',
+      "<IMG data-src='ignored.png' SRC='../missing-relative.png'>",
+      '<img width="16" src=assets/missing-bare.png>',
+    ].join('\n'));
+    assert.deepEqual(checkDocuments(root, ['docs/nested.md']).errors, [
+      'docs/nested.md: missing target assets/missing-double.png',
+      'docs/nested.md: missing target ../missing-relative.png',
+      'docs/nested.md: missing target assets/missing-bare.png',
+    ]);
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^GIT_/i.test(name)));
     const fixture = { cwd: root, env: { ...env, HOME: root, XDG_CONFIG_HOME: root, GIT_CONFIG_NOSYSTEM: '1' } };
     const fixtureGit = (...args) => git(args, fixture);
