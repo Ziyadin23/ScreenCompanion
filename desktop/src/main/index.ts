@@ -3,7 +3,7 @@ import electronUpdater from 'electron-updater';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
+import type { AppState, DisplayError, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
 import { linuxCommand } from '../contracts/linux-actions';
 import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry,
   restoreHyprlandPanelPlacement, type HyprlandPanelPlacement } from '../platform';
@@ -468,6 +468,13 @@ function trustedSender(event: Electron.IpcMainInvokeEvent, readState: boolean): 
   if (!target || event.sender !== target.webContents || event.senderFrame !== target.webContents.mainFrame) throw new Error('Untrusted application frame.');
   if (!trustedUrl(event.senderFrame.url)) throw new Error('Untrusted application origin.');
 }
+function copyDiagnosticDetails(report: DisplayError): 'copied' {
+  const details = diagnosticDetails(report);
+  clipboard.writeText(details);
+  // Native writes can fail without throwing. Compare locally and discard the readback.
+  if (clipboard.readText() !== details) throw new Error('The diagnostic details were not copied.');
+  return 'copied';
+}
 function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
@@ -480,8 +487,7 @@ function bindIpc(): void {
         const report = command.surface === 'settings' ? state.shortcutRecovery : state.error;
         if (!state.visible || !target?.isVisible() || !target.isFocused() || command.surface !== state.surface || report?.reportId !== command.reportId)
           throw new Error('The displayed diagnostic is unavailable.');
-        clipboard.writeText(diagnosticDetails(report));
-        return 'copied';
+        return copyDiagnosticDetails(report);
       }
       if (command.type !== 'copyLinuxCommand') return controller!.command(command);
       if (!linux || surface !== 'settings' || !activeWindow()?.isFocused()) throw new Error('Linux Settings is not focused.');
@@ -693,7 +699,7 @@ async function startupFailure(error: unknown): Promise<void> {
           const response = linux ? (await dialog.showMessageBox(options)).response : dialog.showMessageBoxSync(options);
           if (response !== 0 || closing) break;
           try {
-            clipboard.writeText(details);
+            copyDiagnosticDetails(report);
             feedback = linux ? 'Diagnostic details copied. Paste them before closing this dialog.' : 'Diagnostic details copied.';
           } catch { feedback = 'Could not copy. Try again.'; }
         }

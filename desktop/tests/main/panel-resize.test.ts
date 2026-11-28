@@ -18,7 +18,8 @@ const platform = process.platform === 'linux' ? 'linux' : 'windows';
 const workArea = { x: 0, y: 0, width: 900, height: 700 };
 const setTrayImage = vi.fn();
 const captureVisibility = vi.fn();
-const clipboardWrite = vi.fn();
+let clipboardText: string;
+const clipboardWrite = vi.fn((value: string) => { clipboardText = value; });
 const showMessageBox = vi.fn<(options: Electron.MessageBoxOptions) => Promise<Electron.MessageBoxReturnValue>>();
 const showMessageBoxSync = vi.fn<(options: Electron.MessageBoxOptions) => number>();
 const sizeWrites = new EventEmitter();
@@ -118,7 +119,7 @@ class TestWindow extends EventEmitter {
 
 vi.mock('electron', () => ({
   app, safeStorage: {}, session: {},
-  clipboard: { writeText: clipboardWrite },
+  clipboard: { writeText: clipboardWrite, readText: () => clipboardText },
   BrowserWindow: function (...args: ConstructorParameters<typeof TestWindow>) {
     panel = new TestWindow(...args);
     return panel;
@@ -243,6 +244,7 @@ beforeEach(async () => {
   instanceOwner = null;
   exitFromTray = undefined;
   captureVisibility.mockClear();
+  clipboardText = 'Unrelated clipboard text';
   vi.stubEnv('LOCALAPPDATA', profile);
   vi.stubEnv('ELECTRON_RENDERER_URL', undefined);
   await store().save(defaultSettings('synthetic-panel-key'));
@@ -271,6 +273,10 @@ it('copies only the current Answer diagnostic via its focused window', async () 
   await expect(invoke('command', { ...request, surface: 'settings' })).rejects.toThrow();
   await expect(invoke('command', { ...request, text: 'Synthetic API key' })).rejects.toThrow();
   expect(clipboardWrite).not.toHaveBeenCalled();
+  clipboardWrite.mockImplementationOnce(() => {});
+  await expect(invoke('command', request)).rejects.toThrow();
+  expect(clipboardText).toBe('Unrelated clipboard text');
+  clipboardWrite.mockClear();
   await expect(invoke('command', request)).resolves.toBe('copied');
   expect(clipboardWrite).toHaveBeenCalledExactlyOnceWith(`Code: ${first.code}\nReport ID: ${first.reportId}`);
 
@@ -287,7 +293,7 @@ it('keeps the startup report available for a failed copy, retry and dismissal', 
   const exitCode = process.exitCode;
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
   await writeFile(join(profile, 'SC', platform === 'linux' ? 'sc.linux.key' : 'sc.user.key'), 'synthetic damaged vault');
-  clipboardWrite.mockClear().mockImplementationOnce(() => { throw new Error('Clipboard unavailable'); });
+  clipboardWrite.mockClear().mockImplementationOnce(() => {});
   showMessageBox.mockReset()
     .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
     .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
