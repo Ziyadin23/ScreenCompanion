@@ -933,3 +933,30 @@ it.skipIf(platform !== 'linux')('keeps fit constraints until the compositor acce
     nextPaint.resume();
   }
 });
+
+it.runIf(platform === 'linux')('waits for the Linux shortcut clipboard write and lets a failed copy be retried', async () => {
+  await boot();
+  await invoke('command', { type: 'settings' });
+  const write = vi.mocked((await import('electron')).clipboard.writeText);
+  const command = { type: 'copyLinuxCommand', action: 'input' };
+  const expected = '/opt/SC/io.github.ziyadin23.sc --action=input';
+  const gate = pause();
+  write.mockReturnValueOnce(gate.pending);
+  const completed = vi.fn();
+  const response = invoke('command', command).then(completed);
+  try {
+    await setImmediate();
+    expect(write).toHaveBeenCalledWith(expected);
+    expect(completed).not.toHaveBeenCalled();
+  } finally {
+    gate.resume();
+    await response;
+  }
+  expect(completed).toHaveBeenCalledWith('copied');
+
+  write.mockRejectedValueOnce(new Error('Synthetic clipboard denial'));
+  await expect(invoke('command', command)).rejects.toThrow();
+  write.mockResolvedValueOnce(undefined);
+  await expect(invoke('command', command)).resolves.toBe('copied');
+  expect(write).toHaveBeenLastCalledWith(expected);
+});
