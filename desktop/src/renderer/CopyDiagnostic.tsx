@@ -15,13 +15,14 @@ export function CopyDiagnostic({ surface, reportId }: { surface: 'answer' | 'inp
     catch { /* Announce the failure and leave the button available for retry. */ }
     if (attempt === latest.current) setNotice({ attempt, copied });
   }
-  if (surface === 'settings') return <HStack className="inline-actions" align="center">
+  const message = notice?.copied ? 'Copied.' : 'Try again.';
+  if (surface === 'settings') return <HStack className="inline-actions settings-diagnostic-copy" align="center">
     <Button type="button" variant="secondary" label={LABEL} onClick={() => { void copy(); }}>{LABEL}</Button>
-    <Text type="supporting" role="status">{notice && <Text key={notice.attempt} type="inherit">{notice.copied ? 'Diagnostic details copied.' : 'Could not copy. Try again.'}</Text>}</Text>
+    <Text type="supporting" role="status">{notice && <Text key={notice.attempt} type="inherit">{message}</Text>}</Text>
   </HStack>;
   return <p className="panel-diagnostic">
     <button type="button" onMouseDown={event => { if (event.button === 0) event.preventDefault(); }}
       onClick={() => { void copy(); }}>{LABEL}</button>
-    <span role="status">{notice && <span key={notice.attempt}>{notice.copied ? 'Copied.' : 'Try again.'}</span>}</span>
+    <span role="status">{notice && <span key={notice.attempt}>{message}</span>}</span>
   </p>;
 }

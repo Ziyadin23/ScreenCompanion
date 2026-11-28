@@ -77,10 +77,10 @@ describe('diagnostic copy', () => {
     button.focus();
     driver.api.command.mockRejectedValueOnce(new Error('Secure clipboard unavailable'));
     await user.keyboard(' ');
-    expect((await screen.findByText('Could not copy. Try again.')).closest('[role="status"]')).toBeTruthy();
+    expect((await screen.findByText('Try again.')).closest('[role="status"]')).toBeTruthy();
     driver.api.command.mockResolvedValue('copied');
     await user.keyboard('{Enter}');
-    expect(await screen.findByText('Diagnostic details copied.')).toBeTruthy();
+    expect(await screen.findByText('Copied.')).toBeTruthy();
     expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'copyDiagnostic', surface: 'settings', reportId: failure.reportId });
     expect(document.activeElement).toBe(button);
     expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');

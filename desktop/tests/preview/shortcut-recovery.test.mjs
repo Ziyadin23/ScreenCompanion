@@ -300,7 +300,7 @@ async function openCompactSettings(t, withRecovery = false, fontSize) {
     globalThis.sc = {
       getState: async () => state,
       subscribe: listener => { publish = listener; return () => {}; },
-      getSettingsDraft: () => load(), command: async () => {},
+      getSettingsDraft: () => load(), command: async command => command.type === 'copyDiagnostic' ? 'copied' : undefined,
       discardSettings: async session => {
         globalThis.discardedSession = session;
         state = { ...state, surface: 'answer' };
@@ -488,7 +488,7 @@ test('keyboard scrolling exposes both Settings messages at 32px', async t => {
   await expect(messages).toBeFocused();
   assert.ok(await messages.evaluate(node => node.matches(':focus-visible') &&
     node.ownerDocument.defaultView.getComputedStyle(node).outlineStyle !== 'none'));
-  const visibleLines = () => messages.evaluate(node => Array.from(node.children).flatMap(alert => {
+  const visibleLines = () => messages.evaluate(node => Array.from(node.querySelectorAll('[role="alert"]')).flatMap(alert => {
     const range = node.ownerDocument.createRange();
     range.selectNodeContents(alert);
     return Array.from(range.getClientRects(), line => {
@@ -498,11 +498,21 @@ test('keyboard scrolling exposes both Settings messages at 32px', async t => {
   }));
   await page.keyboard.press('Home');
   await expect.poll(() => messages.evaluate(node => node.scrollTop)).toBe(0);
-  const first = await visibleLines();
-  await page.keyboard.press('End');
-  await expect.poll(() => messages.evaluate(node => node.scrollTop + node.clientHeight >= node.scrollHeight - 1)).toBe(true);
-  const last = await visibleLines();
-  assert.ok(first[0] && last.at(-1) && first.every((visible, i) => visible || last[i]), 'every line of both messages can be read');
+  const seen = await visibleLines();
+  const scroll = () => messages.evaluate(node => ({ top: node.scrollTop, end: node.scrollHeight - node.clientHeight }));
+  for (let position = await scroll(); position.top < position.end - 1; position = await scroll()) {
+    await page.keyboard.press('ArrowDown');
+    await expect.poll(async () => (await scroll()).top).toBeGreaterThan(position.top);
+    const lines = await visibleLines();
+    lines.forEach((visible, index) => { seen[index] ||= visible; });
+  }
+  assert.ok(seen.length && seen.every(Boolean), 'every line of both messages can be read');
+  await page.keyboard.press('Tab');
+  const copy = messages.getByRole('button', { name: 'Copy diagnostic details' });
+  await expectUnobscuredFocus(copy);
+  await page.keyboard.press('Enter');
+  await expect(messages.getByText('Copied.', { exact: true })).toBeInViewport({ ratio: 1 });
+  await expectUnobscuredFocus(copy);
 });
 
 for (const [fontSize, recovery] of [[16, false], [24, false], [24, 'long'], [32, false], [32, 'long']]) {

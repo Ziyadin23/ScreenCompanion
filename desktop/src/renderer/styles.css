@@ -139,6 +139,9 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .shortcut-row { min-width: 0; }
 .astryx-dialog .recording { background: var(--color-accent-muted); outline: var(--focus-outline-width) solid var(--color-icon-accent); }
 .inline-actions { display: flex; flex-direction: row; gap: var(--spacing-2); margin-top: var(--spacing-2); flex-wrap: wrap; }
+.settings-diagnostic-copy { flex-wrap: nowrap; padding: calc(var(--focus-outline-width) + var(--focus-outline-offset)); }
+.settings-diagnostic-copy > button { flex-shrink: 0; }
+.settings-diagnostic-copy > [role="status"] { min-inline-size: 0; overflow-wrap: anywhere; }
 .astryx-dialog input[type="number"], .astryx-dialog input[type="color"], .choice input {
   background: var(--dialog-header); color: var(--dialog-text); border: var(--border-width) solid var(--dialog-border); border-radius: var(--radius-element); width: 100%; padding: var(--spacing-2) var(--spacing-3); min-height: var(--size-element-md);
 }
