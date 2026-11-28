@@ -513,7 +513,8 @@ export function Settings({ state }: { state: AppState }) {
       </fieldset>}
     </VStack>
     </VStack>
-    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages">
+    {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages"
+      tabIndex={state.shortcutRecovery ? 0 : undefined}>
       {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
       {state.shortcutRecovery && <>
         <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>

@@ -468,11 +468,11 @@ function trustedSender(event: Electron.IpcMainInvokeEvent, readState: boolean): 
   if (!target || event.sender !== target.webContents || event.senderFrame !== target.webContents.mainFrame) throw new Error('Untrusted application frame.');
   if (!trustedUrl(event.senderFrame.url)) throw new Error('Untrusted application origin.');
 }
-function copyDiagnosticDetails(report: DisplayError): 'copied' {
+async function copyDiagnosticDetails(report: DisplayError): Promise<'copied'> {
   const details = diagnosticDetails(report);
-  clipboard.writeText(details);
+  await clipboard.writeText(details);
   // Native writes can fail without throwing. Compare locally and discard the readback.
-  if (clipboard.readText() !== details) throw new Error('The diagnostic details were not copied.');
+  if (await clipboard.readText() !== details) throw new Error('The diagnostic details were not copied.');
   return 'copied';
 }
 function bindIpc(): void {
@@ -699,7 +699,7 @@ async function startupFailure(error: unknown): Promise<void> {
           const response = linux ? (await dialog.showMessageBox(options)).response : dialog.showMessageBoxSync(options);
           if (response !== 0 || closing) break;
           try {
-            copyDiagnosticDetails(report);
+            await copyDiagnosticDetails(report);
             feedback = linux ? 'Diagnostic details copied. Paste them before closing this dialog.' : 'Diagnostic details copied.';
           } catch { feedback = 'Could not copy. Try again.'; }
         }
