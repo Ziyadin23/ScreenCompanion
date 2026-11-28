@@ -1,5 +1,5 @@
 import { EventEmitter, once } from 'node:events';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
@@ -18,6 +18,8 @@ const platform = process.platform === 'linux' ? 'linux' : 'windows';
 const workArea = { x: 0, y: 0, width: 900, height: 700 };
 const setTrayImage = vi.fn();
 const captureVisibility = vi.fn();
+const clipboardWrite = vi.fn();
+const showMessageBox = vi.fn<(options: Electron.MessageBoxOptions) => Promise<Electron.MessageBoxReturnValue>>();
 const sizeWrites = new EventEmitter();
 let profile: string;
 let scaleFactor: number;
@@ -43,6 +45,7 @@ const app = Object.assign(new EventEmitter(), {
 });
 
 class TestWindow extends EventEmitter {
+  focused = true;
   private readonly normalBounds: Electron.Rectangle;
   private bounds: Electron.Rectangle;
   private compositorSize: Electron.Size;
@@ -101,6 +104,7 @@ class TestWindow extends EventEmitter {
   isDestroyed() { return false; }
   isMaximized() { return this.hasMapped; }
   isVisible() { return this.visible; }
+  isFocused() { return this.focused; }
   show() { this.visible = true; this.hasMapped = true; }
   showInactive() { this.show(); }
   hide() { this.visible = false; }
@@ -113,11 +117,12 @@ class TestWindow extends EventEmitter {
 
 vi.mock('electron', () => ({
   app, safeStorage: {}, session: {},
+  clipboard: { writeText: clipboardWrite },
   BrowserWindow: function (...args: ConstructorParameters<typeof TestWindow>) {
     panel = new TestWindow(...args);
     return panel;
   },
-  dialog: { showErrorBox: vi.fn() },
+  dialog: { showMessageBox, showErrorBox: vi.fn() },
   nativeImage: {
     createFromPath: () => ({
       resize: ({ width, height }: Electron.Size) => ({ toBitmap: () => Buffer.alloc(width * height * 4) })
@@ -251,6 +256,54 @@ it('publishes an idle tray image when the panel finishes loading', async () => {
   setTrayImage.mockClear();
   await boot();
   expect(setTrayImage).toHaveBeenCalledWith(expect.objectContaining({ toBitmap: expect.any(Function) }));
+});
+
+it('copies only the current Answer diagnostic via its focused window', async () => {
+  clipboardWrite.mockClear();
+  await boot();
+  await invoke('command', { type: 'capture' });
+  const first = (await invoke('getState') as AppState).error!;
+  const request = { type: 'copyDiagnostic', surface: 'answer', reportId: first.reportId };
+  panel.focused = false;
+  await expect(invoke('command', request)).rejects.toThrow();
+  panel.focused = true;
+  await expect(invoke('command', { ...request, surface: 'settings' })).rejects.toThrow();
+  await expect(invoke('command', { ...request, text: 'Synthetic API key' })).rejects.toThrow();
+  expect(clipboardWrite).not.toHaveBeenCalled();
+  await expect(invoke('command', request)).resolves.toBe('copied');
+  expect(clipboardWrite).toHaveBeenCalledExactlyOnceWith(`Code: ${first.code}\nReport ID: ${first.reportId}`);
+
+  await invoke('command', { type: 'capture' });
+  const next = (await invoke('getState') as AppState).error!;
+  expect(next.reportId).not.toBe(first.reportId);
+  await expect(invoke('command', request)).rejects.toThrow();
+  expect(clipboardWrite).toHaveBeenCalledTimes(1);
+  await expect(invoke('command', { ...request, reportId: next.reportId })).resolves.toBe('copied');
+  expect(clipboardWrite).toHaveBeenLastCalledWith(`Code: ${next.code}\nReport ID: ${next.reportId}`);
+});
+
+it('keeps the startup report available for a failed copy, retry and dismissal', async () => {
+  const exitCode = process.exitCode;
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await writeFile(join(profile, 'SC', platform === 'linux' ? 'sc.linux.key' : 'sc.user.key'), 'synthetic damaged vault');
+  clipboardWrite.mockClear().mockImplementationOnce(() => { throw new Error('Clipboard unavailable'); });
+  showMessageBox.mockReset()
+    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
+    .mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+  try {
+    vi.resetModules();
+    const exited = once(app, 'quit');
+    await import('../../src/main/index');
+    await exited;
+    const [initial, failed, copied] = showMessageBox.mock.calls.map(([options]) => options);
+    expect(initial).toMatchObject({ title: 'SC could not start', buttons: ['Copy diagnostic details', 'Close'], cancelId: 1 });
+    expect(initial?.detail).toMatch(/^Code: STARTUP-[A-Z]+\nReport ID: [0-9a-f]{12}$/u);
+    expect(failed?.detail).toBe(`${initial?.detail}\n\nCould not copy. Try again.`);
+    expect(copied?.detail).toContain(`${initial?.detail}\n\nDiagnostic details copied.`);
+    expect(clipboardWrite.mock.calls).toEqual([[initial?.detail], [initial?.detail]]);
+    expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = exitCode; log.mockRestore(); }
 });
 
 it.for([

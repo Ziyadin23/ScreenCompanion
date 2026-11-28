@@ -40,12 +40,14 @@ input, textarea { caret-color: var(--ui-accent); }
 .panel-toolbar { display: flex; flex-shrink: 0; gap: 2px; opacity: 0; pointer-events: none; transition: opacity 150ms ease-out; }
 .answer-panel:hover .panel-toolbar, .answer-panel:has(:focus-visible) .panel-toolbar,
 .answer-panel:focus-visible .panel-toolbar, .panel-toolbar:focus-within { opacity: 1; pointer-events: auto; }
-.panel-toolbar button {
+.panel-toolbar button, .panel-diagnostic button {
   display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
   padding: 0; border: 0; border-radius: 6px; background: var(--input-background); color: var(--input-text);
 }
-.panel-toolbar button:hover:not(:disabled) { background: var(--button-background); color: var(--button-text); }
+.panel-toolbar button:hover:not(:disabled), .panel-diagnostic button:hover { background: var(--button-background); color: var(--button-text); }
 .panel-toolbar button:active:not(:disabled) { transform: translateY(1px); }
+.panel-diagnostic { display: flex; align-items: center; gap: 6px; margin: 0 8px; color: var(--input-text); font-size: 11px; }
+.panel-diagnostic button { flex-shrink: 0; width: auto; height: 24px; padding-inline: 4px; }
 .answer-text {
   flex: 1; min-height: 0; margin: 0 8px 8px; padding: 4px 8px 8px; overflow-y: auto; overflow-x: hidden;
   white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; cursor: text; line-height: 1.5;
@@ -251,4 +253,12 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 @container (height < calc(47px + 1.5em)) {
   .answer-content:has(.panel-recovery) { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
   .answer-content:has(.panel-recovery) .answer-text { flex: 1 0 auto; overflow: visible; }
+}
+@container (height < calc(71px + 1.5em)) {
+  .answer-content:has(.panel-diagnostic) { overflow-x: hidden; overflow-y: auto; scrollbar-width: none; }
+  .answer-content:has(.panel-diagnostic) .answer-text { flex: 1 0 auto; overflow: visible; }
+}
+@media (max-height: 160px) {
+  .panel-content:has(.question-form):has(.panel-diagnostic) { overflow-x: hidden; overflow-y: auto; }
+  .answer-panel:has(.question-form) .panel-content:has(.panel-diagnostic) .answer-text { display: block; flex: 1 0 auto; overflow: visible; }
 }

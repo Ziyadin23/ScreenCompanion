@@ -1,6 +1,6 @@
 # SC project status
 
-Snapshot updated **2026-11-28 UTC**. Application source is **0.5.0-beta.21**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+Snapshot updated **2026-11-28 UTC**. Application source is **0.5.0-beta.22**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
 
 Beta.21 adds a Copy command button for each of the seven Linux actions.
 The installed Fedora RPM passed keyboard and clipboard checks at two Settings

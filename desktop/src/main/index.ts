@@ -10,7 +10,7 @@ import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readH
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
 import { createPipelineRunner, loadPipelineConfiguration, withSavedSettings } from '../pipeline';
 import { ApplicationController, canResizePanel, isPanelSurface as isPanel } from './controller';
-import { createDiagnostics, AppError } from './diagnostics';
+import { createDiagnostics, diagnosticDetails, AppError } from './diagnostics';
 import { commandSchema, colorSchema, settingsDraftSchema, settingsSessionSchema, setupRequestSchema, updateActionSchema } from './validation';
 import { ApplicationUpdates } from './updates';
 import { createPreviewPlatform, createPreviewStore } from './preview';
@@ -59,6 +59,7 @@ let releaseLinuxPanelSize: (() => void) | null = null;
 let tray: Tray | null = null;
 let trayIcons: ReturnType<typeof createTrayImages> | undefined;
 let closing = false;
+let startupFailureShowing = false;
 let waitingForPanelSize = false;
 const panelSizeLifetime = new AbortController();
 const pendingLinuxResizes = new Set<Promise<void>>();
@@ -473,6 +474,15 @@ function bindIpc(): void {
     setup: value => controller!.setup(setupRequestSchema.parse(value)),
     command: value => {
       const command = commandSchema.parse(value);
+      if (command.type === 'copyDiagnostic') {
+        const state = controller!.getState();
+        const target = activeWindow();
+        const report = command.surface === 'settings' ? state.shortcutRecovery : state.error;
+        if (!state.visible || !target?.isVisible() || !target.isFocused() || command.surface !== state.surface || report?.reportId !== command.reportId)
+          throw new Error('The displayed diagnostic is unavailable.');
+        clipboard.writeText(diagnosticDetails(report));
+        return 'copied';
+      }
       if (command.type !== 'copyLinuxCommand') return controller!.command(command);
       if (!linux || surface !== 'settings' || !activeWindow()?.isFocused()) throw new Error('Linux Settings is not focused.');
       clipboard.writeText(linuxCommand(command.action));
@@ -662,14 +672,32 @@ async function boot(): Promise<void> {
   if (activationPending) { activationPending = false; controller.restore(); }
   void updates.action('check');
 }
-function startupFailure(error: unknown): void {
+async function startupFailure(error: unknown): Promise<void> {
   // Quitting can destroy the renderer while its startup load is still pending.
-  if (closing) return;
+  if (closing || startupFailureShowing) return;
+  startupFailureShowing = true;
   const report = diagnostics.failure('Startup', linux && error instanceof SettingsError ? new AppError('KEYRING', 'SC could not open its settings. Unlock or install a secure Linux keyring, then restart SC. Existing settings were retained.') : error);
   // Protected native setup is unavailable if initialization itself failed. Keep output content-free.
   console.error(`${report.code} / ${report.reportId}: ${report.message}`);
-  if ((process.platform === 'win32' || linux) && !synthetic) dialog.showErrorBox('SC could not start', `${report.message}\n\nDiagnostic: ${report.code} / ${report.reportId}`);
-  process.exitCode = 1; app.quit();
+  try {
+    if ((process.platform === 'win32' || linux) && !synthetic) {
+      const title = 'SC could not start';
+      const details = diagnosticDetails(report);
+      let feedback = '';
+      try {
+        while (!closing) {
+          const { response } = await dialog.showMessageBox({ title, type: 'error', message: report.message,
+            detail: feedback ? `${details}\n\n${feedback}` : details,
+            buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true });
+          if (response !== 0 || closing) break;
+          try {
+            clipboard.writeText(details);
+            feedback = linux ? 'Diagnostic details copied. Paste them before closing this dialog.' : 'Diagnostic details copied.';
+          } catch { feedback = 'Could not copy. Try again.'; }
+        }
+      } catch { dialog.showErrorBox(title, `${report.message}\n\n${details}`); }
+    }
+  } finally { process.exitCode = 1; app.quit(); }
 }
 app.on('window-all-closed', () => {});
 app.on('before-quit', event => {

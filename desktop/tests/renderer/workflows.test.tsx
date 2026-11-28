@@ -43,6 +43,51 @@ async function openSettingsFromPanel() {
   fireEvent.click(await screen.findByRole('button', { name: 'Settings' }));
   await screen.findByRole('combobox', { name: 'Answer mode' });
 }
+
+describe('diagnostic copy', () => {
+  const failure = { message: 'Synthetic failure', code: 'ANSWER-NETWORK', reportId: '0123456789ab', hint: 'Check connection', logSaved: true };
+
+  it('copies from the Question panel without changing the draft, scroll or keyboard focus', async () => {
+    const driver = fixture({ surface: 'input', platform: 'linux', error: failure });
+    driver.api.command.mockResolvedValue('copied');
+    render(<App />);
+    const input = await screen.findByRole<HTMLInputElement>('textbox', { name: 'Question' });
+    fireEvent.change(input, { target: { value: 'Keep this draft' } });
+    const answer = screen.getByTestId('answer-text');
+    answer.scrollTop = 25;
+    const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+    button.focus();
+    await userEvent.setup().keyboard('{Enter}');
+    expect(driver.api.command).toHaveBeenCalledWith({ type: 'copyDiagnostic', surface: 'input', reportId: failure.reportId });
+    expect(await screen.findByText('Copied.')).toBeTruthy();
+    expect(document.activeElement).toBe(button);
+    expect(input.value).toBe('Keep this draft');
+    expect(answer.scrollTop).toBe(25);
+  });
+
+  it('reports a failed copy and lets the user retry without losing their Settings edits', async () => {
+    const driver = fixture();
+    render(<App />);
+    await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    await act(async () => driver.emit({ shortcutRecovery: failure }));
+    const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+    const user = userEvent.setup();
+    button.focus();
+    driver.api.command.mockRejectedValueOnce(new Error('Secure clipboard unavailable'));
+    await user.keyboard(' ');
+    expect((await screen.findByText('Could not copy. Try again.')).closest('[role="status"]')).toBeTruthy();
+    driver.api.command.mockResolvedValue('copied');
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText('Diagnostic details copied.')).toBeTruthy();
+    expect(driver.api.command).toHaveBeenLastCalledWith({ type: 'copyDiagnostic', surface: 'settings', reportId: failure.reportId });
+    expect(document.activeElement).toBe(button);
+    expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
+    expect(driver.getState().settingsDirty).toBe(true);
+  });
+});
+
 function enterModel(name: string, value: string) {
   const model = screen.getByRole('combobox', { name });
   fireEvent.change(model, { target: { value } });

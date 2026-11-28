@@ -217,6 +217,16 @@ upgrading and uninstalling preserve the encrypted settings for your Windows acco
 
 If an answer fails, the panel shows the error, a diagnostic code and a report ID. `CAPTURE-...` means capture failed before the API request. Codes such as `ANSWER-NETWORK`, `ANSWER-TIMEOUT` or `ANSWER-HTTPFAILURE` identify the stage and failure class; the safe message/log metadata can include the numeric HTTP status.
 
+Choose **Copy diagnostic details** in the Answer panel or in the shortcut
+recovery message in Settings. You can also use Tab to focus the button and
+Enter to activate it. SC copies two lines, one labelled `Code:` and one labelled
+`Report ID:`. The copy leaves your question or Settings draft in place.
+If the copy fails, choose the button again.
+
+If SC cannot start and shows a system dialog, choose **Copy diagnostic details**
+there. On Linux, paste the details before you close the dialog. Choose **Close**
+or press Esc to exit SC.
+
 If a text-only send gives `ANSWER-NETWORK`, `ANSWER-TIMEOUT`, or an HTTP timeout
 (status 408 or 504), reopen **Question**.
 Edit your text, then press **Enter** or choose **Send** to try again.
