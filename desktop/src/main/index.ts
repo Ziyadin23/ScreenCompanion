@@ -686,9 +686,11 @@ async function startupFailure(error: unknown): Promise<void> {
       let feedback = '';
       try {
         while (!closing) {
-          const { response } = await dialog.showMessageBox({ title, type: 'error', message: report.message,
+          const options: Electron.MessageBoxOptions = { title, type: 'error', message: report.message,
             detail: feedback ? `${details}\n\n${feedback}` : details,
-            buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true });
+            buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true };
+          // On Windows the capture-protection hook covers the application's UI thread.
+          const response = linux ? (await dialog.showMessageBox(options)).response : dialog.showMessageBoxSync(options);
           if (response !== 0 || closing) break;
           try {
             clipboard.writeText(details);

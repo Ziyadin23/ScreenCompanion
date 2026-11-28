@@ -516,7 +516,7 @@ export function Settings({ state }: { state: AppState }) {
     {(error || state.shortcutRecovery) && <VStack className="settings-feedback" role="region" aria-label="Settings messages">
       {error && <p className="dialog-error" id="settings-error" role="alert">{error}</p>}
       {state.shortcutRecovery && <>
-        <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code: {state.shortcutRecovery.code}. Report ID: {state.shortcutRecovery.reportId}.</p>
+        <p className="dialog-error" role="alert">{state.shortcutRecovery.message} Code {state.shortcutRecovery.code}, report {state.shortcutRecovery.reportId}.</p>
         <CopyDiagnostic key={state.shortcutRecovery.reportId} surface="settings" reportId={state.shortcutRecovery.reportId} />
       </>}
     </VStack>}

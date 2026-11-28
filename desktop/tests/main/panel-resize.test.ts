@@ -20,6 +20,7 @@ const setTrayImage = vi.fn();
 const captureVisibility = vi.fn();
 const clipboardWrite = vi.fn();
 const showMessageBox = vi.fn<(options: Electron.MessageBoxOptions) => Promise<Electron.MessageBoxReturnValue>>();
+const showMessageBoxSync = vi.fn<(options: Electron.MessageBoxOptions) => number>();
 const sizeWrites = new EventEmitter();
 let profile: string;
 let scaleFactor: number;
@@ -122,7 +123,7 @@ vi.mock('electron', () => ({
     panel = new TestWindow(...args);
     return panel;
   },
-  dialog: { showMessageBox, showErrorBox: vi.fn() },
+  dialog: { showMessageBox, showMessageBoxSync, showErrorBox: vi.fn() },
   nativeImage: {
     createFromPath: () => ({
       resize: ({ width, height }: Electron.Size) => ({ toBitmap: () => Buffer.alloc(width * height * 4) })
@@ -291,12 +292,13 @@ it('keeps the startup report available for a failed copy, retry and dismissal', 
     .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
     .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
     .mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+  showMessageBoxSync.mockReset().mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(1);
   try {
     vi.resetModules();
     const exited = once(app, 'quit');
     await import('../../src/main/index');
     await exited;
-    const [initial, failed, copied] = showMessageBox.mock.calls.map(([options]) => options);
+    const [initial, failed, copied] = (platform === 'linux' ? showMessageBox : showMessageBoxSync).mock.calls.map(([options]) => options);
     expect(initial).toMatchObject({ title: 'SC could not start', buttons: ['Copy diagnostic details', 'Close'], cancelId: 1 });
     expect(initial?.detail).toMatch(/^Code: STARTUP-[A-Z]+\nReport ID: [0-9a-f]{12}$/u);
     expect(failed?.detail).toBe(`${initial?.detail}\n\nCould not copy. Try again.`);
