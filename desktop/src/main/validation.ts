@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
+import { LINUX_ACTION_NAMES } from '../contracts/linux-actions';
 import { MAX_MODEL_PIPELINES, validModelPipelines } from '../contracts/model-pipelines';
 import { SHORTCUT_FIELDS } from '../contracts/shortcut-display';
 
@@ -41,6 +42,7 @@ export const colorSchema = color;
 export const updateActionSchema = z.enum(['check', 'download', 'install']);
 export const commandSchema = z.discriminatedUnion('type', [
   z.object({ type: z.enum(['capture', 'showInput', 'toggleVisibility', 'settings', 'captureTest', 'exit', 'escape', 'beginMove']) }),
+  z.object({ type: z.literal('copyLinuxCommand'), action: z.enum(LINUX_ACTION_NAMES) }),
   z.object({ type: z.literal('submit'), question: z.string().min(1).max(4000).refine(value => value.trim().length > 0), includeScreenshot: z.boolean() }),
   z.object({ type: z.literal('inputHeight'), height: z.number().int().min(1).max(32768) }),
   z.object({ type: z.literal('recordShortcut'), recording: z.boolean(), session: settingsSessionSchema, focusRevision: z.number().int().nonnegative() }),

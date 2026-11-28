@@ -1,5 +1,6 @@
 import type { ApiProvider, AppState, DesktopApi, SettingsDraft, Surface } from '../src/contracts';
 import { defaultModels, defaultSettings } from '../src/contracts/defaults';
+import { LINUX_ACTION_NAMES, linuxCommand } from '../src/contracts/linux-actions';
 import { applyModelPipelineUpdates, rememberModelPipeline } from '../src/contracts/model-pipelines';
 import { shortcutsByAction } from '../src/contracts/shortcut-display';
 import { version } from '../package.json';
@@ -42,6 +43,12 @@ export function previewBridge(surface: Surface = 'settings', platform: AppState[
     getState: async () => structuredClone(state),
     setup: async ({ provider }) => { applyDraft(setupDraft(provider)); },
     command: async (command) => {
+      if (command.type === 'copyLinuxCommand') {
+        if (state.platform !== 'linux' || state.surface !== 'settings' || !LINUX_ACTION_NAMES.includes(command.action))
+          throw new Error('Linux command is unavailable.');
+        await navigator.clipboard.writeText(linuxCommand(command.action));
+        return 'copied';
+      }
       if (command.type === 'settings') emit({ surface: 'settings' });
       if (command.type === 'showInput') emit({ surface: 'input' });
       if (command.type === 'captureTest') emit({ surface: 'captureTest' });

@@ -124,9 +124,10 @@ export interface SettingsDraft {
   pipelineUpdates: ModelPipelinePreference[];
 }
 export type SettingsSaveResult = 'saved' | 'busy' | 'shortcut-restore-failed';
-export type AppCommandResult = 'clear-question' | void;
+export type AppCommandResult = 'clear-question' | 'copied' | void;
 export type AppCommand =
   | { type: 'capture' | 'showInput' | 'toggleVisibility' | 'settings' | 'captureTest' | 'exit' | 'escape' | 'beginMove' }
+  | { type: 'copyLinuxCommand'; action: DesktopAction }
   | { type: 'submit'; question: string; includeScreenshot: boolean }
   | { type: 'inputHeight'; height: number }
   | { type: 'recordShortcut'; recording: boolean; session: number; focusRevision: number }

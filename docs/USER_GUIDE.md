@@ -58,7 +58,11 @@ bind = CTRL, RETURN, exec, /opt/SC/io.github.ziyadin23.sc --action=input-with-sc
 ```
 
 The initial command help, **Settings → Commands**, and **Settings → Answer &
-shortcuts → Keyboard shortcuts** list all seven actions. Use `--action=input`
+shortcuts → Keyboard shortcuts** list all seven actions. In **Commands**, select
+**Copy command** beside an action, or focus the button with Tab and press Enter
+or Space. SC copies the executable path and its action argument, then shows a
+confirmation in Settings. Add the keys and binding syntax in Hyprland using the
+examples above. Use `--action=input`
 to open or focus Question. Use `--action=input-with-screenshot` to open Question
 or send your draft with a screenshot if the question field has focus. In
 Question, Enter sends text only. The other actions are `capture`, `settings`,

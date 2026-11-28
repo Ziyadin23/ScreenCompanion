@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
+import { previewBridge } from '../../preview/bridge';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
 import { PROVIDERS, type AppState, type HttpResponse, type SettingsDraft } from '../../src/contracts';
@@ -1621,11 +1622,10 @@ describe('settings drafts and protected controls', () => {
       expect(help).not.toContain(shortcut);
     }
   });
-  it.each(['Keyboard shortcuts', 'Commands'])('shows all Linux actions and notices in %s', async surface => {
+  it('shows all Linux actions and notices in Keyboard shortcuts', async () => {
     fixture({ platform: 'linux' }); render(<App />); await screen.findByTestId('answer-text');
     await openSettings();
-    if (surface === 'Keyboard shortcuts') disclose(surface);
-    else tab(surface);
+    disclose('Keyboard shortcuts');
 
     const help = screen.getByText(/--action=capture/).textContent!;
     const actions = [...help.matchAll(/^--action=([\w-]+) /gm)].map(match => match[1]).sort();
@@ -1636,6 +1636,51 @@ describe('settings drafts and protected controls', () => {
     expect(help).toContain('Reopen SC to restore a hidden window.');
     expect(help).toContain('SC windows can appear in recordings.');
     expect(screen.queryByText(/Change them in Answer & shortcuts/)).toBeNull();
+  });
+  it('copies each Linux command from Settings with keyboard focus and feedback', async () => {
+    const driver = fixture({ platform: 'linux' }); render(<App />); await screen.findByTestId('answer-text');
+    await openSettings();
+    choose('Answer mode', 'Brief');
+    tab('Commands');
+    const user = userEvent.setup();
+    const actions = ['capture', 'input', 'input-with-screenshot', 'settings', 'visibility', 'test', 'exit'];
+    const commandPage = screen.getByRole('tabpanel');
+    commandPage.focus();
+    driver.api.command.mockClear().mockResolvedValue('copied');
+    expect(screen.getByText(/executable command for a Hyprland binding/)).toBeTruthy();
+    expect(screen.getByText(/SC windows can appear in recordings/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open capture test' })).toBeTruthy();
+    for (const action of actions) {
+      expect(screen.getByText(`/opt/SC/io.github.ziyadin23.sc --action=${action}`)).toBeTruthy();
+      const button = screen.getByRole('button', { name: `Copy command for ${action}` });
+      await user.tab();
+      expect(document.activeElement).toBe(button);
+      await user.keyboard('{Enter}');
+      const row = within(button.closest('li')!);
+      expect((await row.findByText('Command copied.')).closest('[role="status"]')).toBeTruthy();
+      expect(document.activeElement).toBe(button);
+      expect(screen.getByText('Unsaved changes')).toBeTruthy();
+    }
+    expect(driver.api.command.mock.calls).toEqual(actions.map(action => [{ type: 'copyLinuxCommand', action }]));
+    driver.api.command.mockRejectedValueOnce(new Error('synthetic clipboard failure'));
+    await user.keyboard(' ');
+    expect((await screen.findByText('Could not copy. Try again.')).closest('[role="status"]')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy command for exit' }));
+    await user.keyboard(' ');
+    await screen.findByText('Command copied.');
+    tab('Answer & shortcuts'); tab('Commands');
+    expect(screen.queryByText('Command copied.')).toBeNull();
+    expect(screen.getByText('Unsaved changes')).toBeTruthy();
+  });
+  it('uses the browser clipboard in the Linux preview and reports a denied write', async () => {
+    userEvent.setup();
+    const { api } = previewBridge('settings', 'linux');
+    const command = { type: 'copyLinuxCommand', action: 'capture' } as const;
+    await expect(api.command(command)).resolves.toBe('copied');
+    await expect(navigator.clipboard.readText()).resolves.toBe('/opt/SC/io.github.ziyadin23.sc --action=capture');
+    const write = vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new DOMException('Denied', 'NotAllowedError'));
+    try { await expect(api.command(command)).rejects.toMatchObject({ name: 'NotAllowedError' }); }
+    finally { write.mockRestore(); }
   });
   it('records six shortcuts, rejects duplicates and F12, notifies native host and restores defaults', async () => {
     const driver = fixture(); render(<App />); await screen.findByTestId('answer-text'); await openSettings();

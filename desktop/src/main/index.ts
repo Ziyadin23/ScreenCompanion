@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, safeStorage, screen, session, Tray } from 'electron';
 import electronUpdater from 'electron-updater';
 import { dirname, join, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import type { AppState, PanelSize, SettingsStore, WindowsPlatform } from '../contracts';
+import { linuxCommand } from '../contracts/linux-actions';
 import { createLinuxPlatform, createLinuxTransport, createWindowsPlatform, readHyprlandPanelGeometry,
   restoreHyprlandPanelPlacement, type HyprlandPanelPlacement } from '../platform';
 import { createLinuxCryptor, createSettingsStore, SettingsError, validateSettings } from '../storage';
@@ -470,7 +471,13 @@ function bindIpc(): void {
   const handlers: Record<string, (value?: unknown) => unknown> = {
     getState: () => controller!.getState(),
     setup: value => controller!.setup(setupRequestSchema.parse(value)),
-    command: value => controller!.command(commandSchema.parse(value)),
+    command: value => {
+      const command = commandSchema.parse(value);
+      if (command.type !== 'copyLinuxCommand') return controller!.command(command);
+      if (!linux || surface !== 'settings' || !activeWindow()?.isFocused()) throw new Error('Linux Settings is not focused.');
+      clipboard.writeText(linuxCommand(command.action));
+      return 'copied';
+    },
     getSettingsDraft: () => controller!.getSettingsDraft(),
     saveSettings: value => controller!.saveSettings(settingsDraftSchema.parse(value)),
     discardSettings: value => controller!.discardSettings(settingsSessionSchema.parse(value)),

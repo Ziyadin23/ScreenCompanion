@@ -1,6 +1,10 @@
 # SC project status
 
-Snapshot updated **2026-11-27 UTC**. Application source is **0.5.0-beta.20**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+Snapshot updated **2026-11-28 UTC**. Application source is **0.5.0-beta.21**. The latest published Windows prerelease is **v0.5.0-beta.16**. It follows beta.6. The latest stable release is the previous C# application, **v0.4.14**. See [downloads](../README.md#release-status), [beta.16 release notes](releases/v0.5.0-beta.16.md) and the [source manifest](../desktop/package.json).
+
+Beta.21 adds a Copy command button for each of the seven Linux actions.
+The installed Fedora RPM passed keyboard and clipboard checks at two Settings
+sizes in isolated Hyprland. [Beta.21 Linux evidence](VERIFICATION.md#linux-command-copy-in-beta21-2026-11-28)
 
 Beta.20 shows all seven Hyprland actions in the Linux command help and explains
 when the screenshot action submits a question. The installed RPM passed compact

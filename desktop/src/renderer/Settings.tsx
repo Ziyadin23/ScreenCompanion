@@ -5,13 +5,13 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
 import { Button } from '@astryxdesign/core/Button';
-import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, HotkeyBinding, ModelField, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
+import type { AppState, AppearanceSettings, ApiProvider, DeepSeekReasoning, DesktopAction, HotkeyBinding, ModelField, ModelSelection, PipelineMode, SettingsDraft } from '../contracts';
 import { PROVIDERS, RESPONSE_MODES } from '../contracts';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings, PROVIDER_MODELS } from '../contracts/defaults';
 import { applyModelPipelineUpdates, modelPipeline, rememberModelPipeline, validModelPipelines } from '../contracts/model-pipelines';
 import { applyModelEdits, screenModelError } from '../contracts/model-selection';
 import { applyPreferenceEdits, customInstructionError } from '../contracts/settings-preferences';
-import { LINUX_SHORTCUT_HELP } from '../contracts/linux-actions';
+import { LINUX_ACTION_NAMES, LINUX_ACTIONS, LINUX_CONTROL_NOTICE, LINUX_SHORTCUT_HELP, linuxCommand } from '../contracts/linux-actions';
 import type { ShortcutBindings } from '../contracts/shortcut-display';
 import { Choice } from './Choice';
 import { Updates } from './Updates';
@@ -48,6 +48,35 @@ const DATA_NOTICE: Record<ApiProvider, string> = {
   OpenRouter: 'Requires all parameters and disallows routing that permits data collection. This does not guarantee zero retention. Review provider and account policies.',
   DeepSeek: 'Uses stateless Responses with store: false. This does not guarantee zero retention under DeepSeek API policies.'
 };
+
+function LinuxCommands() {
+  const latestCopy = useRef(0);
+  const [notice, setNotice] = useState<{ action: DesktopAction; revision: number; message: string } | null>(null);
+  async function copyCommand(action: DesktopAction) {
+    const revision = ++latestCopy.current;
+    let copied = false;
+    try { copied = await window.sc.command({ type: 'copyLinuxCommand', action }) === 'copied'; }
+    catch { /* Announce a failed copy next to the button. */ }
+    if (revision === latestCopy.current) {
+      setNotice({ action, revision, message: copied ? 'Command copied.' : 'Could not copy. Try again.' });
+    }
+  }
+  return <>
+    <VStack as="ul" className="linux-command-list" gap={4}>
+      {LINUX_ACTION_NAMES.map(action => <VStack as="li" key={action} gap={2} align="start">
+        <Text as="p" type="supporting">{LINUX_ACTIONS[action]}</Text>
+        <code>{linuxCommand(action)}</code>
+        <HStack gap={3} align="center">
+          <Button label={`Copy command for ${action}`} type="button" variant="secondary" onClick={() => { void copyCommand(action); }}>Copy command</Button>
+          <Text type="supporting" role="status">
+            {notice?.action === action && <Text key={notice.revision} type="inherit">{notice.message}</Text>}
+          </Text>
+        </HStack>
+      </VStack>)}
+    </VStack>
+    <p className="hint">{LINUX_CONTROL_NOTICE}</p>
+  </>;
+}
 
 export function Settings({ state }: { state: AppState }) {
   const [draft, setDraft] = useState<SettingsDraft | null>(null);
@@ -321,6 +350,7 @@ export function Settings({ state }: { state: AppState }) {
       appearanceEdits: [...new Set([...(previous.appearanceEdits ?? []), ...fields])] }));
   }
   const blocked = saving || choosingColor;
+  const linuxCommandsPage = state.platform === 'linux' && page === 'Commands';
   const showRetry = loadStatus === 'failed' || loadStatus === 'retrying';
   function fieldAria(id: string, hint?: string) { return { 'aria-invalid': invalidField === id, 'aria-describedby': [hint, invalidField === id ? 'settings-error' : null].filter(Boolean).join(' ') || undefined }; }
   function choiceAria(id: string, hint?: string) { return { id, disabled: blocked, invalid: invalidField === id, describedBy: fieldAria(id, hint)['aria-describedby'] }; }
@@ -350,7 +380,7 @@ export function Settings({ state }: { state: AppState }) {
     </VStack>
     <VStack ref={body} className="settings-body" id="settings-page" role="tabpanel" aria-labelledby={`tab-${PAGE_IDS[page]}`} tabIndex={0}>
       <VStack className="page-intro"><Heading level={2} ref={heading} tabIndex={-1}>{page}</Heading>
-        {(state.platform !== 'linux' || page !== 'Commands') && <p className="hint">{PAGE_HINTS[page]}</p>}</VStack>
+        <p className="hint">{linuxCommandsPage ? 'Copy an executable command for a Hyprland binding. Add the keys and binding syntax in Hyprland.' : PAGE_HINTS[page]}</p></VStack>
       {(!draft || showRetry) && <VStack className="settings-loading"><p role="status">{loadStatus === 'failed' ? 'Settings unavailable.' : 'Loading settings…'}</p>
         {showRetry && <Button ref={retryButton} label="Try loading again" type="button" isLoading={loadStatus === 'retrying'} onClick={() => {
           setLoadStatus('retrying'); setLoadAttempt((value) => value + 1);
@@ -476,7 +506,7 @@ export function Settings({ state }: { state: AppState }) {
           </details>
           <p className="hint model-summary">Answer model: <strong>{models.AnswerModel}</strong>. {pipeline === 'Direct' ? 'Direct screenshot sends the full captured monitor.' : `${pipeline} uses a separate screen-reading model.`} The pipeline is saved per answer model; text-only sends skip screen reading.</p>
         </>}
-        {page === 'Commands' && <><pre className="commands-text">{state.platform === 'linux' ? LINUX_SHORTCUT_HELP : commandsText(state.shortcuts)}</pre>
+        {page === 'Commands' && <>{linuxCommandsPage ? <LinuxCommands /> : <pre className="commands-text">{commandsText(state.shortcuts)}</pre>}
           <Button label="Open capture test" type="button" onClick={() => { void window.sc.command({ type: 'captureTest' }).catch(() => setError('Capture test could not be opened. Try again.')); }}>Open capture test</Button></>}
         {page === 'Updates' && <Updates state={state} dirty={dirty || state.settingsDirty} />}
       </fieldset>}
