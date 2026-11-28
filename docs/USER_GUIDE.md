@@ -223,8 +223,8 @@ Enter to activate it. SC copies two lines, one labelled `Code:` and one labelled
 `Report ID:`. The copy leaves your question or Settings draft in place.
 If the copy fails, choose the button again.
 
-If SC cannot start and shows a system dialog, choose **Copy diagnostic details**
-there. On Linux, paste the details before you close the dialog. Choose **Close**
+If SC cannot start and shows a startup error window, choose **Copy diagnostic details**
+there. On Linux, paste the details before you close the window. Choose **Close**
 or press Esc to exit SC.
 
 If a text-only send gives `ANSWER-NETWORK`, `ANSWER-TIMEOUT`, or an HTTP timeout

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
 import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { AppState } from '../../src/contracts';
+import type { AppState, DisplayError } from '../../src/contracts';
 import { defaultSettings } from '../../src/contracts/defaults';
 import { createSettingsStore } from '../../src/storage';
 
@@ -20,8 +20,8 @@ const setTrayImage = vi.fn();
 const captureVisibility = vi.fn();
 let clipboardText: string;
 const clipboardWrite = vi.fn(async (value: string) => { clipboardText = value; });
-const showMessageBox = vi.fn<(options: Electron.MessageBoxOptions) => Promise<Electron.MessageBoxReturnValue>>();
 const showMessageBoxSync = vi.fn<(options: Electron.MessageBoxOptions) => number>();
+const showErrorBox = vi.fn();
 const sizeWrites = new EventEmitter();
 let profile: string;
 let scaleFactor: number;
@@ -34,6 +34,7 @@ let nextSizeWrite: Promise<void> | null;
 let deferPanelConfigure: boolean;
 let instanceOwner: symbol | null;
 let exitFromTray: (() => void) | undefined;
+let failStartupRenderer: boolean;
 
 const ipc = new Map<string, (event: unknown, value: unknown) => Promise<unknown>>();
 const app = Object.assign(new EventEmitter(), {
@@ -48,6 +49,8 @@ const app = Object.assign(new EventEmitter(), {
 
 class TestWindow extends EventEmitter {
   focused = true;
+  private destroyed = false;
+  readonly startupIpc = new Map<string, (event: unknown, value: unknown) => unknown>();
   private readonly normalBounds: Electron.Rectangle;
   private bounds: Electron.Rectangle;
   private compositorSize: Electron.Size;
@@ -57,6 +60,7 @@ class TestWindow extends EventEmitter {
   private hasMapped = false;
   readonly webContents = Object.assign(new EventEmitter(), {
     mainFrame: { url: '' }, send() {}, setWindowOpenHandler() {}, invalidate() {},
+    ipc: { handle: (name: string, handler: (event: unknown, value: unknown) => unknown) => this.startupIpc.set(name, handler) },
     session: { setPermissionRequestHandler() {}, setPermissionCheckHandler() {}, setDisplayMediaRequestHandler() {} },
     executeJavaScript: async (script: string) => {
       if (script.includes('getBoundingClientRect')) return { height: measuredTextHeight, controlsHeight: 20, inputHeight: 0 };
@@ -103,7 +107,9 @@ class TestWindow extends EventEmitter {
   setMenu() {}
   setContentProtection() {}
   setResizable() {}
-  isDestroyed() { return false; }
+  isDestroyed() { return this.destroyed; }
+  destroy() { this.destroyed = true; this.emit('closed'); }
+  close() { this.destroy(); }
   isMaximized() { return this.hasMapped; }
   isVisible() { return this.visible; }
   isFocused() { return this.focused; }
@@ -111,7 +117,8 @@ class TestWindow extends EventEmitter {
   showInactive() { this.show(); }
   hide() { this.visible = false; }
   focus() {}
-  async loadFile(path: string) {
+  async loadFile(path: string, options?: Electron.LoadFileOptions) {
+    if (failStartupRenderer && options?.query?.['window-role'] === 'startup') throw new Error('Renderer load failed');
     this.webContents.mainFrame.url = pathToFileURL(path).href;
     this.webContents.emit('did-finish-load');
   }
@@ -124,7 +131,7 @@ vi.mock('electron', () => ({
     panel = new TestWindow(...args);
     return panel;
   },
-  dialog: { showMessageBox, showMessageBoxSync, showErrorBox: vi.fn() },
+  dialog: { showMessageBoxSync, showErrorBox },
   nativeImage: {
     createFromPath: () => ({
       resize: ({ width, height }: Electron.Size) => ({ toBitmap: () => Buffer.alloc(width * height * 4) })
@@ -243,6 +250,7 @@ beforeEach(async () => {
   deferPanelConfigure = false;
   instanceOwner = null;
   exitFromTray = undefined;
+  failStartupRenderer = false;
   captureVisibility.mockClear();
   clipboardText = 'Unrelated clipboard text';
   vi.stubEnv('LOCALAPPDATA', profile);
@@ -289,28 +297,73 @@ it('copies only the current Answer diagnostic via its focused window', async () 
   expect(clipboardWrite).toHaveBeenLastCalledWith(`Code: ${next.code}\nReport ID: ${next.reportId}`);
 });
 
-it('keeps the startup report available for a failed copy, retry and dismissal', async () => {
+it.skipIf(platform === 'linux')('keeps the Windows startup report available for a failed copy, retry and dismissal', async () => {
   const exitCode = process.exitCode;
   const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-  await writeFile(join(profile, 'SC', platform === 'linux' ? 'sc.linux.key' : 'sc.user.key'), 'synthetic damaged vault');
+  await writeFile(join(profile, 'SC', 'sc.user.key'), 'synthetic damaged vault');
   clipboardWrite.mockClear().mockResolvedValueOnce(undefined);
-  showMessageBox.mockReset()
-    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
-    .mockResolvedValueOnce({ response: 0, checkboxChecked: false })
-    .mockResolvedValueOnce({ response: 1, checkboxChecked: false });
   showMessageBoxSync.mockReset().mockReturnValueOnce(0).mockReturnValueOnce(0).mockReturnValueOnce(1);
   try {
     vi.resetModules();
     const exited = once(app, 'quit');
     await import('../../src/main/index');
     await exited;
-    const [initial, failed, copied] = (platform === 'linux' ? showMessageBox : showMessageBoxSync).mock.calls.map(([options]) => options);
+    const [initial, failed, copied] = showMessageBoxSync.mock.calls.map(([options]) => options);
     expect(initial).toMatchObject({ title: 'SC could not start', buttons: ['Copy diagnostic details', 'Close'], cancelId: 1 });
     expect(initial?.detail).toMatch(/^Code: STARTUP-[A-Z]+\nReport ID: [0-9a-f]{12}$/u);
     expect(failed?.detail).toBe(`${initial?.detail}\n\nCould not copy. Try again.`);
     expect(copied?.detail).toContain(`${initial?.detail}\n\nDiagnostic details copied.`);
     expect(clipboardWrite.mock.calls).toEqual([[initial?.detail], [initial?.detail]]);
     expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = exitCode; log.mockRestore(); }
+});
+
+it.skipIf(platform !== 'linux')('copies the Linux startup report only from its focused window and permits retry', async () => {
+  const exitCode = process.exitCode;
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await writeFile(join(profile, 'SC', 'sc.linux.key'), 'synthetic damaged vault');
+  clipboardWrite.mockClear().mockResolvedValueOnce(undefined);
+  try {
+    vi.resetModules();
+    const exited = once(app, 'quit');
+    await import('../../src/main/index');
+    await vi.waitFor(() => expect(panel.startupIpc.has('sc:getStartupReport') && panel.isVisible()).toBe(true));
+    const startup = panel;
+    const event = { sender: startup.webContents, senderFrame: startup.webContents.mainFrame };
+    const report = startup.startupIpc.get('sc:getStartupReport')!(event, undefined) as DisplayError;
+    expect(report.code).toBe('STARTUP-KEYRING');
+    const request = { type: 'copyDiagnostic', surface: 'startup', reportId: report.reportId };
+    const command = startup.startupIpc.get('sc:command')!;
+    expect(() => command({ ...event, senderFrame: { ...event.senderFrame } }, request)).toThrow();
+    expect(() => command(event, { ...request, reportId: '000000000000' })).toThrow();
+    startup.focused = false;
+    expect(() => command(event, request)).toThrow();
+    expect(clipboardWrite).not.toHaveBeenCalled();
+
+    startup.focused = true;
+    await expect(command(event, request)).rejects.toThrow();
+    await expect(command(event, request)).resolves.toBe('copied');
+    const details = `Code: ${report.code}\nReport ID: ${report.reportId}`;
+    expect(clipboardWrite.mock.calls).toEqual([[details], [details]]);
+    command(event, { type: 'exit' });
+    await exited;
+    expect(process.exitCode).toBe(1);
+  } finally { process.exitCode = exitCode; log.mockRestore(); }
+});
+
+it.skipIf(platform !== 'linux')('falls back to a native error box when the Linux startup renderer cannot load', async () => {
+  const exitCode = process.exitCode;
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  await writeFile(join(profile, 'SC', 'sc.linux.key'), 'synthetic damaged vault');
+  failStartupRenderer = true;
+  showErrorBox.mockClear();
+  try {
+    vi.resetModules();
+    const exited = once(app, 'quit');
+    await import('../../src/main/index');
+    await exited;
+    expect(showErrorBox).toHaveBeenCalledExactlyOnceWith('SC could not start', expect.stringMatching(/Code: STARTUP-KEYRING\nReport ID: [\da-f]{12}$/u));
+    expect(panel.isDestroyed()).toBe(true);
   } finally { process.exitCode = exitCode; log.mockRestore(); }
 });
 

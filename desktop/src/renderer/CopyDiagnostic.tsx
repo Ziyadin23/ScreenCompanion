@@ -5,7 +5,7 @@ import { Text } from '@astryxdesign/core/Text';
 
 const LABEL = 'Copy diagnostic details';
 
-export function CopyDiagnostic({ surface, reportId }: { surface: 'answer' | 'input' | 'settings'; reportId: string }) {
+export function CopyDiagnostic({ surface, reportId }: { surface: 'answer' | 'input' | 'settings' | 'startup'; reportId: string }) {
   const latest = useRef(0);
   const [notice, setNotice] = useState<{ attempt: number; copied: boolean } | null>(null);
   async function copy() {
@@ -16,7 +16,7 @@ export function CopyDiagnostic({ surface, reportId }: { surface: 'answer' | 'inp
     if (attempt === latest.current) setNotice({ attempt, copied });
   }
   const message = notice?.copied ? 'Copied.' : 'Try again.';
-  if (surface === 'settings') return <HStack className="inline-actions settings-diagnostic-copy" align="center">
+  if (surface === 'settings' || surface === 'startup') return <HStack className="inline-actions settings-diagnostic-copy" align="center">
     <Button type="button" variant="secondary" label={LABEL} onClick={() => { void copy(); }}>{LABEL}</Button>
     <Text type="supporting" role="status">{notice && <Text key={notice.attempt} type="inherit">{message}</Text>}</Text>
   </HStack>;

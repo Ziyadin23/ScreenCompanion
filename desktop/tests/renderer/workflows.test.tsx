@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../src/renderer/App';
+import { StartupFailure } from '../../src/renderer/StartupFailure';
 import { previewBridge } from '../../preview/bridge';
 import { fixture } from './fixture';
 import { DEFAULT_APPEARANCE, defaultModels, defaultSettings } from '../../src/contracts/defaults';
@@ -85,6 +86,30 @@ describe('diagnostic copy', () => {
     expect(document.activeElement).toBe(button);
     expect(screen.getByRole('combobox', { name: 'Answer mode' }).textContent).toBe('Brief');
     expect(driver.getState().settingsDirty).toBe(true);
+  });
+
+  it('copies the Linux startup report with keyboard retry and closes on Escape', async () => {
+    const { api } = fixture();
+    const report = { ...failure, code: 'STARTUP-KEYRING' };
+    vi.stubGlobal('scStartup', async () => report);
+    try {
+      api.command.mockRejectedValueOnce(new Error('Clipboard unavailable')).mockResolvedValueOnce('copied');
+      render(<StartupFailure />);
+      await screen.findByText(/Code: STARTUP-KEYRING/);
+      const user = userEvent.setup();
+      const button = screen.getByRole('button', { name: 'Copy diagnostic details' });
+      await user.tab();
+      expect(document.activeElement).toBe(button);
+      await user.keyboard('{Enter}');
+      await screen.findByText('Try again.');
+      await user.keyboard(' ');
+      await screen.findByText('Copied.');
+      expect(document.activeElement).toBe(button);
+      const copy = { type: 'copyDiagnostic', surface: 'startup', reportId: report.reportId };
+      expect(api.command.mock.calls).toEqual([[copy], [copy]]);
+      await user.keyboard('{Escape}');
+      expect(api.command).toHaveBeenLastCalledWith({ type: 'exit' });
+    } finally { vi.unstubAllGlobals(); }
   });
 });
 

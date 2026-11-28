@@ -152,7 +152,7 @@ function activeWindow(): BrowserWindow | null {
   if (linuxPanelLayout?.hideCheck) return null;
   return linuxDialog?.surface === surface ? linuxDialog.window : null;
 }
-function createWindow(options: Electron.BrowserWindowConstructorOptions): BrowserWindow {
+function createWindow(options: Electron.BrowserWindowConstructorOptions, startup = false): BrowserWindow {
   const target = new BrowserWindow({ title: 'SC', icon: appIconPath, show: false, frame: linux, transparent: true, maximizable: false,
     fullscreenable: false, alwaysOnTop: true, skipTaskbar: !linux, hasShadow: linux,
     webPreferences: { preload: join(directory, '../preload/index.cjs'), partition: 'sc-ephemeral', sandbox: true,
@@ -161,6 +161,7 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions): Browse
   if (!linux) target.setContentProtection(true);
   target.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   target.webContents.on('will-navigate', event => event.preventDefault());
+  if (startup) return target;
   target.on('close', event => {
     if (closing) return;
     event.preventDefault();
@@ -169,7 +170,7 @@ function createWindow(options: Electron.BrowserWindowConstructorOptions): Browse
   target.on('blur', () => { if (target === activeWindow()) void controller?.onWindowBlur(); });
   return target;
 }
-function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog'): Promise<void> {
+function loadRenderer(target: BrowserWindow, role?: 'panel' | 'dialog' | 'startup'): Promise<void> {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const url = new URL(process.env.ELECTRON_RENDERER_URL);
     if (role) url.searchParams.set('window-role', role);
@@ -678,6 +679,36 @@ async function boot(): Promise<void> {
   if (activationPending) { activationPending = false; controller.restore(); }
   void updates.action('check');
 }
+async function showLinuxStartupFailure(title: string, report: DisplayError): Promise<void> {
+  // Wayland requires an input serial from the Chromium window that owns the clipboard.
+  const target = createWindow({ title, width: 480, height: 300, transparent: false, alwaysOnTop: false }, true);
+  const closed = new Promise<void>(resolve => target.once('closed', resolve));
+  function checkFrame(event: Electron.IpcMainInvokeEvent) {
+    if (event.sender !== target.webContents || event.senderFrame !== target.webContents.mainFrame || !trustedUrl(event.senderFrame.url))
+      throw new Error('Untrusted startup frame.');
+  }
+  target.webContents.ipc.handle('sc:getStartupReport', event => { checkFrame(event); return report; });
+  target.webContents.ipc.handle('sc:command', (event, value: unknown) => {
+    checkFrame(event);
+    const command = commandSchema.parse(value);
+    if (command.type === 'exit') { target.close(); return; }
+    if (closing || command.type !== 'copyDiagnostic' || command.surface !== 'startup' || command.reportId !== report.reportId ||
+        !target.isVisible() || !target.isFocused()) throw new Error('The displayed diagnostic is unavailable.');
+    return copyDiagnosticDetails(report);
+  });
+  const rendererGone = new Promise<never>((_resolve, reject) => {
+    target.webContents.once('render-process-gone', () => reject(new Error('SC could not load the startup window.')));
+  });
+  try {
+    await Promise.race([loadRenderer(target, 'startup'), rendererGone]);
+    if (!closing && !target.isDestroyed()) target.show();
+    await Promise.race([closed, rendererGone]);
+  } catch (error) {
+    if (target.isDestroyed()) return;
+    target.destroy();
+    throw error;
+  }
+}
 async function startupFailure(error: unknown): Promise<void> {
   // Quitting can destroy the renderer while its startup load is still pending.
   if (closing || startupFailureShowing) return;
@@ -691,19 +722,20 @@ async function startupFailure(error: unknown): Promise<void> {
       const details = diagnosticDetails(report);
       let feedback = '';
       try {
-        while (!closing) {
+        if (linux) await showLinuxStartupFailure(title, report);
+        else while (!closing) {
           const options: Electron.MessageBoxOptions = { title, type: 'error', message: report.message,
             detail: feedback ? `${details}\n\n${feedback}` : details,
             buttons: ['Copy diagnostic details', 'Close'], defaultId: 0, cancelId: 1, noLink: true };
           // On Windows the capture-protection hook covers the application's UI thread.
-          const response = linux ? (await dialog.showMessageBox(options)).response : dialog.showMessageBoxSync(options);
+          const response = dialog.showMessageBoxSync(options);
           if (response !== 0 || closing) break;
           try {
             await copyDiagnosticDetails(report);
-            feedback = linux ? 'Diagnostic details copied. Paste them before closing this dialog.' : 'Diagnostic details copied.';
+            feedback = 'Diagnostic details copied.';
           } catch { feedback = 'Could not copy. Try again.'; }
         }
-      } catch { dialog.showErrorBox(title, `${report.message}\n\n${details}`); }
+      } catch { if (!closing) dialog.showErrorBox(title, `${report.message}\n\n${details}`); }
     }
   } finally { process.exitCode = 1; app.quit(); }
 }

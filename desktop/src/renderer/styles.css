@@ -199,7 +199,7 @@ progress::-webkit-progress-value { background: var(--color-icon-accent); }
 .setup .choice-list { overscroll-behavior-y: contain; }
 .privacy-notice { background: var(--color-background-muted); border: var(--border-width) solid var(--color-border); border-radius: var(--radius-element); }
 .setup-content .dialog-error { margin: 0 !important; }
-.startup-error { padding: 24px; height: 100%; background: var(--ui-bg); color: var(--ui-text); }
+.startup-error { padding: 24px; height: 100%; overflow-y: auto; background: var(--ui-bg); color: var(--ui-text); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 599px) {
   .settings-layout { display: flex; flex-direction: column; }
