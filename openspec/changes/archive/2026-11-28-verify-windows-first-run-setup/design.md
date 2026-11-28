@@ -14,4 +14,4 @@ The coordinated issue worktree starts at main `4667e43365dd4690d111057f23d85bbd8
 
 ## Delivery
 
-Use [Publishing](../../../docs/PUBLISHING.md#local-beta-handoff) for local files. Independent review covers the final diff, issue evidence and the copied bytes. Keep raw lab evidence in the private workspace.
+Use [Publishing](../../../../docs/PUBLISHING.md#local-beta-handoff) for local files. Independent review covers the final diff, issue evidence and the copied bytes. Keep raw lab evidence in the private workspace.
