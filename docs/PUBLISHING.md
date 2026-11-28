@@ -113,9 +113,14 @@ does not publish a GitHub release or change the latest stable download.
 
 On Fedora 44 x86-64, install the build tools `rpm-build` and `libxcrypt-compat`
 alongside Node.js, then `cd desktop && npm ci && npm run verify && npm run package:rpm`
-builds an RPM without the Windows native addon. The target requires Hyprland
-Wayland, PipeWire, its desktop portal and an unlocked Secret Service keyring.
-The RPM uses the `io.github.ziyadin23.sc` desktop identity and manual updates;
+builds an RPM without the Windows native addon. The Linux file list excludes
+`out/preview`. The packaging command checks the application archive for this
+exclusion and for the production entry points. To exercise the exclusion, run
+`npm run preview:astryx -- build` before `npm run package:rpm`.
+
+The target requires Hyprland Wayland, PipeWire, its desktop portal and an
+unlocked Secret Service keyring. The RPM uses the
+`io.github.ziyadin23.sc` desktop identity and manual updates;
 it does not run the Windows updater. Before publication verify installation,
 desktop launch, portal monitor selection and full-resolution capture, keyring
 failure/recovery, compositor bindings, duplicate launch, package upgrade and

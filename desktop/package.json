@@ -28,7 +28,7 @@
     "package:zip": "node scripts/package-zip.mjs",
     "verify": "npm run typecheck && npm run lint && npm test && npm run build",
     "package:installer": "npm run typecheck && npm run native:build && npm run build && electron-builder --win nsis --x64 --publish never && node scripts/verify-windows-asar.mjs",
-    "package:rpm": "npm run typecheck && npm run build && electron-builder --linux rpm --x64 --publish never",
+    "package:rpm": "npm run typecheck && npm run build && electron-builder --linux rpm --x64 --publish never && node scripts/verify-linux-asar.mjs",
     "test:lab": "node scripts/lab-tests.mjs",
     "test:deepseek": "node scripts/deepseek-tests.mjs"
   },
@@ -103,6 +103,7 @@
     "linux": {
       "files": [
         "out/**/*",
+        "!out/preview{,/**/*}",
         "package.json"
       ],
       "icon": "../assets/brand/sc-icon-512.png",
